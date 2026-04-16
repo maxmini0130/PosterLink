@@ -10,12 +10,15 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@posterlink/lib": "workspace:*",
+    "@posterlink/types": "workspace:*",
     "expo": "~50.0.0",
+    "expo-constants": "^55.0.14",
+    "expo-device": "^55.0.15",
+    "expo-notifications": "^55.0.19",
     "expo-status-bar": "~1.11.1",
     "react": "18.2.0",
-    "react-native": "0.73.4",
-    "@posterlink/types": "workspace:*",
-    "@posterlink/lib": "workspace:*"
+    "react-native": "0.73.4"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
