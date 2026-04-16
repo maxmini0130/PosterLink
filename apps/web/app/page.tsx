@@ -21,18 +21,30 @@ export default function Home() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
+          // 1. 프로필 정보 가져오기
           const { data: profile } = await supabase.from("profiles").select("*, regions(name)").eq("id", user.id).single();
           setUserProfile(profile);
 
-          const { data: posterData } = await supabase
-            .from("posters")
-            .select(`*, categories (name)`)
-            .eq("status", "published")
-            .or(`primary_region_id.eq.${profile?.primary_region_id || 'REG_NATION'},primary_region_id.is.null`)
-            .order("created_at", { ascending: false })
-            .limit(8);
-          if (posterData) setPosters(posterData);
+          // 2. RPC를 통한 맞춤형 추천 공고 가져오기 (NEW!)
+          const { data: recommendedData, error: rpcError } = await supabase.rpc('get_recommended_posters', {
+            p_user_id: user.id,
+            p_limit: 8
+          });
 
+          if (!rpcError && recommendedData) {
+            setPosters(recommendedData);
+          } else {
+            // RPC 오류 시 기본 최신순 공고 (Fallback)
+            const { data: fallbackData } = await supabase
+              .from("posters")
+              .select(`*, categories (name)`)
+              .eq("status", "published")
+              .order("created_at", { ascending: false })
+              .limit(8);
+            if (fallbackData) setPosters(fallbackData);
+          }
+
+          // 3. 마감 임박 공고 가져오기 (기존 로직 유지)
           const now = new Date().toISOString();
           const sevenDaysLater = new Date();
           sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
@@ -66,18 +78,18 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <motion.div 
           animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
           transition={{ duration: 1.5, repeat: Infinity }}
-          className="w-12 h-12 bg-blue-600 rounded-2xl shadow-xl shadow-blue-100" 
+          className="w-12 h-12 bg-blue-600 rounded-2xl shadow-xl shadow-blue-100 dark:shadow-none" 
         />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50/50 pb-24">
+    <div className="min-h-screen bg-background pb-24 transition-colors duration-300">
       <Header />
       
       <main className="container mx-auto px-4 py-8 max-w-4xl">
@@ -87,17 +99,17 @@ export default function Home() {
           animate={{ y: 0, opacity: 1 }}
           className="mb-12"
         >
-          <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-gray-100 relative overflow-hidden">
-            <div className="absolute -top-10 -right-10 w-40 h-40 bg-blue-50 rounded-full blur-3xl opacity-60" />
+          <div className="bg-white dark:bg-slate-800 p-8 rounded-[3rem] shadow-sm border border-gray-100 dark:border-slate-700 relative overflow-hidden transition-colors">
+            <div className="absolute -top-10 -right-10 w-40 h-40 bg-blue-50 dark:bg-blue-900/20 rounded-full blur-3xl opacity-60" />
             <div className="relative z-10">
               <div className="flex items-center gap-2 mb-3">
-                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+                <div className="p-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl">
                   <Sparkles size={16} fill="currentColor" />
                 </div>
-                <span className="text-xs font-black text-blue-600 uppercase tracking-widest">Recommended for you</span>
+                <span className="text-xs font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Recommended for you</span>
               </div>
-              <h2 className="text-3xl font-black text-gray-900 leading-tight">
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">
+              <h2 className="text-3xl font-black text-gray-900 dark:text-slate-50 leading-tight">
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
                   {userProfile?.regions?.name || "전국"} {userProfile?.age_band === '20s' ? '20대' : ''}
                 </span>를 위한<br />
                 맞춤형 공고가 도착했어요 💡
@@ -116,10 +128,10 @@ export default function Home() {
         >
           <div className="flex items-center justify-between mb-8 px-2">
             <div className="flex items-center gap-2">
-              <h3 className="text-xl font-black text-gray-900">새로 올라온 공고</h3>
+              <h3 className="text-xl font-black text-gray-900 dark:text-slate-50">새로 올라온 공고</h3>
               <div className="w-2 h-2 bg-rose-500 rounded-full animate-pulse" />
             </div>
-            <Link href="/posters" className="text-xs font-black text-gray-400 flex items-center gap-1 hover:text-blue-600 transition-colors">
+            <Link href="/posters" className="text-xs font-black text-gray-400 dark:text-slate-500 flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
               VIEW ALL <ArrowRight size={14} />
             </Link>
           </div>
@@ -141,8 +153,8 @@ export default function Home() {
               ))}
             </div>
           ) : (
-            <div className="py-20 text-center bg-white rounded-[3rem] border border-dashed border-gray-200">
-              <p className="text-gray-400 font-bold">아직 등록된 공고가 없습니다.</p>
+            <div className="py-20 text-center bg-white dark:bg-slate-800 rounded-[3rem] border border-dashed border-gray-200 dark:border-slate-700">
+              <p className="text-gray-400 dark:text-slate-500 font-bold">아직 등록된 공고가 없습니다.</p>
             </div>
           )}
         </motion.section>
@@ -156,7 +168,7 @@ export default function Home() {
               viewport={{ once: true }}
               className="mb-10"
             >
-              <div className="bg-gradient-to-br from-rose-500 to-rose-600 p-8 rounded-[3rem] shadow-xl shadow-rose-100 relative overflow-hidden">
+              <div className="bg-gradient-to-br from-rose-500 to-rose-600 dark:from-rose-600 dark:to-rose-700 p-8 rounded-[3rem] shadow-xl shadow-rose-100 dark:shadow-none relative overflow-hidden transition-colors">
                 <div className="absolute top-0 right-0 p-6 opacity-10">
                   <Zap size={120} fill="white" />
                 </div>

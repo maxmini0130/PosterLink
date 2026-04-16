@@ -55,10 +55,48 @@ export default function NewPosterPage() {
     }
   };
 
-  const onCropComplete = (blob: Blob) => {
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  const onCropComplete = async (blob: Blob) => {
     setCroppedImageBlob(blob);
     setImagePreview(URL.createObjectURL(blob));
     setShowCropper(false);
+
+    // OCR 분석 시작
+    setIsAnalyzing(true);
+    try {
+      const reader = new FileReader();
+      reader.readAsDataURL(blob);
+      reader.onloadend = async () => {
+        const base64data = reader.result as string;
+        
+        // Edge Function 호출
+        const { data, error } = await supabase.functions.invoke('process-ocr', {
+          body: { imageBase64: base64data.split(',')[1] }
+        });
+
+        if (error) throw error;
+
+        // 추출된 데이터로 폼 채우기
+        if (data) {
+          setFormData(prev => ({
+            ...prev,
+            title: data.title || prev.title,
+            sourceOrgName: data.sourceOrgName || prev.sourceOrgName,
+            appEndAt: data.appEndAt || prev.appEndAt,
+            summaryShort: data.summaryShort || prev.summaryShort,
+            officialLink: data.officialLink || prev.officialLink,
+            // 카테고리는 매칭 시도가 필요할 수 있음
+            categoryId: categories.find(c => c.code === data.categoryId)?.id || prev.categoryId
+          }));
+          alert("이미지 분석이 완료되었습니다. 추출된 정보를 확인해주세요.");
+        }
+      };
+    } catch (err: any) {
+      console.error("OCR Error:", err);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -149,6 +187,13 @@ export default function NewPosterPage() {
       <form onSubmit={handleSubmit} className="space-y-8">
         {/* 이미지 업로드 & 미리보기 */}
         <section className="bg-white p-8 rounded-[2.5rem] border-2 border-dashed border-gray-100 hover:border-blue-200 transition-all group overflow-hidden relative shadow-sm">
+          {isAnalyzing && (
+            <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center animate-in fade-in duration-300">
+              <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mb-4" />
+              <p className="text-gray-900 font-black">인공지능 분석 중...</p>
+              <p className="text-gray-400 text-xs font-bold mt-1 italic">포스터 정보를 자동으로 추출하고 있습니다.</p>
+            </div>
+          )}
           <input type="file" id="poster-upload" className="hidden" accept="image/*" onChange={handleImageChange} />
           <label htmlFor="poster-upload" className="cursor-pointer flex flex-col items-center justify-center min-h-[350px]">
             {imagePreview ? (
