@@ -65,7 +65,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <Link href="/admin/reports" className="flex items-center gap-3 p-3 rounded-xl hover:bg-indigo-800 transition-colors font-bold text-sm">
             <AlertCircle size={18} /> 신고 관리
           </Link>
-          <Link href="/admin/settings" className="flex items-center gap-3 p-3 rounded-xl hover:bg-indigo-800 transition-colors font-bold text-sm opacity-50 cursor-not-allowed">
+          <Link href="/admin/settings" className="flex items-center gap-3 p-3 rounded-xl hover:bg-indigo-800 transition-colors font-bold text-sm">
             <Settings size={18} /> 기준정보 관리
           </Link>
         </nav>
