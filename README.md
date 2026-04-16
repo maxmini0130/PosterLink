@@ -4,7 +4,7 @@
 
 ## 구조
 
-- `apps/web`: 사용자 서비스 및 관리자 웹 (Next.js)
+- `apps/web`: 사용자 서비스 및 관리자 웹 (Next.js - Port 4000)
 - `apps/mobile`: 운영자 촬영 및 업로드 앱 (Expo)
 - `packages/ui`: 공통 UI 컴포넌트
 - `packages/types`: 공통 타입 정의
