@@ -14,7 +14,7 @@ CREATE TYPE comment_type AS ENUM ('question', 'review', 'info', 'correction', 'g
 
 -- Regions (기준정보: 지역)
 CREATE TABLE regions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     parent_id UUID REFERENCES regions(id),
     level region_level NOT NULL,
     code VARCHAR(50) UNIQUE NOT NULL,
@@ -26,7 +26,7 @@ CREATE TABLE regions (
 
 -- Categories (기준정보: 카테고리)
 CREATE TABLE categories (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     parent_id UUID REFERENCES categories(id),
     code VARCHAR(50) UNIQUE NOT NULL,
     name VARCHAR(100) NOT NULL,
@@ -50,7 +50,7 @@ CREATE TABLE profiles (
 
 -- User Interest Categories
 CREATE TABLE user_interest_categories (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
     category_id UUID REFERENCES categories(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT now(),
@@ -59,7 +59,7 @@ CREATE TABLE user_interest_categories (
 
 -- Posters (포스터 핵심 데이터)
 CREATE TABLE posters (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title VARCHAR(255) NOT NULL,
     slug VARCHAR(255) UNIQUE,
     source_org_name VARCHAR(100),
@@ -84,7 +84,7 @@ CREATE TABLE posters (
 
 -- Poster Images
 CREATE TABLE poster_images (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     poster_id UUID REFERENCES posters(id) ON DELETE CASCADE,
     image_type VARCHAR(50) NOT NULL, -- original, corrected, thumbnail
     storage_path TEXT NOT NULL,
@@ -95,7 +95,7 @@ CREATE TABLE poster_images (
 
 -- Poster Links
 CREATE TABLE poster_links (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     poster_id UUID REFERENCES posters(id) ON DELETE CASCADE,
     link_type VARCHAR(50) NOT NULL, -- official_notice, official_apply, etc.
     title VARCHAR(255),
@@ -106,7 +106,7 @@ CREATE TABLE poster_links (
 
 -- Poster Favorites
 CREATE TABLE poster_favorites (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     poster_id UUID REFERENCES posters(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT now(),
@@ -115,7 +115,7 @@ CREATE TABLE poster_favorites (
 
 -- Comments
 CREATE TABLE comments (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     poster_id UUID REFERENCES posters(id) ON DELETE CASCADE,
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     parent_comment_id UUID REFERENCES comments(id) ON DELETE CASCADE,
@@ -132,7 +132,7 @@ CREATE TABLE comments (
 
 -- Admin Actions (운영 로그)
 CREATE TABLE admin_actions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     actor_user_id UUID REFERENCES auth.users(id),
     target_type VARCHAR(50) NOT NULL,
     target_id UUID NOT NULL,
