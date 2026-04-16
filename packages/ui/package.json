@@ -1,0 +1,10 @@
+{
+  "name": "@posterlink/ui",
+  "version": "0.1.0",
+  "main": "./index.ts",
+  "dependencies": {
+    "react": "^18.0.0",
+    "tailwind-merge": "^2.0.0",
+    "clsx": "^2.0.0"
+  }
+}

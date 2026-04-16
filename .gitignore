@@ -1,0 +1,26 @@
+# Dependencies
+node_modules
+.pnpm-debug.log
+
+# Next.js
+.next/
+out/
+build/
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
