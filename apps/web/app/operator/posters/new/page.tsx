@@ -4,26 +4,28 @@ import { useState, useEffect } from "react";
 import { supabase } from "../../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { Button } from "@posterlink/ui";
-import { Camera, Link as LinkIcon, Calendar, MapPin, Tag, Building2, ChevronLeft, Loader2 } from "lucide-react";
+import { Camera, Link as LinkIcon, Calendar, MapPin, Tag, Building2, ChevronLeft, Loader2, Scissors } from "lucide-react";
+import { ImageCropper } from "../../components/ImageCropper";
 
 export default function NewPosterPage() {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const router = useRouter();
 
-  // DB에서 가져올 기초 데이터
   const [categories, setCategories] = useState<any[]>([]);
   const [regions, setRegions] = useState<any[]>([]);
 
   // 폼 상태
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [originalImage, setOriginalImage] = useState<string | null>(null);
+  const [croppedImageBlob, setCroppedImageBlob] = useState<Blob | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [showCropper, setShowCropper] = useState(false);
   
   const [formData, setFormData] = useState({
     title: "",
     sourceOrgName: "",
     categoryId: "",
-    regionId: "", // null이면 전국
+    regionId: "",
     appStartAt: "",
     appEndAt: "",
     summaryShort: "",
@@ -34,7 +36,6 @@ export default function NewPosterPage() {
     const fetchBaseData = async () => {
       const { data: cats } = await supabase.from("categories").select("*").order("sort_order");
       const { data: regs } = await supabase.from("regions").select("*").in("level", ["nation", "sido"]).order("level", { ascending: false });
-      
       if (cats) setCategories(cats);
       if (regs) setRegions(regs);
       setInitialLoading(false);
@@ -45,34 +46,41 @@ export default function NewPosterPage() {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setImageFile(file);
       const reader = new FileReader();
-      reader.onloadend = () => setImagePreview(reader.result as string);
+      reader.onloadend = () => {
+        setOriginalImage(reader.result as string);
+        setShowCropper(true);
+      };
       reader.readAsDataURL(file);
     }
   };
 
+  const onCropComplete = (blob: Blob) => {
+    setCroppedImageBlob(blob);
+    setImagePreview(URL.createObjectURL(blob));
+    setShowCropper(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!imageFile) return alert("포스터 이미지를 업로드해주세요.");
+    if (!croppedImageBlob) return alert("포스터 이미지를 보정하여 등록해주세요.");
     
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("인증 오류");
 
-      // 1. 이미지 업로드
-      const fileExt = imageFile.name.split('.').pop();
-      const fileName = `${Math.random()}.${fileExt}`;
-      const filePath = `${user.id}/${Date.now()}_${fileName}`;
+      // 1. 보정된 이미지 업로드
+      const fileName = `${Date.now()}_cropped.jpg`;
+      const filePath = `${user.id}/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
         .from("poster-originals")
-        .upload(filePath, imageFile);
+        .upload(filePath, croppedImageBlob, { contentType: 'image/jpeg' });
 
       if (uploadError) throw uploadError;
 
-      // 2. 포스터 기본 정보 저장
+      // 2. 포스터 정보 저장
       const { data: poster, error: posterError } = await supabase
         .from("posters")
         .insert({
@@ -80,10 +88,9 @@ export default function NewPosterPage() {
           source_org_name: formData.sourceOrgName,
           category_id: formData.categoryId,
           primary_region_id: formData.regionId || null,
-          application_start_at: formData.appStartAt || null,
           application_end_at: formData.appEndAt || null,
           summary_short: formData.summaryShort,
-          status: "draft", // 운영자가 처음 올리면 검수 전 초안 상태
+          status: "draft",
           created_by: user.id
         })
         .select()
@@ -94,11 +101,11 @@ export default function NewPosterPage() {
       // 3. 이미지 정보 저장
       await supabase.from("poster_images").insert({
         poster_id: poster.id,
-        image_type: "original",
+        image_type: "corrected",
         storage_path: filePath
       });
 
-      // 4. 공식 링크 저장
+      // 4. 링크 저장
       if (formData.officialLink) {
         await supabase.from("poster_links").insert({
           poster_id: poster.id,
@@ -109,142 +116,99 @@ export default function NewPosterPage() {
         });
       }
 
-      alert("포스터가 성공적으로 등록되었습니다 (초안 상태)");
+      alert("보정된 이미지로 포스터가 등록되었습니다.");
       router.push("/operator/posters");
     } catch (err: any) {
-      console.error(err);
-      alert("등록 중 오류가 발생했습니다: " + err.message);
+      alert("오류 발생: " + err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  if (initialLoading) return <div className="p-20 text-center font-bold text-blue-600">준비 중...</div>;
+  if (initialLoading) return <div className="p-20 text-center font-bold text-blue-600">데이터 로드 중...</div>;
 
   return (
     <div className="max-w-3xl mx-auto pb-20">
+      {showCropper && originalImage && (
+        <ImageCropper 
+          image={originalImage} 
+          onCropComplete={onCropComplete} 
+          onCancel={() => setShowCropper(false)} 
+        />
+      )}
+
       <div className="flex items-center gap-4 mb-8">
         <button onClick={() => router.back()} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
           <ChevronLeft size={24} />
         </button>
-        <h1 className="text-2xl font-black text-gray-900">새 포스터 등록 🖼️</h1>
+        <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
+          포스터 수집 및 보정 <Scissors size={20} className="text-blue-600" />
+        </h1>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
-        {/* 이미지 업로드 영역 */}
-        <section className="bg-white p-8 rounded-3xl border-2 border-dashed border-gray-200 hover:border-blue-400 transition-all group overflow-hidden">
+        {/* 이미지 업로드 & 미리보기 */}
+        <section className="bg-white p-8 rounded-[2.5rem] border-2 border-dashed border-gray-100 hover:border-blue-200 transition-all group overflow-hidden relative shadow-sm">
           <input type="file" id="poster-upload" className="hidden" accept="image/*" onChange={handleImageChange} />
-          <label htmlFor="poster-upload" className="cursor-pointer flex flex-col items-center justify-center min-h-[300px]">
+          <label htmlFor="poster-upload" className="cursor-pointer flex flex-col items-center justify-center min-h-[350px]">
             {imagePreview ? (
-              <img src={imagePreview} alt="Preview" className="max-h-[400px] rounded-xl shadow-lg" />
+              <div className="relative group">
+                <img src={imagePreview} alt="Preview" className="max-h-[450px] rounded-[2rem] shadow-2xl border-4 border-white" />
+                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-[2rem] flex items-center justify-center">
+                  <div className="bg-white px-4 py-2 rounded-xl text-xs font-black text-gray-900 shadow-xl flex items-center gap-2">
+                    <Camera size={14} /> 사진 변경 / 다시 보정
+                  </div>
+                </div>
+              </div>
             ) : (
               <div className="text-center">
-                <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
-                  <Camera size={32} />
+                <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-[2rem] flex items-center justify-center mx-auto mb-5 group-hover:scale-110 transition-transform">
+                  <Camera size={36} />
                 </div>
-                <p className="text-gray-900 font-black">포스터 사진을 올려주세요</p>
-                <p className="text-gray-400 text-sm mt-1 font-bold">JPG, PNG 파일 (최대 10MB)</p>
+                <p className="text-gray-900 font-black text-lg">포스터 사진 촬영 또는 업로드</p>
+                <p className="text-gray-400 text-sm mt-1 font-bold italic">업로드 후 자르기/회전 보정이 시작됩니다.</p>
               </div>
             )}
           </label>
         </section>
 
-        {/* 상세 정보 입력 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* 상세 정보 입력 영역 (기존과 동일) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-10 rounded-[3rem] shadow-sm border border-gray-50">
           <div className="md:col-span-2">
-            <label className="flex items-center gap-2 text-sm font-black text-gray-700 mb-2">
-              <Tag size={16} className="text-blue-600" /> 포스터 제목
-            </label>
-            <input 
-              type="text" required placeholder="공고문의 핵심 제목을 입력하세요"
-              value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})}
-              className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold focus:ring-2 focus:ring-blue-100 transition-all outline-none" 
-            />
+            <label className="text-xs font-black text-gray-400 uppercase mb-2 block px-1">TITLE</label>
+            <input type="text" required value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-100" />
           </div>
-
           <div>
-            <label className="flex items-center gap-2 text-sm font-black text-gray-700 mb-2">
-              <Building2 size={16} className="text-blue-600" /> 공고 기관
-            </label>
-            <input 
-              type="text" required placeholder="예: 서울특별시, 고용노동부"
-              value={formData.sourceOrgName} onChange={(e) => setFormData({...formData, sourceOrgName: e.target.value})}
-              className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold focus:ring-2 focus:ring-blue-100 transition-all outline-none" 
-            />
+            <label className="text-xs font-black text-gray-400 uppercase mb-2 block px-1">ORGANIZATION</label>
+            <input type="text" required value={formData.sourceOrgName} onChange={(e) => setFormData({...formData, sourceOrgName: e.target.value})} className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-100" />
           </div>
-
           <div>
-            <label className="flex items-center gap-2 text-sm font-black text-gray-700 mb-2">
-              <MapPin size={16} className="text-blue-600" /> 대상 지역
-            </label>
-            <select 
-              className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold focus:ring-2 focus:ring-blue-100 outline-none appearance-none"
-              value={formData.regionId} onChange={(e) => setFormData({...formData, regionId: e.target.value})}
-            >
-              <option value="">전국 대상</option>
+            <label className="text-xs font-black text-gray-400 uppercase mb-2 block px-1">REGION</label>
+            <select value={formData.regionId} onChange={(e) => setFormData({...formData, regionId: e.target.value})} className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-100 appearance-none">
+              <option value="">전국</option>
               {regions.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select>
           </div>
-
           <div>
-            <label className="flex items-center gap-2 text-sm font-black text-gray-700 mb-2">
-               분야 카테고리
-            </label>
-            <select 
-              required className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold focus:ring-2 focus:ring-blue-100 outline-none appearance-none"
-              value={formData.categoryId} onChange={(e) => setFormData({...formData, categoryId: e.target.value})}
-            >
-              <option value="">분야 선택</option>
+            <label className="text-xs font-black text-gray-400 uppercase mb-2 block px-1">CATEGORY</label>
+            <select required value={formData.categoryId} onChange={(e) => setFormData({...formData, categoryId: e.target.value})} className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-100 appearance-none">
+              <option value="">선택</option>
               {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
-
           <div>
-            <label className="flex items-center gap-2 text-sm font-black text-gray-700 mb-2">
-              <Calendar size={16} className="text-blue-600" /> 신청 마감일
-            </label>
-            <input 
-              type="date"
-              value={formData.appEndAt} onChange={(e) => setFormData({...formData, appEndAt: e.target.value})}
-              className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold focus:ring-2 focus:ring-blue-100 outline-none" 
-            />
+            <label className="text-xs font-black text-gray-400 uppercase mb-2 block px-1">DEADLINE</label>
+            <input type="date" value={formData.appEndAt} onChange={(e) => setFormData({...formData, appEndAt: e.target.value})} className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none" />
           </div>
-
-          <div className="md:col-span-2">
-            <label className="flex items-center gap-2 text-sm font-black text-gray-700 mb-2">
-              <LinkIcon size={16} className="text-blue-600" /> 공식 홈페이지 링크
-            </label>
-            <input 
-              type="url" placeholder="https://..."
-              value={formData.officialLink} onChange={(e) => setFormData({...formData, officialLink: e.target.value})}
-              className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold focus:ring-2 focus:ring-blue-100 transition-all outline-none" 
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="flex items-center gap-2 text-sm font-black text-gray-700 mb-2">
-              💡 한 줄 요약
-            </label>
-            <textarea 
-              rows={3} placeholder="사용자가 이해하기 쉽게 핵심 혜택을 요약해주세요"
-              value={formData.summaryShort} onChange={(e) => setFormData({...formData, summaryShort: e.target.value})}
-              className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold focus:ring-2 focus:ring-blue-100 transition-all outline-none resize-none" 
-            />
+          <div className="md:col-span-2 border-t border-gray-50 pt-6 mt-4">
+            <label className="text-xs font-black text-gray-400 uppercase mb-2 block px-1">OFFICIAL LINK</label>
+            <input type="url" value={formData.officialLink} onChange={(e) => setFormData({...formData, officialLink: e.target.value})} className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-100" placeholder="https://..." />
           </div>
         </div>
 
-        <div className="pt-6">
-          <Button 
-            disabled={loading}
-            className="w-full h-16 text-lg font-black bg-blue-600 hover:bg-blue-700 rounded-3xl shadow-xl shadow-blue-100 transition-all disabled:bg-gray-200"
-          >
-            {loading ? (
-              <div className="flex items-center gap-2">
-                <Loader2 className="animate-spin" /> 등록 중...
-              </div>
-            ) : "포스터 등록하기 (초안 저장)"}
-          </Button>
-        </div>
+        <Button disabled={loading} className="w-full h-16 text-lg font-black bg-gray-900 hover:bg-black rounded-[2rem] shadow-2xl transition-all disabled:bg-gray-200">
+          {loading ? <Loader2 className="animate-spin" /> : "보정된 포스터 등록하기"}
+        </Button>
       </form>
     </div>
   );
