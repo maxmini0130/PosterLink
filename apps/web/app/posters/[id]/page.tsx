@@ -3,30 +3,67 @@
 import { useState, useEffect } from "react";
 import { Header } from "../../components/Header";
 import { BottomNav } from "../../components/BottomNav";
-import { DUMMY_POSTERS } from "../../lib/dummy";
+import { CommentSection } from "../../components/CommentSection";
 import { notFound } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
 export default function PosterDetailPage({ params }: { params: { id: string } }) {
-  const poster = DUMMY_POSTERS.find((p) => p.id === params.id);
+  const [poster, setPoster] = useState<any>(null);
+  const [links, setLinks] = useState<any[]>([]);
   const [isFavorited, setIsFavorited] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  if (!poster) {
-    notFound();
-  }
-
   useEffect(() => {
-    const checkFavorite = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data } = await supabase.from("favorites").select().eq("user_id", user.id).eq("poster_id", poster.id).single();
-        setIsFavorited(!!data);
+    const fetchPosterDetail = async () => {
+      setLoading(true);
+      try {
+        // 1. 포스터 상세 정보 가져오기 (카테고리, 지역 포함)
+        const { data, error } = await supabase
+          .from("posters")
+          .select(`
+            *,
+            categories (name),
+            regions (name),
+            poster_images (storage_path)
+          `)
+          .eq("id", params.id)
+          .single();
+
+        if (error || !data) {
+          setPoster(null);
+          return;
+        }
+
+        setPoster(data);
+
+        // 2. 관련 링크 가져오기
+        const { data: linkData } = await supabase
+          .from("poster_links")
+          .select("*")
+          .eq("poster_id", params.id);
+        
+        if (linkData) setLinks(linkData);
+
+        // 3. 찜 상태 확인
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: favData } = await supabase
+            .from("poster_favorites")
+            .select()
+            .eq("user_id", user.id)
+            .eq("poster_id", params.id)
+            .single();
+          setIsFavorited(!!favData);
+        }
+      } catch (err) {
+        console.error("Error fetching detail:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
-    checkFavorite();
-  }, [poster.id]);
+
+    fetchPosterDetail();
+  }, [params.id]);
 
   const toggleFavorite = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -36,63 +73,144 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
     }
 
     if (isFavorited) {
-      await supabase.from("favorites").delete().eq("user_id", user.id).eq("poster_id", poster.id);
+      await supabase.from("poster_favorites").delete().eq("user_id", user.id).eq("poster_id", params.id);
     } else {
-      await supabase.from("favorites").insert({ user_id: user.id, poster_id: poster.id });
+      await supabase.from("poster_favorites").insert({ user_id: user.id, poster_id: params.id });
     }
     setIsFavorited(!isFavorited);
   };
 
-  const daysLeft = Math.ceil((new Date(poster.application_end_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+  if (loading) {
+    return <div className="p-10 text-center animate-pulse">상세 정보 불러오는 중...</div>;
+  }
+
+  if (!poster) {
+    notFound();
+  }
+
+  // D-Day 계산
+  const getDaysLeft = (date: string) => {
+    const diff = new Date(date).getTime() - new Date().getTime();
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  };
+  const daysLeft = poster.application_end_at ? getDaysLeft(poster.application_end_at) : null;
+
+  // 이미지 URL 구성 (Supabase Storage 경로 활용)
+  const imageUrl = poster.poster_images?.[0]?.storage_path 
+    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/poster-originals/${poster.poster_images[0].storage_path}`
+    : null;
 
   return (
     <div className="min-h-screen bg-white pb-24 md:pb-10">
       <Header />
       <main className="container mx-auto max-w-2xl px-4 py-6">
-        <div className="aspect-[3/4] rounded-2xl overflow-hidden border shadow-lg mb-6">
-          <img src={poster.thumbnail_url} alt={poster.title} className="w-full h-full object-cover" />
+        {/* 포스터 이미지 */}
+        <div className="aspect-[3/4] rounded-2xl overflow-hidden border shadow-lg mb-6 bg-gray-100 flex items-center justify-center">
+          {imageUrl ? (
+            <img src={imageUrl} alt={poster.title} className="w-full h-full object-cover" />
+          ) : (
+            <span className="text-gray-300 font-bold">이미지가 없습니다</span>
+          )}
         </div>
 
+        {/* 상단 타이틀 영역 */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-2">
-            <span className="px-2 py-0.5 bg-accent text-white text-[10px] font-bold rounded">
-              D-{daysLeft > 0 ? daysLeft : "Day"}
-            </span>
-            <span className="text-sm text-gray-500 font-medium">{poster.source_org_name}</span>
+            {daysLeft !== null && (
+              <span className={`px-2 py-0.5 text-[10px] font-black rounded text-white ${daysLeft <= 3 ? 'bg-rose-500' : 'bg-blue-600'}`}>
+                {daysLeft > 0 ? `D-${daysLeft}` : daysLeft === 0 ? 'D-Day' : '마감'}
+              </span>
+            )}
+            <span className="text-sm text-gray-500 font-bold">{poster.source_org_name}</span>
           </div>
           <h1 className="text-2xl font-bold text-gray-900 leading-tight mb-4">{poster.title}</h1>
           <div className="flex flex-wrap gap-2">
-            {poster.tags.map((tag) => (
-              <span key={tag} className="px-3 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
-                #{tag}
+            {poster.categories?.name && (
+              <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-black rounded-full">
+                #{poster.categories.name}
               </span>
-            ))}
+            )}
+            {poster.regions?.name && (
+              <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs font-black rounded-full">
+                #{poster.regions.name}
+              </span>
+            )}
           </div>
         </div>
 
-        <section className="p-6 bg-gray-50 rounded-2xl mb-8">
-          <h2 className="text-sm font-bold text-primary mb-4">📍 핵심 요약</h2>
-          <ul className="space-y-4 text-sm text-gray-700">
+        {/* 핵심 요약 정보 */}
+        <section className="p-6 bg-gray-50 rounded-3xl mb-8 border border-gray-100">
+          <h2 className="text-sm font-black text-blue-600 mb-5 flex items-center gap-2">
+            <span className="w-1.5 h-1.5 bg-blue-600 rounded-full" /> 📍 핵심 요약
+          </h2>
+          <ul className="space-y-4 text-sm text-gray-700 font-medium">
             <li className="flex gap-4">
-              <span className="font-bold text-gray-400 w-16 flex-shrink-0">신청기간</span>
-              <span>{new Date(poster.application_end_at).toLocaleDateString()} 까지</span>
+              <span className="text-gray-400 w-16 flex-shrink-0">신청기간</span>
+              <span className="text-gray-900 font-bold">
+                {poster.application_end_at ? new Date(poster.application_end_at).toLocaleDateString() : "상시"} 까지
+              </span>
             </li>
             <li className="flex gap-4">
-              <span className="font-bold text-gray-400 w-16 flex-shrink-0">대상지역</span>
-              <span>{poster.region}</span>
+              <span className="text-gray-400 w-16 flex-shrink-0">대상지역</span>
+              <span className="text-gray-900 font-bold">{poster.regions?.name || "전국"}</span>
             </li>
+            {poster.summary_short && (
+              <li className="flex gap-4">
+                <span className="text-gray-400 w-16 flex-shrink-0">주요내용</span>
+                <span className="text-gray-900 font-bold leading-relaxed">{poster.summary_short}</span>
+              </li>
+            )}
           </ul>
         </section>
 
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-lg border-t md:relative md:bg-transparent md:border-none md:p-0">
+        {/* 안내 문구 */}
+        <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl mb-10">
+          <p className="text-[11px] text-blue-600 font-bold text-center leading-relaxed">
+            정확한 신청 자격 및 절차는 아래 버튼을 눌러<br />공식 공고문을 반드시 확인해 주세요.
+          </p>
+        </div>
+
+        {/* 관련 링크 섹션 (있을 경우) */}
+        {links.length > 0 && (
+          <section className="mb-10">
+            <h2 className="text-lg font-bold mb-4">참고 링크</h2>
+            <div className="space-y-2">
+              {links.map((link) => (
+                <a 
+                  key={link.id}
+                  href={link.url}
+                  target="_blank"
+                  className="block p-4 border rounded-2xl hover:bg-gray-50 transition-colors text-sm font-bold text-gray-700 flex items-center justify-between"
+                >
+                  {link.title || link.link_type}
+                  <span className="text-gray-300">→</span>
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* 댓글 섹션 */}
+        <CommentSection posterId={params.id} />
+
+        {/* 하단 고정 액션바 (모바일) */}
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-xl border-t md:relative md:bg-transparent md:border-none md:p-0">
           <div className="max-w-2xl mx-auto flex gap-3">
             <button 
               onClick={toggleFavorite}
-              className={`w-14 h-14 flex items-center justify-center border rounded-xl transition-colors ${isFavorited ? 'bg-accent/10 border-accent' : 'bg-white'}`}
+              className={`w-14 h-14 flex items-center justify-center border rounded-2xl transition-all shadow-sm ${
+                isFavorited ? 'bg-rose-50 border-rose-200' : 'bg-white border-gray-100'
+              }`}
             >
-               {isFavorited ? '❤️' : '🤍'}
+               <span className="text-xl">{isFavorited ? '❤️' : '🤍'}</span>
             </button>
-            <a href="#" target="_blank" className="flex-1 h-14 flex items-center justify-center bg-primary text-white font-bold rounded-xl shadow-lg">
+            
+            {/* 공식 링크 중 하나를 메인 버튼으로 사용 */}
+            <a 
+              href={links.find(l => l.is_primary)?.url || links[0]?.url || "#"} 
+              target="_blank" 
+              className="flex-1 h-14 flex items-center justify-center bg-blue-600 text-white font-black rounded-2xl shadow-lg shadow-blue-200"
+            >
               공식 홈페이지 바로가기
             </a>
           </div>
