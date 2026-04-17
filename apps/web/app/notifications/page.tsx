@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { Header } from "./components/Header";
-import { BottomNav } from "./components/BottomNav";
+import { Header } from "../components/Header";
+import { BottomNav } from "../components/BottomNav";
 import { Bell, Clock, Calendar, CheckCircle2, ChevronRight, Inbox } from "lucide-react";
 import Link from "next/link";
 

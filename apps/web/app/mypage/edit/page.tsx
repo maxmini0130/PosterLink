@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
-import { Header } from "../../app/components/Header";
-import { BottomNav } from "../../app/components/BottomNav";
+import { Header } from "../../components/Header";
+import { BottomNav } from "../../components/BottomNav";
 import { ChevronLeft, Check, Loader2, MapPin, Calendar, Tag } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@posterlink/ui";

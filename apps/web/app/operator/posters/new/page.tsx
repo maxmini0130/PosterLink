@@ -5,7 +5,7 @@ import { supabase } from "../../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { Button } from "@posterlink/ui";
 import { Camera, Link as LinkIcon, Calendar, MapPin, Tag, Building2, ChevronLeft, Loader2, Scissors } from "lucide-react";
-import { ImageCropper } from "../../components/ImageCropper";
+import { ImageCropper } from "../../../components/ImageCropper";
 
 export default function NewPosterPage() {
   const [loading, setLoading] = useState(false);

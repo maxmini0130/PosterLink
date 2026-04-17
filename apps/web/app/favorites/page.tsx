@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "../../lib/supabase";
-import { Header } from "../../components/Header";
-import { BottomNav } from "../../components/BottomNav";
-import { PosterCard } from "../../components/PosterCard";
-import { Heart } from "lucide-react";
+import { supabase } from "../lib/supabase";
+import { Header } from "../components/Header";
+import { BottomNav } from "../components/BottomNav";
+import { PosterCard } from "../components/PosterCard";
+import { Heart, ArrowRight } from "lucide-react";
+import Link from "next/link";
 
 export default function FavoritesPage() {
   const [loading, setLoading] = useState(true);
@@ -17,25 +18,26 @@ export default function FavoritesPage() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          // Join poster_favorites with posters
+          // Join favorites with posters and related info
           const { data, error } = await supabase
-            .from("poster_favorites")
+            .from("favorites")
             .select(`
-              poster_id,
+              created_at,
               posters (
                 *,
-                categories (name),
-                regions (name)
+                poster_categories (categories (name)),
+                poster_regions (regions (name)),
+                poster_images (image_url)
               )
             `)
             .eq("user_id", user.id)
             .order("created_at", { ascending: false });
 
           if (data) {
-            // Flatten the structure
             const flattened = data.map((f: any) => f.posters).filter(Boolean);
             setFavorites(flattened);
           }
+          if (error) console.error("Fetch Favorites Error:", error);
         }
       } catch (err) {
         console.error("Error fetching favorites:", err);
@@ -51,22 +53,23 @@ export default function FavoritesPage() {
     <div className="min-h-screen bg-white pb-24">
       <Header />
       
-      <main className="container mx-auto px-4 py-6 max-w-4xl">
-        <div className="mb-8">
-          <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
-            내가 찜한 포스터 <Heart className="fill-rose-500 text-rose-500" size={24} />
-          </h1>
-          <p className="text-sm text-gray-400 font-bold mt-1">놓치고 싶지 않은 공고들을 모아보세요.</p>
+      <main className="container mx-auto px-4 py-8 max-w-4xl">
+        <div className="mb-10 flex flex-col items-center text-center">
+          <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-[1.5rem] flex items-center justify-center mb-4 shadow-sm">
+            <Heart size={32} fill="currentColor" />
+          </div>
+          <h1 className="text-3xl font-black text-gray-900 italic tracking-tight">Saved Posters 💖</h1>
+          <p className="text-sm text-gray-400 font-bold mt-2">놓치고 싶지 않은 소중한 공고들을 모아보세요.</p>
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[1,2,3,4].map(i => (
-              <div key={i} className="aspect-[3/4] bg-gray-50 rounded-2xl animate-pulse" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {[1,2,3,4,5,6,7,8].map(i => (
+              <div key={i} className="aspect-[3/4] bg-gray-50 rounded-[2.5rem] animate-pulse" />
             ))}
           </div>
         ) : favorites.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-5 gap-y-12">
             {favorites.map((poster) => (
               <PosterCard 
                 key={poster.id} 
@@ -75,19 +78,24 @@ export default function FavoritesPage() {
                   title: poster.title,
                   org: poster.source_org_name,
                   deadline: poster.application_end_at,
-                  tags: [poster.categories?.name, poster.regions?.name].filter(Boolean)
+                  tags: [poster.poster_categories?.[0]?.categories?.name].filter(Boolean),
+                  image: poster.poster_images?.[0]?.image_url
                 }} 
               />
             ))}
           </div>
         ) : (
-          <div className="py-24 text-center bg-gray-50 rounded-3xl border border-dashed border-gray-200">
-            <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mx-auto mb-4">
-              <Heart className="text-gray-200" size={32} />
+          <div className="py-40 text-center bg-gray-50/50 rounded-[4rem] border-2 border-dashed border-gray-100">
+            <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
+              <Heart className="text-gray-200" size={40} />
             </div>
-            <p className="text-sm text-gray-400 font-bold">아직 찜한 포스터가 없습니다.</p>
-            <Link href="/posters" className="mt-4 inline-block text-sm text-blue-600 font-black underline">
-              포스터 탐색하러 가기
+            <p className="text-gray-900 font-black text-lg">아직 찜한 포스터가 없습니다.</p>
+            <p className="text-gray-400 text-sm font-bold mt-2 mb-8">마음에 드는 포스터를 발견하면 ❤️ 버튼을 눌러보세요.</p>
+            <Link 
+              href="/posters" 
+              className="inline-flex items-center gap-2 px-8 py-4 bg-gray-900 text-white font-black rounded-[1.5rem] hover:bg-black transition-all shadow-xl shadow-gray-200"
+            >
+              EXPLORE POSTERS <ArrowRight size={18} />
             </Link>
           </div>
         )}
@@ -97,6 +105,3 @@ export default function FavoritesPage() {
     </div>
   );
 }
-
-// Need to import Link for the empty state
-import Link from "next/link";

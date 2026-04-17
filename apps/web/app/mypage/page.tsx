@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { Header } from "./components/Header";
-import { BottomNav } from "./components/BottomNav";
+import { Header } from "../components/Header";
+import { BottomNav } from "../components/BottomNav";
 import Link from "next/link";
 import { User, MessageSquare, Settings, Heart, LogOut, ChevronRight, MapPin, Calendar } from "lucide-react";
 import { useRouter } from "next/navigation";

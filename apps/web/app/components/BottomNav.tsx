@@ -9,7 +9,7 @@ export function BottomNav() {
           <Home size={24} />
           <span className="text-[10px] font-black">홈</span>
         </Link>
-        <Link href="/explore" className="flex flex-col items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+        <Link href="/posters" className="flex flex-col items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
           <Compass size={24} />
           <span className="text-[10px] font-black">탐색</span>
         </Link>

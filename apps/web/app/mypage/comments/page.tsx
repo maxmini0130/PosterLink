@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
-import { Header } from "../../app/components/Header";
-import { BottomNav } from "../../app/components/BottomNav";
+import { Header } from "../../components/Header";
+import { BottomNav } from "../../components/BottomNav";
 import { MessageSquare, Trash2, ChevronLeft, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
