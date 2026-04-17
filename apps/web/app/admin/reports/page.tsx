@@ -21,9 +21,9 @@ export default function AdminReportsPage() {
           user_id,
           profiles (nickname)
         ),
-        reporter:profiles!comment_reports_reporter_id_fkey (nickname)
+        reporter:profiles!reporter_user_id (nickname)
       `)
-      .eq("status", "received")
+      .eq("report_status", "received")
       .order("created_at", { ascending: true });
 
     if (data) setReports(data);
@@ -43,8 +43,8 @@ export default function AdminReportsPage() {
 
     const { error } = await supabase
       .from("comment_reports")
-      .update({ 
-        status: 'actioned',
+      .update({
+        report_status: action === 'hide' ? 'actioned' : 'dismissed',
         handled_at: new Date().toISOString()
       })
       .eq("id", reportId);

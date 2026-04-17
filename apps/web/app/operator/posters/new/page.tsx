@@ -124,11 +124,9 @@ export default function NewPosterPage() {
         .insert({
           title: formData.title,
           source_org_name: formData.sourceOrgName,
-          category_id: formData.categoryId,
-          primary_region_id: formData.regionId || null,
+          poster_status: "draft",
           application_end_at: formData.appEndAt || null,
           summary_short: formData.summaryShort,
-          status: "draft",
           created_by: user.id
         })
         .select()
@@ -136,11 +134,27 @@ export default function NewPosterPage() {
 
       if (posterError) throw posterError;
 
-      // 3. 이미지 정보 저장
+      // 2-1. 포스터 카테고리 연결 (M:N 대응)
+      await supabase.from("poster_categories").insert({
+        poster_id: poster.id,
+        category_id: formData.categoryId
+      });
+
+      // 2-2. 포스터 지역 연결 (M:N 대응)
+      if (formData.regionId) {
+        await supabase.from("poster_regions").insert({
+          poster_id: poster.id,
+          region_id: formData.regionId
+        });
+      }
+
+      // 3. 이미지 정보 저장 (Public URL 생성 후 저장)
+      const { data: { publicUrl } } = supabase.storage.from("poster-originals").getPublicUrl(filePath);
+
       await supabase.from("poster_images").insert({
         poster_id: poster.id,
-        image_type: "corrected",
-        storage_path: filePath
+        image_type: "processed",
+        image_url: publicUrl
       });
 
       // 4. 링크 저장

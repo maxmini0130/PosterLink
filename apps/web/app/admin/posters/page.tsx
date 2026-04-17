@@ -5,12 +5,12 @@ import { supabase } from "../../lib/supabase";
 import { Check, X, ExternalLink, Image as ImageIcon, Eye, FileCheck, Filter, Loader2 } from "lucide-react";
 import Link from "next/link";
 
-type PosterStatus = 'review_requested' | 'published' | 'rejected' | 'draft';
+type PosterStatus = 'review' | 'published' | 'rejected' | 'draft';
 
 export default function AdminPostersPage() {
   const [posters, setPosters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentFilter, setCurrentFilter] = useState<PosterStatus>('review_requested');
+  const [currentFilter, setCurrentFilter] = useState<PosterStatus>('review');
 
   const fetchPosters = async (status: PosterStatus) => {
     setLoading(true);
@@ -18,12 +18,12 @@ export default function AdminPostersPage() {
       .from("posters")
       .select(`
         *,
-        categories (name),
-        regions (name),
-        poster_images (storage_path)
+        poster_categories (categories (name)),
+        poster_regions (regions (name)),
+        poster_images (image_url)
       `)
-      .eq("status", status)
-      .order("created_at", { ascending: status === 'review_requested' }); // 대기중은 오래된 순, 나머지는 최신순
+      .eq("poster_status", status)
+      .order("created_at", { ascending: status === 'review' }); // 대기중은 오래된 순, 나머지는 최신순
 
     if (data) setPosters(data);
     setLoading(false);
@@ -39,8 +39,8 @@ export default function AdminPostersPage() {
 
     const { error } = await supabase
       .from("posters")
-      .update({ 
-        status: newStatus,
+      .update({
+        poster_status: newStatus,
         published_at: newStatus === 'published' ? new Date().toISOString() : null
       })
       .eq("id", id);
@@ -53,7 +53,7 @@ export default function AdminPostersPage() {
   };
 
   const tabs: { label: string; value: PosterStatus }[] = [
-    { label: "검수 대기", value: 'review_requested' },
+    { label: "검수 대기", value: 'review' },
     { label: "승인 완료", value: 'published' },
     { label: "반려됨", value: 'rejected' },
     { label: "임시 저장", value: 'draft' },
@@ -99,7 +99,7 @@ export default function AdminPostersPage() {
               <div className="w-full md:w-32 aspect-[3/4] bg-gray-50 dark:bg-slate-800 rounded-2xl flex-shrink-0 overflow-hidden border border-gray-100 dark:border-slate-700 flex items-center justify-center relative group/img">
                 {p.poster_images?.[0] ? (
                   <img 
-                    src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/poster-originals/${p.poster_images[0].storage_path}`} 
+                    src={p.poster_images[0].image_url} 
                     className="w-full h-full object-cover transition-transform duration-500 group-hover/img:scale-110"
                     alt="Poster"
                   />
@@ -115,11 +115,11 @@ export default function AdminPostersPage() {
               <div className="flex-1 space-y-4">
                 <div className="flex items-center gap-3">
                   <span className={`px-2.5 py-1 text-[10px] font-black rounded-lg uppercase tracking-wider ${
-                    p.status === 'published' ? 'bg-green-50 dark:bg-green-900/20 text-green-600' :
-                    p.status === 'rejected' ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-600' :
+                    p.poster_status === 'published' ? 'bg-green-50 dark:bg-green-900/20 text-green-600' :
+                    p.poster_status === 'rejected' ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-600' :
                     'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600'
                   }`}>
-                    {p.status.replace('_', ' ')}
+                    {p.poster_status.replace('_', ' ')}
                   </span>
                   <span className="text-[11px] font-bold text-gray-400 dark:text-slate-500 italic">
                     {new Date(p.created_at).toLocaleDateString()} 에 요청됨
@@ -130,12 +130,12 @@ export default function AdminPostersPage() {
                 <p className="text-sm font-bold text-gray-500 dark:text-slate-400 flex items-center gap-2">
                   <span className="text-indigo-500">@{p.source_org_name}</span>
                   <span className="w-1 h-1 bg-gray-300 rounded-full" />
-                  <span>{p.regions?.name || '전국'}</span>
+                  <span>{p.poster_regions?.[0]?.regions?.name || '전국'}</span>
                 </p>
 
                 <div className="flex flex-wrap gap-2">
                   <span className="px-3 py-1 bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-slate-400 text-[11px] font-black rounded-full border border-gray-100 dark:border-slate-700">
-                    분야: {p.categories?.name}
+                    분야: {p.poster_categories?.[0]?.categories?.name}
                   </span>
                   <span className="px-3 py-1 bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-slate-400 text-[11px] font-black rounded-full border border-gray-100 dark:border-slate-700">
                     마감: {p.application_end_at ? new Date(p.application_end_at).toLocaleDateString() : '상시'}
@@ -152,7 +152,7 @@ export default function AdminPostersPage() {
                 >
                   <ExternalLink size={20} />
                 </Link>
-                {p.status !== 'rejected' && (
+                {p.poster_status !== 'rejected' && (
                   <button 
                     onClick={() => handleStatusChange(p.id, 'rejected')}
                     className="p-4 bg-rose-50 dark:bg-rose-900/10 text-rose-500 rounded-2xl hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-all"
@@ -160,7 +160,7 @@ export default function AdminPostersPage() {
                     <X size={20} />
                   </button>
                 )}
-                {p.status !== 'published' && (
+                {p.poster_status !== 'published' && (
                   <button 
                     onClick={() => handleStatusChange(p.id, 'published')}
                     className="p-4 md:p-6 bg-indigo-600 dark:bg-indigo-500 text-white rounded-[1.5rem] hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-all shadow-xl shadow-indigo-100 dark:shadow-none"

@@ -142,23 +142,26 @@ export default function App() {
       const { error: storageError } = await supabase.storage.from('poster-originals').upload(fileName, formData);
       if (storageError) throw storageError;
 
-      // 2. DB 초안 생성
+      // Public URL 가져오기
+      const { data: { publicUrl } } = supabase.storage.from('poster-originals').getPublicUrl(fileName);
+
+      // 2. DB 초안 생성 (최신 컬럼명 반영)
       const { data: poster, error: dbError } = await supabase.from('posters').insert({
         title: `현장 수집_${new Date().toLocaleDateString()}`,
-        status: 'draft',
+        poster_status: 'draft',
         created_by: user.id,
       }).select().single();
 
       if (dbError) throw dbError;
 
-      // 3. 이미지 정보 저장
+      // 3. 이미지 정보 저장 (Public URL 저장)
       await supabase.from('poster_images').insert({
         poster_id: poster.id,
         image_type: 'original',
-        storage_path: fileName
+        image_url: publicUrl
       });
 
-      Alert.alert('Success', '포스터 초안이 등록되었습니다.');
+      Alert.alert('Success', '포스터 현장 사진이 업로드되었습니다. 웹 대시보드에서 보정을 진행해주세요.');
       setView('home');
       setCapturedImage(null);
     } catch (error: any) {
@@ -185,7 +188,7 @@ export default function App() {
   if (view === 'home') {
     return (
       <View style={styles.container}>
-        <View className="mb-10 items-center">
+        <View style={{ marginBottom: 40, alignItems: 'center' }}>
            <Text style={styles.welcome}>안녕하세요, {user?.email?.split('@')[0]}님</Text>
            {expoPushToken ? (
              <Text style={styles.statusText}>✅ 알림 수신 대기 중</Text>
@@ -213,7 +216,7 @@ export default function App() {
         <Camera style={{ flex: 1 }} ref={cameraRef}>
           <View style={styles.cameraControls}>
             <TouchableOpacity onPress={() => setView('home')} style={styles.iconButton}>
-              <Text style={{color: 'white', fontBold: 'bold'}}>취소</Text>
+              <Text style={{color: 'white', fontWeight: 'bold'}}>취소</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={takePicture} style={styles.shutterButton} />
             <View style={{ width: 40 }} />
