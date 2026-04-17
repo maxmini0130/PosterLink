@@ -95,12 +95,12 @@ export default function AdminSettingsPage() {
           <input 
             type="text" placeholder="이름 (예: 지원금/복지)" 
             value={newItemName} onChange={(e) => setNewItemName(e.target.value)}
-            className="flex-1 p-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-100"
+            className="flex-1 p-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-100 text-gray-900 placeholder:text-gray-400"
           />
           <input 
             type="text" placeholder="코드 (예: CAT_WELFARE)" 
             value={newItemCode} onChange={(e) => setNewItemCode(e.target.value)}
-            className="flex-1 p-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-100"
+            className="flex-1 p-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-100 text-gray-900 placeholder:text-gray-400"
           />
           <button 
             onClick={handleAddItem}

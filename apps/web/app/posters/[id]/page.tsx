@@ -22,9 +22,9 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
           .from("posters")
           .select(`
             *,
-            categories (name),
-            regions (name),
-            poster_images (storage_path)
+            poster_categories (categories (name)),
+            poster_regions (regions (name)),
+            poster_images (image_url)
           `)
           .eq("id", params.id)
           .single();
@@ -48,7 +48,7 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           const { data: favData } = await supabase
-            .from("poster_favorites")
+            .from("favorites")
             .select()
             .eq("user_id", user.id)
             .eq("poster_id", params.id)
@@ -73,9 +73,9 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
     }
 
     if (isFavorited) {
-      await supabase.from("poster_favorites").delete().eq("user_id", user.id).eq("poster_id", params.id);
+      await supabase.from("favorites").delete().eq("user_id", user.id).eq("poster_id", params.id);
     } else {
-      await supabase.from("poster_favorites").insert({ user_id: user.id, poster_id: params.id });
+      await supabase.from("favorites").insert({ user_id: user.id, poster_id: params.id });
     }
     setIsFavorited(!isFavorited);
   };
@@ -96,9 +96,7 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
   const daysLeft = poster.application_end_at ? getDaysLeft(poster.application_end_at) : null;
 
   // 이미지 URL 구성 (Supabase Storage 경로 활용)
-  const imageUrl = poster.poster_images?.[0]?.storage_path 
-    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/poster-originals/${poster.poster_images[0].storage_path}`
-    : null;
+  const imageUrl = poster.poster_images?.[0]?.image_url ?? null;
 
   return (
     <div className="min-h-screen bg-white pb-24 md:pb-10">
@@ -125,14 +123,14 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
           </div>
           <h1 className="text-2xl font-bold text-gray-900 leading-tight mb-4">{poster.title}</h1>
           <div className="flex flex-wrap gap-2">
-            {poster.categories?.name && (
+            {poster.poster_categories?.[0]?.categories?.name && (
               <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-black rounded-full">
-                #{poster.categories.name}
+                #{poster.poster_categories[0].categories.name}
               </span>
             )}
-            {poster.regions?.name && (
+            {poster.poster_regions?.[0]?.regions?.name && (
               <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs font-black rounded-full">
-                #{poster.regions.name}
+                #{poster.poster_regions[0].regions.name}
               </span>
             )}
           </div>
@@ -152,7 +150,7 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
             </li>
             <li className="flex gap-4">
               <span className="text-gray-400 w-16 flex-shrink-0">대상지역</span>
-              <span className="text-gray-900 font-bold">{poster.regions?.name || "전국"}</span>
+              <span className="text-gray-900 font-bold">{poster.poster_regions?.[0]?.regions?.name || "전국"}</span>
             </li>
             {poster.summary_short && (
               <li className="flex gap-4">

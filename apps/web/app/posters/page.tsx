@@ -46,14 +46,18 @@ export default function PosterListPage() {
     try {
       let query = supabase
         .from("posters")
-        .select(`*, categories (name), regions (name)`)
-        .eq("status", "published");
+        .select(`*, poster_categories (categories (name)), poster_regions (regions (name))`)
+        .eq("poster_status", "published");
 
       if (queryStr) {
         query = query.ilike("title", `%${queryStr}%`);
       }
-      if (selectedCategoryId) query = query.eq("category_id", selectedCategoryId);
-      if (selectedRegionId) query = query.or(`primary_region_id.eq.${selectedRegionId},primary_region_id.is.null`);
+      if (selectedCategoryId) {
+        query = query.eq("poster_categories.category_id", selectedCategoryId);
+      }
+      if (selectedRegionId) {
+        query = query.eq("poster_regions.region_id", selectedRegionId);
+      }
 
       const { data } = await query.order(sortBy === "latest" ? "created_at" : "application_end_at", { ascending: sortBy !== "latest" });
       if (data) setPosters(data);
@@ -107,7 +111,7 @@ export default function PosterListPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="검색어를 입력하세요"
-                className="w-full py-3 px-4 bg-gray-50 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-100"
+                className="w-full py-3 px-4 bg-gray-50 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-100 text-gray-900 placeholder:text-gray-400"
               />
               {searchQuery && (
                 <button type="button" onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400">
@@ -226,7 +230,7 @@ export default function PosterListPage() {
                   title: poster.title,
                   org: poster.source_org_name,
                   deadline: poster.application_end_at,
-                  tags: [poster.categories?.name].filter(Boolean)
+                  tags: [poster.poster_categories?.[0]?.categories?.name].filter(Boolean)
                 }} 
               />
             ))}

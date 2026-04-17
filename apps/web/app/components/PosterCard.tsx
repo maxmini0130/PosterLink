@@ -7,6 +7,7 @@ interface PosterCardProps {
     org: string;
     deadline: string;
     tags: string[];
+    image?: string;
   };
 }
 

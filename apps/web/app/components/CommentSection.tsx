@@ -22,7 +22,7 @@ export function CommentSection({ posterId }: CommentSectionProps) {
         profiles (nickname, role)
       `)
       .eq("poster_id", posterId)
-      .eq("status", "normal")
+      .in("status", ["normal"])
       .order("created_at", { ascending: false });
 
     if (data) setComments(data);
@@ -37,6 +37,7 @@ export function CommentSection({ posterId }: CommentSectionProps) {
     e.preventDefault();
     if (!user) return alert("로그인이 필요합니다.");
     if (!newComment.trim()) return;
+    if (newComment.trim().length > 500) return alert("댓글은 500자 이내로 작성해주세요.");
 
     setLoading(true);
     const { error } = await supabase.from("comments").insert({
@@ -90,7 +91,7 @@ export function CommentSection({ posterId }: CommentSectionProps) {
           onChange={(e) => setNewComment(e.target.value)}
           placeholder={user ? "공고에 대해 궁금한 점이나 후기를 남겨주세요." : "로그인 후 댓글을 작성할 수 있습니다."}
           disabled={!user || loading}
-          className="w-full p-5 bg-gray-50 border-none rounded-3xl text-sm font-bold focus:ring-2 focus:ring-blue-100 outline-none resize-none min-h-[120px]"
+          className="w-full p-5 bg-gray-50 border-none rounded-3xl text-sm font-bold text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-100 outline-none resize-none min-h-[120px]"
         />
         <button
           disabled={!user || loading || !newComment.trim()}
