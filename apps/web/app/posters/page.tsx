@@ -225,6 +225,7 @@ export default function PosterListPage() {
                   title: poster.title,
                   org: poster.source_org_name,
                   deadline: poster.application_end_at,
+                  image: poster.thumbnail_url,
                   tags: []
                 }} 
               />

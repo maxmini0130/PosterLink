@@ -17,10 +17,7 @@ export function CommentSection({ posterId }: CommentSectionProps) {
   const fetchComments = async () => {
     const { data, error } = await supabase
       .from("comments")
-      .select(`
-        *,
-        profiles (nickname, role)
-      `)
+      .select("*")
       .eq("poster_id", posterId)
       .in("status", ["normal"])
       .order("created_at", { ascending: false });
@@ -108,9 +105,9 @@ export function CommentSection({ posterId }: CommentSectionProps) {
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-blue-50 rounded-full flex items-center justify-center text-blue-500 text-[10px] font-black uppercase">
-                  {comment.profiles?.nickname?.charAt(0) || 'U'}
+                  U
                 </div>
-                <span className="text-sm font-black text-gray-900">{comment.profiles?.nickname || '익명'}</span>
+                <span className="text-sm font-black text-gray-900">사용자</span>
                 {comment.is_official && (
                   <span className="px-1.5 py-0.5 bg-blue-600 text-white text-[9px] font-black rounded-md uppercase tracking-tighter">OFFICIAL</span>
                 )}

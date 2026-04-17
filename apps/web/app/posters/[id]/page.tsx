@@ -44,10 +44,10 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
         if (user) {
           const { data: favData } = await supabase
             .from("favorites")
-            .select()
+            .select("poster_id")
             .eq("user_id", user.id)
             .eq("poster_id", params.id)
-            .single();
+            .maybeSingle();
           setIsFavorited(!!favData);
         }
       } catch (err) {

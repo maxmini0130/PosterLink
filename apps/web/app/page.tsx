@@ -45,7 +45,7 @@ export default function Home() {
         if (!postersFetched) {
           const { data: publicData, error: publicError } = await supabase
             .from("posters")
-            .select("id, title, source_org_name, application_end_at, poster_status")
+            .select("id, title, source_org_name, application_end_at, poster_status, thumbnail_url")
             .eq("poster_status", "published")
             .order("created_at", { ascending: false })
             .limit(8);
@@ -166,6 +166,7 @@ export default function Home() {
                       title: poster.title,
                       org: poster.source_org_name,
                       deadline: poster.application_end_at,
+                      image: poster.thumbnail_url,
                       tags: [poster.poster_categories?.[0]?.categories?.name ?? poster.categories?.name ?? poster.category].filter(Boolean)
                     }} 
                   />

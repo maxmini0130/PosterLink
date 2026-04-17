@@ -26,10 +26,13 @@ export function PosterCard({ poster }: PosterCardProps) {
   return (
     <Link href={`/posters/${poster.id}`} className="group block">
       <div className="relative aspect-[3/4] overflow-hidden rounded-2xl bg-gray-100 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 shadow-sm transition-all group-hover:shadow-md group-hover:-translate-y-1">
-        {/* 포스터 이미지 배경 (실제 이미지가 없을 때의 플레이스홀더) */}
-        <div className="h-full w-full bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center">
-           <span className="text-blue-200 dark:text-slate-600 font-black text-2xl tracking-tighter opacity-50 uppercase">POSTER</span>
-        </div>
+        {poster.image ? (
+          <img src={poster.image} alt={poster.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+        ) : (
+          <div className="h-full w-full bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center">
+            <span className="text-blue-200 dark:text-slate-600 font-black text-2xl tracking-tighter opacity-50 uppercase">POSTER</span>
+          </div>
+        )}
         
         {/* D-Day 배지 */}
         <div className={`absolute top-3 left-3 px-2.5 py-1 rounded-lg shadow-sm backdrop-blur-md transition-colors ${
