@@ -17,7 +17,7 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     const fetchStats = async () => {
       const [reviewRes, publishedRes, reportsRes, usersRes] = await Promise.all([
-        supabase.from("posters").select("id", { count: "exact", head: true }).eq("poster_status", "review"),
+        supabase.from("posters").select("id", { count: "exact", head: true }).eq("poster_status", "review_requested"),
         supabase.from("posters").select("id", { count: "exact", head: true }).eq("poster_status", "published"),
         supabase.from("comment_reports").select("id", { count: "exact", head: true }).eq("report_status", "received"),
         supabase.from("profiles").select("id", { count: "exact", head: true }),

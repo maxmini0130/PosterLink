@@ -20,12 +20,7 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
         // 1. 포스터 상세 정보 가져오기 (카테고리, 지역 포함)
         const { data, error } = await supabase
           .from("posters")
-          .select(`
-            *,
-            poster_categories (categories (name)),
-            poster_regions (regions (name)),
-            poster_images (image_url)
-          `)
+          .select("*")
           .eq("id", params.id)
           .single();
 
@@ -96,7 +91,7 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
   const daysLeft = poster.application_end_at ? getDaysLeft(poster.application_end_at) : null;
 
   // 이미지 URL 구성 (Supabase Storage 경로 활용)
-  const imageUrl = poster.poster_images?.[0]?.image_url ?? null;
+  const imageUrl = poster.thumbnail_url ?? null;
 
   return (
     <div className="min-h-screen bg-white pb-24 md:pb-10">

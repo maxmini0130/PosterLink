@@ -40,7 +40,7 @@ export default function OperatorPostersPage() {
 
     const { error } = await supabase
       .from("posters")
-      .update({ poster_status: "review" })
+      .update({ poster_status: "review_requested" })
       .eq("id", id);
 
     if (error) alert(error.message);
@@ -141,12 +141,14 @@ export default function OperatorPostersPage() {
                           <Send size={18} />
                         </button>
                       )}
-                      <Link 
-                        href={`/operator/posters/${p.id}`}
-                        className="p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 rounded-xl transition-colors"
-                      >
-                        <Edit3 size={18} />
-                      </Link>
+                      {p.poster_status === 'draft' && (
+                        <Link
+                          href={`/operator/posters/new`}
+                          className="p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 rounded-xl transition-colors"
+                        >
+                          <Edit3 size={18} />
+                        </Link>
+                      )}
                     </div>
                   </td>
                 </tr>

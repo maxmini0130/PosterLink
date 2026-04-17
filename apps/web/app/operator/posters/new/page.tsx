@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { Button } from "@posterlink/ui";
-import { Camera, Link as LinkIcon, Calendar, MapPin, Tag, Building2, ChevronLeft, Loader2, Scissors } from "lucide-react";
+import { Camera, ChevronLeft, Loader2 } from "lucide-react";
 import { ImageCropper } from "../../../components/ImageCropper";
 
 export default function NewPosterPage() {
@@ -57,27 +57,26 @@ export default function NewPosterPage() {
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  const onCropComplete = async (blob: Blob) => {
+  const onCropComplete = (blob: Blob) => {
     setCroppedImageBlob(blob);
     setImagePreview(URL.createObjectURL(blob));
     setShowCropper(false);
+    runOcr(blob);
+  };
 
-    // OCR 분석 시작
+  const runOcr = (blob: Blob) => {
     setIsAnalyzing(true);
-    try {
-      const reader = new FileReader();
-      reader.readAsDataURL(blob);
-      reader.onloadend = async () => {
-        const base64data = reader.result as string;
-        
-        // Edge Function 호출
-        const { data, error } = await supabase.functions.invoke('process-ocr', {
-          body: { imageBase64: base64data.split(',')[1] }
-        });
-
-        if (error) throw error;
-
-        // 추출된 데이터로 폼 채우기
+    const reader = new FileReader();
+    reader.readAsDataURL(blob);
+    reader.onloadend = () => {
+      const base64data = reader.result as string;
+      supabase.auth.getSession().then(({ data: { session } }) => {
+      supabase.functions.invoke('process-ocr', {
+        body: { imageBase64: base64data.split(',')[1] },
+        headers: session ? { Authorization: `Bearer ${session.access_token}` } : {}
+      }).then(({ data, error }) => {
+        console.log("OCR result:", { data, error });
+        if (error) { console.error("OCR Error:", error); return; }
         if (data) {
           setFormData(prev => ({
             ...prev,
@@ -86,17 +85,12 @@ export default function NewPosterPage() {
             appEndAt: data.appEndAt || prev.appEndAt,
             summaryShort: data.summaryShort || prev.summaryShort,
             officialLink: data.officialLink || prev.officialLink,
-            // 카테고리는 매칭 시도가 필요할 수 있음
             categoryId: categories.find(c => c.code === data.categoryId)?.id || prev.categoryId
           }));
-          alert("이미지 분석이 완료되었습니다. 추출된 정보를 확인해주세요.");
         }
-      };
-    } catch (err: any) {
-      console.error("OCR Error:", err);
-    } finally {
-      setIsAnalyzing(false);
-    }
+      }).finally(() => setIsAnalyzing(false));
+      }); // getSession
+    };
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -124,7 +118,7 @@ export default function NewPosterPage() {
         .insert({
           title: formData.title,
           source_org_name: formData.sourceOrgName,
-          poster_status: "draft",
+          poster_status: "review_requested",
           application_end_at: formData.appEndAt || null,
           summary_short: formData.summaryShort,
           created_by: user.id
@@ -148,14 +142,10 @@ export default function NewPosterPage() {
         });
       }
 
-      // 3. 이미지 정보 저장 (Public URL 생성 후 저장)
+      // 3. 이미지 URL을 posters에 직접 저장
       const { data: { publicUrl } } = supabase.storage.from("poster-originals").getPublicUrl(filePath);
 
-      await supabase.from("poster_images").insert({
-        poster_id: poster.id,
-        image_type: "processed",
-        image_url: publicUrl
-      });
+      await supabase.from("posters").update({ thumbnail_url: publicUrl }).eq("id", poster.id);
 
       // 4. 링크 저장
       if (formData.officialLink) {
@@ -168,7 +158,7 @@ export default function NewPosterPage() {
         });
       }
 
-      alert("보정된 이미지로 포스터가 등록되었습니다.");
+      alert("포스터가 등록되었습니다. 관리자 검수 후 게시됩니다.");
       router.push("/operator/posters");
     } catch (err: any) {
       alert("오류 발생: " + err.message);
@@ -193,8 +183,8 @@ export default function NewPosterPage() {
         <button onClick={() => router.back()} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
           <ChevronLeft size={24} />
         </button>
-        <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
-          포스터 수집 및 보정 <Scissors size={20} className="text-blue-600" />
+        <h1 className="text-2xl font-black text-gray-900">
+          새 포스터 등록
         </h1>
       </div>
 
@@ -202,10 +192,10 @@ export default function NewPosterPage() {
         {/* 이미지 업로드 & 미리보기 */}
         <section className="bg-white p-8 rounded-[2.5rem] border-2 border-dashed border-gray-100 hover:border-blue-200 transition-all group overflow-hidden relative shadow-sm">
           {isAnalyzing && (
-            <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center animate-in fade-in duration-300">
+            <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center">
               <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mb-4" />
-              <p className="text-gray-900 font-black">인공지능 분석 중...</p>
-              <p className="text-gray-400 text-xs font-bold mt-1 italic">포스터 정보를 자동으로 추출하고 있습니다.</p>
+              <p className="text-gray-900 font-black">AI 분석 중...</p>
+              <p className="text-gray-400 text-xs font-bold mt-1">포스터 정보를 자동으로 추출하고 있습니다.</p>
             </div>
           )}
           <input type="file" id="poster-upload" className="hidden" accept="image/*" onChange={handleImageChange} />
@@ -258,6 +248,10 @@ export default function NewPosterPage() {
           <div>
             <label className="text-xs font-black text-gray-400 uppercase mb-2 block px-1">DEADLINE</label>
             <input type="date" value={formData.appEndAt} onChange={(e) => setFormData({...formData, appEndAt: e.target.value})} className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none text-gray-900" />
+          </div>
+          <div className="md:col-span-2">
+            <label className="text-xs font-black text-gray-400 uppercase mb-2 block px-1">SUMMARY</label>
+            <textarea value={formData.summaryShort} onChange={(e) => setFormData({...formData, summaryShort: e.target.value})} rows={3} className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-100 text-gray-900 resize-none" placeholder="공고 핵심 내용을 2~3문장으로 요약해주세요." />
           </div>
           <div className="md:col-span-2 border-t border-gray-50 pt-6 mt-4">
             <label className="text-xs font-black text-gray-400 uppercase mb-2 block px-1">OFFICIAL LINK</label>

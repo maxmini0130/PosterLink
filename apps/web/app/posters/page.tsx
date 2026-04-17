@@ -46,20 +46,15 @@ export default function PosterListPage() {
     try {
       let query = supabase
         .from("posters")
-        .select(`*, poster_categories (categories (name)), poster_regions (regions (name))`)
+        .select("*")
         .eq("poster_status", "published");
 
-      if (queryStr) {
-        query = query.ilike("title", `%${queryStr}%`);
-      }
-      if (selectedCategoryId) {
-        query = query.eq("poster_categories.category_id", selectedCategoryId);
-      }
-      if (selectedRegionId) {
-        query = query.eq("poster_regions.region_id", selectedRegionId);
-      }
+      if (queryStr) query = query.ilike("title", `%${queryStr}%`);
 
-      const { data } = await query.order(sortBy === "latest" ? "created_at" : "application_end_at", { ascending: sortBy !== "latest" });
+      const { data } = await query.order(
+        sortBy === "latest" ? "created_at" : "application_end_at",
+        { ascending: sortBy !== "latest" }
+      );
       if (data) setPosters(data);
     } finally {
       setLoading(false);
@@ -230,7 +225,7 @@ export default function PosterListPage() {
                   title: poster.title,
                   org: poster.source_org_name,
                   deadline: poster.application_end_at,
-                  tags: [poster.poster_categories?.[0]?.categories?.name].filter(Boolean)
+                  tags: []
                 }} 
               />
             ))}
