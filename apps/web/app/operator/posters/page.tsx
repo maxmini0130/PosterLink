@@ -15,15 +15,37 @@ export default function OperatorPostersPage() {
     try {
       const { data, error } = await supabase
         .from("posters")
-        .select(`
-          *,
-          poster_categories (categories (name)),
-          poster_regions (regions (name))
-        `)
+        .select("*")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      if (data) setPosters(data);
+      if (!data) return;
+
+      // category/region 별도 조회
+      const posterIds = data.map((p: any) => p.id);
+      const [catLinks, regLinks] = await Promise.all([
+        supabase.from("poster_categories").select("poster_id, category_id").in("poster_id", posterIds),
+        supabase.from("poster_regions").select("poster_id, region_id").in("poster_id", posterIds),
+      ]);
+
+      const categoryIds = [...new Set((catLinks.data ?? []).map((r: any) => r.category_id))];
+      const regionIds = [...new Set((regLinks.data ?? []).map((r: any) => r.region_id))];
+
+      const [cats, regs] = await Promise.all([
+        categoryIds.length ? supabase.from("categories").select("id, name").in("id", categoryIds) : { data: [] },
+        regionIds.length ? supabase.from("regions").select("id, name").in("id", regionIds) : { data: [] },
+      ]);
+
+      const catMap = Object.fromEntries((cats.data ?? []).map((c: any) => [c.id, c.name]));
+      const regMap = Object.fromEntries((regs.data ?? []).map((r: any) => [r.id, r.name]));
+      const posterCatMap = Object.fromEntries((catLinks.data ?? []).map((r: any) => [r.poster_id, catMap[r.category_id]]));
+      const posterRegMap = Object.fromEntries((regLinks.data ?? []).map((r: any) => [r.poster_id, regMap[r.region_id]]));
+
+      setPosters(data.map((p: any) => ({
+        ...p,
+        categoryName: posterCatMap[p.id] ?? null,
+        regionName: posterRegMap[p.id] ?? null,
+      })));
     } catch (err) {
       console.error("Error fetching operator posters:", err);
     } finally {
@@ -119,8 +141,8 @@ export default function OperatorPostersPage() {
                   </td>
                   <td className="px-6 py-5">
                     <div className="flex flex-col gap-1">
-                      <span className="text-[11px] font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-md inline-block w-fit">#{p.poster_categories?.[0]?.categories?.name || '기타'}</span>
-                      <span className="text-[11px] font-bold text-gray-400">{p.poster_regions?.[0]?.regions?.name || '전국'}</span>
+                      <span className="text-[11px] font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-md inline-block w-fit">#{p.categoryName || '기타'}</span>
+                      <span className="text-[11px] font-bold text-gray-400">{p.regionName || '전국'}</span>
                     </div>
                   </td>
                   <td className="px-6 py-5">

@@ -316,6 +316,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP FUNCTION IF EXISTS get_recommended_posters(uuid, integer);
 CREATE OR REPLACE FUNCTION get_recommended_posters(
     p_user_id UUID,
     p_limit INT DEFAULT 10
@@ -327,6 +328,7 @@ RETURNS TABLE (
     summary_short TEXT,
     poster_status TEXT,
     application_end_at TIMESTAMPTZ,
+    thumbnail_url TEXT,
     created_at TIMESTAMPTZ,
     recom_score FLOAT
 ) AS $$
@@ -340,8 +342,9 @@ BEGIN
         p.title,
         p.source_org_name,
         p.summary_short,
-        p.poster_status,
+        p.poster_status::TEXT,
         p.application_end_at,
+        p.thumbnail_url,
         p.created_at,
         (
             COALESCE(MAX(
@@ -373,7 +376,7 @@ BEGIN
     WHERE p.poster_status = 'published'
       AND (p.application_end_at IS NULL OR p.application_end_at > now())
     GROUP BY p.id, p.title, p.source_org_name, p.summary_short,
-             p.poster_status, p.application_end_at, p.created_at
+             p.poster_status, p.application_end_at, p.thumbnail_url, p.created_at
     ORDER BY recom_score DESC, p.created_at DESC
     LIMIT p_limit;
 END;
