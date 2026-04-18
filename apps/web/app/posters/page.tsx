@@ -55,7 +55,28 @@ export default function PosterListPage() {
         sortBy === "latest" ? "created_at" : "application_end_at",
         { ascending: sortBy !== "latest" }
       );
-      if (data) setPosters(data);
+      if (!data) return;
+
+      // 카테고리/지역 필터: poster_categories, poster_regions 별도 조회
+      let filtered = data;
+      if (selectedCategoryId) {
+        const { data: catLinks } = await supabase
+          .from("poster_categories")
+          .select("poster_id")
+          .eq("category_id", selectedCategoryId);
+        const ids = new Set((catLinks ?? []).map((r: any) => r.poster_id));
+        filtered = filtered.filter(p => ids.has(p.id));
+      }
+      if (selectedRegionId) {
+        const { data: regLinks } = await supabase
+          .from("poster_regions")
+          .select("poster_id")
+          .eq("region_id", selectedRegionId);
+        const ids = new Set((regLinks ?? []).map((r: any) => r.poster_id));
+        filtered = filtered.filter(p => ids.has(p.id));
+      }
+
+      setPosters(filtered);
     } finally {
       setLoading(false);
     }

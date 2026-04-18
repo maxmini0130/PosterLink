@@ -15,14 +15,24 @@ export function CommentSection({ posterId }: CommentSectionProps) {
   const [user, setUser] = useState<any>(null);
 
   const fetchComments = async () => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("comments")
       .select("*")
       .eq("poster_id", posterId)
       .in("status", ["normal"])
       .order("created_at", { ascending: false });
 
-    if (data) setComments(data);
+    if (!data || data.length === 0) { setComments([]); return; }
+
+    // 닉네임 별도 조회
+    const userIds = [...new Set(data.map((c: any) => c.user_id))];
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, nickname")
+      .in("id", userIds);
+
+    const profileMap = Object.fromEntries((profiles ?? []).map((p: any) => [p.id, p]));
+    setComments(data.map((c: any) => ({ ...c, profiles: profileMap[c.user_id] ?? null })));
   };
 
   useEffect(() => {
@@ -105,9 +115,9 @@ export function CommentSection({ posterId }: CommentSectionProps) {
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-blue-50 rounded-full flex items-center justify-center text-blue-500 text-[10px] font-black uppercase">
-                  U
+                  {comment.profiles?.nickname?.charAt(0) || 'U'}
                 </div>
-                <span className="text-sm font-black text-gray-900">사용자</span>
+                <span className="text-sm font-black text-gray-900">{comment.profiles?.nickname || '익명'}</span>
                 {comment.is_official && (
                   <span className="px-1.5 py-0.5 bg-blue-600 text-white text-[9px] font-black rounded-md uppercase tracking-tighter">OFFICIAL</span>
                 )}

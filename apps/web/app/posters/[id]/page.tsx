@@ -29,7 +29,25 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
           return;
         }
 
-        setPoster(data);
+        // 카테고리, 지역 별도 조회 (JOIN 없이)
+        const [catRes, regRes] = await Promise.all([
+          supabase.from("poster_categories").select("category_id").eq("poster_id", params.id),
+          supabase.from("poster_regions").select("region_id").eq("poster_id", params.id),
+        ]);
+
+        let categoryName = null;
+        let regionName = null;
+
+        if (catRes.data?.[0]?.category_id) {
+          const { data: cat } = await supabase.from("categories").select("name").eq("id", catRes.data[0].category_id).single();
+          categoryName = cat?.name ?? null;
+        }
+        if (regRes.data?.[0]?.region_id) {
+          const { data: reg } = await supabase.from("regions").select("name").eq("id", regRes.data[0].region_id).single();
+          regionName = reg?.name ?? null;
+        }
+
+        setPoster({ ...data, categoryName, regionName });
 
         // 2. 관련 링크 가져오기
         const { data: linkData } = await supabase
@@ -118,14 +136,14 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
           </div>
           <h1 className="text-2xl font-bold text-gray-900 leading-tight mb-4">{poster.title}</h1>
           <div className="flex flex-wrap gap-2">
-            {poster.poster_categories?.[0]?.categories?.name && (
+            {poster.categoryName && (
               <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-black rounded-full">
-                #{poster.poster_categories[0].categories.name}
+                #{poster.categoryName}
               </span>
             )}
-            {poster.poster_regions?.[0]?.regions?.name && (
+            {poster.regionName && (
               <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs font-black rounded-full">
-                #{poster.poster_regions[0].regions.name}
+                #{poster.regionName}
               </span>
             )}
           </div>
