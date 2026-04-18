@@ -31,11 +31,15 @@ export default function NotificationsPage() {
   }, []);
 
   const markAsRead = async (id: string) => {
-    await supabase
-      .from("notifications")
-      .update({ is_read: true })
-      .eq("id", id);
-    fetchNotifications();
+    await supabase.from("notifications").update({ is_read: true }).eq("id", id);
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+  };
+
+  const markAllAsRead = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from("notifications").update({ is_read: true }).eq("user_id", user.id).eq("is_read", false);
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
   };
 
   const getIcon = (type: string) => {
@@ -54,7 +58,7 @@ export default function NotificationsPage() {
         <div className="flex items-center justify-between mb-8 px-2">
           <h1 className="text-2xl font-black text-gray-900">알림 센터 🔔</h1>
           {notifications.some(n => !n.is_read) && (
-            <button className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full">전체 읽음</button>
+            <button onClick={markAllAsRead} className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full hover:bg-blue-100 transition-colors">전체 읽음</button>
           )}
         </div>
 
