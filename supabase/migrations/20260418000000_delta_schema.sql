@@ -395,3 +395,19 @@ BEGIN
     LIMIT 5;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION get_popular_keywords(p_limit INT DEFAULT 5)
+RETURNS TABLE (keyword TEXT, search_count BIGINT)
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT query AS keyword, COUNT(*) AS search_count
+  FROM search_logs
+  WHERE created_at > now() - interval '30 days'
+    AND query IS NOT NULL
+    AND trim(query) != ''
+  GROUP BY query
+  ORDER BY search_count DESC
+  LIMIT p_limit;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
