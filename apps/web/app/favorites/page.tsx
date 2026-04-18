@@ -16,28 +16,26 @@ export default function FavoritesPage() {
     const fetchFavorites = async () => {
       setLoading(true);
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user ?? null;
         if (user) {
           // Join favorites with posters and related info
           const { data, error } = await supabase
             .from("favorites")
-            .select(`
-              created_at,
-              posters (
-                *,
-                poster_categories (categories (name)),
-                poster_regions (regions (name)),
-                poster_images (image_url)
-              )
-            `)
+            .select("poster_id, created_at")
             .eq("user_id", user.id)
             .order("created_at", { ascending: false });
 
-          if (data) {
-            const flattened = data.map((f: any) => f.posters).filter(Boolean);
-            setFavorites(flattened);
-          }
-          if (error) console.error("Fetch Favorites Error:", error);
+          if (error) { console.error("Fetch Favorites Error:", error); return; }
+          if (!data || data.length === 0) return;
+
+          const posterIds = data.map((f: any) => f.poster_id);
+          const { data: postersData } = await supabase
+            .from("posters")
+            .select("*")
+            .in("id", posterIds);
+
+          if (postersData) setFavorites(postersData);
         }
       } catch (err) {
         console.error("Error fetching favorites:", err);
@@ -78,8 +76,8 @@ export default function FavoritesPage() {
                   title: poster.title,
                   org: poster.source_org_name,
                   deadline: poster.application_end_at,
-                  tags: [poster.poster_categories?.[0]?.categories?.name].filter(Boolean),
-                  image: poster.poster_images?.[0]?.image_url
+                  tags: [],
+                  image: poster.thumbnail_url
                 }} 
               />
             ))}

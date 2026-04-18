@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
+import { fetchCategoryRegionNames } from "../lib/posterHelpers";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
 import { PosterCard } from "../components/PosterCard";
@@ -18,6 +19,7 @@ export default function PosterListPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [popularKeywords, setPopularKeywords] = useState<string[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState("latest");
@@ -34,8 +36,20 @@ export default function PosterListPage() {
       if (regData) setRegions(regData);
       
       // Load recent searches from localStorage
-      const saved = localStorage.getItem("recent_searches");
-      if (saved) setRecentSearches(JSON.parse(saved));
+      try {
+        const saved = localStorage.getItem("recent_searches");
+        if (saved) setRecentSearches(JSON.parse(saved));
+      } catch {
+        localStorage.removeItem("recent_searches");
+      }
+
+      // 인기 검색어 DB에서 로드
+      const { data: kwData } = await supabase.rpc("get_popular_keywords", { p_limit: 5 });
+      if (kwData && kwData.length > 0) {
+        setPopularKeywords(kwData.map((r: any) => r.keyword));
+      } else {
+        setPopularKeywords(["청년수당", "소상공인 지원", "내일배움카드", "디지털 교육", "창업 지원"]);
+      }
     };
     fetchBase();
   }, []);
@@ -46,17 +60,33 @@ export default function PosterListPage() {
     try {
       let query = supabase
         .from("posters")
-        .select(`*, categories (name), regions (name)`)
-        .eq("status", "published");
+        .select("*")
+        .eq("poster_status", "published");
 
-      if (queryStr) {
-        query = query.ilike("title", `%${queryStr}%`);
+      if (queryStr) query = query.ilike("title", `%${queryStr}%`);
+
+      const { data } = await query.order(
+        sortBy === "latest" ? "created_at" : "application_end_at",
+        { ascending: sortBy !== "latest" }
+      );
+      if (!data) return;
+
+      // 카테고리/지역 필터: poster_categories, poster_regions 별도 조회
+      let filtered = data;
+      if (selectedCategoryId) {
+        const { data: catLinks } = await supabase
+          .from("poster_categories").select("poster_id").eq("category_id", selectedCategoryId);
+        const ids = new Set((catLinks ?? []).map((r: any) => r.poster_id));
+        filtered = filtered.filter(p => ids.has(p.id));
       }
-      if (selectedCategoryId) query = query.eq("category_id", selectedCategoryId);
-      if (selectedRegionId) query = query.or(`primary_region_id.eq.${selectedRegionId},primary_region_id.is.null`);
+      if (selectedRegionId) {
+        const { data: regLinks } = await supabase
+          .from("poster_regions").select("poster_id").eq("region_id", selectedRegionId);
+        const ids = new Set((regLinks ?? []).map((r: any) => r.poster_id));
+        filtered = filtered.filter(p => ids.has(p.id));
+      }
 
-      const { data } = await query.order(sortBy === "latest" ? "created_at" : "application_end_at", { ascending: sortBy !== "latest" });
-      if (data) setPosters(data);
+      setPosters(filtered);
     } finally {
       setLoading(false);
     }
@@ -77,7 +107,16 @@ export default function PosterListPage() {
     const updated = [finalTerm, ...recentSearches.filter(s => s !== finalTerm)].slice(0, 5);
     setRecentSearches(updated);
     localStorage.setItem("recent_searches", JSON.stringify(updated));
-    
+
+    // 검색 로그 저장
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      supabase.rpc("log_search", {
+        p_user_id: session?.user?.id ?? null,
+        p_query: finalTerm.trim(),
+        p_result_count: 0,
+      });
+    });
+
     setSearchQuery(finalTerm);
     setIsSearchFocused(false);
     searchInputRef.current?.blur();
@@ -107,7 +146,7 @@ export default function PosterListPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="검색어를 입력하세요"
-                className="w-full py-3 px-4 bg-gray-50 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-100"
+                className="w-full py-3 px-4 bg-gray-50 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-100 text-gray-900 placeholder:text-gray-400"
               />
               {searchQuery && (
                 <button type="button" onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400">
@@ -142,7 +181,7 @@ export default function PosterListPage() {
                 <TrendingUp size={14} /> Popular Keywords
               </h3>
               <div className="flex flex-wrap gap-2">
-                {["청년수당", "소상공인 지원", "내일배움카드", "디지털 교육", "창업 지원"].map(k => (
+                {popularKeywords.map(k => (
                   <button key={k} onClick={() => handleSearchSubmit(undefined, k)} className="px-4 py-2 border border-gray-100 rounded-xl text-sm font-bold text-gray-500 hover:border-blue-200 hover:text-blue-600 transition-all">
                     {k}
                   </button>
@@ -226,7 +265,8 @@ export default function PosterListPage() {
                   title: poster.title,
                   org: poster.source_org_name,
                   deadline: poster.application_end_at,
-                  tags: [poster.categories?.name].filter(Boolean)
+                  image: poster.thumbnail_url,
+                  tags: []
                 }} 
               />
             ))}

@@ -76,15 +76,16 @@ export default function ProfileEditPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // 1. Update Profile
+      // 1. Upsert Profile (없으면 생성, 있으면 업데이트)
       const { error: profileError } = await supabase
         .from("profiles")
-        .update({
+        .upsert({
+          id: user.id,
           nickname: formData.nickname,
           primary_region_id: formData.primaryRegionId || null,
-          age_band: formData.ageBand as any
-        })
-        .eq("id", user.id);
+          age_band: formData.ageBand as any,
+          role: "user"
+        }, { onConflict: "id" });
 
       if (profileError) throw profileError;
 

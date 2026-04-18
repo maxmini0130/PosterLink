@@ -5,26 +5,22 @@ import { supabase } from "../../lib/supabase";
 import { Check, X, ExternalLink, Image as ImageIcon, Eye, FileCheck, Filter, Loader2 } from "lucide-react";
 import Link from "next/link";
 
-type PosterStatus = 'review' | 'published' | 'rejected' | 'draft';
+type PosterStatus = 'review_requested' | 'published' | 'rejected' | 'draft';
 
 export default function AdminPostersPage() {
   const [posters, setPosters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentFilter, setCurrentFilter] = useState<PosterStatus>('review');
+  const [currentFilter, setCurrentFilter] = useState<PosterStatus>('review_requested');
 
   const fetchPosters = async (status: PosterStatus) => {
     setLoading(true);
     const { data, error } = await supabase
       .from("posters")
-      .select(`
-        *,
-        poster_categories (categories (name)),
-        poster_regions (regions (name)),
-        poster_images (image_url)
-      `)
+      .select("*")
       .eq("poster_status", status)
-      .order("created_at", { ascending: status === 'review' }); // 대기중은 오래된 순, 나머지는 최신순
+      .order("created_at", { ascending: status === 'review_requested' });
 
+    if (error) { console.error(error); setLoading(false); return; }
     if (data) setPosters(data);
     setLoading(false);
   };
@@ -53,7 +49,7 @@ export default function AdminPostersPage() {
   };
 
   const tabs: { label: string; value: PosterStatus }[] = [
-    { label: "검수 대기", value: 'review' },
+    { label: "검수 대기", value: 'review_requested' },
     { label: "승인 완료", value: 'published' },
     { label: "반려됨", value: 'rejected' },
     { label: "임시 저장", value: 'draft' },
@@ -97,9 +93,9 @@ export default function AdminPostersPage() {
             <div key={p.id} className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-slate-800 flex flex-col md:flex-row gap-8 items-start hover:shadow-md dark:hover:shadow-indigo-900/10 transition-all group">
               {/* Thumbnail Preview */}
               <div className="w-full md:w-32 aspect-[3/4] bg-gray-50 dark:bg-slate-800 rounded-2xl flex-shrink-0 overflow-hidden border border-gray-100 dark:border-slate-700 flex items-center justify-center relative group/img">
-                {p.poster_images?.[0] ? (
-                  <img 
-                    src={p.poster_images[0].image_url} 
+                {p.thumbnail_url ? (
+                  <img
+                    src={p.thumbnail_url}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover/img:scale-110"
                     alt="Poster"
                   />

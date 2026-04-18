@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, ArrowRight, Zap } from "lucide-react";
 import Link from "next/link";
 
+
 export default function Home() {
   const [loading, setLoading] = useState(true);
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -19,46 +20,56 @@ export default function Home() {
     const fetchHomeData = async () => {
       setLoading(true);
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        // getSession reads from localStorage (no network) — safe even with deleted accounts
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user ?? null;
+
+        // 로그인 시: 프로필 + 맞춤 추천
+        let postersFetched = false;
         if (user) {
-          // 1. 프로필 정보 가져오기
           const { data: profile } = await supabase.from("profiles").select("*, regions(name)").eq("id", user.id).single();
           setUserProfile(profile);
 
-          // 2. RPC를 통한 맞춤형 추천 공고 가져오기 (NEW!)
           const { data: recommendedData, error: rpcError } = await supabase.rpc('get_recommended_posters', {
             p_user_id: user.id,
             p_limit: 8
           });
 
-          if (!rpcError && recommendedData) {
+          if (!rpcError && recommendedData && recommendedData.length > 0) {
             setPosters(recommendedData);
-          } else {
-            // RPC 오류 시 기본 최신순 공고 (Fallback)
-            const { data: fallbackData } = await supabase
-              .from("posters")
-              .select(`*, categories (name)`)
-              .eq("status", "published")
-              .order("created_at", { ascending: false })
-              .limit(8);
-            if (fallbackData) setPosters(fallbackData);
+            postersFetched = true;
           }
-
-          // 3. 마감 임박 공고 가져오기 (기존 로직 유지)
-          const now = new Date().toISOString();
-          const sevenDaysLater = new Date();
-          sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
-
-          const { data: urgentData } = await supabase
-            .from("posters")
-            .select("*")
-            .eq("status", "published")
-            .gte("application_end_at", now)
-            .lte("application_end_at", sevenDaysLater.toISOString())
-            .order("application_end_at", { ascending: true })
-            .limit(4);
-          if (urgentData) setUrgentPosters(urgentData);
         }
+
+        // 비로그인 또는 RPC 결과 없을 때: 공개 포스터 최신순
+        if (!postersFetched) {
+          const { data: publicData, error: publicError } = await supabase
+            .from("posters")
+            .select("id, title, source_org_name, application_end_at, poster_status, thumbnail_url")
+            .eq("poster_status", "published")
+            .order("created_at", { ascending: false })
+            .limit(8);
+
+          if (!publicError && publicData) {
+            setPosters(publicData);
+          }
+        }
+
+        // 마감 임박 공고 (로그인 여부 무관)
+        const now = new Date().toISOString();
+        const sevenDaysLater = new Date();
+        sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
+
+        const { data: urgentData } = await supabase
+          .from("posters")
+          .select("*")
+          .eq("poster_status", "published")
+          .gte("application_end_at", now)
+          .lte("application_end_at", sevenDaysLater.toISOString())
+          .order("application_end_at", { ascending: true })
+          .limit(4);
+        if (urgentData && urgentData.length > 0) setUrgentPosters(urgentData);
+
       } finally {
         setLoading(false);
       }
@@ -73,7 +84,7 @@ export default function Home() {
 
   const itemVariants = {
     hidden: { y: 20, opacity: 0 },
-    visible: { y: 0, opacity: 1, transition: { type: "spring", stiffness: 100 } }
+    visible: { y: 0, opacity: 1, transition: { type: "spring" as const, stiffness: 100 } }
   };
 
   if (loading) {
@@ -146,7 +157,8 @@ export default function Home() {
                       title: poster.title,
                       org: poster.source_org_name,
                       deadline: poster.application_end_at,
-                      tags: [poster.categories?.name].filter(Boolean)
+                      image: poster.thumbnail_url,
+                      tags: [poster.poster_categories?.[0]?.categories?.name ?? poster.categories?.name ?? poster.category].filter(Boolean)
                     }} 
                   />
                 </motion.div>
