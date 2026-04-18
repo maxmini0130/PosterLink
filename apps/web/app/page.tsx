@@ -8,7 +8,7 @@ import { PosterCard } from "./components/PosterCard";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, ArrowRight, Zap } from "lucide-react";
 import Link from "next/link";
-import { DUMMY_POSTERS } from "../lib/dummy";
+
 
 export default function Home() {
   const [loading, setLoading] = useState(true);
@@ -50,17 +50,8 @@ export default function Home() {
             .order("created_at", { ascending: false })
             .limit(8);
 
-          if (!publicError && publicData && publicData.length > 0) {
+          if (!publicError && publicData) {
             setPosters(publicData);
-          } else {
-            // 데이터 없을 때 더미 데이터
-            setPosters(DUMMY_POSTERS.map(d => ({
-              id: d.id,
-              title: d.title,
-              source_org_name: d.source_org_name,
-              application_end_at: d.application_end_at,
-              poster_categories: [{ categories: { name: d.category } }],
-            })));
           }
         }
 
