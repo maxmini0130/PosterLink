@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
+import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
 import Link from "next/link";
 import { Plus, Search, FileText, CheckCircle2, Clock, AlertCircle, Edit3, Send } from "lucide-react";
 
@@ -15,15 +16,14 @@ export default function OperatorPostersPage() {
     try {
       const { data, error } = await supabase
         .from("posters")
-        .select(`
-          *,
-          categories (name),
-          regions (name)
-        `)
+        .select("*")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      if (data) setPosters(data);
+      if (!data) return;
+
+      const metaMap = await fetchCategoryRegionNames(data.map((p: any) => p.id));
+      setPosters(data.map((p: any) => ({ ...p, ...metaMap[p.id] })));
     } catch (err) {
       console.error("Error fetching operator posters:", err);
     } finally {
@@ -40,7 +40,7 @@ export default function OperatorPostersPage() {
 
     const { error } = await supabase
       .from("posters")
-      .update({ status: "review_requested" })
+      .update({ poster_status: "review_requested" })
       .eq("id", id);
 
     if (error) alert(error.message);
@@ -92,7 +92,7 @@ export default function OperatorPostersPage() {
           placeholder="포스터 제목이나 기관명으로 검색..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-12 pr-4 py-4 bg-white border-none rounded-2xl text-sm font-bold shadow-sm focus:ring-2 focus:ring-blue-100 outline-none transition-all"
+          className="w-full pl-12 pr-4 py-4 bg-white border-none rounded-2xl text-sm font-bold text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-blue-100 outline-none transition-all"
         />
       </div>
 
@@ -119,12 +119,12 @@ export default function OperatorPostersPage() {
                   </td>
                   <td className="px-6 py-5">
                     <div className="flex flex-col gap-1">
-                      <span className="text-[11px] font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-md inline-block w-fit">#{p.categories?.name || '기타'}</span>
-                      <span className="text-[11px] font-bold text-gray-400">{p.regions?.name || '전국'}</span>
+                      <span className="text-[11px] font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-md inline-block w-fit">#{p.categoryName || '기타'}</span>
+                      <span className="text-[11px] font-bold text-gray-400">{p.regionName || '전국'}</span>
                     </div>
                   </td>
                   <td className="px-6 py-5">
-                    {getStatusBadge(p.status)}
+                    {getStatusBadge(p.poster_status)}
                   </td>
                   <td className="px-6 py-5">
                     <span className="text-xs font-bold text-gray-600">
@@ -133,7 +133,7 @@ export default function OperatorPostersPage() {
                   </td>
                   <td className="px-6 py-5 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      {p.status === 'draft' && (
+                      {p.poster_status === 'draft' && (
                         <button 
                           onClick={() => handleRequestReview(p.id)}
                           className="p-2 text-blue-600 hover:bg-blue-100 rounded-xl transition-colors title='검수 요청'"
@@ -141,12 +141,14 @@ export default function OperatorPostersPage() {
                           <Send size={18} />
                         </button>
                       )}
-                      <Link 
-                        href={`/operator/posters/${p.id}`}
-                        className="p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 rounded-xl transition-colors"
-                      >
-                        <Edit3 size={18} />
-                      </Link>
+                      {p.poster_status === 'draft' && (
+                        <Link
+                          href={`/operator/posters/new`}
+                          className="p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 rounded-xl transition-colors"
+                        >
+                          <Edit3 size={18} />
+                        </Link>
+                      )}
                     </div>
                   </td>
                 </tr>

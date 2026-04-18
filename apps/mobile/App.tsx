@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Image, TextInput, Alert, ActivityIndicator, Platform } from 'react-native';
-import { Camera } from 'expo-camera';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { supabase } from './src/lib/supabase';
 import { StatusBar } from 'expo-status-bar';
 
-// 알림 수신 설정 (앱이 켜져 있을 때)
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -21,42 +20,33 @@ export default function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [user, setUser] = useState<any>(null);
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [expoPushToken, setExpoPushToken] = useState('');
-  
-  const cameraRef = useRef<Camera>(null);
+  const [permission, requestPermission] = useCameraPermissions();
+
+  const cameraRef = useRef<CameraView>(null);
   const notificationListener = useRef<any>();
   const responseListener = useRef<any>();
 
   useEffect(() => {
-    // 1. 카메라 권한 체크
-    (async () => {
-      const { status } = await Camera.requestCameraPermissionsAsync();
-      setHasPermission(status === 'granted');
-    })();
-
-    // 2. 푸시 알림 토큰 요청 및 저장
+    // 푸시 알림 설정
     registerForPushNotificationsAsync().then(token => {
       if (token) setExpoPushToken(token);
     });
 
-    // 3. 알림 수신 리스너
     notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
       console.log('Notification Received:', notification);
     });
-
     responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
       console.log('Notification Clicked:', response);
     });
 
-    // 4. 기존 세션 확인
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        setUser(data.user);
+    // 기존 세션 확인 (getSession: 네트워크 없이 로컬 확인)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser(session.user);
         setView('home');
-        if (expoPushToken) saveTokenToDB(data.user.id, expoPushToken);
       }
     });
 
@@ -64,34 +54,34 @@ export default function App() {
       Notifications.removeNotificationSubscription(notificationListener.current);
       Notifications.removeNotificationSubscription(responseListener.current);
     };
-  }, [expoPushToken]);
+  }, []);
 
-  const saveTokenToDB = async (userId: string, token: string) => {
-    await supabase.from('profiles').update({ expo_push_token: token }).eq('id', userId);
-  };
+  // 토큰 저장은 user/token 둘 다 준비됐을 때만
+  useEffect(() => {
+    if (user && expoPushToken) {
+      supabase.from('profiles').update({ expo_push_token: expoPushToken }).eq('id', user.id);
+    }
+  }, [user, expoPushToken]);
 
   async function registerForPushNotificationsAsync() {
-    let token;
-    if (Device.isDevice) {
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
-      if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-      }
-      if (finalStatus !== 'granted') {
-        Alert.alert('알림 권한이 거부되었습니다.');
-        return;
-      }
-      token = (await Notifications.getExpoPushTokenAsync({
-        projectId: Constants.expoConfig?.extra?.eas?.projectId,
-      })).data;
-    } else {
+    if (!Device.isDevice) {
       console.log('실제 기기에서만 푸시 알림이 작동합니다.');
+      return;
+    }
+
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== 'granted') {
+      Alert.alert('알림 권한이 거부되었습니다.');
+      return;
     }
 
     if (Platform.OS === 'android') {
-      Notifications.setNotificationChannelAsync('default', {
+      await Notifications.setNotificationChannelAsync('default', {
         name: 'default',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
@@ -99,20 +89,19 @@ export default function App() {
       });
     }
 
+    const token = (await Notifications.getExpoPushTokenAsync({
+      projectId: Constants.expoConfig?.extra?.eas?.projectId,
+    })).data;
     return token;
   }
 
   const handleLogin = async () => {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) Alert.alert('Error', error.message);
-    else {
-      const { data } = await supabase.auth.getUser();
-      if (data.user) {
-        setUser(data.user);
-        setView('home');
-        if (expoPushToken) saveTokenToDB(data.user.id, expoPushToken);
-      }
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) Alert.alert('오류', error.message);
+    else if (data.user) {
+      setUser(data.user);
+      setView('home');
     }
     setLoading(false);
   };
@@ -120,15 +109,17 @@ export default function App() {
   const takePicture = async () => {
     if (cameraRef.current) {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.7 });
-      setCapturedImage(photo.uri);
-      setView('preview');
+      if (photo) {
+        setCapturedImage(photo.uri);
+        setView('preview');
+      }
     }
   };
 
   const uploadPoster = async () => {
     if (!capturedImage || !user) return;
     setLoading(true);
-    
+
     try {
       const fileName = `${user.id}/${Date.now()}_mobile.jpg`;
       const formData = new FormData();
@@ -138,34 +129,27 @@ export default function App() {
         type: 'image/jpeg',
       } as any);
 
-      // 1. Storage 업로드
-      const { error: storageError } = await supabase.storage.from('poster-originals').upload(fileName, formData);
+      const { error: storageError } = await supabase.storage
+        .from('poster-originals')
+        .upload(fileName, formData);
       if (storageError) throw storageError;
 
-      // Public URL 가져오기
       const { data: { publicUrl } } = supabase.storage.from('poster-originals').getPublicUrl(fileName);
 
-      // 2. DB 초안 생성 (최신 컬럼명 반영)
-      const { data: poster, error: dbError } = await supabase.from('posters').insert({
+      // poster 초안 생성 + thumbnail_url 직접 저장
+      const { error: dbError } = await supabase.from('posters').insert({
         title: `현장 수집_${new Date().toLocaleDateString()}`,
         poster_status: 'draft',
         created_by: user.id,
-      }).select().single();
-
+        thumbnail_url: publicUrl,
+      });
       if (dbError) throw dbError;
 
-      // 3. 이미지 정보 저장 (Public URL 저장)
-      await supabase.from('poster_images').insert({
-        poster_id: poster.id,
-        image_type: 'original',
-        image_url: publicUrl
-      });
-
-      Alert.alert('Success', '포스터 현장 사진이 업로드되었습니다. 웹 대시보드에서 보정을 진행해주세요.');
+      Alert.alert('완료', '포스터 사진이 업로드되었습니다. 웹 대시보드에서 내용을 입력하고 검수를 요청해주세요.');
       setView('home');
       setCapturedImage(null);
-    } catch (error: any) {
-      Alert.alert('Error', error.message);
+    } catch (err: any) {
+      Alert.alert('오류', err.message);
     } finally {
       setLoading(false);
     }
@@ -175,10 +159,23 @@ export default function App() {
     return (
       <View style={styles.container}>
         <Text style={styles.title}>PosterLink OPS</Text>
-        <TextInput placeholder="Email" value={email} onChangeText={setEmail} style={styles.input} autoCapitalize="none" />
-        <TextInput placeholder="Password" value={password} onChangeText={setPassword} style={styles.input} secureTextEntry />
+        <TextInput
+          placeholder="이메일"
+          value={email}
+          onChangeText={setEmail}
+          style={styles.input}
+          autoCapitalize="none"
+          keyboardType="email-address"
+        />
+        <TextInput
+          placeholder="비밀번호"
+          value={password}
+          onChangeText={setPassword}
+          style={styles.input}
+          secureTextEntry
+        />
         <TouchableOpacity onPress={handleLogin} style={styles.primaryButton} disabled={loading}>
-          <Text style={styles.buttonText}>{loading ? 'Logging in...' : 'Login'}</Text>
+          <Text style={styles.buttonText}>{loading ? '로그인 중...' : '로그인'}</Text>
         </TouchableOpacity>
         <StatusBar style="auto" />
       </View>
@@ -189,19 +186,22 @@ export default function App() {
     return (
       <View style={styles.container}>
         <View style={{ marginBottom: 40, alignItems: 'center' }}>
-           <Text style={styles.welcome}>안녕하세요, {user?.email?.split('@')[0]}님</Text>
-           {expoPushToken ? (
-             <Text style={styles.statusText}>✅ 알림 수신 대기 중</Text>
-           ) : (
-             <Text style={styles.statusTextDisabled}>❌ 알림 비활성 상태 (실기기 권장)</Text>
-           )}
+          <Text style={styles.welcome}>안녕하세요, {user?.email?.split('@')[0]}님</Text>
+          {expoPushToken ? (
+            <Text style={styles.statusText}>✅ 알림 수신 대기 중</Text>
+          ) : (
+            <Text style={styles.statusTextDisabled}>❌ 알림 비활성 (실기기 권장)</Text>
+          )}
         </View>
 
         <TouchableOpacity onPress={() => setView('camera')} style={styles.captureButton}>
           <Text style={styles.captureButtonText}>📸 포스터 촬영 시작</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity onPress={() => supabase.auth.signOut().then(() => setView('login'))} style={styles.linkButton}>
+
+        <TouchableOpacity
+          onPress={() => supabase.auth.signOut().then(() => { setUser(null); setView('login'); })}
+          style={styles.linkButton}
+        >
           <Text style={styles.linkText}>로그아웃</Text>
         </TouchableOpacity>
       </View>
@@ -209,19 +209,28 @@ export default function App() {
   }
 
   if (view === 'camera') {
-    if (hasPermission === null) return <View />;
-    if (hasPermission === false) return <Text>No access to camera</Text>;
+    if (!permission) return <View />;
+    if (!permission.granted) {
+      return (
+        <View style={styles.container}>
+          <Text style={{ marginBottom: 20, fontWeight: 'bold', color: '#374151' }}>카메라 접근 권한이 필요합니다.</Text>
+          <TouchableOpacity onPress={requestPermission} style={styles.primaryButton}>
+            <Text style={styles.buttonText}>권한 허용</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
     return (
       <View style={{ flex: 1 }}>
-        <Camera style={{ flex: 1 }} ref={cameraRef}>
+        <CameraView style={{ flex: 1 }} ref={cameraRef}>
           <View style={styles.cameraControls}>
             <TouchableOpacity onPress={() => setView('home')} style={styles.iconButton}>
-              <Text style={{color: 'white', fontWeight: 'bold'}}>취소</Text>
+              <Text style={{ color: 'white', fontWeight: 'bold' }}>취소</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={takePicture} style={styles.shutterButton} />
             <View style={{ width: 40 }} />
           </View>
-        </Camera>
+        </CameraView>
       </View>
     );
   }

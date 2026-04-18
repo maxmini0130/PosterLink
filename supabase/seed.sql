@@ -7,7 +7,8 @@ INSERT INTO categories (name, code, sort_order) VALUES
 ('소상공인', 'CAT_BUSINESS', 5),
 ('육아/가족', 'CAT_FAMILY', 6),
 ('건강/의료', 'CAT_HEALTH', 7),
-('기타', 'CAT_OTHER', 8);
+('기타', 'CAT_OTHER', 8)
+ON CONFLICT (code) DO NOTHING;
 
 -- 2. Regions (기본 지역 - 전국 및 주요 시도)
 INSERT INTO regions (name, code, level, full_name) VALUES
@@ -20,7 +21,8 @@ INSERT INTO regions (name, code, level, full_name) VALUES
 ('광주광역시', 'REG_GWANGJU', 'sido', '광주광역시'),
 ('대전광역시', 'REG_DAEJEON', 'sido', '대전광역시'),
 ('울산광역시', 'REG_ULSAN', 'sido', '울산광역시'),
-('세종특별자치시', 'REG_SEJONG', 'sido', '세종특별자치시');
+('세종특별자치시', 'REG_SEJONG', 'sido', '세종특별자치시')
+ON CONFLICT (code) DO NOTHING;
 
 -- 3. Sample Sub-Regions (서울 주요 구)
 DO $$
@@ -34,7 +36,8 @@ BEGIN
     (seoul_id, '서초구', 'REG_SEOUL_SEOCHO', 'sigungu', '서울특별시 서초구'),
     (seoul_id, '송파구', 'REG_SEOUL_SONGPA', 'sigungu', '서울특별시 송파구'),
     (seoul_id, '마포구', 'REG_SEOUL_MAPO', 'sigungu', '서울특별시 마포구'),
-    (seoul_id, '종로구', 'REG_SEOUL_JONGNO', 'sigungu', '서울특별시 종로구');
+    (seoul_id, '종로구', 'REG_SEOUL_JONGNO', 'sigungu', '서울특별시 종로구')
+    ON CONFLICT (code) DO NOTHING;
 END $$;
 
 -- 4. Eligibility Tags (대상 조건 태그)

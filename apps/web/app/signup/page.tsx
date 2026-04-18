@@ -15,14 +15,39 @@ export default function SignupPage() {
     e.preventDefault();
     setLoading(true);
     const { data, error } = await supabase.auth.signUp({ email, password });
-    
+
     if (error) {
       alert(error.message);
-    } else if (data.user) {
-      // Create initial profile
-      await supabase.from("profiles").insert({ id: data.user.id, nickname: email.split("@")[0] });
-      router.push("/onboarding");
+      setLoading(false);
+      return;
     }
+
+    if (!data.user) {
+      alert("회원가입에 실패했습니다. 다시 시도해주세요.");
+      setLoading(false);
+      return;
+    }
+
+    // 세션이 없으면 (이메일 확인 필요) 바로 로그인 시도
+    let session = data.session;
+    if (!session) {
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) {
+        // 이메일 미확인 상태 — 확인 메일 안내
+        alert("가입 확인 이메일을 발송했습니다.\nSupabase 대시보드 → Authentication → Configuration에서 'Enable email confirmations'를 OFF 하면 확인 없이 바로 사용할 수 있습니다.");
+        setLoading(false);
+        return;
+      }
+      session = signInData.session;
+    }
+
+    // 세션 확보 후 프로필 생성 (이미 있으면 무시)
+    await supabase.from("profiles").upsert(
+      { id: data.user.id, nickname: email.split("@")[0], role: 'user' },
+      { onConflict: "id", ignoreDuplicates: true }
+    );
+    localStorage.setItem("onboarding_uid", data.user.id);
+    router.push("/onboarding");
     setLoading(false);
   };
 
@@ -49,7 +74,7 @@ export default function SignupPage() {
             placeholder="example@email.com"
             value={email} 
             onChange={(e) => setEmail(e.target.value)} 
-            className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all outline-none" 
+            className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all outline-none text-gray-900 placeholder:text-gray-400" 
             required 
           />
         </div>
@@ -60,7 +85,7 @@ export default function SignupPage() {
             placeholder="••••••••"
             value={password} 
             onChange={(e) => setPassword(e.target.value)} 
-            className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all outline-none" 
+            className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all outline-none text-gray-900 placeholder:text-gray-400" 
             required 
           />
         </div>

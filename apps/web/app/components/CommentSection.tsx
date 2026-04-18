@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
-import { MessageSquare, Send, AlertTriangle, MoreVertical, Trash2 } from "lucide-react";
+import { fetchProfileMap } from "../../lib/posterHelpers";
+import { MessageSquare, Send, AlertTriangle, Trash2 } from "lucide-react";
 
 interface CommentSectionProps {
   posterId: string;
@@ -15,17 +16,17 @@ export function CommentSection({ posterId }: CommentSectionProps) {
   const [user, setUser] = useState<any>(null);
 
   const fetchComments = async () => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("comments")
-      .select(`
-        *,
-        profiles (nickname, role)
-      `)
+      .select("*")
       .eq("poster_id", posterId)
-      .eq("status", "normal")
+      .in("status", ["normal"])
       .order("created_at", { ascending: false });
 
-    if (data) setComments(data);
+    if (!data || data.length === 0) { setComments([]); return; }
+
+    const profileMap = await fetchProfileMap(data.map((c: any) => c.user_id));
+    setComments(data.map((c: any) => ({ ...c, profiles: profileMap[c.user_id] ?? null })));
   };
 
   useEffect(() => {
@@ -37,6 +38,7 @@ export function CommentSection({ posterId }: CommentSectionProps) {
     e.preventDefault();
     if (!user) return alert("로그인이 필요합니다.");
     if (!newComment.trim()) return;
+    if (newComment.trim().length > 500) return alert("댓글은 500자 이내로 작성해주세요.");
 
     setLoading(true);
     const { error } = await supabase.from("comments").insert({
@@ -90,7 +92,7 @@ export function CommentSection({ posterId }: CommentSectionProps) {
           onChange={(e) => setNewComment(e.target.value)}
           placeholder={user ? "공고에 대해 궁금한 점이나 후기를 남겨주세요." : "로그인 후 댓글을 작성할 수 있습니다."}
           disabled={!user || loading}
-          className="w-full p-5 bg-gray-50 border-none rounded-3xl text-sm font-bold focus:ring-2 focus:ring-blue-100 outline-none resize-none min-h-[120px]"
+          className="w-full p-5 bg-gray-50 border-none rounded-3xl text-sm font-bold text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-100 outline-none resize-none min-h-[120px]"
         />
         <button
           disabled={!user || loading || !newComment.trim()}

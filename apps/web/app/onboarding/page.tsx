@@ -55,7 +55,10 @@ export default function OnboardingPage() {
     setSubmitting(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Authentication failed.");
+      const { data: { session } } = await supabase.auth.getSession();
+      const fallbackUid = typeof window !== "undefined" ? localStorage.getItem("onboarding_uid") : null;
+      const currentUser = user ?? session?.user ?? (fallbackUid ? { id: fallbackUid } : null);
+      if (!currentUser) throw new Error("로그인 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
 
       // 1. 프로필 업데이트 (지역 + 연령대)
       const { error: profileError } = await supabase
@@ -65,17 +68,18 @@ export default function OnboardingPage() {
           age_band: selectedAgeBand,
           role: 'user'
         })
-        .eq("id", user.id);
+        .eq("id", currentUser.id);
 
       if (profileError) throw profileError;
 
       // 2. 관심 카테고리 저장 (M:N)
       if (selectedCategoryIds.length > 0) {
-        await supabase.from("user_interest_categories").delete().eq("user_id", user.id);
-        const inserts = selectedCategoryIds.map(catId => ({ user_id: user.id, category_id: catId }));
+        await supabase.from("user_interest_categories").delete().eq("user_id", currentUser.id);
+        const inserts = selectedCategoryIds.map(catId => ({ user_id: currentUser.id, category_id: catId }));
         await supabase.from("user_interest_categories").insert(inserts);
       }
 
+      localStorage.removeItem("onboarding_uid");
       router.push("/");
     } catch (error: any) {
       alert("Error saving profile: " + error.message);
