@@ -16,7 +16,8 @@ export default function FavoritesPage() {
     const fetchFavorites = async () => {
       setLoading(true);
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user ?? null;
         if (user) {
           // Join favorites with posters and related info
           const { data, error } = await supabase
@@ -75,8 +76,8 @@ export default function FavoritesPage() {
                   title: poster.title,
                   org: poster.source_org_name,
                   deadline: poster.application_end_at,
-                  tags: [poster.poster_categories?.[0]?.categories?.name].filter(Boolean),
-                  image: poster.poster_images?.[0]?.image_url
+                  tags: [],
+                  image: poster.thumbnail_url
                 }} 
               />
             ))}

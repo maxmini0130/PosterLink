@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
-import { MessageSquare, Send, AlertTriangle, MoreVertical, Trash2 } from "lucide-react";
+import { fetchProfileMap } from "../../lib/posterHelpers";
+import { MessageSquare, Send, AlertTriangle, Trash2 } from "lucide-react";
 
 interface CommentSectionProps {
   posterId: string;
@@ -24,14 +25,7 @@ export function CommentSection({ posterId }: CommentSectionProps) {
 
     if (!data || data.length === 0) { setComments([]); return; }
 
-    // 닉네임 별도 조회
-    const userIds = [...new Set(data.map((c: any) => c.user_id))];
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, nickname")
-      .in("id", userIds);
-
-    const profileMap = Object.fromEntries((profiles ?? []).map((p: any) => [p.id, p]));
+    const profileMap = await fetchProfileMap(data.map((c: any) => c.user_id));
     setComments(data.map((c: any) => ({ ...c, profiles: profileMap[c.user_id] ?? null })));
   };
 

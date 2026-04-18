@@ -75,7 +75,6 @@ export default function NewPosterPage() {
         body: { imageBase64: base64data.split(',')[1] },
         headers: session ? { Authorization: `Bearer ${session.access_token}` } : {}
       }).then(({ data, error }) => {
-        console.log("OCR result:", { data, error });
         if (error) { console.error("OCR Error:", error); return; }
         if (data) {
           setFormData(prev => ({

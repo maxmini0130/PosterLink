@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
+import { fetchCategoryRegionNames } from "../lib/posterHelpers";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
 import { PosterCard } from "../components/PosterCard";
@@ -34,8 +35,12 @@ export default function PosterListPage() {
       if (regData) setRegions(regData);
       
       // Load recent searches from localStorage
-      const saved = localStorage.getItem("recent_searches");
-      if (saved) setRecentSearches(JSON.parse(saved));
+      try {
+        const saved = localStorage.getItem("recent_searches");
+        if (saved) setRecentSearches(JSON.parse(saved));
+      } catch {
+        localStorage.removeItem("recent_searches");
+      }
     };
     fetchBase();
   }, []);
@@ -61,17 +66,13 @@ export default function PosterListPage() {
       let filtered = data;
       if (selectedCategoryId) {
         const { data: catLinks } = await supabase
-          .from("poster_categories")
-          .select("poster_id")
-          .eq("category_id", selectedCategoryId);
+          .from("poster_categories").select("poster_id").eq("category_id", selectedCategoryId);
         const ids = new Set((catLinks ?? []).map((r: any) => r.poster_id));
         filtered = filtered.filter(p => ids.has(p.id));
       }
       if (selectedRegionId) {
         const { data: regLinks } = await supabase
-          .from("poster_regions")
-          .select("poster_id")
-          .eq("region_id", selectedRegionId);
+          .from("poster_regions").select("poster_id").eq("region_id", selectedRegionId);
         const ids = new Set((regLinks ?? []).map((r: any) => r.poster_id));
         filtered = filtered.filter(p => ids.has(p.id));
       }

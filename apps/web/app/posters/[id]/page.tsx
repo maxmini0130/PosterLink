@@ -6,6 +6,7 @@ import { BottomNav } from "../../components/BottomNav";
 import { CommentSection } from "../../components/CommentSection";
 import { notFound } from "next/navigation";
 import { supabase } from "../../lib/supabase";
+import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
 
 export default function PosterDetailPage({ params }: { params: { id: string } }) {
   const [poster, setPoster] = useState<any>(null);
@@ -29,25 +30,8 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
           return;
         }
 
-        // 카테고리, 지역 별도 조회 (JOIN 없이)
-        const [catRes, regRes] = await Promise.all([
-          supabase.from("poster_categories").select("category_id").eq("poster_id", params.id),
-          supabase.from("poster_regions").select("region_id").eq("poster_id", params.id),
-        ]);
-
-        let categoryName = null;
-        let regionName = null;
-
-        if (catRes.data?.[0]?.category_id) {
-          const { data: cat } = await supabase.from("categories").select("name").eq("id", catRes.data[0].category_id).single();
-          categoryName = cat?.name ?? null;
-        }
-        if (regRes.data?.[0]?.region_id) {
-          const { data: reg } = await supabase.from("regions").select("name").eq("id", regRes.data[0].region_id).single();
-          regionName = reg?.name ?? null;
-        }
-
-        setPoster({ ...data, categoryName, regionName });
+        const metaMap = await fetchCategoryRegionNames([params.id]);
+        setPoster({ ...data, ...metaMap[params.id] });
 
         // 2. 관련 링크 가져오기
         const { data: linkData } = await supabase
@@ -86,11 +70,12 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
     }
 
     if (isFavorited) {
-      await supabase.from("favorites").delete().eq("user_id", user.id).eq("poster_id", params.id);
+      const { error } = await supabase.from("favorites").delete().eq("user_id", user.id).eq("poster_id", params.id);
+      if (!error) setIsFavorited(false);
     } else {
-      await supabase.from("favorites").insert({ user_id: user.id, poster_id: params.id });
+      const { error } = await supabase.from("favorites").insert({ user_id: user.id, poster_id: params.id });
+      if (!error) setIsFavorited(true);
     }
-    setIsFavorited(!isFavorited);
   };
 
   if (loading) {
@@ -101,12 +86,9 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
     notFound();
   }
 
-  // D-Day 계산
-  const getDaysLeft = (date: string) => {
-    const diff = new Date(date).getTime() - new Date().getTime();
-    return Math.ceil(diff / (1000 * 60 * 60 * 24));
-  };
-  const daysLeft = poster.application_end_at ? getDaysLeft(poster.application_end_at) : null;
+  const daysLeft = poster.application_end_at
+    ? Math.ceil((new Date(poster.application_end_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+    : null;
 
   // 이미지 URL 구성 (Supabase Storage 경로 활용)
   const imageUrl = poster.thumbnail_url ?? null;

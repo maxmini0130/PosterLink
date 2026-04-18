@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
+import { fetchProfileMap } from "../../lib/posterHelpers";
 import { AlertCircle, CheckCircle2, EyeOff, MessageSquare } from "lucide-react";
 
 export default function AdminReportsPage() {
@@ -20,20 +21,18 @@ export default function AdminReportsPage() {
 
     // 댓글 및 작성자 닉네임 별도 조회
     const commentIds = [...new Set(data.map((r: any) => r.comment_id))];
-    const reporterIds = [...new Set(data.map((r: any) => r.reporter_user_id))];
+    const { data: commentsData } = await supabase
+      .from("comments").select("id, body, status, user_id").in("id", commentIds);
 
-    const [commentsRes, reporterRes] = await Promise.all([
-      supabase.from("comments").select("id, body, status, user_id").in("id", commentIds),
-      supabase.from("profiles").select("id, nickname").in("id", reporterIds),
-    ]);
+    const commentMap = Object.fromEntries((commentsData ?? []).map((c: any) => [c.id, c]));
 
-    const commentAuthorIds = [...new Set((commentsRes.data ?? []).map((c: any) => c.user_id))];
-    const { data: authorProfiles } = await supabase
-      .from("profiles").select("id, nickname").in("id", commentAuthorIds);
-
-    const commentMap = Object.fromEntries((commentsRes.data ?? []).map((c: any) => [c.id, c]));
-    const authorMap = Object.fromEntries((authorProfiles ?? []).map((p: any) => [p.id, p]));
-    const reporterMap = Object.fromEntries((reporterRes.data ?? []).map((p: any) => [p.id, p]));
+    const allUserIds = [
+      ...(commentsData ?? []).map((c: any) => c.user_id),
+      ...data.map((r: any) => r.reporter_user_id),
+    ];
+    const profileMap = await fetchProfileMap(allUserIds);
+    const authorMap = profileMap;
+    const reporterMap = profileMap;
 
     setReports(data.map((r: any) => ({
       ...r,
