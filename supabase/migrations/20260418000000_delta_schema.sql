@@ -179,6 +179,10 @@ CREATE POLICY "posters_update" ON posters FOR UPDATE USING (
     created_by = auth.uid()
     OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin','super_admin'))
 );
+CREATE POLICY "posters_delete" ON posters FOR DELETE USING (
+    created_by = auth.uid()
+    OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin','super_admin'))
+);
 
 -- 5-2. 새 테이블 정책
 CREATE POLICY "audience_groups_select" ON audience_groups FOR SELECT USING (is_active = true);
