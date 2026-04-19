@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
 import Link from "next/link";
-import { Plus, Search, FileText, CheckCircle2, Clock, AlertCircle, Edit3, Send } from "lucide-react";
+import { Plus, Search, FileText, CheckCircle2, Clock, AlertCircle, Edit3, Send, Trash2 } from "lucide-react";
 
 export default function OperatorPostersPage() {
   const [posters, setPosters] = useState<any[]>([]);
@@ -50,7 +50,14 @@ export default function OperatorPostersPage() {
     }
   };
 
-  const filteredPosters = posters.filter(p => 
+  const handleDelete = async (id: string) => {
+    if (!confirm("포스터를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) return;
+    const { error } = await supabase.from("posters").delete().eq("id", id);
+    if (error) alert(error.message);
+    else fetchPosters();
+  };
+
+  const filteredPosters = posters.filter(p =>
     p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
     p.source_org_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -134,21 +141,21 @@ export default function OperatorPostersPage() {
                   <td className="px-6 py-5 text-right">
                     <div className="flex items-center justify-end gap-2">
                       {p.poster_status === 'draft' && (
-                        <button 
+                        <button
                           onClick={() => handleRequestReview(p.id)}
-                          className="p-2 text-blue-600 hover:bg-blue-100 rounded-xl transition-colors title='검수 요청'"
+                          title="검수 요청"
+                          className="p-2 text-blue-600 hover:bg-blue-100 rounded-xl transition-colors"
                         >
                           <Send size={18} />
                         </button>
                       )}
-                      {p.poster_status === 'draft' && (
-                        <Link
-                          href={`/operator/posters/new`}
-                          className="p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 rounded-xl transition-colors"
-                        >
-                          <Edit3 size={18} />
-                        </Link>
-                      )}
+                      <button
+                        onClick={() => handleDelete(p.id)}
+                        title="삭제"
+                        className="p-2 text-gray-400 hover:bg-rose-50 hover:text-rose-500 rounded-xl transition-colors"
+                      >
+                        <Trash2 size={18} />
+                      </button>
                     </div>
                   </td>
                 </tr>
