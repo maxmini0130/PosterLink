@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
 import Link from "next/link";
-import { Plus, Search, FileText, CheckCircle2, Clock, AlertCircle, Edit3, Send, Trash2 } from "lucide-react";
+import { Plus, Search, FileText, CheckCircle2, Clock, AlertCircle, Edit3, Send } from "lucide-react";
 
 export default function OperatorPostersPage() {
   const [posters, setPosters] = useState<any[]>([]);
@@ -48,13 +48,6 @@ export default function OperatorPostersPage() {
       alert("검수 요청이 완료되었습니다.");
       fetchPosters();
     }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm("포스터를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) return;
-    const { error } = await supabase.from("posters").delete().eq("id", id);
-    if (error) alert(error.message);
-    else fetchPosters();
   };
 
   const filteredPosters = posters.filter(p =>
@@ -149,13 +142,13 @@ export default function OperatorPostersPage() {
                           <Send size={18} />
                         </button>
                       )}
-                      <button
-                        onClick={() => handleDelete(p.id)}
-                        title="삭제"
-                        className="p-2 text-gray-400 hover:bg-rose-50 hover:text-rose-500 rounded-xl transition-colors"
+                      <Link
+                        href={`/operator/posters/${p.id}/edit`}
+                        title="수정"
+                        className="p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 rounded-xl transition-colors"
                       >
-                        <Trash2 size={18} />
-                      </button>
+                        <Edit3 size={18} />
+                      </Link>
                     </div>
                   </td>
                 </tr>
