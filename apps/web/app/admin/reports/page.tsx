@@ -20,7 +20,7 @@ export default function AdminReportsPage() {
     if (error || !data) { setLoading(false); return; }
 
     // 댓글 및 작성자 닉네임 별도 조회
-    const commentIds = [...new Set(data.map((r: any) => r.comment_id))];
+    const commentIds = Array.from(new Set(data.map((r: any) => r.comment_id)));
     const { data: commentsData } = await supabase
       .from("comments").select("id, body, status, user_id").in("id", commentIds);
 
