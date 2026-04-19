@@ -37,7 +37,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-gray-100 bg-white/80 backdrop-blur-md">
-      <div className="container mx-auto px-4 h-14 flex items-center justify-between">
+      <div className="container mx-auto px-4 max-w-4xl h-14 flex items-center justify-between">
         <Link href="/" className="text-xl font-black text-blue-600">
           PosterLink
         </Link>
