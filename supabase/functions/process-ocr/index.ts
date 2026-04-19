@@ -17,6 +17,42 @@ const CATEGORY_GUIDE = `
 - CAT_OTHER: 위에 해당하지 않는 기타
 `.trim()
 
+async function searchOfficialLink(title: string, orgName: string): Promise<string | null> {
+  const tavilyKey = Deno.env.get("TAVILY_API_KEY")
+  if (!tavilyKey) return null
+
+  const query = `${title} ${orgName} 공식 공고 신청`
+
+  try {
+    const res = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: tavilyKey,
+        query,
+        search_depth: "basic",
+        max_results: 3,
+        include_domains: [],
+        exclude_domains: ["youtube.com", "facebook.com", "instagram.com", "twitter.com"],
+      }),
+    })
+
+    if (!res.ok) return null
+
+    const data = await res.json()
+    const results = data.results ?? []
+
+    // 공식 도메인(.go.kr, .or.kr, .ac.kr) 우선, 없으면 첫 번째 결과
+    const official = results.find((r: any) =>
+      /\.go\.kr|\.or\.kr|\.ac\.kr|\.edu\.kr/.test(r.url)
+    )
+
+    return official?.url ?? results[0]?.url ?? null
+  } catch {
+    return null
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -89,13 +125,19 @@ ${CATEGORY_GUIDE}`
       throw new Error("AI 응답 파싱 실패: " + content)
     }
 
+    // 이미지에서 URL을 못 찾은 경우 Tavily로 검색
+    let officialLink = parsed.officialLink ?? null
+    if (!officialLink && parsed.title) {
+      officialLink = await searchOfficialLink(parsed.title, parsed.sourceOrgName ?? "")
+    }
+
     return new Response(JSON.stringify({
       title: parsed.title ?? null,
       sourceOrgName: parsed.sourceOrgName ?? null,
       categoryId: parsed.categoryId ?? null,
       appEndAt: parsed.appEndAt ?? null,
       summaryShort: parsed.summaryShort ?? null,
-      officialLink: parsed.officialLink ?? null,
+      officialLink,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
