@@ -1,5 +1,5 @@
 export type UserRole = 'user' | 'operator' | 'admin' | 'super_admin';
-export type PosterStatus = 'draft' | 'review_requested' | 'published' | 'hidden' | 'rejected' | 'expired';
+export type PosterStatus = 'draft' | 'review' | 'published' | 'hidden' | 'rejected' | 'closed' | 'archived';
 export type CommentStatus = 'normal' | 'hidden' | 'deleted' | 'blocked';
 export type ReportStatus = 'received' | 'reviewing' | 'actioned' | 'dismissed';
 

@@ -117,7 +117,7 @@ export default function NewPosterPage() {
         .insert({
           title: formData.title,
           source_org_name: formData.sourceOrgName,
-          poster_status: "review_requested",
+          poster_status: "review",
           application_end_at: formData.appEndAt || null,
           summary_short: formData.summaryShort,
           created_by: user.id

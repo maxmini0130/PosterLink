@@ -45,7 +45,7 @@ serve(async (req) => {
     for (const poster of expiringPosters) {
       // 2. 해당 포스터를 찜한 사용자 및 그들의 푸시 토큰 조회
       const { data: favorites, error: favoritesError } = await supabase
-        .from('poster_favorites')
+        .from('favorites')
         .select(`
           user_id,
           profiles:user_id (nickname, expo_push_token)

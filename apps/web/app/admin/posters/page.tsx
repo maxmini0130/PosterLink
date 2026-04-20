@@ -5,12 +5,12 @@ import { supabase } from "../../lib/supabase";
 import { Check, X, ExternalLink, Image as ImageIcon, Eye, FileCheck, Filter, Loader2 } from "lucide-react";
 import Link from "next/link";
 
-type PosterStatus = 'review_requested' | 'published' | 'rejected' | 'draft';
+type PosterStatus = 'review' | 'published' | 'rejected' | 'draft';
 
 export default function AdminPostersPage() {
   const [posters, setPosters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentFilter, setCurrentFilter] = useState<PosterStatus>('review_requested');
+  const [currentFilter, setCurrentFilter] = useState<PosterStatus>('review');
 
   const fetchPosters = async (status: PosterStatus) => {
     setLoading(true);
@@ -18,7 +18,7 @@ export default function AdminPostersPage() {
       .from("posters")
       .select("*")
       .eq("poster_status", status)
-      .order("created_at", { ascending: status === 'review_requested' });
+      .order("created_at", { ascending: status === 'review' });
 
     if (error) { console.error(error); setLoading(false); return; }
     if (data) setPosters(data);
@@ -49,7 +49,7 @@ export default function AdminPostersPage() {
   };
 
   const tabs: { label: string; value: PosterStatus }[] = [
-    { label: "검수 대기", value: 'review_requested' },
+    { label: "검수 대기", value: 'review' },
     { label: "승인 완료", value: 'published' },
     { label: "반려됨", value: 'rejected' },
     { label: "임시 저장", value: 'draft' },

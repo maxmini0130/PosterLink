@@ -40,7 +40,7 @@ export default function OperatorPostersPage() {
 
     const { error } = await supabase
       .from("posters")
-      .update({ poster_status: "review_requested" })
+      .update({ poster_status: "review" })
       .eq("id", id);
 
     if (error) alert(error.message);
@@ -51,8 +51,8 @@ export default function OperatorPostersPage() {
   };
 
   const filteredPosters = posters.filter(p =>
-    p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    p.source_org_name.toLowerCase().includes(searchQuery.toLowerCase())
+    p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (p.source_org_name ?? '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const getStatusBadge = (status: string) => {
@@ -61,7 +61,7 @@ export default function OperatorPostersPage() {
         return <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-50 text-green-600 text-[11px] font-black border border-green-100"><CheckCircle2 size={12}/> 게시 중</span>;
       case 'draft':
         return <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50 text-gray-400 text-[11px] font-black border border-gray-100"><FileText size={12}/> 초안 작성</span>;
-      case 'review_requested':
+      case 'review':
         return <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-600 text-[11px] font-black border border-blue-100"><Clock size={12}/> 검수 대기</span>;
       case 'rejected':
         return <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-500 text-[11px] font-black border border-rose-100"><AlertCircle size={12}/> 반려됨</span>;

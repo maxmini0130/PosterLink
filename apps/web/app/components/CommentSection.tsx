@@ -62,7 +62,7 @@ export function CommentSection({ posterId }: CommentSectionProps) {
 
     const { error } = await supabase.from("comment_reports").insert({
       comment_id: commentId,
-      reporter_id: user.id,
+      reporter_user_id: user.id,
       reason_code: 'other',
       reason_detail: reason
     });

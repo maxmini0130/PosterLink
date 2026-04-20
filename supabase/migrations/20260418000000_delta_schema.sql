@@ -19,7 +19,10 @@ DO $$ BEGIN
     END IF;
 END $$;
 
--- 1-2. profiles: 누락 컬럼 추가
+-- 1-2. posters: thumbnail_url 컬럼 추가 (코드에서 직접 URL 저장용)
+ALTER TABLE posters ADD COLUMN IF NOT EXISTS thumbnail_url TEXT;
+
+-- 1-3. profiles: 누락 컬럼 추가
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS is_notified BOOLEAN DEFAULT true;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS expo_push_token TEXT;
