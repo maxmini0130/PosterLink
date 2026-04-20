@@ -15,7 +15,7 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
       if (!user) router.push("/login");
       else {
         const { data } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-        if (data?.role !== "operator" && data?.role !== "admin") {
+        if (data?.role !== "operator" && data?.role !== "admin" && data?.role !== "super_admin") {
           alert("권한이 없습니다.");
           router.push("/");
         } else {

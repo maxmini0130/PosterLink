@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Search, Bell, User, ShieldCheck } from "lucide-react";
+import { Search, Bell, User, ShieldCheck, ClipboardList } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
@@ -70,6 +70,11 @@ export function Header() {
               {(role === 'admin' || role === 'super_admin') && (
                 <Link href="/admin" className="p-2 text-indigo-500 hover:text-indigo-700 transition-colors" title="관리자">
                   <ShieldCheck size={22} />
+                </Link>
+              )}
+              {role === 'operator' && (
+                <Link href="/operator/posters" className="p-2 text-emerald-500 hover:text-emerald-700 transition-colors" title="운영자">
+                  <ClipboardList size={22} />
                 </Link>
               )}
               <Link href="/notifications" className="p-2 text-gray-500 hover:text-blue-600 transition-colors relative">
