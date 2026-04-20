@@ -219,6 +219,16 @@ export default function App() {
     return (
       <View style={{ flex: 1 }}>
         <CameraView style={{ flex: 1 }} ref={cameraRef}>
+          {/* 포스터 가이드 오버레이 */}
+          <View style={styles.guideOverlay}>
+            <View style={styles.guideBox}>
+              <View style={[styles.guideCorner, styles.guideTopLeft]} />
+              <View style={[styles.guideCorner, styles.guideTopRight]} />
+              <View style={[styles.guideCorner, styles.guideBottomLeft]} />
+              <View style={[styles.guideCorner, styles.guideBottomRight]} />
+            </View>
+            <Text style={styles.guideText}>포스터를 프레임에 맞춰주세요</Text>
+          </View>
           <View style={styles.cameraControls}>
             <TouchableOpacity onPress={() => setView('home')} style={styles.iconButton}>
               <Text style={{ color: 'white', fontWeight: 'bold' }}>취소</Text>
@@ -270,4 +280,12 @@ const styles = StyleSheet.create({
   linkButton: { marginTop: 24 },
   linkText: { color: '#9ca3af', fontWeight: 'bold', textDecorationLine: 'underline' },
   iconButton: { padding: 10 },
+  guideOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', zIndex: 1 },
+  guideBox: { width: '75%', aspectRatio: 3 / 4, borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)', borderRadius: 16, position: 'relative' },
+  guideCorner: { position: 'absolute', width: 24, height: 24, borderColor: '#3b82f6' },
+  guideTopLeft: { top: -2, left: -2, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 16 },
+  guideTopRight: { top: -2, right: -2, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 16 },
+  guideBottomLeft: { bottom: -2, left: -2, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 16 },
+  guideBottomRight: { bottom: -2, right: -2, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 16 },
+  guideText: { color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: 'bold', marginTop: 16, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
 });
