@@ -182,41 +182,58 @@ CREATE POLICY "posters_update" ON posters FOR UPDATE USING (
     created_by = auth.uid()
     OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin','super_admin'))
 );
+DROP POLICY IF EXISTS "posters_delete" ON posters;
 CREATE POLICY "posters_delete" ON posters FOR DELETE USING (
     created_by = auth.uid()
     OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin','super_admin'))
 );
 
--- 5-2. 새 테이블 정책
+-- 5-2. 새 테이블 정책 (멱등성: 이미 존재하면 DROP 후 재생성)
+DROP POLICY IF EXISTS "audience_groups_select" ON audience_groups;
 CREATE POLICY "audience_groups_select" ON audience_groups FOR SELECT USING (is_active = true);
+DROP POLICY IF EXISTS "synonyms_select" ON synonym_dictionary;
 CREATE POLICY "synonyms_select" ON synonym_dictionary FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "poster_categories_select" ON poster_categories;
 CREATE POLICY "poster_categories_select" ON poster_categories FOR SELECT USING (true);
+DROP POLICY IF EXISTS "poster_categories_insert" ON poster_categories;
 CREATE POLICY "poster_categories_insert" ON poster_categories FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
+DROP POLICY IF EXISTS "poster_regions_select" ON poster_regions;
 CREATE POLICY "poster_regions_select" ON poster_regions FOR SELECT USING (true);
+DROP POLICY IF EXISTS "poster_regions_insert" ON poster_regions;
 CREATE POLICY "poster_regions_insert" ON poster_regions FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
+DROP POLICY IF EXISTS "poster_audiences_select" ON poster_audiences;
 CREATE POLICY "poster_audiences_select" ON poster_audiences FOR SELECT USING (true);
+DROP POLICY IF EXISTS "poster_audiences_insert" ON poster_audiences;
 CREATE POLICY "poster_audiences_insert" ON poster_audiences FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
+DROP POLICY IF EXISTS "favorites_all" ON favorites;
 CREATE POLICY "favorites_all" ON favorites FOR ALL USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "reports_insert" ON comment_reports;
 CREATE POLICY "reports_insert" ON comment_reports FOR INSERT WITH CHECK (auth.uid() = reporter_user_id);
+DROP POLICY IF EXISTS "reports_select" ON comment_reports;
 CREATE POLICY "reports_select" ON comment_reports FOR SELECT USING (
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin','super_admin'))
 );
+DROP POLICY IF EXISTS "reports_update" ON comment_reports;
 CREATE POLICY "reports_update" ON comment_reports FOR UPDATE USING (
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin','super_admin'))
 );
 
+DROP POLICY IF EXISTS "admin_actions_all" ON admin_actions;
 CREATE POLICY "admin_actions_all" ON admin_actions FOR ALL USING (
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin','super_admin'))
 );
 
+DROP POLICY IF EXISTS "notifications_select" ON notifications;
 CREATE POLICY "notifications_select" ON notifications FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "notifications_update" ON notifications;
 CREATE POLICY "notifications_update" ON notifications FOR UPDATE USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "search_logs_deny" ON search_logs;
 CREATE POLICY "search_logs_deny" ON search_logs FOR SELECT USING (false);
 
 

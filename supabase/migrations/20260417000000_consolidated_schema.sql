@@ -109,6 +109,7 @@ CREATE TABLE posters (
     comment_count INT DEFAULT 0,
     created_by UUID REFERENCES profiles(id),
     approved_by UUID REFERENCES profiles(id),
+    thumbnail_url TEXT,
     published_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
@@ -315,6 +316,10 @@ CREATE POLICY "posters_select" ON posters FOR SELECT USING (
 );
 CREATE POLICY "posters_insert" ON posters FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 CREATE POLICY "posters_update" ON posters FOR UPDATE USING (
+    created_by = auth.uid()
+    OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin','super_admin'))
+);
+CREATE POLICY "posters_delete" ON posters FOR DELETE USING (
     created_by = auth.uid()
     OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin','super_admin'))
 );
