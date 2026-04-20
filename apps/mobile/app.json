@@ -15,14 +15,34 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.maxmini.posterlink",
+      "infoPlist": {
+        "NSCameraUsageDescription": "포스터 촬영을 위해 카메라 권한이 필요합니다.",
+        "NSPhotoLibraryUsageDescription": "갤러리에서 포스터를 선택하기 위해 권한이 필요합니다."
+      }
     },
     "android": {
+      "package": "com.maxmini.posterlink",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "NOTIFICATIONS"
+      ]
+    },
+    "extra": {
+      "eas": {
+        "projectId": "your-expo-project-id"
       }
     },
+    "plugins": [
+      "expo-camera"
+    ],
     "web": {
       "favicon": "./assets/favicon.png"
     }
