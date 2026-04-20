@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Search, Bell, User } from "lucide-react";
+import { Search, Bell, User, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
@@ -9,27 +9,28 @@ import { useRouter } from "next/navigation";
 export function Header() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
   const [hasUnread, setHasUnread] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
   const router = useRouter();
 
-  const checkUnread = async (userId: string) => {
-    const { count, error } = await supabase
-      .from("notifications")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .eq("is_read", false);
+  const checkUserInfo = async (userId: string) => {
+    const [{ count, error }, { data: profile }] = await Promise.all([
+      supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("is_read", false),
+      supabase.from("profiles").select("role").eq("id", userId).single(),
+    ]);
     if (!error) setHasUnread((count ?? 0) > 0);
+    if (profile) setRole(profile.role);
   };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setIsLoggedIn(!!session);
-      if (session?.user) checkUnread(session.user.id);
+      if (session?.user) checkUserInfo(session.user.id);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsLoggedIn(!!session);
-      if (session?.user) checkUnread(session.user.id);
-      else setHasUnread(false);
+      if (session?.user) checkUserInfo(session.user.id);
+      else { setHasUnread(false); setRole(null); }
     });
 
     return () => subscription.unsubscribe();
@@ -60,6 +61,11 @@ export function Header() {
           )}
           {isLoggedIn === true && (
             <>
+              {(role === 'admin' || role === 'super_admin') && (
+                <Link href="/admin" className="p-2 text-indigo-500 hover:text-indigo-700 transition-colors" title="관리자">
+                  <ShieldCheck size={22} />
+                </Link>
+              )}
               <Link href="/notifications" className="p-2 text-gray-500 hover:text-blue-600 transition-colors relative">
                 <Bell size={22} />
                 {hasUnread && <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-white" />}
