@@ -468,7 +468,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 11-3. 개인화 추천 피드
-CREATE OR REPLACE FUNCTION get_personalized_feed(
+CREATE OR REPLACE FUNCTION get_recommended_posters(
     p_user_id UUID,
     p_limit INT DEFAULT 10
 )
@@ -479,15 +479,13 @@ RETURNS TABLE (
     summary_short TEXT,
     poster_status TEXT,
     application_end_at TIMESTAMPTZ,
+    thumbnail_url TEXT,
     created_at TIMESTAMPTZ,
     recom_score FLOAT
 ) AS $$
 BEGIN
     RETURN QUERY
-    WITH user_profile AS (
-        SELECT primary_region_id FROM profiles WHERE profiles.id = p_user_id
-    ),
-    user_interests AS (
+    WITH user_interests AS (
         SELECT category_id FROM user_interest_categories WHERE user_id = p_user_id
     )
     SELECT
@@ -495,20 +493,19 @@ BEGIN
         p.title,
         p.source_org_name,
         p.summary_short,
-        p.poster_status,
+        p.poster_status::TEXT,
         p.application_end_at,
+        p.thumbnail_url,
         p.created_at,
         (
-            -- 지역 일치 (최대 50)
             COALESCE(MAX(
                 CASE
-                    WHEN pr.region_id = (SELECT primary_region_id FROM user_profile) THEN 50.0
+                    WHEN pr.region_id = (SELECT primary_region_id FROM profiles WHERE profiles.id = p_user_id) THEN 50.0
                     WHEN r.level = 'nation' THEN 10.0
                     ELSE 0.0
                 END
             ), 0.0)
             +
-            -- 관심 카테고리 일��� (최대 30)
             COALESCE(MAX(
                 CASE
                     WHEN pc.category_id IN (SELECT category_id FROM user_interests) THEN 30.0
@@ -516,7 +513,6 @@ BEGIN
                 END
             ), 0.0)
             +
-            -- 마감 임박 가점 (7일 이내)
             CASE
                 WHEN p.application_end_at IS NOT NULL
                      AND p.application_end_at > now()
@@ -531,7 +527,7 @@ BEGIN
     WHERE p.poster_status = 'published'
       AND (p.application_end_at IS NULL OR p.application_end_at > now())
     GROUP BY p.id, p.title, p.source_org_name, p.summary_short,
-             p.poster_status, p.application_end_at, p.created_at
+             p.poster_status, p.application_end_at, p.thumbnail_url, p.created_at
     ORDER BY recom_score DESC, p.created_at DESC
     LIMIT p_limit;
 END;
@@ -554,5 +550,22 @@ BEGIN
     GROUP BY r.id, r.name
     ORDER BY count DESC
     LIMIT 5;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 11-5. 인기 검색어
+CREATE OR REPLACE FUNCTION get_popular_keywords(p_limit INT DEFAULT 5)
+RETURNS TABLE (keyword TEXT, search_count BIGINT)
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT query AS keyword, COUNT(*) AS search_count
+  FROM search_logs
+  WHERE created_at > now() - interval '30 days'
+    AND query IS NOT NULL
+    AND trim(query) != ''
+  GROUP BY query
+  ORDER BY search_count DESC
+  LIMIT p_limit;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
