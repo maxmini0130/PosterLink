@@ -13,12 +13,18 @@ export function Header() {
   const router = useRouter();
 
   const checkUserInfo = async (userId: string) => {
-    const [{ count, error }, { data: profile }] = await Promise.all([
+    const [notifResult, profileResult] = await Promise.all([
       supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("is_read", false),
       supabase.from("profiles").select("role").eq("id", userId).single(),
     ]);
-    if (!error) setHasUnread((count ?? 0) > 0);
-    if (profile) setRole(profile.role);
+    if (!notifResult.error) setHasUnread((notifResult.count ?? 0) > 0);
+    if (profileResult.error) {
+      console.error("[Header] profiles 조회 실패:", profileResult.error);
+    }
+    if (profileResult.data) {
+      console.log("[Header] role:", profileResult.data.role);
+      setRole(profileResult.data.role);
+    }
   };
 
   useEffect(() => {
