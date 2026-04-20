@@ -12,6 +12,7 @@
   "dependencies": {
     "@posterlink/lib": "workspace:*",
     "@posterlink/types": "workspace:*",
+    "@supabase/supabase-js": "^2.103.2",
     "expo": "~50.0.0",
     "expo-camera": "~14.0.0",
     "expo-constants": "~15.4.0",

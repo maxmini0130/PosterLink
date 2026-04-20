@@ -122,16 +122,12 @@ export default function App() {
 
     try {
       const fileName = `${user.id}/${Date.now()}_mobile.jpg`;
-      const formData = new FormData();
-      formData.append('file', {
-        uri: capturedImage,
-        name: fileName,
-        type: 'image/jpeg',
-      } as any);
+      const response = await fetch(capturedImage);
+      const blob = await response.blob();
 
       const { error: storageError } = await supabase.storage
         .from('poster-originals')
-        .upload(fileName, formData);
+        .upload(fileName, blob, { contentType: 'image/jpeg' });
       if (storageError) throw storageError;
 
       const { data: { publicUrl } } = supabase.storage.from('poster-originals').getPublicUrl(fileName);
