@@ -42,24 +42,28 @@ export default function LoginPage() {
       <form onSubmit={handleLogin} className="w-full max-w-sm space-y-4">
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-1">이메일</label>
-          <input 
-            type="email" 
+          <input
+            type="email"
+            name="email"
+            autoComplete="email"
             placeholder="example@email.com"
-            value={email} 
-            onChange={(e) => setEmail(e.target.value)} 
-            className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all outline-none text-gray-900 placeholder:text-gray-400" 
-            required 
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all outline-none text-gray-900 placeholder:text-gray-400"
+            required
           />
         </div>
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-1">비밀번호</label>
-          <input 
-            type="password" 
+          <input
+            type="password"
+            name="password"
+            autoComplete="current-password"
             placeholder="••••••••"
-            value={password} 
-            onChange={(e) => setPassword(e.target.value)} 
-            className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all outline-none text-gray-900 placeholder:text-gray-400" 
-            required 
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all outline-none text-gray-900 placeholder:text-gray-400"
+            required
           />
         </div>
         <button 
