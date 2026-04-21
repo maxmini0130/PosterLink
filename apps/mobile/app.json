@@ -32,12 +32,16 @@
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
-        "NOTIFICATIONS"
+        "NOTIFICATIONS",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "extra": {
+      "supabaseUrl": "https://zxndgzsfrgwahwsdbjdj.supabase.co",
+      "supabaseAnonKey": "sb_publishable_RQL3QuN9fmETURVzmm9Lfg_usBexkd1",
       "eas": {
-        "projectId": "your-expo-project-id"
+        "projectId": "dd58cb12-9739-4dfb-bcda-6bc4947094b0"
       }
     },
     "plugins": [
@@ -45,6 +49,7 @@
     ],
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "owner": "maxmini"
   }
 }

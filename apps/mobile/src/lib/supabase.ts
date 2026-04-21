@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
+import Constants from 'expo-constants';
 
-// Should use env variables in production (expo-constants / .env)
-const supabaseUrl = 'YOUR_SUPABASE_URL';
-const supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY';
+const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl;
+const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
