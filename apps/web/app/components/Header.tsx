@@ -18,11 +18,7 @@ export function Header() {
       supabase.from("profiles").select("role").eq("id", userId).single(),
     ]);
     if (!notifResult.error) setHasUnread((notifResult.count ?? 0) > 0);
-    if (profileResult.error) {
-      console.error("[Header] profiles 조회 실패:", profileResult.error);
-    }
     if (profileResult.data) {
-      console.log("[Header] role:", profileResult.data.role);
       setRole(profileResult.data.role);
     }
   };

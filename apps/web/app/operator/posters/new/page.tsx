@@ -120,6 +120,8 @@ export default function NewPosterPage() {
           poster_status: "review",
           application_end_at: formData.appEndAt || null,
           summary_short: formData.summaryShort,
+          category_id: formData.categoryId || null,
+          primary_region_id: formData.regionId || null,
           created_by: user.id
         })
         .select()

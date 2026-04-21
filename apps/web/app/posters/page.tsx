@@ -64,29 +64,15 @@ export default function PosterListPage() {
         .eq("poster_status", "published");
 
       if (queryStr) query = query.ilike("title", `%${queryStr}%`);
+      if (selectedCategoryId) query = query.eq("category_id", selectedCategoryId);
+      if (selectedRegionId) query = query.eq("primary_region_id", selectedRegionId);
 
       const { data } = await query.order(
         sortBy === "latest" ? "created_at" : "application_end_at",
         { ascending: sortBy !== "latest" }
       );
-      if (!data) return;
 
-      // 카테고리/지역 필터: poster_categories, poster_regions 별도 조회
-      let filtered = data;
-      if (selectedCategoryId) {
-        const { data: catLinks } = await supabase
-          .from("poster_categories").select("poster_id").eq("category_id", selectedCategoryId);
-        const ids = new Set((catLinks ?? []).map((r: any) => r.poster_id));
-        filtered = filtered.filter(p => ids.has(p.id));
-      }
-      if (selectedRegionId) {
-        const { data: regLinks } = await supabase
-          .from("poster_regions").select("poster_id").eq("region_id", selectedRegionId);
-        const ids = new Set((regLinks ?? []).map((r: any) => r.poster_id));
-        filtered = filtered.filter(p => ids.has(p.id));
-      }
-
-      setPosters(filtered);
+      setPosters(data ?? []);
     } finally {
       setLoading(false);
     }

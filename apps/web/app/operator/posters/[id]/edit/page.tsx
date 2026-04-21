@@ -72,6 +72,8 @@ export default function EditPosterPage() {
         source_org_name: formData.sourceOrgName,
         application_end_at: formData.appEndAt || null,
         summary_short: formData.summaryShort,
+        category_id: formData.categoryId || null,
+        primary_region_id: formData.regionId || null,
       }).eq("id", id);
 
       if (error) throw error;
