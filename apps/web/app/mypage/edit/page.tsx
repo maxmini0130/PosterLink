@@ -36,7 +36,7 @@ export default function ProfileEditPage() {
     const fetchData = async () => {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) { router.push("/login"); return; }
 
       // Fetch Profile, Regions, Categories, and User Interests in parallel
       const [profileRes, regionRes, categoryRes, interestRes] = await Promise.all([

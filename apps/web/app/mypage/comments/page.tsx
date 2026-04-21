@@ -17,7 +17,7 @@ export default function MyCommentsPage() {
     setLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
     const user = session?.user ?? null;
-    if (!user) return;
+    if (!user) { router.push("/login"); return; }
 
     const { data } = await supabase
       .from("comments")

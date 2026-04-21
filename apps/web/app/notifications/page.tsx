@@ -6,14 +6,17 @@ import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
 import { Bell, Clock, Calendar, CheckCircle2, ChevronRight, Inbox } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   const fetchNotifications = async () => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { router.push("/login"); return; }
     if (user) {
       const { data } = await supabase
         .from("notifications")

@@ -7,10 +7,12 @@ import { BottomNav } from "../components/BottomNav";
 import { PosterCard } from "../components/PosterCard";
 import { Heart, ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function FavoritesPage() {
   const [loading, setLoading] = useState(true);
   const [favorites, setFavorites] = useState<any[]>([]);
+  const router = useRouter();
 
   useEffect(() => {
     const fetchFavorites = async () => {
@@ -18,6 +20,7 @@ export default function FavoritesPage() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const user = session?.user ?? null;
+        if (!user) { router.push("/login"); return; }
         if (user) {
           // Join favorites with posters and related info
           const { data, error } = await supabase
