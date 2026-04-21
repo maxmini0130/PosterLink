@@ -8,13 +8,15 @@ export interface PosterWithMeta {
 export async function fetchCategoryRegionNames(posterIds: string[]): Promise<Record<string, PosterWithMeta>> {
   if (posterIds.length === 0) return {};
 
-  const [catLinks, regLinks] = await Promise.all([
-    supabase.from("poster_categories").select("poster_id, category_id").in("poster_id", posterIds),
-    supabase.from("poster_regions").select("poster_id, region_id").in("poster_id", posterIds),
-  ]);
+  const { data: posters } = await supabase
+    .from("posters")
+    .select("id, category_id, primary_region_id")
+    .in("id", posterIds);
 
-  const categoryIds = [...new Set((catLinks.data ?? []).map((r: any) => r.category_id))];
-  const regionIds = [...new Set((regLinks.data ?? []).map((r: any) => r.region_id))];
+  if (!posters || posters.length === 0) return {};
+
+  const categoryIds = [...new Set(posters.map((p: any) => p.category_id).filter(Boolean))];
+  const regionIds = [...new Set(posters.map((p: any) => p.primary_region_id).filter(Boolean))];
 
   const [cats, regs] = await Promise.all([
     categoryIds.length ? supabase.from("categories").select("id, name").in("id", categoryIds) : { data: [] },
@@ -23,14 +25,12 @@ export async function fetchCategoryRegionNames(posterIds: string[]): Promise<Rec
 
   const catMap = Object.fromEntries((cats.data ?? []).map((c: any) => [c.id, c.name]));
   const regMap = Object.fromEntries((regs.data ?? []).map((r: any) => [r.id, r.name]));
-  const posterCatMap = Object.fromEntries((catLinks.data ?? []).map((r: any) => [r.poster_id, catMap[r.category_id]]));
-  const posterRegMap = Object.fromEntries((regLinks.data ?? []).map((r: any) => [r.poster_id, regMap[r.region_id]]));
 
   const result: Record<string, PosterWithMeta> = {};
-  for (const id of posterIds) {
-    result[id] = {
-      categoryName: posterCatMap[id] ?? null,
-      regionName: posterRegMap[id] ?? null,
+  for (const poster of posters) {
+    result[poster.id] = {
+      categoryName: poster.category_id ? catMap[poster.category_id] ?? null : null,
+      regionName: poster.primary_region_id ? regMap[poster.primary_region_id] ?? null : null,
     };
   }
   return result;

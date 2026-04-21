@@ -39,17 +39,14 @@ export default function EditPosterPage() {
       if (regs) setRegions(regs);
 
       if (poster) {
-        const [{ data: catLink }, { data: regLink }, { data: linkData }] = await Promise.all([
-          supabase.from("poster_categories").select("category_id").eq("poster_id", id).maybeSingle(),
-          supabase.from("poster_regions").select("region_id").eq("poster_id", id).maybeSingle(),
-          supabase.from("poster_links").select("url").eq("poster_id", id).eq("is_primary", true).maybeSingle(),
-        ]);
+        const { data: linkData } = await supabase
+          .from("poster_links").select("url").eq("poster_id", id).eq("is_primary", true).maybeSingle();
 
         setFormData({
           title: poster.title || "",
           sourceOrgName: poster.source_org_name || "",
-          categoryId: catLink?.category_id || "",
-          regionId: regLink?.region_id || "",
+          categoryId: poster.category_id || "",
+          regionId: poster.primary_region_id || "",
           appEndAt: poster.application_end_at ? poster.application_end_at.slice(0, 10) : "",
           summaryShort: poster.summary_short || "",
           officialLink: linkData?.url || "",

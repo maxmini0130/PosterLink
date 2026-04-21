@@ -145,7 +145,7 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
             </li>
             <li className="flex gap-4">
               <span className="text-gray-400 w-16 flex-shrink-0">대상지역</span>
-              <span className="text-gray-900 font-bold">{poster.poster_regions?.[0]?.regions?.name || "전국"}</span>
+              <span className="text-gray-900 font-bold">{poster.regionName || "전국"}</span>
             </li>
             {poster.summary_short && (
               <li className="flex gap-4">
