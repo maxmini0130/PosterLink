@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { Search, Bell, User, ShieldCheck, ClipboardList } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
@@ -41,7 +42,8 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-gray-100 bg-white/80 backdrop-blur-md">
       <div className="container mx-auto px-4 max-w-4xl h-14 flex items-center justify-between">
-        <Link href="/" className="text-xl font-black text-blue-600">
+        <Link href="/" className="flex items-center gap-2 text-xl font-black text-blue-600">
+          <Image src="/logo.png" alt="PosterLink" width={32} height={32} className="rounded-lg" />
           PosterLink
         </Link>
         <div className="flex items-center gap-2">
