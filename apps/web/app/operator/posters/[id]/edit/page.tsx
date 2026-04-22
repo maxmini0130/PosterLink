@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../../../../lib/supabase";
+import { fetchCategoryRegionNames } from "../../../../lib/posterHelpers";
 import { useRouter, useParams } from "next/navigation";
 import { ChevronLeft, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@posterlink/ui";
@@ -39,14 +40,17 @@ export default function EditPosterPage() {
       if (regs) setRegions(regs);
 
       if (poster) {
-        const { data: linkData } = await supabase
-          .from("poster_links").select("url").eq("poster_id", id).eq("is_primary", true).maybeSingle();
+        const [{ data: linkData }, metaMap] = await Promise.all([
+          supabase.from("poster_links").select("url").eq("poster_id", id).eq("is_primary", true).maybeSingle(),
+          fetchCategoryRegionNames([id]),
+        ]);
+        const meta = metaMap[id];
 
         setFormData({
           title: poster.title || "",
           sourceOrgName: poster.source_org_name || "",
-          categoryId: poster.category_id || "",
-          regionId: poster.primary_region_id || "",
+          categoryId: meta?.categoryId || "",
+          regionId: meta?.regionId || "",
           appEndAt: poster.application_end_at ? poster.application_end_at.slice(0, 10) : "",
           summaryShort: poster.summary_short || "",
           officialLink: linkData?.url || "",
@@ -69,30 +73,42 @@ export default function EditPosterPage() {
         source_org_name: formData.sourceOrgName,
         application_end_at: formData.appEndAt || null,
         summary_short: formData.summaryShort,
-        category_id: formData.categoryId || null,
-        primary_region_id: formData.regionId || null,
       }).eq("id", id);
 
       if (error) throw error;
 
-      await supabase.from("poster_categories").delete().eq("poster_id", id);
+      const { error: categoryDeleteError } = await supabase.from("poster_categories").delete().eq("poster_id", id);
+      if (categoryDeleteError) throw categoryDeleteError;
+
       if (formData.categoryId) {
-        await supabase.from("poster_categories").insert({ poster_id: id, category_id: formData.categoryId });
+        const { error: categoryInsertError } = await supabase.from("poster_categories").insert({ poster_id: id, category_id: formData.categoryId });
+        if (categoryInsertError) throw categoryInsertError;
       }
 
-      await supabase.from("poster_regions").delete().eq("poster_id", id);
+      const { error: regionDeleteError } = await supabase.from("poster_regions").delete().eq("poster_id", id);
+      if (regionDeleteError) throw regionDeleteError;
+
       if (formData.regionId) {
-        await supabase.from("poster_regions").insert({ poster_id: id, region_id: formData.regionId });
+        const { error: regionInsertError } = await supabase.from("poster_regions").insert({ poster_id: id, region_id: formData.regionId });
+        if (regionInsertError) throw regionInsertError;
       }
+
+      const { error: linkDeleteError } = await supabase
+        .from("poster_links")
+        .delete()
+        .eq("poster_id", id)
+        .eq("link_type", "official_homepage");
+      if (linkDeleteError) throw linkDeleteError;
 
       if (formData.officialLink) {
-        await supabase.from("poster_links").upsert({
+        const { error: linkInsertError } = await supabase.from("poster_links").insert({
           poster_id: id,
           link_type: "official_homepage",
           url: formData.officialLink,
           title: "공식 홈페이지",
           is_primary: true,
-        }, { onConflict: "poster_id,link_type" });
+        });
+        if (linkInsertError) throw linkInsertError;
       }
 
       alert("저장되었습니다.");

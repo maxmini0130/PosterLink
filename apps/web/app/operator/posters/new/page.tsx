@@ -120,8 +120,6 @@ export default function NewPosterPage() {
           poster_status: "review",
           application_end_at: formData.appEndAt || null,
           summary_short: formData.summaryShort,
-          category_id: formData.categoryId || null,
-          primary_region_id: formData.regionId || null,
           created_by: user.id
         })
         .select()
@@ -130,33 +128,37 @@ export default function NewPosterPage() {
       if (posterError) throw posterError;
 
       // 2-1. 포스터 카테고리 연결 (M:N 대응)
-      await supabase.from("poster_categories").insert({
+      const { error: categoryError } = await supabase.from("poster_categories").insert({
         poster_id: poster.id,
         category_id: formData.categoryId
       });
+      if (categoryError) throw categoryError;
 
       // 2-2. 포스터 지역 연결 (M:N 대응)
       if (formData.regionId) {
-        await supabase.from("poster_regions").insert({
+        const { error: regionError } = await supabase.from("poster_regions").insert({
           poster_id: poster.id,
           region_id: formData.regionId
         });
+        if (regionError) throw regionError;
       }
 
       // 3. 이미지 URL을 posters에 직접 저장
       const { data: { publicUrl } } = supabase.storage.from("poster-originals").getPublicUrl(filePath);
 
-      await supabase.from("posters").update({ thumbnail_url: publicUrl }).eq("id", poster.id);
+      const { error: thumbnailError } = await supabase.from("posters").update({ thumbnail_url: publicUrl }).eq("id", poster.id);
+      if (thumbnailError) throw thumbnailError;
 
       // 4. 링크 저장
       if (formData.officialLink) {
-        await supabase.from("poster_links").insert({
+        const { error: linkError } = await supabase.from("poster_links").insert({
           poster_id: poster.id,
           link_type: "official_homepage",
           url: formData.officialLink,
           title: "공식 홈페이지",
           is_primary: true
         });
+        if (linkError) throw linkError;
       }
 
       alert("포스터가 등록되었습니다. 관리자 검수 후 게시됩니다.");

@@ -5,8 +5,8 @@ import { supabase } from "../lib/supabase";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
 import { PosterCard } from "../components/PosterCard";
+import { fetchCategoryRegionNames } from "../lib/posterHelpers";
 import { Search, X, History, TrendingUp, Filter, ArrowLeft } from "lucide-react";
-import { useRouter } from "next/navigation";
 
 export default function PosterListPage() {
   const [loading, setLoading] = useState(true);
@@ -23,7 +23,6 @@ export default function PosterListPage() {
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState("latest");
 
-  const router = useRouter();
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // 1. Initial Data Load
@@ -57,21 +56,29 @@ export default function PosterListPage() {
   const fetchPosters = async (queryStr = searchQuery) => {
     setLoading(true);
     try {
-      let query = supabase
-        .from("posters")
-        .select("*")
-        .eq("poster_status", "published");
+      const { data, error } = await supabase.rpc("search_posters_with_synonyms", {
+        p_query: queryStr.trim(),
+        p_category_id: selectedCategoryId,
+        p_region_id: selectedRegionId,
+      });
 
-      if (queryStr) query = query.ilike("title", `%${queryStr}%`);
-      if (selectedCategoryId) query = query.eq("category_id", selectedCategoryId);
-      if (selectedRegionId) query = query.eq("primary_region_id", selectedRegionId);
+      if (error) throw error;
 
-      const { data } = await query.order(
-        sortBy === "latest" ? "created_at" : "application_end_at",
-        { ascending: sortBy !== "latest" }
-      );
+      const sortedData = [...(data ?? [])].sort((a: any, b: any) => {
+        if (sortBy === "deadline") {
+          const aTime = a.application_end_at ? new Date(a.application_end_at).getTime() : Number.MAX_SAFE_INTEGER;
+          const bTime = b.application_end_at ? new Date(b.application_end_at).getTime() : Number.MAX_SAFE_INTEGER;
+          return aTime - bTime;
+        }
 
-      setPosters(data ?? []);
+        return new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime();
+      });
+
+      const metaMap = await fetchCategoryRegionNames(sortedData.map((poster: any) => poster.id));
+      setPosters(sortedData.map((poster: any) => ({ ...poster, ...metaMap[poster.id] })));
+    } catch (err) {
+      console.error("Error fetching posters:", err);
+      setPosters([]);
     } finally {
       setLoading(false);
     }
@@ -218,11 +225,19 @@ export default function PosterListPage() {
           )}
 
           {/* Quick Filters */}
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-            <button onClick={() => setSelectedCategoryId(null)} className={`px-5 py-2.5 rounded-2xl text-[13px] font-black transition-all ${!selectedCategoryId ? 'bg-gray-900 text-white shadow-xl shadow-gray-200' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>전체</button>
-            {categories.map(cat => (
-              <button key={cat.id} onClick={() => setSelectedCategoryId(cat.id)} className={`px-5 py-2.5 rounded-2xl text-[13px] font-black whitespace-nowrap transition-all ${selectedCategoryId === cat.id ? 'bg-gray-900 text-white shadow-xl shadow-gray-200' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>{cat.name}</button>
-            ))}
+          <div className="space-y-3">
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+              <button onClick={() => setSelectedCategoryId(null)} className={`px-5 py-2.5 rounded-2xl text-[13px] font-black whitespace-nowrap transition-all ${!selectedCategoryId ? 'bg-gray-900 text-white shadow-xl shadow-gray-200' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>전체 분야</button>
+              {categories.map(cat => (
+                <button key={cat.id} onClick={() => setSelectedCategoryId(cat.id)} className={`px-5 py-2.5 rounded-2xl text-[13px] font-black whitespace-nowrap transition-all ${selectedCategoryId === cat.id ? 'bg-gray-900 text-white shadow-xl shadow-gray-200' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>{cat.name}</button>
+              ))}
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+              <button onClick={() => setSelectedRegionId(null)} className={`px-5 py-2.5 rounded-2xl text-[13px] font-black whitespace-nowrap transition-all ${!selectedRegionId ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : 'bg-blue-50 text-blue-400 hover:bg-blue-100'}`}>전체 지역</button>
+              {regions.map(region => (
+                <button key={region.id} onClick={() => setSelectedRegionId(region.id)} className={`px-5 py-2.5 rounded-2xl text-[13px] font-black whitespace-nowrap transition-all ${selectedRegionId === region.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : 'bg-blue-50 text-blue-400 hover:bg-blue-100'}`}>{region.name}</button>
+              ))}
+            </div>
           </div>
 
           {/* Sort & Result Count */}
@@ -251,7 +266,7 @@ export default function PosterListPage() {
                   org: poster.source_org_name,
                   deadline: poster.application_end_at,
                   image: poster.thumbnail_url,
-                  tags: []
+                  tags: [poster.categoryName, poster.regionName].filter((tag): tag is string => Boolean(tag))
                 }} 
               />
             ))}

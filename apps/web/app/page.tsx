@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import { Header } from "./components/Header";
 import { BottomNav } from "./components/BottomNav";
 import { PosterCard } from "./components/PosterCard";
+import { fetchCategoryRegionNames } from "./lib/posterHelpers";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, ArrowRight, Zap } from "lucide-react";
 import Link from "next/link";
@@ -20,6 +21,11 @@ export default function Home() {
     const fetchHomeData = async () => {
       setLoading(true);
       try {
+        const attachPosterMeta = async (items: any[]) => {
+          const metaMap = await fetchCategoryRegionNames(items.map((poster: any) => poster.id));
+          return items.map((poster: any) => ({ ...poster, ...metaMap[poster.id] }));
+        };
+
         // getSession reads from localStorage (no network) — safe even with deleted accounts
         const { data: { session } } = await supabase.auth.getSession();
         const user = session?.user ?? null;
@@ -36,7 +42,7 @@ export default function Home() {
           });
 
           if (!rpcError && recommendedData && recommendedData.length > 0) {
-            setPosters(recommendedData);
+            setPosters(await attachPosterMeta(recommendedData));
             postersFetched = true;
           }
         }
@@ -51,7 +57,7 @@ export default function Home() {
             .limit(8);
 
           if (!publicError && publicData) {
-            setPosters(publicData);
+            setPosters(await attachPosterMeta(publicData));
           }
         }
 
@@ -158,7 +164,7 @@ export default function Home() {
                       org: poster.source_org_name,
                       deadline: poster.application_end_at,
                       image: poster.thumbnail_url,
-                      tags: [poster.poster_categories?.[0]?.categories?.name ?? poster.categories?.name ?? poster.category].filter(Boolean)
+                      tags: [poster.categoryName, poster.regionName].filter((tag): tag is string => Boolean(tag))
                     }} 
                   />
                 </motion.div>

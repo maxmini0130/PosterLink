@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
-import { Check, X, ExternalLink, Image as ImageIcon, Eye, FileCheck, Filter, Loader2 } from "lucide-react";
+import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
+import { Check, X, ExternalLink, Image as ImageIcon, Eye, FileCheck } from "lucide-react";
 import Link from "next/link";
 
 type PosterStatus = 'review' | 'published' | 'rejected' | 'draft';
@@ -21,7 +22,10 @@ export default function AdminPostersPage() {
       .order("created_at", { ascending: status === 'review' });
 
     if (error) { console.error(error); setLoading(false); return; }
-    if (data) setPosters(data);
+    if (data) {
+      const metaMap = await fetchCategoryRegionNames(data.map((poster: any) => poster.id));
+      setPosters(data.map((poster: any) => ({ ...poster, ...metaMap[poster.id] })));
+    }
     setLoading(false);
   };
 
@@ -126,12 +130,12 @@ export default function AdminPostersPage() {
                 <p className="text-sm font-bold text-gray-500 dark:text-slate-400 flex items-center gap-2">
                   <span className="text-indigo-500">@{p.source_org_name}</span>
                   <span className="w-1 h-1 bg-gray-300 rounded-full" />
-                  <span>{p.poster_regions?.[0]?.regions?.name || '전국'}</span>
+                  <span>{p.regionName || '전국'}</span>
                 </p>
 
                 <div className="flex flex-wrap gap-2">
                   <span className="px-3 py-1 bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-slate-400 text-[11px] font-black rounded-full border border-gray-100 dark:border-slate-700">
-                    분야: {p.poster_categories?.[0]?.categories?.name}
+                    분야: {p.categoryName || '기타'}
                   </span>
                   <span className="px-3 py-1 bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-slate-400 text-[11px] font-black rounded-full border border-gray-100 dark:border-slate-700">
                     마감: {p.application_end_at ? new Date(p.application_end_at).toLocaleDateString() : '상시'}

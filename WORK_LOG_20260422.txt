@@ -1,0 +1,93 @@
+PosterLink 작업 로그 - 2026-04-22
+
+작성 목적
+- 오늘 진행하는 구조 점검, 코드 수정, 검증 결과를 계속 누적 기록한다.
+- 이전 PowerShell 출력에서 보였던 한글 깨짐은 파일 손상이 아니라 출력 인코딩 문제로 확인했다.
+
+현재 확인된 출발점
+- 프로젝트 텍스트 파일은 UTF-8로 정상 디코딩된다.
+- 현재 쉘 PATH에서 node, pnpm, git 명령이 잡히지 않아 빌드/린트/git 상태 확인은 아직 실행하지 못했다.
+- DB 스키마 기준으로 posters 테이블에는 category_id, primary_region_id 컬럼이 없다.
+- 카테고리/지역은 poster_categories, poster_regions M:N 테이블로 연결되어야 한다.
+- 일부 웹 코드가 아직 posters.category_id, posters.primary_region_id를 직접 사용하고 있어 수정이 필요하다.
+
+진행 내역
+
+1. 작업 로그 파일 생성
+- WORK_LOG_20260422.txt 생성.
+- 앞으로 수정한 내용과 검증 결과를 이 파일에 계속 업데이트한다.
+
+2. 카테고리/지역 메타 조회 헬퍼 수정
+- 파일: apps/web/lib/posterHelpers.ts
+- 기존 문제: posters.category_id, posters.primary_region_id를 조회했지만 실제 스키마에는 해당 컬럼이 없다.
+- 수정 내용: poster_categories, poster_regions를 별도 조회한 뒤 categories, regions 이름을 매핑하도록 변경.
+- 결과: 상세/운영자 목록/관리자 목록에서 재사용 가능한 실제 스키마 기반 메타 조회로 변경.
+
+3. 포스터 목록 필터 복구
+- 파일: apps/web/app/posters/page.tsx
+- 기존 문제: 목록 필터가 posters.category_id, posters.primary_region_id로 직접 필터링해 실제 스키마와 맞지 않았다.
+- 수정 내용: search_posters_with_synonyms RPC를 사용해 검색어, 카테고리, 지역 필터를 M:N 테이블 기준으로 처리하도록 변경.
+- 추가 내용: 지역 필터 버튼 영역을 목록 화면에 추가.
+- 추가 내용: 조회 결과에 fetchCategoryRegionNames 결과를 붙여 PosterCard 태그에 카테고리/지역명을 표시하도록 변경.
+
+4. 운영자/관리자 포스터 관계 데이터 정합성 수정
+- 파일: apps/web/app/operator/posters/new/page.tsx
+- 수정 내용: posters INSERT payload에서 존재하지 않는 category_id, primary_region_id 제거.
+- 파일: apps/web/app/operator/posters/[id]/edit/page.tsx
+- 수정 내용: 수정 폼 초기값을 posters 직접 컬럼이 아니라 fetchCategoryRegionNames의 categoryId, regionId로 채우도록 변경.
+- 수정 내용: posters UPDATE payload에서 존재하지 않는 category_id, primary_region_id 제거.
+- 수정 내용: poster_links upsert는 실제 unique 제약이 없어 실패할 수 있으므로 delete 후 insert 방식으로 변경.
+- 파일: apps/web/app/admin/posters/page.tsx
+- 수정 내용: 관리자 목록도 fetchCategoryRegionNames로 카테고리/지역명을 붙여 표시하도록 변경.
+
+5. 관계 테이블 수정용 RLS 보강 마이그레이션 추가
+- 파일: supabase/migrations/20260422000000_fix_poster_relation_policies.sql
+- 추가 내용: poster_categories, poster_regions 삭제 정책 추가.
+- 추가 내용: poster_links 업데이트/삭제 정책 추가.
+- 추가 내용: PostgREST 스키마 캐시 갱신 요청용 NOTIFY pgrst, 'reload schema' 추가.
+
+6. 관계 테이블 저장 에러 처리 보강
+- 파일: apps/web/app/operator/posters/new/page.tsx
+- 수정 내용: poster_categories, poster_regions, thumbnail_url update, poster_links insert 실패 시 즉시 throw하도록 변경.
+- 파일: apps/web/app/operator/posters/[id]/edit/page.tsx
+- 수정 내용: poster_categories/poster_regions delete+insert, poster_links delete+insert 실패 시 즉시 throw하도록 변경.
+- 이유: 관계 데이터 저장 실패를 조용히 지나가면 등록/수정 화면에서는 성공처럼 보이지만 목록/필터에서는 누락될 수 있다.
+
+7. 홈 피드 카드 태그 표시 정합성 수정
+- 파일: apps/web/app/page.tsx
+- 수정 내용: 홈 추천/공개 포스터 결과에도 fetchCategoryRegionNames를 적용.
+- 수정 내용: PosterCard 태그를 categoryName, regionName 기준으로 표시하도록 변경.
+- 이유: get_recommended_posters RPC는 categoryName을 직접 반환하지 않으므로 기존 nested JOIN 기반 태그 접근은 표시가 비어 있을 수 있었다.
+
+8. 정적 검증 및 빌드 확인
+- 재스캔 결과: poster.category_id, poster.primary_region_id, p.category_id, p.primary_region_id 직접 접근 패턴은 더 이상 발견되지 않음.
+- 확인: category_id 직접 사용은 poster_categories 또는 user_interest_categories 연결 테이블 용도만 남아 있음.
+- 확인: primary_region_id 직접 사용은 profiles 테이블의 사용자 주 지역 용도만 남아 있음.
+- 환경 확인: node는 C:\Program Files\nodejs\node.exe, pnpm은 C:\Users\maxmi\AppData\Roaming\npm\pnpm.cmd에 설치되어 있음.
+- 실행: pnpm --filter web build
+- 결과: Next.js 프로덕션 빌드 성공, 22개 라우트 생성 완료.
+- 참고: Tailwind content 패턴이 node_modules까지 과하게 매칭될 수 있다는 경고가 표시됨.
+- 실행: pnpm --filter web lint
+- 결과: ESLint 설정 파일이 없어 Next.js가 대화형 설정 프롬프트를 띄우며 종료됨. 코드 오류 검증으로 진행되지 않음.
+
+9. Tailwind content 경고 대응
+- 파일: apps/web/tailwind.config.ts
+- 기존 문제: ../../packages/ui/**/* 패턴이 빌드 중 node_modules까지 과하게 매칭될 수 있다는 경고를 냈다.
+- 확인: packages/ui에는 현재 index.tsx만 존재한다.
+- 수정 내용: Tailwind content 대상을 ../../packages/ui/index.tsx 단일 파일로 축소.
+
+10. Tailwind 설정 수정 후 빌드 재확인
+- 실행: pnpm --filter web build
+- 결과: Next.js 프로덕션 빌드 성공.
+- 결과: 이전 Tailwind content 경고는 재발하지 않음.
+- 생성 라우트: 22개.
+
+11. Playwright E2E 실행
+- 실행: pnpm --filter web test:e2e
+- 결과: 28개 테스트 모두 통과.
+- 확인 범위: 로그인/회원가입 화면, 접근 제어, 홈, 포스터 목록, 검색, 카테고리 필터 클릭, 정렬, 포스터 상세, 비로그인 찜하기 유도, OCR/check-deadlines Edge Function 응답.
+- 참고: Playwright webServer에서 npm env config 관련 경고가 출력됐지만 테스트 실패로 이어지지는 않음.
+
+다음 작업
+- ESLint 설정이 필요한지 확인 후 비대화형 설정 추가 여부 판단.
+- 실제 Supabase DB에 20260422000000_fix_poster_relation_policies.sql 적용 필요.
