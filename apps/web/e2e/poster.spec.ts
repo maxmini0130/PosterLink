@@ -95,6 +95,38 @@ test.describe("포스터 상세", () => {
   });
 });
 
+test.describe("포스터 목록 - 페이지네이션", () => {
+  test("포스터가 12개 초과 시 더 보기 버튼 표시", async ({ page }) => {
+    await page.goto("/posters");
+    await page.waitForLoadState("networkidle");
+
+    const loadMoreBtn = page.locator("button:has-text('더 보기')").first();
+    const cards = page.locator("a[href^='/posters/']");
+    const count = await cards.count();
+
+    if (count >= 12) {
+      await expect(loadMoreBtn).toBeVisible();
+    }
+  });
+});
+
+test.describe("포스터 상세 - 링크 복사", () => {
+  test("링크 복사 버튼 표시", async ({ page }) => {
+    await page.goto("/posters");
+    await page.waitForLoadState("networkidle");
+
+    const firstCard = page.locator("a[href^='/posters/']").first();
+    if (await firstCard.count() === 0) { test.skip(); return; }
+
+    const href = await firstCard.getAttribute("href");
+    await page.goto(href!);
+    await page.waitForLoadState("networkidle");
+
+    const copyBtn = page.locator("button[title='링크 복사']").first();
+    await expect(copyBtn).toBeVisible();
+  });
+});
+
 test.describe("검색", () => {
   test("검색어 입력 후 결과 페이지 유지", async ({ page }) => {
     await page.goto("/posters");

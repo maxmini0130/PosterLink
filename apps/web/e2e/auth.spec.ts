@@ -36,6 +36,31 @@ test.describe("인증 - 회원가입", () => {
     await expect(page.locator("input[type='email'], input[name='email']").first()).toBeVisible();
     await expect(page.locator("input[type='password']").first()).toBeVisible();
   });
+
+  test("회원가입 페이지 - 약관 동의 체크박스 존재", async ({ page }) => {
+    await page.goto("/signup");
+    await expect(page.locator("input[type='checkbox']").first()).toBeVisible();
+    await expect(page.locator("text=이용약관")).toBeVisible();
+    await expect(page.locator("text=개인정보처리방침")).toBeVisible();
+  });
+
+  test("회원가입 - 약관 미동의 시 가입 버튼 비활성화", async ({ page }) => {
+    await page.goto("/signup");
+    const submitBtn = page.locator("button[type='submit'], button:has-text('이메일로 가입')").first();
+    await expect(submitBtn).toBeDisabled();
+  });
+});
+
+test.describe("약관/정책 페이지", () => {
+  test("이용약관 페이지 접근", async ({ page }) => {
+    await page.goto("/terms");
+    await expect(page.locator("h1")).toContainText("이용약관");
+  });
+
+  test("개인정보처리방침 페이지 접근", async ({ page }) => {
+    await page.goto("/privacy");
+    await expect(page.locator("h1")).toContainText("개인정보처리방침");
+  });
 });
 
 test.describe("인증 - 접근 제어", () => {
