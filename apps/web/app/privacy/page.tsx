@@ -1,4 +1,5 @@
 import { Header } from "../components/Header";
+import { Footer } from "../components/Footer";
 import Link from "next/link";
 import type { Metadata } from "next";
 
@@ -8,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white flex flex-col">
       <Header />
       <main className="container mx-auto max-w-3xl px-6 py-12">
         <div className="mb-10">
@@ -82,6 +83,7 @@ export default function PrivacyPage() {
           </section>
         </div>
       </main>
+      <Footer />
     </div>
   );
 }

@@ -14,6 +14,7 @@
     "@posterlink/lib": "workspace:*",
     "@posterlink/types": "workspace:*",
     "@posterlink/ui": "workspace:*",
+    "@sentry/nextjs": "^10.50.0",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.103.2",
     "canvas-to-blob": "^1.0.0",

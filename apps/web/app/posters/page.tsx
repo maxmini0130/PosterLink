@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
+import { Footer } from "../components/Footer";
 import { PosterCard } from "../components/PosterCard";
 import { fetchCategoryRegionNames } from "../lib/posterHelpers";
 import { Search, X, History, TrendingUp, Filter, ArrowLeft, ChevronDown } from "lucide-react";
@@ -298,6 +299,7 @@ export default function PosterListPage() {
         )}
       </main>
 
+      <Footer />
       <BottomNav />
     </div>
   );

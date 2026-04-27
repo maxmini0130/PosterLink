@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { Header } from "./components/Header";
 import { BottomNav } from "./components/BottomNav";
+import { Footer } from "./components/Footer";
 import { PosterCard } from "./components/PosterCard";
 import { fetchCategoryRegionNames } from "./lib/posterHelpers";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, ArrowRight, Zap } from "lucide-react";
+import { Sparkles, ArrowRight, Zap, Bell, Heart, Search } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 
 
 export default function Home() {
@@ -16,6 +18,7 @@ export default function Home() {
   const [userProfile, setUserProfile] = useState<any>(null);
   const [posters, setPosters] = useState<any[]>([]);
   const [urgentPosters, setUrgentPosters] = useState<any[]>([]);
+  const [stats, setStats] = useState({ posters: 0, favorites: 0, notifications: 0 });
 
   useEffect(() => {
     const fetchHomeData = async () => {
@@ -76,6 +79,18 @@ export default function Home() {
           .limit(4);
         if (urgentData && urgentData.length > 0) setUrgentPosters(urgentData);
 
+        // 서비스 통계
+        const [postersCount, favCount, notifCount] = await Promise.all([
+          supabase.from("posters").select("id", { count: "exact", head: true }).eq("poster_status", "published"),
+          user ? supabase.from("favorites").select("id", { count: "exact", head: true }).eq("user_id", user.id) : Promise.resolve({ count: 0 }),
+          user ? supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("is_read", false) : Promise.resolve({ count: 0 }),
+        ]);
+        setStats({
+          posters: postersCount.count ?? 0,
+          favorites: (favCount as any).count ?? 0,
+          notifications: (notifCount as any).count ?? 0,
+        });
+
       } finally {
         setLoading(false);
       }
@@ -110,11 +125,11 @@ export default function Home() {
       <Header />
       
       <main className="container mx-auto px-4 py-8 max-w-4xl">
-        {/* Animated Hero Header */}
-        <motion.section 
+        {/* Hero */}
+        <motion.section
           initial={{ y: -20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="mb-12"
+          className="mb-8"
         >
           <div className="bg-white dark:bg-slate-800 p-8 rounded-[3rem] shadow-sm border border-gray-100 dark:border-slate-700 relative overflow-hidden transition-colors">
             <div className="absolute -top-10 -right-10 w-40 h-40 bg-blue-50 dark:bg-blue-900/20 rounded-full blur-3xl opacity-60" />
@@ -134,6 +149,33 @@ export default function Home() {
             </div>
           </div>
         </motion.section>
+
+        {/* Stats Bar */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="grid grid-cols-3 gap-3 mb-10"
+        >
+          <Link href="/posters" className="flex flex-col items-center py-4 bg-blue-50 dark:bg-blue-900/20 rounded-[1.5rem] hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors group">
+            <Search size={18} className="text-blue-500 mb-1" />
+            <p className="text-lg font-black text-blue-600 dark:text-blue-400">{stats.posters}</p>
+            <p className="text-[10px] font-black text-blue-400 uppercase">공고</p>
+          </Link>
+          <Link href="/favorites" className="flex flex-col items-center py-4 bg-rose-50 dark:bg-rose-900/20 rounded-[1.5rem] hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-colors">
+            <Heart size={18} className="text-rose-400 mb-1" />
+            <p className="text-lg font-black text-rose-500 dark:text-rose-400">{stats.favorites}</p>
+            <p className="text-[10px] font-black text-rose-400 uppercase">찜</p>
+          </Link>
+          <Link href="/notifications" className="flex flex-col items-center py-4 bg-amber-50 dark:bg-amber-900/20 rounded-[1.5rem] hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors relative">
+            <Bell size={18} className="text-amber-400 mb-1" />
+            <p className="text-lg font-black text-amber-500 dark:text-amber-400">{stats.notifications}</p>
+            <p className="text-[10px] font-black text-amber-400 uppercase">미확인</p>
+            {stats.notifications > 0 && (
+              <span className="absolute top-3 right-4 w-2 h-2 bg-rose-500 rounded-full animate-pulse" />
+            )}
+          </Link>
+        </motion.div>
 
         {/* Latest Feed with Stagger Animation */}
         <motion.section 
@@ -197,23 +239,34 @@ export default function Home() {
                     </h3>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {urgentPosters.map((poster) => (
-                      <motion.div 
-                        key={`urgent-${poster.id}`}
-                        whileHover={{ y: -5 }}
-                        className="flex gap-4 p-5 bg-white/10 backdrop-blur-md rounded-[2rem] border border-white/20"
-                      >
-                        <div className="w-20 h-24 bg-white/20 rounded-2xl flex-shrink-0" />
-                        <div className="flex-1 flex flex-col justify-between py-1">
-                          <h4 className="text-sm font-black text-white line-clamp-2 leading-snug">
-                            {poster.title}
-                          </h4>
-                          <span className="text-[11px] text-white/90 font-black px-2.5 py-1 bg-white/20 rounded-xl w-fit">
-                            {new Date(poster.application_end_at).toLocaleDateString()} 마감
-                          </span>
-                        </div>
-                      </motion.div>
-                    ))}
+                    {urgentPosters.map((poster) => {
+                      const daysLeft = Math.ceil((new Date(poster.application_end_at).getTime() - Date.now()) / 86400000);
+                      return (
+                        <motion.div
+                          key={`urgent-${poster.id}`}
+                          whileHover={{ y: -4 }}
+                        >
+                          <Link
+                            href={`/posters/${poster.id}`}
+                            className="flex gap-4 p-5 bg-white/10 backdrop-blur-md rounded-[2rem] border border-white/20 hover:bg-white/20 transition-colors"
+                          >
+                            <div className="w-16 h-20 bg-white/20 rounded-2xl flex-shrink-0 overflow-hidden relative">
+                              {poster.thumbnail_url && (
+                                <Image src={poster.thumbnail_url} alt={poster.title} fill className="object-cover" sizes="64px" />
+                              )}
+                            </div>
+                            <div className="flex-1 flex flex-col justify-between py-1 min-w-0">
+                              <h4 className="text-sm font-black text-white line-clamp-2 leading-snug">
+                                {poster.title}
+                              </h4>
+                              <span className={`text-[11px] font-black px-2.5 py-1 rounded-xl w-fit ${daysLeft <= 1 ? 'bg-white text-rose-600' : 'text-white/90 bg-white/20'}`}>
+                                {daysLeft === 0 ? 'D-Day' : `D-${daysLeft}`} 마감
+                              </span>
+                            </div>
+                          </Link>
+                        </motion.div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -222,6 +275,7 @@ export default function Home() {
         </AnimatePresence>
       </main>
 
+      <Footer />
       <BottomNav />
     </div>
   );

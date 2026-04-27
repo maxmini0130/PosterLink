@@ -9,6 +9,7 @@ import { notFound } from "next/navigation";
 import Image from "next/image";
 import { supabase } from "../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
+import { Footer } from "../../components/Footer";
 import { Link2 } from "lucide-react";
 
 export default function PosterDetailPage({ params }: { params: { id: string } }) {
@@ -223,6 +224,7 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
           </div>
         </div>
       </main>
+      <Footer />
       <BottomNav />
     </div>
   );
