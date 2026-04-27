@@ -88,6 +88,27 @@ PosterLink 작업 로그 - 2026-04-22
 - 확인 범위: 로그인/회원가입 화면, 접근 제어, 홈, 포스터 목록, 검색, 카테고리 필터 클릭, 정렬, 포스터 상세, 비로그인 찜하기 유도, OCR/check-deadlines Edge Function 응답.
 - 참고: Playwright webServer에서 npm env config 관련 경고가 출력됐지만 테스트 실패로 이어지지는 않음.
 
+12. ESLint 설정 추가
+- 파일: apps/web/.eslintrc.json
+- 추가 내용: Next.js 기본 권장 설정인 next/core-web-vitals를 사용하는 비대화형 ESLint 설정 추가.
+- 파일: apps/web/package.json
+- 추가 내용: eslint-config-next@14.2.0 devDependency 추가.
+- 이유: 기존 next lint는 ESLint 설정이 없어 대화형 프롬프트에서 종료됐다.
+
+13. ESLint 오류 수정 및 검증
+- 파일: apps/web/app/admin/reports/page.tsx
+- 수정 내용: JSX 텍스트 안의 큰따옴표를 &ldquo;/&rdquo;로 변경해 react/no-unescaped-entities 오류 제거.
+- 파일: apps/web/app/posters/page.tsx
+- 수정 내용: 검색어 활성 배지의 큰따옴표를 &ldquo;/&rdquo;로 변경해 react/no-unescaped-entities 오류 제거.
+- 실행: pnpm --filter web lint
+- 결과: 성공.
+- 남은 항목: img 요소 최적화 경고, useEffect dependency 경고가 남아 있으나 lint 실패는 아님.
+
+14. ESLint 설정 후 빌드 재확인
+- 실행: pnpm --filter web build
+- 결과: 성공.
+- 참고: 빌드 중 lint 경고는 표시되지만 컴파일/타입 체크/라우트 생성은 정상 완료.
+
 다음 작업
-- ESLint 설정이 필요한지 확인 후 비대화형 설정 추가 여부 판단.
+- lint 경고 정리 여부 결정: next/image 전환, useEffect dependency 정리.
 - 실제 Supabase DB에 20260422000000_fix_poster_relation_policies.sql 적용 필요.

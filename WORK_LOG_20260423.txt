@@ -1,0 +1,48 @@
+PosterLink 작업 로그 - 2026-04-23
+
+작성 목적
+- 2026-04-23에 이어서 진행한 관리자 포스터 검수/수정 작업과 후속 확인 내용을 기록한다.
+- 2026-04-22 작업 로그와 분리해 오늘 작업 이력을 남긴다.
+
+진행 내역
+
+1. 관리자 포스터 검수 페이지 수정 진입 요구 확인
+- 요청: 관리자 페이지의 포스터 검수 화면에서도 포스터 정보를 수정할 수 있으면 좋겠다고 하셨다.
+- 확인: 기존 운영자 수정 화면(/operator/posters/[id]/edit)은 operator, admin, super_admin 역할 접근을 허용한다.
+- 결정: 중복 수정 화면을 새로 만들기보다 기존 운영자 수정 화면을 재사용하고, 관리자 검수 화면에서 수정 버튼을 제공한다.
+
+2. 관리자 포스터 검수 카드에 수정 버튼 추가
+- 파일: apps/web/app/admin/posters/page.tsx
+- 수정 내용: 각 포스터 카드의 액션 영역에 포스터 수정 버튼을 추가했다.
+- 연결 경로: /operator/posters/[id]/edit?returnTo=admin
+- 추가 내용: 상세 보기/수정/반려/승인 아이콘 버튼에 title과 aria-label을 붙였다.
+
+3. 관리자 진입 시 수정 완료 후 복귀 경로 처리
+- 파일: apps/web/app/operator/posters/[id]/edit/page.tsx
+- 수정 내용: returnTo=admin 쿼리 파라미터를 읽어 저장/삭제 후 /admin/posters로 이동하도록 변경했다.
+- 기존 운영자 진입 시에는 기존처럼 /operator/posters로 복귀한다.
+- 추가 내용: 관리자 검수 화면에서 편집 중임을 알려주는 보조 문구를 표시한다.
+
+4. 검증
+- 실행: pnpm --filter web lint
+- 결과: 성공.
+- 참고: 기존 img 요소 최적화 경고와 useEffect dependency 경고는 남아 있으나 실패는 아님.
+- 실행: pnpm --filter web build
+- 결과: 성공.
+- 실행: pnpm --filter web test:e2e
+- 결과: 28개 테스트 모두 통과.
+- 참고: Playwright webServer에서 npm env config 관련 경고가 출력되지만 테스트 실패로 이어지지는 않음.
+
+5. 관심 지역/관심 카테고리 기반 신규 포스터 알림 여부 확인
+- 요청: 관심사로 등록한 지역/카테고리에 포스터가 등록되면 알림이 가는지 확인.
+- 확인 결과: 현재는 자동 발송되지 않는다.
+- 준비된 부분: notifications 테이블의 type에는 new_match가 포함되어 있고, 웹 알림 센터도 new_match 아이콘을 처리한다.
+- 미구현 부분: 새 포스터 등록 또는 관리자 승인 시 poster_regions/poster_categories와 사용자 profiles.primary_region_id/user_interest_categories를 매칭해 notifications에 insert하는 로직이 없다.
+- 현재 구현된 자동 알림: supabase/functions/check-deadlines/index.ts에서 찜한 포스터 마감 임박(favorite_deadline) 알림만 생성하고 Expo Push를 보낸다.
+- 추천 기능: get_recommended_posters RPC는 관심 지역/카테고리를 추천 점수에 반영하지만 알림 생성은 하지 않는다.
+- 구현 권장 지점: 포스터가 review에서 published로 승인되는 순간, Edge Function 또는 SECURITY DEFINER DB 함수로 매칭 사용자에게 type=new_match 알림을 생성하고 필요하면 Expo Push까지 보낸다.
+
+다음 작업
+- 관심 지역/카테고리 기반 신규 포스터 알림 로직 구현 여부 결정.
+- 구현 시 notifications insert가 RLS에 막히지 않도록 클라이언트 직접 insert보다 Edge Function 또는 DB 함수 방식으로 처리하는 것이 안전하다.
+- lint 경고 정리 여부 결정: next/image 전환, useEffect dependency 정리.
