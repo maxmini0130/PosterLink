@@ -11,7 +11,8 @@
     "lint": "pnpm -r lint",
     "collect": "tsx scripts/collect-posters.ts",
     "collect:youth": "tsx scripts/collect-posters.ts youth",
-    "collect:bokjiro": "tsx scripts/collect-posters.ts bokjiro",
+    "collect:central": "tsx scripts/collect-posters.ts central",
+    "collect:local": "tsx scripts/collect-posters.ts local",
     "collect:subsidy": "tsx scripts/collect-posters.ts subsidy"
   },
   "devDependencies": {

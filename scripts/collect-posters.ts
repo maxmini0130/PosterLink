@@ -184,51 +184,57 @@ async function collectYouth() {
 }
 
 // ──────────────────────────────────────────────
-// 2. 복지로 복지서비스 API
-//    카테고리: 지원금/복지(CAT_WELFARE), 육아/가족(CAT_FAMILY)
-//    API 키: data.go.kr에서 발급
+// 복지로 공통 파서
 // ──────────────────────────────────────────────
-async function collectBokjiro() {
-  const apiKey = process.env.DATA_GO_KR_API_KEY;
-  if (!apiKey) {
-    console.log("\n[SKIP] DATA_GO_KR_API_KEY 미설정 — 복지로 수집 건너뜀");
-    return;
-  }
-
-  console.log("\n[복지로] 수집 시작...");
+async function collectBokjiroEndpoint(label: string, baseUrl: string, sourcePrefix: string) {
+  const apiKey = process.env.DATA_GO_KR_API_KEY!;
   let page = 1;
   let total = 0;
 
+  console.log(`\n[${label}] 수집 시작...`);
+
   while (true) {
-    const url = new URL("http://apis.data.go.kr/B554287/WelfareInfoService2/WelfarelistInqire2");
+    const url = new URL(baseUrl);
     url.searchParams.set("serviceKey", apiKey);
     url.searchParams.set("pageNo", String(page));
     url.searchParams.set("numOfRows", "100");
     url.searchParams.set("returnType", "json");
 
     const res = await fetch(url.toString());
-    if (!res.ok) break;
+    if (!res.ok) {
+      console.log(`\n[${label}] HTTP ${res.status} — 중단`);
+      break;
+    }
 
     let json: any;
     try { json = await res.json(); } catch { break; }
 
-    const items: any[] = json?.WelfarelistInqire2?.list ?? [];
+    // 두 API 모두 동일한 응답 구조 사용
+    const body = json?.response?.body ?? json?.WelfarelistInqire2 ?? json?.WelfarelistInqire ?? {};
+    const raw = body?.items?.item ?? body?.list ?? [];
+    const items: any[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
     if (items.length === 0) break;
 
     for (const item of items) {
-      // 육아/가족 관련 서비스 감지
-      const name: string = item.servNm ?? "";
-      const isFamily = /육아|가족|아동|출산|보육|임신|양육/.test(name);
-      const categoryCode = isFamily ? "CAT_FAMILY" : "CAT_WELFARE";
+      const name: string = item.servNm ?? item.servNmEn ?? "";
+      const isFamily = /육아|가족|아동|출산|보육|임신|양육|돌봄/.test(name);
+      const isEducation = /교육|훈련|취업|일자리|직업|장학/.test(name);
+      const categoryCode = isFamily ? "CAT_FAMILY"
+        : isEducation ? "CAT_EDUCATION"
+        : "CAT_WELFARE";
+
+      const servId = item.servId ?? item.servNm ?? Math.random().toString(36).slice(2);
 
       await upsertPoster({
         title: name || "제목 없음",
-        source_org_name: item.jurMnofNm ?? item.servDgistNm ?? "복지부",
-        summary_short: (item.servDgist ?? "").slice(0, 300),
-        application_end_at: null, // 복지로 상시 서비스는 마감일 없음
+        source_org_name: item.jurMnofNm ?? item.wlfareInfoReldBjNm ?? "복지부",
+        summary_short: (item.servDgist ?? item.servSumry ?? "").slice(0, 300),
+        application_start_at: parseKoreanDate(item.aplyBgngDt),
+        application_end_at: parseKoreanDate(item.aplyEndDt),
         category_code: categoryCode,
-        source_url: item.servDetailLink ?? `https://www.bokjiro.go.kr/ssis-tbu/twataa/wlfareInfo/moveTWAT52011M.do?wlfareInfoId=${item.servId}`,
-        source_key: `bokjiro_${item.servId}`,
+        source_url: item.servDetailLink
+          ?? `https://www.bokjiro.go.kr/ssis-tbu/twataa/wlfareInfo/moveTWAT52011M.do?wlfareInfoId=${servId}`,
+        source_key: `${sourcePrefix}_${servId}`,
       });
       total++;
     }
@@ -237,7 +243,43 @@ async function collectBokjiro() {
     page++;
   }
 
-  console.log(`\n[복지로] 완료 — 처리 ${total}건`);
+  console.log(`\n[${label}] 완료 — 처리 ${total}건`);
+}
+
+// ──────────────────────────────────────────────
+// 2. 한국사회보장정보원 — 중앙부처복지서비스
+//    전국 단위 보건복지부·여성가족부 등 지원사업
+// ──────────────────────────────────────────────
+async function collectBokjiroCentral() {
+  const apiKey = process.env.DATA_GO_KR_API_KEY;
+  if (!apiKey) {
+    console.log("\n[SKIP] DATA_GO_KR_API_KEY 미설정 — 중앙부처복지서비스 건너뜀");
+    return;
+  }
+  // ※ 정확한 오퍼레이션명은 마이페이지 > 내 오픈API > 상세보기 > 참고문서에서 확인
+  await collectBokjiroEndpoint(
+    "중앙부처복지서비스",
+    "http://apis.data.go.kr/B554287/WelfareInfoService/WelfarelistInqire",
+    "bokjiro_central"
+  );
+}
+
+// ──────────────────────────────────────────────
+// 3. 한국사회보장정보원 — 지자체복지서비스
+//    시·군·구 단위 지역 지원사업
+// ──────────────────────────────────────────────
+async function collectBokjiroLocal() {
+  const apiKey = process.env.DATA_GO_KR_API_KEY;
+  if (!apiKey) {
+    console.log("\n[SKIP] DATA_GO_KR_API_KEY 미설정 — 지자체복지서비스 건너뜀");
+    return;
+  }
+  // ※ 정확한 오퍼레이션명은 마이페이지 > 내 오픈API > 상세보기 > 참고문서에서 확인
+  await collectBokjiroEndpoint(
+    "지자체복지서비스",
+    "http://apis.data.go.kr/B554287/WelfareInfoService/LocalWelfarelistInqire",
+    "bokjiro_local"
+  );
 }
 
 // ──────────────────────────────────────────────
@@ -312,7 +354,8 @@ async function main() {
   console.log("범례: + 신규 등록  . 중복 스킵  [ERROR] 오류\n");
 
   if (target === "all" || target === "youth")   await collectYouth();
-  if (target === "all" || target === "bokjiro") await collectBokjiro();
+  if (target === "all" || target === "central") await collectBokjiroCentral();
+  if (target === "all" || target === "local")   await collectBokjiroLocal();
   if (target === "all" || target === "subsidy") await collectSubsidy();
 
   console.log("\n\n수집 완료. 관리자 페이지에서 review 상태 포스터를 승인해주세요.");
