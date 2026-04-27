@@ -1,6 +1,8 @@
 import { MetadataRoute } from "next";
 import { createServerClient } from "@supabase/ssr";
 
+export const dynamic = "force-dynamic";
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
