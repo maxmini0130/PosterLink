@@ -3,14 +3,16 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../../../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../../../lib/posterHelpers";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { ChevronLeft, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@posterlink/ui";
 
 export default function EditPosterPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const id = params.id as string;
+  const returnPath = searchParams.get("returnTo") === "admin" ? "/admin/posters" : "/operator/posters";
 
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -112,7 +114,7 @@ export default function EditPosterPage() {
       }
 
       alert("저장되었습니다.");
-      router.push("/operator/posters");
+      router.push(returnPath);
     } catch (err: any) {
       alert("오류 발생: " + err.message);
     } finally {
@@ -124,7 +126,7 @@ export default function EditPosterPage() {
     if (!confirm("포스터를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) return;
     const { error } = await supabase.from("posters").delete().eq("id", id);
     if (error) alert(error.message);
-    else router.push("/operator/posters");
+    else router.push(returnPath);
   };
 
   if (initialLoading) return <div className="p-20 text-center font-bold text-blue-600">데이터 로드 중...</div>;
@@ -135,7 +137,12 @@ export default function EditPosterPage() {
         <button onClick={() => router.back()} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
           <ChevronLeft size={24} />
         </button>
-        <h1 className="text-2xl font-black text-gray-900">포스터 수정</h1>
+        <div>
+          <h1 className="text-2xl font-black text-gray-900">포스터 수정</h1>
+          {returnPath === "/admin/posters" && (
+            <p className="text-xs font-bold text-gray-400 mt-1">관리자 검수 화면에서 편집 중입니다.</p>
+          )}
+        </div>
       </div>
 
       {formData.thumbnailUrl && (

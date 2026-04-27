@@ -208,7 +208,7 @@ export default function PosterListPage() {
             <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-top-1">
               {searchQuery && (
                 <span className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-black rounded-lg shadow-lg shadow-blue-100">
-                  "{searchQuery}" <button onClick={() => setSearchQuery("")}><X size={12}/></button>
+                  &ldquo;{searchQuery}&rdquo; <button onClick={() => setSearchQuery("")}><X size={12}/></button>
                 </span>
               )}
               {selectedRegionId && (

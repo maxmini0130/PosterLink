@@ -108,7 +108,7 @@ export default function AdminReportsPage() {
                       <span className="text-gray-500">@{report.comment?.authorNickname}</span>
                     </div>
                     <p className="text-base font-bold text-gray-700 dark:text-slate-200 leading-relaxed italic">
-                      "{report.comment?.body}"
+                      &ldquo;{report.comment?.body}&rdquo;
                     </p>
                   </div>
                 </div>

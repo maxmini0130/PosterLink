@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
-import { Check, X, ExternalLink, Image as ImageIcon, Eye, FileCheck } from "lucide-react";
+import { Check, X, ExternalLink, Image as ImageIcon, Eye, FileCheck, PencilLine } from "lucide-react";
 import Link from "next/link";
 
 type PosterStatus = 'review' | 'published' | 'rejected' | 'draft';
@@ -148,13 +148,25 @@ export default function AdminPostersPage() {
                 <Link 
                   href={`/posters/${p.id}`} 
                   target="_blank"
+                  title="공개 상세 보기"
+                  aria-label="공개 상세 보기"
                   className="p-4 bg-gray-50 dark:bg-slate-800 text-gray-400 dark:text-slate-500 rounded-2xl hover:bg-gray-100 dark:hover:bg-slate-700 transition-all border border-transparent hover:border-gray-200 dark:hover:border-slate-600"
                 >
                   <ExternalLink size={20} />
                 </Link>
+                <Link
+                  href={`/operator/posters/${p.id}/edit?returnTo=admin`}
+                  title="포스터 수정"
+                  aria-label="포스터 수정"
+                  className="p-4 bg-blue-50 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400 rounded-2xl hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all"
+                >
+                  <PencilLine size={20} />
+                </Link>
                 {p.poster_status !== 'rejected' && (
                   <button 
                     onClick={() => handleStatusChange(p.id, 'rejected')}
+                    title="반려"
+                    aria-label="반려"
                     className="p-4 bg-rose-50 dark:bg-rose-900/10 text-rose-500 rounded-2xl hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-all"
                   >
                     <X size={20} />
@@ -163,6 +175,8 @@ export default function AdminPostersPage() {
                 {p.poster_status !== 'published' && (
                   <button 
                     onClick={() => handleStatusChange(p.id, 'published')}
+                    title="승인"
+                    aria-label="승인"
                     className="p-4 md:p-6 bg-indigo-600 dark:bg-indigo-500 text-white rounded-[1.5rem] hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-all shadow-xl shadow-indigo-100 dark:shadow-none"
                   >
                     <Check size={24} strokeWidth={3} />
