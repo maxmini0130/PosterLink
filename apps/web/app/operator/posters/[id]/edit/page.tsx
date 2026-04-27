@@ -1,12 +1,14 @@
 "use client";
+import toast from "react-hot-toast";
 
 import { useState, useEffect } from "react";
 import { supabase } from "../../../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../../../lib/posterHelpers";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
-import { ChevronLeft, Loader2, Trash2 } from "lucide-react";
+import { ChevronLeft, Loader2, Trash2, Camera } from "lucide-react";
 import Image from "next/image";
 import { Button } from "@posterlink/ui";
+import { ImageCropper } from "../../../../components/ImageCropper";
 
 export default function EditPosterPage() {
   const router = useRouter();
@@ -19,6 +21,9 @@ export default function EditPosterPage() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [categories, setCategories] = useState<any[]>([]);
   const [regions, setRegions] = useState<any[]>([]);
+  const [originalImage, setOriginalImage] = useState<string | null>(null);
+  const [newImageBlob, setNewImageBlob] = useState<Blob | null>(null);
+  const [showCropper, setShowCropper] = useState(false);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -67,15 +72,43 @@ export default function EditPosterPage() {
     fetchData();
   }, [id]);
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setOriginalImage(reader.result as string);
+        setShowCropper(true);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
+      let thumbnailUrl = formData.thumbnailUrl;
+
+      if (newImageBlob) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("인증 오류");
+        const fileName = `${Date.now()}_cropped.jpg`;
+        const filePath = `${user.id}/${fileName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("poster-originals")
+          .upload(filePath, newImageBlob, { contentType: "image/jpeg" });
+        if (uploadError) throw uploadError;
+        const { data: { publicUrl } } = supabase.storage.from("poster-originals").getPublicUrl(filePath);
+        thumbnailUrl = publicUrl;
+      }
+
       const { error } = await supabase.from("posters").update({
         title: formData.title,
         source_org_name: formData.sourceOrgName,
         application_end_at: formData.appEndAt || null,
         summary_short: formData.summaryShort,
+        ...(newImageBlob ? { thumbnail_url: thumbnailUrl } : {}),
       }).eq("id", id);
 
       if (error) throw error;
@@ -114,10 +147,10 @@ export default function EditPosterPage() {
         if (linkInsertError) throw linkInsertError;
       }
 
-      alert("저장되었습니다.");
+      toast.success("저장되었습니다.");
       router.push(returnPath);
     } catch (err: any) {
-      alert("오류 발생: " + err.message);
+      toast.error("오류 발생: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -126,14 +159,24 @@ export default function EditPosterPage() {
   const handleDelete = async () => {
     if (!confirm("포스터를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) return;
     const { error } = await supabase.from("posters").delete().eq("id", id);
-    if (error) alert(error.message);
+    if (error) toast.error(error.message);
     else router.push(returnPath);
   };
 
   if (initialLoading) return <div className="p-20 text-center font-bold text-blue-600">데이터 로드 중...</div>;
 
+  const previewUrl = newImageBlob ? URL.createObjectURL(newImageBlob) : formData.thumbnailUrl;
+
   return (
     <div className="max-w-3xl mx-auto pb-20">
+      {showCropper && originalImage && (
+        <ImageCropper
+          image={originalImage}
+          onCropComplete={(blob) => { setNewImageBlob(blob); setShowCropper(false); }}
+          onCancel={() => setShowCropper(false)}
+        />
+      )}
+
       <div className="flex items-center gap-4 mb-8">
         <button onClick={() => router.back()} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
           <ChevronLeft size={24} />
@@ -146,11 +189,27 @@ export default function EditPosterPage() {
         </div>
       </div>
 
-      {formData.thumbnailUrl && (
-        <div className="mb-8 rounded-[2.5rem] overflow-hidden border border-gray-100 shadow-sm relative w-full h-[300px]">
-          <Image src={formData.thumbnailUrl} alt="포스터 이미지" fill sizes="(max-width: 768px) 100vw, 768px" className="object-contain bg-gray-50" />
+      {previewUrl && (
+        <div className="mb-4 rounded-[2.5rem] overflow-hidden border border-gray-100 shadow-sm relative w-full h-[300px] group">
+          <Image src={previewUrl} alt="포스터 이미지" fill sizes="(max-width: 768px) 100vw, 768px" className="object-contain bg-gray-50" />
+          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <label htmlFor="edit-poster-upload" className="cursor-pointer bg-white px-4 py-2 rounded-xl text-xs font-black text-gray-900 shadow-xl flex items-center gap-2">
+              <Camera size={14} /> 이미지 교체
+            </label>
+          </div>
         </div>
       )}
+      <div className="mb-8">
+        <input type="file" id="edit-poster-upload" className="hidden" accept="image/*" onChange={handleImageChange} />
+        {!previewUrl && (
+          <label htmlFor="edit-poster-upload" className="flex items-center justify-center gap-2 h-24 border-2 border-dashed border-gray-200 rounded-[2rem] cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-all text-sm font-bold text-gray-400">
+            <Camera size={18} /> 포스터 이미지 업로드
+          </label>
+        )}
+        {newImageBlob && (
+          <p className="text-xs font-bold text-blue-600 text-center mt-2">새 이미지가 선택되었습니다. 저장 시 반영됩니다.</p>
+        )}
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-10 rounded-[3rem] shadow-sm border border-gray-50">

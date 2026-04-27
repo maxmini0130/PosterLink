@@ -1,4 +1,5 @@
 "use client";
+import toast from "react-hot-toast";
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
@@ -16,7 +17,7 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
       else {
         const { data } = await supabase.from("profiles").select("role").eq("id", user.id).single();
         if (data?.role !== "operator" && data?.role !== "admin" && data?.role !== "super_admin") {
-          alert("권한이 없습니다.");
+          toast.error("권한이 없습니다.");
           router.push("/");
         } else {
           setRole(data.role);
@@ -34,6 +35,7 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
       <aside className="w-64 bg-primary text-white p-6 hidden md:block">
         <h2 className="text-xl font-bold mb-10">PosterLink OPS</h2>
         <nav className="space-y-4">
+          <Link href="/operator" className="block p-3 hover:bg-white/20 rounded-xl">📊 대시보드</Link>
           <Link href="/operator/posters" className="block p-3 bg-white/10 rounded-xl hover:bg-white/20">포스터 관리</Link>
           <Link href="/operator/posters/new" className="block p-3 hover:bg-white/20 rounded-xl">+ 새 포스터 등록</Link>
         </nav>

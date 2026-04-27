@@ -6,7 +6,9 @@ import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
 import { PosterCard } from "../components/PosterCard";
 import { fetchCategoryRegionNames } from "../lib/posterHelpers";
-import { Search, X, History, TrendingUp, Filter, ArrowLeft } from "lucide-react";
+import { Search, X, History, TrendingUp, Filter, ArrowLeft, ChevronDown } from "lucide-react";
+
+const PAGE_SIZE = 12;
 
 export default function PosterListPage() {
   const [loading, setLoading] = useState(true);
@@ -23,6 +25,7 @@ export default function PosterListPage() {
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState("latest");
 
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // 1. Initial Data Load
@@ -76,6 +79,7 @@ export default function PosterListPage() {
 
       const metaMap = await fetchCategoryRegionNames(sortedData.map((poster: any) => poster.id));
       setPosters(sortedData.map((poster: any) => ({ ...poster, ...metaMap[poster.id] })));
+      setDisplayCount(PAGE_SIZE);
     } catch (err) {
       console.error("Error fetching posters:", err);
       setPosters([]);
@@ -244,6 +248,7 @@ export default function PosterListPage() {
           {/* Sort & Result Count */}
           <div className="flex items-center justify-between border-b border-gray-50 pb-4">
              <span className="text-[11px] font-black text-gray-300 uppercase tracking-widest">Total {posters.length} Results</span>
+
              <div className="flex gap-4">
                <button onClick={() => setSortBy("latest")} className={`text-xs font-black transition-colors ${sortBy === 'latest' ? 'text-blue-600' : 'text-gray-300'}`}>LATEST</button>
                <button onClick={() => setSortBy("deadline")} className={`text-xs font-black transition-colors ${sortBy === 'deadline' ? 'text-blue-600' : 'text-gray-300'}`}>DEADLINE</button>
@@ -257,21 +262,33 @@ export default function PosterListPage() {
             {[1,2,3,4].map(i => <div key={i} className="aspect-[3/4] bg-gray-50 rounded-3xl animate-pulse" />)}
           </div>
         ) : posters.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-5 gap-y-10 mt-8">
-            {posters.map((poster) => (
-              <PosterCard 
-                key={poster.id} 
-                poster={{
-                  id: poster.id,
-                  title: poster.title,
-                  org: poster.source_org_name,
-                  deadline: poster.application_end_at,
-                  image: poster.thumbnail_url,
-                  tags: [poster.categoryName, poster.regionName].filter((tag): tag is string => Boolean(tag))
-                }} 
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-5 gap-y-10 mt-8">
+              {posters.slice(0, displayCount).map((poster) => (
+                <PosterCard
+                  key={poster.id}
+                  poster={{
+                    id: poster.id,
+                    title: poster.title,
+                    org: poster.source_org_name,
+                    deadline: poster.application_end_at,
+                    image: poster.thumbnail_url,
+                    tags: [poster.categoryName, poster.regionName].filter((tag): tag is string => Boolean(tag))
+                  }}
+                />
+              ))}
+            </div>
+            {displayCount < posters.length && (
+              <div className="flex justify-center mt-10">
+                <button
+                  onClick={() => setDisplayCount(prev => prev + PAGE_SIZE)}
+                  className="flex items-center gap-2 px-8 py-4 bg-gray-50 hover:bg-blue-50 text-gray-500 hover:text-blue-600 font-black text-sm rounded-[1.5rem] transition-all border border-gray-100 hover:border-blue-100"
+                >
+                  <ChevronDown size={18} /> 더 보기 ({posters.length - displayCount}개 남음)
+                </button>
+              </div>
+            )}
+          </>
         ) : (
           <div className="py-32 text-center bg-gray-50/50 rounded-[3rem] border border-dashed border-gray-100 mt-8">
             <Search className="mx-auto text-gray-200 mb-4" size={48} />

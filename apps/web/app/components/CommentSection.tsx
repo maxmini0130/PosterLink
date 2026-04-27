@@ -1,8 +1,10 @@
 "use client";
+import toast from "react-hot-toast";
 
 import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import { fetchProfileMap } from "../../lib/posterHelpers";
+import { ReportModal } from "./ReportModal";
 import { MessageSquare, Send, AlertTriangle, Trash2 } from "lucide-react";
 
 interface CommentSectionProps {
@@ -14,6 +16,7 @@ export function CommentSection({ posterId }: CommentSectionProps) {
   const [newComment, setNewComment] = useState("");
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [reportingCommentId, setReportingCommentId] = useState<string | null>(null);
 
   const fetchComments = async () => {
     const { data } = await supabase
@@ -37,9 +40,9 @@ export function CommentSection({ posterId }: CommentSectionProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return alert("로그인이 필요합니다.");
+    if (!user) return void toast.error("로그인이 필요합니다.");
     if (!newComment.trim()) return;
-    if (newComment.trim().length > 500) return alert("댓글은 500자 이내로 작성해주세요.");
+    if (newComment.trim().length > 500) return void toast.error("댓글은 500자 이내로 작성해주세요.");
 
     setLoading(true);
     const { error } = await supabase.from("comments").insert({
@@ -49,7 +52,7 @@ export function CommentSection({ posterId }: CommentSectionProps) {
       comment_type: 'general'
     });
 
-    if (error) alert(error.message);
+    if (error) toast.error(error.message);
     else {
       setNewComment("");
       fetchComments();
@@ -57,29 +60,35 @@ export function CommentSection({ posterId }: CommentSectionProps) {
     setLoading(false);
   };
 
-  const handleReport = async (commentId: string) => {
-    const reason = prompt("신고 사유를 입력해주세요 (욕설, 허위정보, 광고 등)");
-    if (!reason) return;
-
+  const handleReport = async (reasonCode: string, reasonDetail: string) => {
+    if (!reportingCommentId) return;
     const { error } = await supabase.from("comment_reports").insert({
-      comment_id: commentId,
+      comment_id: reportingCommentId,
       reporter_user_id: user.id,
-      reason_code: 'other',
-      reason_detail: reason
+      reason_code: reasonCode,
+      reason_detail: reasonDetail
     });
-
-    if (error) alert(error.message);
-    else alert("신고가 접수되었습니다.");
+    setReportingCommentId(null);
+    if (error) toast.error(error.message);
+    else toast.success("신고가 접수되었습니다.");
   };
 
   const handleDelete = async (commentId: string) => {
     if (!confirm("댓글을 삭제하시겠습니까?")) return;
     const { error } = await supabase.from("comments").update({ status: 'deleted' }).eq("id", commentId);
-    if (error) alert(error.message);
+    if (error) toast.error(error.message);
     else fetchComments();
   };
 
   return (
+    <>
+    {reportingCommentId && (
+      <ReportModal
+        title="댓글 신고"
+        onSubmit={handleReport}
+        onClose={() => setReportingCommentId(null)}
+      />
+    )}
     <section className="mt-12 border-t border-gray-100 pt-10">
       <div className="flex items-center gap-2 mb-6">
         <MessageSquare className="text-blue-600" size={22} />
@@ -127,7 +136,7 @@ export function CommentSection({ posterId }: CommentSectionProps) {
                     <Trash2 size={16} />
                   </button>
                 ) : (
-                  <button onClick={() => handleReport(comment.id)} className="p-2 text-gray-300 hover:text-orange-500 transition-colors">
+                  <button onClick={() => user ? setReportingCommentId(comment.id) : toast.error("로그인이 필요합니다.")} className="p-2 text-gray-300 hover:text-orange-500 transition-colors">
                     <AlertTriangle size={16} />
                   </button>
                 )}
@@ -146,5 +155,6 @@ export function CommentSection({ posterId }: CommentSectionProps) {
         )}
       </div>
     </section>
+    </>
   );
 }

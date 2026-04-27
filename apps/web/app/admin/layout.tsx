@@ -1,4 +1,5 @@
 "use client";
+import toast from "react-hot-toast";
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
@@ -28,7 +29,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       if (profile?.role === "admin" || profile?.role === "super_admin") {
         setIsAdmin(true);
       } else {
-        alert("관리자 권한이 없습니다.");
+        toast.error("관리자 권한이 없습니다.");
         router.push("/");
       }
     };

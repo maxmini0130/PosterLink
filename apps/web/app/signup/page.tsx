@@ -4,26 +4,32 @@ import { useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import toast from "react-hot-toast";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!agreed) {
+      toast.error("이용약관 및 개인정보처리방침에 동의해주세요.");
+      return;
+    }
     setLoading(true);
     const { data, error } = await supabase.auth.signUp({ email, password });
 
     if (error) {
-      alert(error.message);
+      toast.error(error.message);
       setLoading(false);
       return;
     }
 
     if (!data.user) {
-      alert("회원가입에 실패했습니다. 다시 시도해주세요.");
+      toast.error("회원가입에 실패했습니다. 다시 시도해주세요.");
       setLoading(false);
       return;
     }
@@ -34,7 +40,7 @@ export default function SignupPage() {
       const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
       if (signInError) {
         // 이메일 미확인 상태 — 확인 메일 안내
-        alert("가입 확인 이메일을 발송했습니다.\nSupabase 대시보드 → Authentication → Configuration에서 'Enable email confirmations'를 OFF 하면 확인 없이 바로 사용할 수 있습니다.");
+        toast("가입 확인 이메일을 발송했습니다. 이메일을 확인해주세요.", { icon: "📧", duration: 6000 });
         setLoading(false);
         return;
       }
@@ -59,7 +65,7 @@ export default function SignupPage() {
         ...(provider === 'kakao' && { scopes: 'profile_nickname profile_image' }),
       },
     });
-    if (error) alert(error.message);
+    if (error) toast.error(error.message);
   };
 
   return (
@@ -90,8 +96,21 @@ export default function SignupPage() {
             required 
           />
         </div>
-        <button 
-          disabled={loading} 
+        <label className="flex items-start gap-3 cursor-pointer group">
+          <input
+            type="checkbox"
+            checked={agreed}
+            onChange={(e) => setAgreed(e.target.checked)}
+            className="mt-0.5 w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary/20 cursor-pointer"
+          />
+          <span className="text-sm text-gray-500 leading-relaxed">
+            <Link href="/terms" className="font-bold text-primary hover:underline" target="_blank">이용약관</Link> 및{" "}
+            <Link href="/privacy" className="font-bold text-primary hover:underline" target="_blank">개인정보처리방침</Link>에
+            동의합니다. <span className="text-rose-500">(필수)</span>
+          </span>
+        </label>
+        <button
+          disabled={loading || !agreed}
           className="w-full py-4 bg-primary text-white font-bold rounded-2xl shadow-lg shadow-primary/20 active:scale-[0.98] transition-all disabled:opacity-50"
         >
           {loading ? "가입 중..." : "이메일로 가입하기"}
@@ -128,7 +147,7 @@ export default function SignupPage() {
           구글로 시작하기
         </button>
         <button
-          onClick={() => alert("네이버 로그인은 현재 준비 중입니다. 빠른 시일 내에 지원 예정입니다!")}
+          onClick={() => toast("네이버 로그인은 현재 준비 중입니다.", { icon: "🔔" })}
           className="w-full py-4 bg-[#03C75A] text-white font-bold rounded-2xl flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
         >
           <span className="w-5 h-5 bg-white rounded-full flex items-center justify-center text-[11px] text-[#03C75A] font-black">N</span>

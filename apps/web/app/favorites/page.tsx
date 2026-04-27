@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { fetchCategoryRegionNames } from "../lib/posterHelpers";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
 import { PosterCard } from "../components/PosterCard";
@@ -38,7 +39,10 @@ export default function FavoritesPage() {
             .select("*")
             .in("id", posterIds);
 
-          if (postersData) setFavorites(postersData);
+          if (postersData) {
+            const metaMap = await fetchCategoryRegionNames(postersData.map((p: any) => p.id));
+            setFavorites(postersData.map((p: any) => ({ ...p, ...metaMap[p.id] })));
+          }
         }
       } catch (err) {
         console.error("Error fetching favorites:", err);
@@ -79,7 +83,7 @@ export default function FavoritesPage() {
                   title: poster.title,
                   org: poster.source_org_name,
                   deadline: poster.application_end_at,
-                  tags: [],
+                  tags: [poster.categoryName, poster.regionName].filter(Boolean),
                   image: poster.thumbnail_url
                 }} 
               />

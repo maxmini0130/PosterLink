@@ -1,11 +1,11 @@
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-// ANON_KEY 또는 PUBLISHABLE_KEY 중 있는 값을 사용합니다.
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error("Supabase environment variables are missing!");
+  console.error('Supabase environment variables are missing!');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// createBrowserClient는 쿠키 기반 세션을 사용해 미들웨어와 세션을 공유합니다.
+export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey);

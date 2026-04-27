@@ -1,4 +1,5 @@
 "use client";
+import toast from "react-hot-toast";
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
@@ -101,10 +102,10 @@ export default function ProfileEditPage() {
         if (catError) throw catError;
       }
 
-      alert("프로필이 수정되었습니다.");
+      toast.success("프로필이 수정되었습니다.");
       router.push("/mypage");
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setSaving(false);
     }

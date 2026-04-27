@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import { Bell, Send, Loader2, CheckCircle2, Inbox } from "lucide-react";
+import toast from "react-hot-toast";
 
 export default function AdminNotificationsPage() {
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -31,7 +32,7 @@ export default function AdminNotificationsPage() {
   }, []);
 
   const handleSend = async () => {
-    if (!title.trim() || !body.trim()) return alert("제목과 본문을 모두 입력해주세요.");
+    if (!title.trim() || !body.trim()) return void toast.error("제목과 본문을 모두 입력해주세요.");
     if (!confirm("전체 사용자에게 시스템 공지를 발송하시겠습니까?")) return;
 
     setSending(true);
@@ -43,7 +44,7 @@ export default function AdminNotificationsPage() {
 
       if (usersError) throw usersError;
       if (!users || users.length === 0) {
-        alert("발송 대상 사용자가 없습니다.");
+        toast.error("발송 대상 사용자가 없습니다.");
         return;
       }
 
@@ -58,12 +59,12 @@ export default function AdminNotificationsPage() {
       const { error } = await supabase.from("notifications").insert(inserts);
       if (error) throw error;
 
-      alert(`${users.length}명에게 공지가 발송되었습니다.`);
+      toast.success(`${users.length}명에게 공지가 발송되었습니다.`);
       setTitle("");
       setBody("");
       fetchNotifications();
     } catch (err: any) {
-      alert("발송 실패: " + err.message);
+      toast.error("발송 실패: " + err.message);
     } finally {
       setSending(false);
     }

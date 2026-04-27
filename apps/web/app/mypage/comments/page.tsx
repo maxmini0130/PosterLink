@@ -1,4 +1,5 @@
 "use client";
+import toast from "react-hot-toast";
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
@@ -41,7 +42,7 @@ export default function MyCommentsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm("댓글을 삭제하시겠습니까?")) return;
     const { error } = await supabase.from("comments").update({ status: 'deleted' }).eq("id", id);
-    if (error) alert(error.message);
+    if (error) toast.error(error.message);
     else fetchMyComments();
   };
 

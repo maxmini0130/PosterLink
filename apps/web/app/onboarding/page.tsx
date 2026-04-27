@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@posterlink/ui";
 import { motion, AnimatePresence } from "framer-motion";
 import { MapPin, User, Star, ChevronRight, Check } from "lucide-react";
+import toast from "react-hot-toast";
 
 export default function OnboardingPage() {
   const [step, setStep] = useState(1);
@@ -82,7 +83,7 @@ export default function OnboardingPage() {
       localStorage.removeItem("onboarding_uid");
       router.push("/");
     } catch (error: any) {
-      alert("Error saving profile: " + error.message);
+      toast.error("프로필 저장 실패: " + error.message);
     } finally {
       setSubmitting(false);
     }

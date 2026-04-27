@@ -1,4 +1,5 @@
 "use client";
+import toast from "react-hot-toast";
 
 import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
@@ -43,9 +44,9 @@ export default function OperatorPostersPage() {
       .update({ poster_status: "review" })
       .eq("id", id);
 
-    if (error) alert(error.message);
+    if (error) toast.error(error.message);
     else {
-      alert("검수 요청이 완료되었습니다.");
+      toast.success("검수 요청이 완료되었습니다.");
       fetchPosters();
     }
   };

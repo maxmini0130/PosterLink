@@ -1,4 +1,5 @@
 "use client";
+import toast from "react-hot-toast";
 
 import { useState, useEffect } from "react";
 import { supabase } from "../../../lib/supabase";
@@ -94,7 +95,7 @@ export default function NewPosterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!croppedImageBlob) return alert("포스터 이미지를 보정하여 등록해주세요.");
+    if (!croppedImageBlob) return void toast.error("포스터 이미지를 보정하여 등록해주세요.");
     
     setLoading(true);
     try {
@@ -161,10 +162,10 @@ export default function NewPosterPage() {
         if (linkError) throw linkError;
       }
 
-      alert("포스터가 등록되었습니다. 관리자 검수 후 게시됩니다.");
+      toast.success("포스터가 등록되었습니다. 관리자 검수 후 게시됩니다.");
       router.push("/operator/posters");
     } catch (err: any) {
-      alert("오류 발생: " + err.message);
+      toast.error("오류 발생: " + err.message);
     } finally {
       setLoading(false);
     }

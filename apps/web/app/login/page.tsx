@@ -4,6 +4,7 @@ import { useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import toast from "react-hot-toast";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -17,7 +18,7 @@ export default function LoginPage() {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     
     if (error) {
-      alert(error.message);
+      toast.error(error.message);
     } else {
       router.push("/");
     }
@@ -32,7 +33,7 @@ export default function LoginPage() {
         ...(provider === 'kakao' && { scopes: 'profile_nickname profile_image' }),
       },
     });
-    if (error) alert(error.message);
+    if (error) toast.error(error.message);
   };
 
   return (
@@ -105,7 +106,7 @@ export default function LoginPage() {
           구글로 시작하기
         </button>
         <button
-          onClick={() => alert("네이버 로그인은 현재 준비 중입니다. 빠른 시일 내에 지원 예정입니다!")}
+          onClick={() => toast("네이버 로그인은 현재 준비 중입니다. 빠른 시일 내에 지원 예정입니다!", { icon: "🔔" })}
           className="w-full py-4 bg-[#03C75A] text-white font-bold rounded-2xl flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
         >
           <span className="w-5 h-5 bg-white rounded-full flex items-center justify-center text-[11px] text-[#03C75A] font-black">N</span>

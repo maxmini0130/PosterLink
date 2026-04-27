@@ -1,4 +1,5 @@
 "use client";
+import toast from "react-hot-toast";
 
 import { useState, useEffect } from "react";
 import { Header } from "../../components/Header";
@@ -8,6 +9,7 @@ import { notFound } from "next/navigation";
 import Image from "next/image";
 import { supabase } from "../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
+import { Link2 } from "lucide-react";
 
 export default function PosterDetailPage({ params }: { params: { id: string } }) {
   const [poster, setPoster] = useState<any>(null);
@@ -66,7 +68,7 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
   const toggleFavorite = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      alert("로그인이 필요합니다.");
+      toast.error("로그인이 필요합니다.");
       return;
     }
 
@@ -190,7 +192,7 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
         {/* 하단 고정 액션바 (모바일) */}
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-xl border-t md:relative md:bg-transparent md:border-none md:p-0">
           <div className="max-w-2xl mx-auto flex gap-3">
-            <button 
+            <button
               onClick={toggleFavorite}
               className={`w-14 h-14 flex items-center justify-center border rounded-2xl transition-all shadow-sm ${
                 isFavorited ? 'bg-rose-50 border-rose-200' : 'bg-white border-gray-100'
@@ -198,11 +200,22 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
             >
                <span className="text-xl">{isFavorited ? '❤️' : '🤍'}</span>
             </button>
-            
+
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(window.location.href);
+                toast.success("링크가 복사되었습니다!");
+              }}
+              className="w-14 h-14 flex items-center justify-center border border-gray-100 bg-white rounded-2xl transition-all shadow-sm hover:bg-gray-50"
+              title="링크 복사"
+            >
+              <Link2 size={20} className="text-gray-500" />
+            </button>
+
             {/* 공식 링크 중 하나를 메인 버튼으로 사용 */}
-            <a 
-              href={links.find(l => l.is_primary)?.url || links[0]?.url || "#"} 
-              target="_blank" 
+            <a
+              href={links.find(l => l.is_primary)?.url || links[0]?.url || "#"}
+              target="_blank"
               className="flex-1 h-14 flex items-center justify-center bg-blue-600 text-white font-black rounded-2xl shadow-lg shadow-blue-200"
             >
               공식 홈페이지 바로가기

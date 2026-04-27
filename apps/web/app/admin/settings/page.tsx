@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import { Tag, MapPin, Plus, Trash2, Loader2, Users } from "lucide-react";
+import toast from "react-hot-toast";
 
 const ROLES = [
   { value: 'user', label: '일반 사용자' },
@@ -50,7 +51,7 @@ export default function AdminSettingsPage() {
     if (activeTab === 'regions') payload.level = 'sido';
     else payload.sort_order = categories.length + 1;
     const { error } = await supabase.from(table).insert(payload);
-    if (error) alert(error.message);
+    if (error) toast.error(error.message);
     else { setNewItemName(""); setNewItemCode(""); fetchData(); }
     setSaving(false);
   };
@@ -59,13 +60,13 @@ export default function AdminSettingsPage() {
     if (!confirm("정말 삭제하시겠습니까? 관련 데이터가 있을 경우 삭제되지 않을 수 있습니다.")) return;
     const table = activeTab === 'categories' ? 'categories' : 'regions';
     const { error } = await supabase.from(table).delete().eq("id", id);
-    if (error) alert("삭제할 수 없습니다. 이미 사용 중인 데이터인지 확인하세요.");
+    if (error) toast.error("삭제할 수 없습니다. 이미 사용 중인 데이터인지 확인하세요.");
     else fetchData();
   };
 
   const handleRoleChange = async (userId: string, newRole: string) => {
     const { error } = await supabase.from("profiles").update({ role: newRole }).eq("id", userId);
-    if (error) alert(error.message);
+    if (error) toast.error(error.message);
     else setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
   };
 

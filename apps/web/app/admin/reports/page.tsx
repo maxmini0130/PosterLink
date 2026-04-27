@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import { fetchProfileMap } from "../../lib/posterHelpers";
 import { AlertCircle, CheckCircle2, EyeOff, MessageSquare } from "lucide-react";
+import toast from "react-hot-toast";
 
 export default function AdminReportsPage() {
   const [reports, setReports] = useState<any[]>([]);
@@ -65,9 +66,9 @@ export default function AdminReportsPage() {
       })
       .eq("id", reportId);
 
-    if (error) alert(error.message);
+    if (error) toast.error(error.message);
     else {
-      alert(action === 'hide' ? "댓글 숨김 및 신고 처리 완료" : "신고 기각 완료");
+      toast.success(action === 'hide' ? "댓글 숨김 및 신고 처리 완료" : "신고 기각 완료");
       fetchReports();
     }
   };

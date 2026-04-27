@@ -9,6 +9,7 @@ const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 import { Check, X, ExternalLink, Image as ImageIcon, Eye, FileCheck, PencilLine } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import toast from "react-hot-toast";
 
 type PosterStatus = 'review' | 'published' | 'rejected' | 'draft';
 
@@ -49,7 +50,7 @@ export default function AdminPostersPage() {
       })
       .eq("id", id);
 
-    if (error) { alert(error.message); return; }
+    if (error) { toast.error(error.message); return; }
 
     if (newStatus === 'published') {
       // DB 트리거가 인앱 알림을 자동 생성한 뒤, Edge Function으로 Expo 푸시 발송
@@ -64,7 +65,7 @@ export default function AdminPostersPage() {
       }).catch((err) => console.warn('notify-new-match push 실패:', err));
     }
 
-    alert(newStatus === 'published' ? "승인 완료! 관심 사용자에게 알림이 발송됩니다." : "반려 처리되었습니다.");
+    toast.success(newStatus === 'published' ? "승인 완료! 관심 사용자에게 알림이 발송됩니다." : "반려 처리되었습니다.");
     fetchPosters(currentFilter);
   };
 
