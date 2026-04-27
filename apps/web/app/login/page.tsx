@@ -25,9 +25,9 @@ export default function LoginPage() {
     setLoading(false);
   };
 
-  const handleSocialLogin = async (provider: 'kakao' | 'google') => {
+  const handleSocialLogin = async (provider: 'kakao' | 'google' | 'naver') => {
     const { error } = await supabase.auth.signInWithOAuth({
-      provider,
+      provider: provider as any,
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
         ...(provider === 'kakao' && { scopes: 'profile_nickname profile_image' }),
@@ -106,7 +106,7 @@ export default function LoginPage() {
           구글로 시작하기
         </button>
         <button
-          onClick={() => toast("네이버 로그인은 현재 준비 중입니다. 빠른 시일 내에 지원 예정입니다!", { icon: "🔔" })}
+          onClick={() => handleSocialLogin('naver')}
           className="w-full py-4 bg-[#03C75A] text-white font-bold rounded-2xl flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
         >
           <span className="w-5 h-5 bg-white rounded-full flex items-center justify-center text-[11px] text-[#03C75A] font-black">N</span>
