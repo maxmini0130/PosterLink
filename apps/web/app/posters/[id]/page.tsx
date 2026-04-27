@@ -10,7 +10,7 @@ import Image from "next/image";
 import { supabase } from "../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
 import { Footer } from "../../components/Footer";
-import { Link2 } from "lucide-react";
+import { Link2, Share2 } from "lucide-react";
 
 export default function PosterDetailPage({ params }: { params: { id: string } }) {
   const [poster, setPoster] = useState<any>(null);
@@ -211,6 +211,21 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
               title="링크 복사"
             >
               <Link2 size={20} className="text-gray-500" />
+            </button>
+
+            <button
+              onClick={async () => {
+                if (navigator.share) {
+                  await navigator.share({ title: poster.title, text: poster.summary_short ?? '', url: window.location.href });
+                } else {
+                  navigator.clipboard.writeText(window.location.href);
+                  toast.success("링크가 복사되었습니다!");
+                }
+              }}
+              className="w-14 h-14 flex items-center justify-center border border-gray-100 bg-white rounded-2xl transition-all shadow-sm hover:bg-gray-50"
+              title="공유"
+            >
+              <Share2 size={20} className="text-gray-500" />
             </button>
 
             {/* 공식 링크 중 하나를 메인 버튼으로 사용 */}

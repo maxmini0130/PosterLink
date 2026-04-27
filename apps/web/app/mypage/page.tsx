@@ -5,12 +5,16 @@ import { supabase } from "../lib/supabase";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
 import Link from "next/link";
-import { User, MessageSquare, Settings, Heart, LogOut, ChevronRight, MapPin, Calendar } from "lucide-react";
+import { User, MessageSquare, Heart, LogOut, ChevronRight, MapPin, Calendar, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 
 export default function MyPage() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -39,6 +43,21 @@ export default function MyPage() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push("/");
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirm !== "탈퇴") return;
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/auth/delete-account", { method: "DELETE" });
+      if (!res.ok) throw new Error((await res.json()).error);
+      await supabase.auth.signOut();
+      toast.success("계정이 삭제되었습니다.");
+      router.push("/");
+    } catch (err: any) {
+      toast.error(err.message ?? "탈퇴 처리 중 오류가 발생했습니다.");
+      setDeleting(false);
+    }
   };
 
   if (loading) return <div className="p-10 text-center animate-pulse">마이페이지 로딩 중...</div>;
@@ -95,7 +114,7 @@ export default function MyPage() {
 
           <div className="p-2"></div>
 
-          <button 
+          <button
             onClick={handleLogout}
             className="flex items-center justify-between p-6 bg-white rounded-3xl border border-gray-100 hover:bg-rose-50 transition-all group shadow-sm"
           >
@@ -106,10 +125,64 @@ export default function MyPage() {
               <span className="font-black text-gray-400 group-hover:text-rose-500 transition-colors">로그아웃</span>
             </div>
           </button>
+
+          <button
+            onClick={() => { setDeleteConfirm(""); setShowDeleteModal(true); }}
+            className="flex items-center justify-between p-6 bg-white rounded-3xl border border-gray-100 hover:bg-red-50 transition-all group shadow-sm"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-gray-50 text-gray-300 rounded-2xl flex items-center justify-center group-hover:bg-red-100 group-hover:text-red-400 transition-all">
+                <Trash2 size={22} />
+              </div>
+              <span className="font-black text-gray-300 group-hover:text-red-400 transition-colors">회원 탈퇴</span>
+            </div>
+          </button>
         </div>
       </main>
 
       <BottomNav />
+
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-6">
+          <div className="bg-white rounded-[2rem] p-8 w-full max-w-sm shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-red-100 rounded-2xl flex items-center justify-center">
+                <Trash2 size={20} className="text-red-500" />
+              </div>
+              <h3 className="text-lg font-black text-gray-900">회원 탈퇴</h3>
+            </div>
+            <p className="text-sm text-gray-500 font-bold mb-2">
+              탈퇴 시 모든 데이터(찜, 댓글, 알림)가 <span className="text-red-500">영구 삭제</span>되며 복구할 수 없습니다.
+            </p>
+            <p className="text-sm text-gray-400 mb-6">
+              계속하려면 아래 입력창에 <strong className="text-gray-700">탈퇴</strong>를 입력하세요.
+            </p>
+            <input
+              type="text"
+              value={deleteConfirm}
+              onChange={(e) => setDeleteConfirm(e.target.value)}
+              placeholder="탈퇴"
+              className="w-full p-4 bg-gray-50 rounded-2xl font-bold text-gray-900 outline-none border-2 border-transparent focus:border-red-200 mb-4"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleting}
+                className="flex-1 py-4 border border-gray-200 text-gray-500 font-black rounded-2xl hover:bg-gray-50 transition-all disabled:opacity-50"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleteConfirm !== "탈퇴" || deleting}
+                className="flex-1 py-4 bg-red-500 text-white font-black rounded-2xl hover:bg-red-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                {deleting ? "처리 중..." : "탈퇴하기"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

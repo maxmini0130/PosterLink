@@ -5,7 +5,9 @@ import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import { fetchProfileMap } from "../../lib/posterHelpers";
 import { ReportModal } from "./ReportModal";
-import { MessageSquare, Send, AlertTriangle, Trash2 } from "lucide-react";
+import { MessageSquare, Send, AlertTriangle, Trash2, ChevronDown } from "lucide-react";
+
+const PAGE_SIZE = 5;
 
 interface CommentSectionProps {
   posterId: string;
@@ -13,10 +15,12 @@ interface CommentSectionProps {
 
 export function CommentSection({ posterId }: CommentSectionProps) {
   const [comments, setComments] = useState<any[]>([]);
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   const [newComment, setNewComment] = useState("");
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [reportingCommentId, setReportingCommentId] = useState<string | null>(null);
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
 
   const fetchComments = async () => {
     const { data } = await supabase
@@ -74,8 +78,8 @@ export function CommentSection({ posterId }: CommentSectionProps) {
   };
 
   const handleDelete = async (commentId: string) => {
-    if (!confirm("댓글을 삭제하시겠습니까?")) return;
     const { error } = await supabase.from("comments").update({ status: 'deleted' }).eq("id", commentId);
+    setDeletingCommentId(null);
     if (error) toast.error(error.message);
     else fetchComments();
   };
@@ -94,6 +98,20 @@ export function CommentSection({ posterId }: CommentSectionProps) {
         <MessageSquare className="text-blue-600" size={22} />
         <h2 className="text-xl font-black text-gray-900">질문/후기 ({comments.length})</h2>
       </div>
+
+      {/* 삭제 확인 인라인 모달 */}
+      {deletingCommentId && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-6">
+          <div className="bg-white rounded-[2rem] p-7 w-full max-w-xs shadow-2xl">
+            <p className="text-base font-black text-gray-900 mb-2">댓글 삭제</p>
+            <p className="text-sm text-gray-500 font-bold mb-6">이 댓글을 삭제하시겠습니까?</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeletingCommentId(null)} className="flex-1 py-3 border border-gray-200 text-gray-500 font-black rounded-2xl hover:bg-gray-50">취소</button>
+              <button onClick={() => handleDelete(deletingCommentId)} className="flex-1 py-3 bg-rose-500 text-white font-black rounded-2xl hover:bg-rose-600">삭제</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 댓글 작성 폼 */}
       <form onSubmit={handleSubmit} className="mb-10 relative">
@@ -114,7 +132,7 @@ export function CommentSection({ posterId }: CommentSectionProps) {
 
       {/* 댓글 리스트 */}
       <div className="space-y-6">
-        {comments.map((comment) => (
+        {comments.slice(0, displayCount).map((comment) => (
           <div key={comment.id} className="group relative bg-white p-6 rounded-[2rem] border border-gray-50 hover:border-blue-50 transition-all">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -132,7 +150,7 @@ export function CommentSection({ posterId }: CommentSectionProps) {
               
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 {user?.id === comment.user_id ? (
-                  <button onClick={() => handleDelete(comment.id)} className="p-2 text-gray-300 hover:text-rose-500 transition-colors">
+                  <button onClick={() => setDeletingCommentId(comment.id)} className="p-2 text-gray-300 hover:text-rose-500 transition-colors">
                     <Trash2 size={16} />
                   </button>
                 ) : (
@@ -152,6 +170,15 @@ export function CommentSection({ posterId }: CommentSectionProps) {
           <div className="py-20 text-center bg-gray-50/50 rounded-[3rem] border border-dashed border-gray-200">
             <p className="text-sm text-gray-400 font-bold">첫 번째 질문이나 후기를 남겨보세요! 💬</p>
           </div>
+        )}
+
+        {comments.length > displayCount && (
+          <button
+            onClick={() => setDisplayCount(prev => prev + PAGE_SIZE)}
+            className="w-full py-4 border border-gray-100 rounded-2xl text-sm font-black text-gray-400 hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
+          >
+            <ChevronDown size={16} /> 댓글 더보기 ({comments.length - displayCount}개 남음)
+          </button>
         )}
       </div>
     </section>
