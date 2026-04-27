@@ -68,7 +68,7 @@ export default function ProfileEditPage() {
     };
 
     fetchData();
-  }, []);
+  }, [router]);
 
   const handleSave = async () => {
     setSaving(true);

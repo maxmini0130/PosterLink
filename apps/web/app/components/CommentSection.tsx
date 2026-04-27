@@ -32,6 +32,7 @@ export function CommentSection({ posterId }: CommentSectionProps) {
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
     fetchComments();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [posterId]);
 
   const handleSubmit = async (e: React.FormEvent) => {

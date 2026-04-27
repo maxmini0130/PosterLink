@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { getDDay, isDeadlineSoon } from "@posterlink/lib";
 
 interface PosterCardProps {
@@ -20,7 +21,7 @@ export function PosterCard({ poster }: PosterCardProps) {
     <Link href={`/posters/${poster.id}`} className="group block">
       <div className="relative aspect-[3/4] overflow-hidden rounded-2xl bg-gray-100 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 shadow-sm transition-all group-hover:shadow-md group-hover:-translate-y-1">
         {poster.image ? (
-          <img src={poster.image} alt={poster.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          <Image src={poster.image} alt={poster.title} fill sizes="(max-width: 768px) 50vw, 200px" className="object-cover transition-transform duration-500 group-hover:scale-105" />
         ) : (
           <div className="h-full w-full bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center">
             <span className="text-blue-200 dark:text-slate-600 font-black text-2xl tracking-tighter opacity-50 uppercase">POSTER</span>

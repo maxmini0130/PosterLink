@@ -65,7 +65,24 @@ PosterLink 작업 로그 - 2026-04-23
 - DB 적용 필요: supabase/migrations/20260423000000_notify_new_match.sql Supabase에 적용해야 트리거 활성화됨.
 - Edge Function 배포 필요: supabase functions deploy notify-new-match
 
+8. DB 마이그레이션 적용 확인
+- 20260423000000_notify_new_match.sql Supabase SQL Editor 실행 결과: Success. No rows returned.
+- notify_new_match_on_publish 함수 및 trg_notify_new_match 트리거 정상 등록.
+
+9. notify-new-match Edge Function 배포
+- Supabase 대시보드 → Edge Functions → Via Editor로 배포 완료.
+- supabase CLI가 Windows Application Control 정책에 의해 차단되어 대시보드 방식으로 대체.
+
+10. lint 경고 전체 제거
+- next/image 전환 (5개 파일):
+  - next.config.mjs: images.remotePatterns에 *.supabase.co 도메인 추가.
+  - PosterCard.tsx, admin/posters, posters/[id], operator/posters/[id]/edit: Image fill + sizes 적용.
+  - operator/posters/new: 파일 업로드 blob URL은 next/image 미지원이므로 eslint-disable 처리.
+- useEffect dependency 경고 제거 (8개 파일):
+  - router가 누락된 경우(favorites, mypage/edit, operator/layout): deps 배열에 router 추가.
+  - 내부 fetch 함수가 누락된 경우(admin/settings, CommentSection, mypage/comments, notifications, posters/page): deps 닫는 줄 바로 위에 eslint-disable-next-line 추가.
+- 실행: pnpm --filter web lint → No ESLint warnings or errors.
+- 실행: pnpm --filter web build → 성공.
+
 다음 작업
-- Supabase에 20260423000000_notify_new_match.sql 적용.
-- supabase functions deploy notify-new-match 실행.
-- lint 경고 정리 여부 결정: next/image 전환, useEffect dependency 정리.
+- 실제 포스터 승인 → new_match 알림 생성 → Expo 푸시 발송 전체 플로우 실기기 테스트.

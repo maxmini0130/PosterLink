@@ -5,6 +5,7 @@ import { supabase } from "../../../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../../../lib/posterHelpers";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { ChevronLeft, Loader2, Trash2 } from "lucide-react";
+import Image from "next/image";
 import { Button } from "@posterlink/ui";
 
 export default function EditPosterPage() {
@@ -146,8 +147,8 @@ export default function EditPosterPage() {
       </div>
 
       {formData.thumbnailUrl && (
-        <div className="mb-8 rounded-[2.5rem] overflow-hidden border border-gray-100 shadow-sm">
-          <img src={formData.thumbnailUrl} alt="포스터 이미지" className="w-full max-h-[300px] object-contain bg-gray-50" />
+        <div className="mb-8 rounded-[2.5rem] overflow-hidden border border-gray-100 shadow-sm relative w-full h-[300px]">
+          <Image src={formData.thumbnailUrl} alt="포스터 이미지" fill sizes="(max-width: 768px) 100vw, 768px" className="object-contain bg-gray-50" />
         </div>
       )}
 

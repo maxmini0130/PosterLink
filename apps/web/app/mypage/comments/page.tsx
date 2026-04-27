@@ -35,6 +35,7 @@ export default function MyCommentsPage() {
 
   useEffect(() => {
     fetchMyComments();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleDelete = async (id: string) => {

@@ -24,7 +24,7 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
       }
     };
     checkRole();
-  }, []);
+  }, [router]);
 
   if (!role) return <div className="p-10 text-center">권한 확인 중...</div>;
 

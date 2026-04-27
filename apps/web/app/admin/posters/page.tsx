@@ -7,6 +7,7 @@ import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 import { Check, X, ExternalLink, Image as ImageIcon, Eye, FileCheck, PencilLine } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 
 type PosterStatus = 'review' | 'published' | 'rejected' | 'draft';
@@ -113,9 +114,11 @@ export default function AdminPostersPage() {
               {/* Thumbnail Preview */}
               <div className="w-full md:w-32 aspect-[3/4] bg-gray-50 dark:bg-slate-800 rounded-2xl flex-shrink-0 overflow-hidden border border-gray-100 dark:border-slate-700 flex items-center justify-center relative group/img">
                 {p.thumbnail_url ? (
-                  <img
+                  <Image
                     src={p.thumbnail_url}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover/img:scale-110"
+                    fill
+                    sizes="128px"
+                    className="object-cover transition-transform duration-500 group-hover/img:scale-110"
                     alt="Poster"
                   />
                 ) : (

@@ -39,6 +39,7 @@ export default function AdminSettingsPage() {
     setLoading(false);
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchData(); }, [activeTab]);
 
   const handleAddItem = async () => {

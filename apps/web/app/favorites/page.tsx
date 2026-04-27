@@ -48,7 +48,7 @@ export default function FavoritesPage() {
     };
 
     fetchFavorites();
-  }, []);
+  }, [router]);
 
   return (
     <div className="min-h-screen bg-white pb-24">

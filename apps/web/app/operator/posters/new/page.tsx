@@ -205,6 +205,7 @@ export default function NewPosterPage() {
           <label htmlFor="poster-upload" className="cursor-pointer flex flex-col items-center justify-center min-h-[350px]">
             {imagePreview ? (
               <div className="relative group">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={imagePreview} alt="Preview" className="max-h-[450px] rounded-[2rem] shadow-2xl border-4 border-white" />
                 <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-[2rem] flex items-center justify-center">
                   <div className="bg-white px-4 py-2 rounded-xl text-xs font-black text-gray-900 shadow-xl flex items-center gap-2">

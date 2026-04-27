@@ -87,6 +87,7 @@ export default function PosterListPage() {
   useEffect(() => {
     const timer = setTimeout(() => fetchPosters(), 300);
     return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, selectedCategoryId, selectedRegionId, sortBy]);
 
   // 3. Search Actions

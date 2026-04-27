@@ -5,6 +5,7 @@ import { Header } from "../../components/Header";
 import { BottomNav } from "../../components/BottomNav";
 import { CommentSection } from "../../components/CommentSection";
 import { notFound } from "next/navigation";
+import Image from "next/image";
 import { supabase } from "../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
 
@@ -98,9 +99,9 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
       <Header />
       <main className="container mx-auto max-w-2xl px-4 py-6">
         {/* 포스터 이미지 */}
-        <div className="aspect-[3/4] rounded-2xl overflow-hidden border shadow-lg mb-6 bg-gray-100 flex items-center justify-center">
+        <div className="aspect-[3/4] rounded-2xl overflow-hidden border shadow-lg mb-6 bg-gray-100 flex items-center justify-center relative">
           {imageUrl ? (
-            <img src={imageUrl} alt={poster.title} className="w-full h-full object-cover" />
+            <Image src={imageUrl} alt={poster.title} fill sizes="(max-width: 672px) 100vw, 672px" className="object-cover" />
           ) : (
             <span className="text-gray-300 font-bold">이미지가 없습니다</span>
           )}
