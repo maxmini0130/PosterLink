@@ -1,12 +1,15 @@
 {
   "expo": {
-    "name": "PosterLink Mobile",
+    "name": "PosterLink",
     "slug": "posterlink-mobile",
     "version": "1.0.0",
     "scheme": "com.maxmini.posterlink",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -16,28 +19,44 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.maxmini.posterlink",
+      "buildNumber": "1",
       "infoPlist": {
         "NSCameraUsageDescription": "포스터 촬영을 위해 카메라 권한이 필요합니다.",
-        "NSPhotoLibraryUsageDescription": "갤러리에서 포스터를 선택하기 위해 권한이 필요합니다."
+        "NSPhotoLibraryUsageDescription": "갤러리에서 포스터를 선택하기 위해 권한이 필요합니다.",
+        "NSFaceIDUsageDescription": "빠른 로그인을 위해 생체 인증이 필요합니다."
       }
     },
     "android": {
       "package": "com.maxmini.posterlink",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "NOTIFICATIONS",
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
       ]
     },
+    "plugins": [
+      "expo-camera",
+      "expo-local-authentication",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#2563EB",
+          "sounds": []
+        }
+      ]
+    ],
     "extra": {
       "supabaseUrl": "https://zxndgzsfrgwahwsdbjdj.supabase.co",
       "supabaseAnonKey": "sb_publishable_RQL3QuN9fmETURVzmm9Lfg_usBexkd1",
@@ -45,9 +64,6 @@
         "projectId": "dd58cb12-9739-4dfb-bcda-6bc4947094b0"
       }
     },
-    "plugins": [
-      "expo-camera"
-    ],
     "web": {
       "favicon": "./assets/favicon.png"
     },
