@@ -6,9 +6,13 @@ import { fetchProfileMap } from "../../lib/posterHelpers";
 import { AlertCircle, CheckCircle2, EyeOff, MessageSquare } from "lucide-react";
 import toast from "react-hot-toast";
 
+type PendingAction = { reportId: string; commentId: string; action: 'hide' | 'dismiss' };
+
 export default function AdminReportsPage() {
   const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [actioning, setActioning] = useState(false);
 
   const fetchReports = async () => {
     setLoading(true);
@@ -48,9 +52,8 @@ export default function AdminReportsPage() {
 
   useEffect(() => { fetchReports(); }, []);
 
-  const handleAction = async (reportId: string, commentId: string, action: 'hide' | 'dismiss') => {
-    if (!confirm(action === 'hide' ? "해당 댓글을 숨김 처리하시겠습니까?" : "신고를 기각하시겠습니까?")) return;
-
+  const handleAction = async ({ reportId, commentId, action }: PendingAction) => {
+    setActioning(true);
     const { data: { user } } = await supabase.auth.getUser();
 
     if (action === 'hide') {
@@ -65,6 +68,9 @@ export default function AdminReportsPage() {
         handled_at: new Date().toISOString(),
       })
       .eq("id", reportId);
+
+    setActioning(false);
+    setPendingAction(null);
 
     if (error) toast.error(error.message);
     else {
@@ -126,13 +132,13 @@ export default function AdminReportsPage() {
 
               <div className="w-full md:w-56 flex flex-row md:flex-col gap-3 justify-center pt-2">
                 <button
-                  onClick={() => handleAction(report.id, report.comment_id, 'hide')}
+                  onClick={() => setPendingAction({ reportId: report.id, commentId: report.comment_id, action: 'hide' })}
                   className="flex-1 md:flex-none px-6 py-5 bg-gray-900 text-white font-black rounded-2xl text-sm flex items-center justify-center gap-2 hover:bg-black transition-all shadow-lg shadow-gray-200"
                 >
                   <EyeOff size={18} /> 댓글 숨김
                 </button>
                 <button
-                  onClick={() => handleAction(report.id, report.comment_id, 'dismiss')}
+                  onClick={() => setPendingAction({ reportId: report.id, commentId: report.comment_id, action: 'dismiss' })}
                   className="flex-1 md:flex-none px-6 py-5 bg-white border border-gray-200 text-gray-400 font-black rounded-2xl text-sm flex items-center justify-center gap-2 hover:bg-gray-50 transition-all"
                 >
                   <CheckCircle2 size={18} /> 신고 기각
@@ -146,6 +152,38 @@ export default function AdminReportsPage() {
           <CheckCircle2 className="mx-auto text-green-100 mb-6" size={64} />
           <p className="text-gray-400 font-black text-lg">처리 대기 중인 신고 내역이 없습니다.</p>
           <p className="text-gray-300 text-sm mt-1">커뮤니티가 아주 깨끗합니다! ✨</p>
+        </div>
+      )}
+
+      {/* 확인 모달 */}
+      {pendingAction && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-6">
+          <div className="bg-white rounded-[2rem] p-8 w-full max-w-sm shadow-2xl">
+            <h3 className="text-lg font-black text-gray-900 mb-2">
+              {pendingAction.action === 'hide' ? '댓글 숨김 처리' : '신고 기각'}
+            </h3>
+            <p className="text-sm text-gray-500 font-bold mb-8">
+              {pendingAction.action === 'hide'
+                ? '해당 댓글을 숨김 처리하시겠습니까? 작성자에게는 표시되지 않습니다.'
+                : '이 신고를 기각하시겠습니까? 댓글은 그대로 유지됩니다.'}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setPendingAction(null)}
+                disabled={actioning}
+                className="flex-1 py-4 border border-gray-200 text-gray-500 font-black rounded-2xl hover:bg-gray-50 transition-all disabled:opacity-50"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => handleAction(pendingAction)}
+                disabled={actioning}
+                className={`flex-1 py-4 font-black rounded-2xl transition-all disabled:opacity-50 ${pendingAction.action === 'hide' ? 'bg-gray-900 text-white hover:bg-black' : 'bg-rose-500 text-white hover:bg-rose-600'}`}
+              >
+                {actioning ? '처리 중...' : pendingAction.action === 'hide' ? '숨김 처리' : '기각'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
