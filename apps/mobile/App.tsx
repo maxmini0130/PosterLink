@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Image, TextInput, Alert, ActivityIndicator, Platform } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as LocalAuthentication from 'expo-local-authentication';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
@@ -23,6 +24,8 @@ export default function App() {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [expoPushToken, setExpoPushToken] = useState('');
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [hasStoredSession, setHasStoredSession] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
 
   const cameraRef = useRef<CameraView>(null);
@@ -42,11 +45,29 @@ export default function App() {
       console.log('Notification Clicked:', response);
     });
 
-    // 기존 세션 확인 (getSession: 네트워크 없이 로컬 확인)
+    // 생체인식 지원 여부 확인
+    Promise.all([
+      LocalAuthentication.hasHardwareAsync(),
+      LocalAuthentication.isEnrolledAsync(),
+    ]).then(([hasHardware, isEnrolled]) => {
+      setBiometricAvailable(hasHardware && isEnrolled);
+    });
+
+    // 기존 세션 확인 — 세션 있으면 생체인식으로 잠금 해제 유도
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        setUser(session.user);
-        setView('home');
+        setHasStoredSession(true);
+        // 생체인식 가능하면 로그인 화면 유지 (버튼으로 해제)
+        // 불가능하면 자동 로그인
+        LocalAuthentication.hasHardwareAsync().then(async (hasHardware) => {
+          const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+          if (hasHardware && isEnrolled) {
+            setView('login');
+          } else {
+            setUser(session.user);
+            setView('home');
+          }
+        });
       }
     });
 
@@ -94,6 +115,24 @@ export default function App() {
     })).data;
     return token;
   }
+
+  const handleBiometricLogin = async () => {
+    const result = await LocalAuthentication.authenticateAsync({
+      promptMessage: 'PosterLink 로그인',
+      fallbackLabel: '비밀번호 사용',
+      cancelLabel: '취소',
+    });
+    if (result.success) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUser(session.user);
+        setView('home');
+      } else {
+        Alert.alert('세션 만료', '다시 로그인해주세요.');
+        setHasStoredSession(false);
+      }
+    }
+  };
 
   const handleLogin = async () => {
     setLoading(true);
@@ -173,6 +212,13 @@ export default function App() {
         <TouchableOpacity onPress={handleLogin} style={styles.primaryButton} disabled={loading}>
           <Text style={styles.buttonText}>{loading ? '로그인 중...' : '로그인'}</Text>
         </TouchableOpacity>
+        {biometricAvailable && hasStoredSession && (
+          <TouchableOpacity onPress={handleBiometricLogin} style={styles.biometricButton}>
+            <Text style={styles.biometricButtonText}>
+              {Platform.OS === 'ios' ? '🔒 Face ID / Touch ID로 로그인' : '🔒 지문으로 로그인'}
+            </Text>
+          </TouchableOpacity>
+        )}
         <StatusBar style="auto" />
       </View>
     );
@@ -277,6 +323,8 @@ const styles = StyleSheet.create({
   previewControls: { width: '100%', flexDirection: 'row', gap: 12 },
   secondaryButton: { flex: 1, height: 60, backgroundColor: '#f3f4f6', borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   secondaryButtonText: { color: '#4b5563', fontWeight: 'bold' },
+  biometricButton: { marginTop: 16, width: '100%', height: 56, backgroundColor: '#f0fdf4', borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#6ee7b7' },
+  biometricButtonText: { color: '#059669', fontSize: 15, fontWeight: 'bold' },
   linkButton: { marginTop: 24 },
   linkText: { color: '#9ca3af', fontWeight: 'bold', textDecorationLine: 'underline' },
   iconButton: { padding: 10 },
