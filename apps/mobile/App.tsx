@@ -2,11 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Image, TextInput, Alert, ActivityIndicator, Platform } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as Linking from 'expo-linking';
 import * as Notifications from 'expo-notifications';
+import * as WebBrowser from 'expo-web-browser';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { supabase } from './src/lib/supabase';
 import { StatusBar } from 'expo-status-bar';
+
+WebBrowser.maybeCompleteAuthSession();
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -145,6 +149,42 @@ export default function App() {
     setLoading(false);
   };
 
+  const handleSocialLogin = async (provider: 'kakao' | 'google') => {
+    setLoading(true);
+    try {
+      const redirectUrl = Linking.createURL('auth-callback');
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: true,
+          ...(provider === 'kakao' && { scopes: 'profile_nickname profile_image' }),
+        },
+      });
+
+      if (error || !data?.url) throw error ?? new Error('OAuth URL 생성 실패');
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+
+      if (result.type === 'success' && result.url) {
+        const parsed = new URL(result.url);
+        const code = parsed.searchParams.get('code');
+        if (code) {
+          const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+          if (sessionError) throw sessionError;
+          if (sessionData.user) {
+            setUser(sessionData.user);
+            setView('home');
+          }
+        }
+      }
+    } catch (err: any) {
+      Alert.alert('로그인 오류', err?.message ?? '소셜 로그인에 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const takePicture = async () => {
     if (cameraRef.current) {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.7 });
@@ -210,8 +250,31 @@ export default function App() {
           secureTextEntry
         />
         <TouchableOpacity onPress={handleLogin} style={styles.primaryButton} disabled={loading}>
-          <Text style={styles.buttonText}>{loading ? '로그인 중...' : '로그인'}</Text>
+          <Text style={styles.buttonText}>{loading ? '로그인 중...' : '이메일로 로그인'}</Text>
         </TouchableOpacity>
+
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>간편 로그인</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <TouchableOpacity
+          onPress={() => handleSocialLogin('kakao')}
+          style={styles.kakaoButton}
+          disabled={loading}
+        >
+          <Text style={styles.kakaoButtonText}>K  카카오로 시작하기</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => handleSocialLogin('google')}
+          style={styles.googleButton}
+          disabled={loading}
+        >
+          <Text style={styles.googleButtonText}>G  구글로 시작하기</Text>
+        </TouchableOpacity>
+
         {biometricAvailable && hasStoredSession && (
           <TouchableOpacity onPress={handleBiometricLogin} style={styles.biometricButton}>
             <Text style={styles.biometricButtonText}>
@@ -323,7 +386,14 @@ const styles = StyleSheet.create({
   previewControls: { width: '100%', flexDirection: 'row', gap: 12 },
   secondaryButton: { flex: 1, height: 60, backgroundColor: '#f3f4f6', borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   secondaryButtonText: { color: '#4b5563', fontWeight: 'bold' },
-  biometricButton: { marginTop: 16, width: '100%', height: 56, backgroundColor: '#f0fdf4', borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#6ee7b7' },
+  divider: { flexDirection: 'row', alignItems: 'center', width: '100%', marginVertical: 20 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#f3f4f6' },
+  dividerText: { marginHorizontal: 12, color: '#9ca3af', fontSize: 13, fontWeight: 'bold' },
+  kakaoButton: { width: '100%', height: 56, backgroundColor: '#FEE500', borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  kakaoButtonText: { color: '#3c1e1e', fontSize: 15, fontWeight: 'bold' },
+  googleButton: { width: '100%', height: 56, backgroundColor: '#fff', borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 10, borderWidth: 1.5, borderColor: '#e5e7eb' },
+  googleButtonText: { color: '#374151', fontSize: 15, fontWeight: 'bold' },
+  biometricButton: { marginTop: 6, width: '100%', height: 56, backgroundColor: '#f0fdf4', borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#6ee7b7' },
   biometricButtonText: { color: '#059669', fontSize: 15, fontWeight: 'bold' },
   linkButton: { marginTop: 24 },
   linkText: { color: '#9ca3af', fontWeight: 'bold', textDecorationLine: 'underline' },

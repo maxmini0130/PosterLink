@@ -3,6 +3,7 @@
     "name": "PosterLink Mobile",
     "slug": "posterlink-mobile",
     "version": "1.0.0",
+    "scheme": "com.maxmini.posterlink",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
