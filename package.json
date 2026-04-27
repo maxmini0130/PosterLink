@@ -8,11 +8,20 @@
     "dev": "pnpm -r --parallel dev",
     "dev:mobile": "pnpm --filter @posterlink/mobile start",
     "build": "pnpm -r build",
-    "lint": "pnpm -r lint"
+    "lint": "pnpm -r lint",
+    "collect": "tsx scripts/collect-posters.ts",
+    "collect:youth": "tsx scripts/collect-posters.ts youth",
+    "collect:bokjiro": "tsx scripts/collect-posters.ts bokjiro",
+    "collect:subsidy": "tsx scripts/collect-posters.ts subsidy"
   },
   "devDependencies": {
     "typescript": "^5.0.0",
     "prettier": "^3.0.0",
-    "eslint": "^8.0.0"
+    "eslint": "^8.0.0",
+    "tsx": "^4.0.0",
+    "dotenv": "^16.0.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.0.0"
   }
 }
