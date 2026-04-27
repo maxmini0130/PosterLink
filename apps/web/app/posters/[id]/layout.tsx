@@ -8,10 +8,11 @@ interface Props {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  try {
   const cookieStore = cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)!,
     { cookies: { get: (name) => cookieStore.get(name)?.value } }
   );
 
@@ -42,6 +43,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       ...(image ? { images: [image] } : {}),
     },
   };
+  } catch {
+    return {};
+  }
 }
 
 export default function PosterDetailLayout({ children }: Props) {
