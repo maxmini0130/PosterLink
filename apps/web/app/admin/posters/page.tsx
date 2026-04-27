@@ -3,6 +3,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 import { Check, X, ExternalLink, Image as ImageIcon, Eye, FileCheck, PencilLine } from "lucide-react";
 import Link from "next/link";
 
@@ -45,11 +48,23 @@ export default function AdminPostersPage() {
       })
       .eq("id", id);
 
-    if (error) alert(error.message);
-    else {
-      alert(newStatus === 'published' ? "승인 완료!" : "반려 처리되었습니다.");
-      fetchPosters(currentFilter);
+    if (error) { alert(error.message); return; }
+
+    if (newStatus === 'published') {
+      // DB 트리거가 인앱 알림을 자동 생성한 뒤, Edge Function으로 Expo 푸시 발송
+      const { data: { session } } = await supabase.auth.getSession();
+      fetch(`${SUPABASE_URL}/functions/v1/notify-new-match`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token ?? SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ poster_id: id }),
+      }).catch((err) => console.warn('notify-new-match push 실패:', err));
     }
+
+    alert(newStatus === 'published' ? "승인 완료! 관심 사용자에게 알림이 발송됩니다." : "반려 처리되었습니다.");
+    fetchPosters(currentFilter);
   };
 
   const tabs: { label: string; value: PosterStatus }[] = [

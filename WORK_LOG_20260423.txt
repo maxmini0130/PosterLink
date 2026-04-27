@@ -42,7 +42,30 @@ PosterLink 작업 로그 - 2026-04-23
 - 추천 기능: get_recommended_posters RPC는 관심 지역/카테고리를 추천 점수에 반영하지만 알림 생성은 하지 않는다.
 - 구현 권장 지점: 포스터가 review에서 published로 승인되는 순간, Edge Function 또는 SECURITY DEFINER DB 함수로 매칭 사용자에게 type=new_match 알림을 생성하고 필요하면 Expo Push까지 보낸다.
 
+6. pg_cron 마이그레이션 Supabase DB 적용
+- 파일: supabase/migrations/20260421000000_pg_cron_check_deadlines.sql
+- 실행 결과: cron.schedule() 반환값 3 → cron.job 테이블에 ID=3으로 check-deadlines-daily 스케줄 정상 등록.
+- 동작: 매일 UTC 00:00 (KST 09:00) check-deadlines Edge Function 자동 호출.
+
+7. 관심 지역/카테고리 기반 신규 포스터 알림 구현
+- 파일: supabase/migrations/20260423000000_notify_new_match.sql
+  - SECURITY DEFINER 함수 notify_new_match_on_publish() 추가.
+  - posters AFTER UPDATE 트리거 trg_notify_new_match 등록.
+  - poster_status가 review → published 로 변경될 때 자동 실행.
+  - 매칭 조건: user_interest_categories 카테고리 교집합 OR profiles.primary_region_id 지역 일치.
+  - 중복 알림 방지: 동일 user+poster 조합으로 이미 new_match 알림이 있으면 skip.
+  - is_notified = false 사용자 제외, 포스터 등록자 본인 제외.
+- 파일: supabase/functions/notify-new-match/index.ts
+  - 신규 Edge Function: service_role_key로 인앱 알림 대상자 조회 후 Expo 푸시 발송.
+  - check-deadlines 패턴과 동일한 구조.
+- 파일: apps/web/app/admin/posters/page.tsx
+  - 승인(published) 처리 후 notify-new-match Edge Function 비동기 호출 추가.
+  - DB 트리거가 인앱 알림 처리 → Edge Function이 푸시 알림 처리 분리.
+- 실행: pnpm --filter web build → 성공.
+- DB 적용 필요: supabase/migrations/20260423000000_notify_new_match.sql Supabase에 적용해야 트리거 활성화됨.
+- Edge Function 배포 필요: supabase functions deploy notify-new-match
+
 다음 작업
-- 관심 지역/카테고리 기반 신규 포스터 알림 로직 구현 여부 결정.
-- 구현 시 notifications insert가 RLS에 막히지 않도록 클라이언트 직접 insert보다 Edge Function 또는 DB 함수 방식으로 처리하는 것이 안전하다.
+- Supabase에 20260423000000_notify_new_match.sql 적용.
+- supabase functions deploy notify-new-match 실행.
 - lint 경고 정리 여부 결정: next/image 전환, useEffect dependency 정리.
