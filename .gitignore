@@ -28,3 +28,10 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Test artifacts
+apps/web/test-results/
+apps/web/playwright-report/
+
+# Claude Code memory
+.claude/
