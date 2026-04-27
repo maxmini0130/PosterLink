@@ -3,23 +3,25 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@posterlink/ui";
 import { motion, AnimatePresence } from "framer-motion";
-import { MapPin, User, Star, ChevronRight, Check } from "lucide-react";
+import { MapPin, Star, ChevronRight, Check, Shield } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function OnboardingPage() {
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  
+  const [agreed, setAgreed] = useState(false);
+
   const [regions, setRegions] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
-  
+
   const [selectedRegionId, setSelectedRegionId] = useState("");
   const [selectedAgeBand, setSelectedAgeBand] = useState("");
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
-  
+
   const router = useRouter();
 
   const ageBands = [
@@ -39,7 +41,7 @@ export default function OnboardingPage() {
         .select("id, name")
         .in("level", ["nation", "sido"])
         .order("level", { ascending: false });
-        
+
       const { data: categoryData } = await supabase
         .from("categories")
         .select("id, name")
@@ -61,7 +63,6 @@ export default function OnboardingPage() {
       const currentUser = user ?? session?.user ?? (fallbackUid ? { id: fallbackUid } : null);
       if (!currentUser) throw new Error("로그인 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
 
-      // 1. 프로필 업데이트 (지역 + 연령대)
       const { error: profileError } = await supabase
         .from("profiles")
         .update({
@@ -73,7 +74,6 @@ export default function OnboardingPage() {
 
       if (profileError) throw profileError;
 
-      // 2. 관심 카테고리 저장 (M:N)
       if (selectedCategoryIds.length > 0) {
         await supabase.from("user_interest_categories").delete().eq("user_id", currentUser.id);
         const inserts = selectedCategoryIds.map(catId => ({ user_id: currentUser.id, category_id: catId }));
@@ -89,6 +89,20 @@ export default function OnboardingPage() {
     }
   };
 
+  const isNextDisabled =
+    submitting ||
+    (step === 0 && !agreed) ||
+    (step === 1 && !selectedRegionId) ||
+    (step === 2 && !selectedAgeBand) ||
+    (step === 3 && selectedCategoryIds.length === 0);
+
+  const stepTitles = [
+    <>서비스 이용을<br />시작하기 전에 👋</>,
+    <>Welcome! ✨<br />살고 계신 지역을<br />알려주세요.</>,
+    <>Good Choice! 👍<br />연령대를<br />알려주세요.</>,
+    <>Last Step! 💡<br />관심 있는 정보를<br />모두 선택하세요.</>,
+  ];
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
@@ -99,31 +113,77 @@ export default function OnboardingPage() {
     <div className="min-h-screen bg-white flex flex-col p-8 max-w-lg mx-auto overflow-hidden">
       <div className="flex-1 pt-12">
         <header className="mb-12">
-           <div className="flex gap-1.5 mb-6">
-             {[1,2,3].map(i => (
-               <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${step >= i ? 'w-8 bg-blue-600' : 'w-2 bg-gray-100'}`} />
-             ))}
-           </div>
-           
-           <AnimatePresence mode="wait">
-             <motion.div
-               key={step}
-               initial={{ x: 20, opacity: 0 }}
-               animate={{ x: 0, opacity: 1 }}
-               exit={{ x: -20, opacity: 0 }}
-               transition={{ duration: 0.3 }}
-             >
-               <h1 className="text-3xl font-black text-gray-900 leading-[1.15] italic tracking-tight">
-                 {step === 1 && <>Welcome! ✨<br />살고 계신 지역을<br />알려주세요.</>}
-                 {step === 2 && <>Good Choice! 👍<br />연령대를<br />알려주세요.</>}
-                 {step === 3 && <>Last Step! 💡<br />관심 있는 정보를<br />모두 선택하세요.</>}
-               </h1>
-               <p className="text-gray-400 font-bold mt-3 text-sm italic">맞춤형 공고 추천을 위해 꼭 필요한 정보입니다.</p>
-             </motion.div>
-           </AnimatePresence>
+          <div className="flex gap-1.5 mb-6">
+            {[0, 1, 2, 3].map(i => (
+              <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${step >= i ? 'w-8 bg-blue-600' : 'w-2 bg-gray-100'}`} />
+            ))}
+          </div>
+
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={step}
+              initial={{ x: 20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -20, opacity: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <h1 className="text-3xl font-black text-gray-900 leading-[1.15] italic tracking-tight">
+                {stepTitles[step]}
+              </h1>
+              <p className="text-gray-400 font-bold mt-3 text-sm italic">
+                {step === 0
+                  ? "아래 약관에 동의하신 후 서비스를 이용하실 수 있습니다."
+                  : "맞춤형 공고 추천을 위해 꼭 필요한 정보입니다."}
+              </p>
+            </motion.div>
+          </AnimatePresence>
         </header>
 
         <div className="min-h-[350px]">
+          {/* Step 0: 개인정보 수집 동의 */}
+          {step === 0 && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+              <div className="rounded-3xl border-2 border-gray-50 bg-gray-50 p-6 space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield size={18} className="text-blue-600" />
+                  <span className="text-sm font-black text-gray-700">수집하는 개인정보 항목</span>
+                </div>
+                <div className="space-y-2 text-sm text-gray-500">
+                  <div className="flex justify-between">
+                    <span className="font-bold text-gray-600">수집 항목</span>
+                    <span>이름, 이메일, 프로필 사진</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-bold text-gray-600">수집 목적</span>
+                    <span>회원 식별 및 서비스 제공</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-bold text-gray-600">보유 기간</span>
+                    <span>회원 탈퇴 시까지</span>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400 pt-2 border-t border-gray-100">
+                  동의를 거부할 권리가 있으나, 거부 시 서비스 이용이 제한됩니다.
+                </p>
+              </div>
+
+              <label className="flex items-start gap-3 cursor-pointer group p-4 rounded-2xl border-2 border-gray-50 hover:border-blue-100 hover:bg-blue-50/30 transition-all">
+                <div
+                  onClick={() => setAgreed(v => !v)}
+                  className={`mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${agreed ? 'bg-blue-600 border-blue-600' : 'border-gray-200 bg-white'}`}
+                >
+                  {agreed && <Check size={12} strokeWidth={4} className="text-white" />}
+                </div>
+                <span className="text-sm text-gray-600 leading-relaxed font-bold" onClick={() => setAgreed(v => !v)}>
+                  <Link href="/terms" className="text-blue-600 hover:underline" target="_blank" onClick={e => e.stopPropagation()}>이용약관</Link> 및{" "}
+                  <Link href="/privacy" className="text-blue-600 hover:underline" target="_blank" onClick={e => e.stopPropagation()}>개인정보처리방침</Link>에 동의하며,
+                  위 개인정보 수집·이용에 동의합니다. <span className="text-rose-500">(필수)</span>
+                </span>
+              </label>
+            </motion.div>
+          )}
+
+          {/* Step 1: 지역 선택 */}
           {step === 1 && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-2 gap-3">
               {regions.map((r) => (
@@ -139,6 +199,7 @@ export default function OnboardingPage() {
             </motion.div>
           )}
 
+          {/* Step 2: 연령대 선택 */}
           {step === 2 && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
               {ageBands.map((a) => (
@@ -159,6 +220,7 @@ export default function OnboardingPage() {
             </motion.div>
           )}
 
+          {/* Step 3: 관심 카테고리 선택 */}
           {step === 3 && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-wrap gap-2.5">
               {categories.map((c) => {
@@ -180,8 +242,8 @@ export default function OnboardingPage() {
       </div>
 
       <footer className="mt-12">
-        <Button 
-          disabled={submitting || (step === 1 && !selectedRegionId) || (step === 2 && !selectedAgeBand) || (step === 3 && selectedCategoryIds.length === 0)}
+        <Button
+          disabled={isNextDisabled}
           onClick={() => step < 3 ? setStep(step + 1) : handleComplete()}
           className="w-full h-18 text-lg font-black bg-gray-900 hover:bg-black text-white rounded-[2rem] shadow-2xl transition-all disabled:bg-gray-100 disabled:text-gray-300 flex items-center justify-center gap-3 group"
         >
