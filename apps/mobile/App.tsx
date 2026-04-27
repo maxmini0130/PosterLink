@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Image, TextInput, Alert, ActivityIndicator, Platform } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Image, TextInput, Alert, ActivityIndicator, Platform, SafeAreaView } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { WebView } from 'react-native-webview';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as Linking from 'expo-linking';
 import * as Notifications from 'expo-notifications';
@@ -21,7 +22,8 @@ Notifications.setNotificationHandler({
 });
 
 export default function App() {
-  const [view, setView] = useState<'login' | 'home' | 'camera' | 'preview'>('login');
+  const [view, setView] = useState<'login' | 'home' | 'camera' | 'preview' | 'browse'>('login');
+  const [browseUrl, setBrowseUrl] = useState('https://posterlink.co.kr/posters');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [user, setUser] = useState<any>(null);
@@ -46,7 +48,12 @@ export default function App() {
       console.log('Notification Received:', notification);
     });
     responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-      console.log('Notification Clicked:', response);
+      const linkUrl = response.notification.request.content.data?.link_url as string | undefined;
+      if (linkUrl) {
+        const targetUrl = `https://posterlink.co.kr${linkUrl}`;
+        setBrowseUrl(targetUrl);
+        setView('browse');
+      }
     });
 
     // 생체인식 지원 여부 확인
@@ -303,6 +310,10 @@ export default function App() {
           <Text style={styles.captureButtonText}>📸 포스터 촬영 시작</Text>
         </TouchableOpacity>
 
+        <TouchableOpacity onPress={() => setView('browse')} style={styles.browseButton}>
+          <Text style={styles.browseButtonText}>🔍 공고 탐색하기</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
           onPress={() => supabase.auth.signOut().then(() => { setUser(null); setView('login'); })}
           style={styles.linkButton}
@@ -310,6 +321,30 @@ export default function App() {
           <Text style={styles.linkText}>로그아웃</Text>
         </TouchableOpacity>
       </View>
+    );
+  }
+
+  if (view === 'browse') {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+        <View style={styles.webviewHeader}>
+          <TouchableOpacity onPress={() => setView('home')} style={styles.backButton}>
+            <Text style={styles.backButtonText}>← 홈으로</Text>
+          </TouchableOpacity>
+          <Text style={styles.webviewTitle}>공고 탐색</Text>
+          <View style={{ width: 70 }} />
+        </View>
+        <WebView
+          source={{ uri: browseUrl }}
+          style={{ flex: 1 }}
+          startInLoadingState
+          renderLoading={() => (
+            <View style={styles.webviewLoading}>
+              <ActivityIndicator size="large" color="#1e3a8a" />
+            </View>
+          )}
+        />
+      </SafeAreaView>
     );
   }
 
@@ -395,6 +430,13 @@ const styles = StyleSheet.create({
   googleButtonText: { color: '#374151', fontSize: 15, fontWeight: 'bold' },
   biometricButton: { marginTop: 6, width: '100%', height: 56, backgroundColor: '#f0fdf4', borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#6ee7b7' },
   biometricButtonText: { color: '#059669', fontSize: 15, fontWeight: 'bold' },
+  browseButton: { width: '100%', height: 64, backgroundColor: '#eff6ff', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 12, borderWidth: 1.5, borderColor: '#bfdbfe' },
+  browseButtonText: { fontSize: 17, fontWeight: 'bold', color: '#1e3a8a' },
+  webviewHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  webviewTitle: { fontSize: 16, fontWeight: 'bold', color: '#111827' },
+  backButton: { paddingVertical: 6, paddingHorizontal: 4 },
+  backButtonText: { color: '#1e3a8a', fontWeight: 'bold', fontSize: 15 },
+  webviewLoading: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
   linkButton: { marginTop: 24 },
   linkText: { color: '#9ca3af', fontWeight: 'bold', textDecorationLine: 'underline' },
   iconButton: { padding: 10 },
