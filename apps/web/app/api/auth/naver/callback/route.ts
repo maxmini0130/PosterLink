@@ -66,8 +66,9 @@ export async function GET(request: NextRequest) {
   });
 
   if (linkError || !linkData?.properties?.action_link) {
+    const e1 = encodeURIComponent(linkError?.message ?? 'no_action_link');
     // 유저가 없어서 실패한 경우 먼저 생성 후 재시도
-    await supabaseAdmin.auth.admin.createUser({
+    const { error: createError } = await supabaseAdmin.auth.admin.createUser({
       email: naverUser.email,
       email_confirm: true,
       user_metadata: { full_name: naverUser.name, avatar_url: naverUser.profile_image, provider: 'naver' },
@@ -81,8 +82,9 @@ export async function GET(request: NextRequest) {
       },
     });
     if (retryError || !retryData?.properties?.action_link) {
-      console.error('[Naver] generateLink retry error:', retryError?.message);
-      return NextResponse.redirect(`${BASE_URL}/login?error=login_failed`);
+      const e2 = encodeURIComponent(retryError?.message ?? 'no_action_link_retry');
+      const e3 = encodeURIComponent(createError?.message ?? 'ok');
+      return NextResponse.redirect(`${BASE_URL}/login?error=login_failed&e1=${e1}&e2=${e2}&create=${e3}`);
     }
     const response = NextResponse.redirect(retryData.properties.action_link);
     response.cookies.delete('naver_oauth_state');
