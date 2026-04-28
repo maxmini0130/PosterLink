@@ -91,7 +91,10 @@ export async function GET(request: NextRequest) {
     return response;
   }
 
-  const response = NextResponse.redirect(linkData.properties.action_link);
+  // 디버그: 리다이렉트 체인 대신 중간 페이지에서 직접 클릭하도록 변경
+  const bridgeUrl = new URL(`${BASE_URL}/auth/naver-bridge`);
+  bridgeUrl.searchParams.set('al', encodeURIComponent(linkData.properties.action_link));
+  const response = NextResponse.redirect(bridgeUrl.toString());
   response.cookies.delete('naver_oauth_state');
   return response;
 }
