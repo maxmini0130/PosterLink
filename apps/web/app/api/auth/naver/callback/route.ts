@@ -74,13 +74,23 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  if (linkError || !linkData?.properties?.hashed_token) {
-    return NextResponse.redirect(`${BASE_URL}/login?error=login_failed`);
+  if (linkError) {
+    console.error('[Naver] generateLink error:', linkError.message);
+    return NextResponse.redirect(`${BASE_URL}/login?error=link_gen_failed`);
+  }
+
+  // hashed_token 또는 action_link에서 token 추출
+  const hashedToken = linkData?.properties?.hashed_token
+    ?? new URL(linkData?.properties?.action_link ?? 'http://x').searchParams.get('token');
+
+  if (!hashedToken) {
+    console.error('[Naver] no token in properties:', JSON.stringify(linkData?.properties));
+    return NextResponse.redirect(`${BASE_URL}/login?error=no_token`);
   }
 
   // Supabase verify URL을 거치지 않고 클라이언트가 직접 verifyOtp 호출
   const callbackUrl = new URL(`${BASE_URL}/auth/callback`);
-  callbackUrl.searchParams.set('token_hash', linkData.properties.hashed_token);
+  callbackUrl.searchParams.set('token_hash', hashedToken);
   callbackUrl.searchParams.set('type', 'magiclink');
 
   const response = NextResponse.redirect(callbackUrl.toString());
