@@ -94,10 +94,11 @@ async function serverSideVerify(actionLink: string, baseUrl: string): Promise<Ne
   const verifyRes = await fetch(actionLink, { redirect: 'manual' });
   const location = verifyRes.headers.get('location') ?? '';
 
+  const status = verifyRes.status;
   const hashIndex = location.indexOf('#');
   if (hashIndex === -1) {
     const loc = encodeURIComponent(location.slice(0, 100));
-    return NextResponse.redirect(`${baseUrl}/login?error=no_hash_in_redirect&loc=${loc}`);
+    return NextResponse.redirect(`${baseUrl}/login?error=no_hash_in_redirect&status=${status}&loc=${loc}`);
   }
 
   const fragment = new URLSearchParams(location.substring(hashIndex + 1));
@@ -105,7 +106,8 @@ async function serverSideVerify(actionLink: string, baseUrl: string): Promise<Ne
   const refreshToken = fragment.get('refresh_token');
 
   if (!accessToken || !refreshToken) {
-    return NextResponse.redirect(`${baseUrl}/login?error=no_tokens_in_fragment`);
+    const fragDebug = encodeURIComponent(location.substring(hashIndex + 1, hashIndex + 120));
+    return NextResponse.redirect(`${baseUrl}/login?error=no_tokens_in_fragment&frag=${fragDebug}`);
   }
 
   // query param으로 전달 (hash fragment 아님)
