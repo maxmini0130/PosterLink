@@ -57,31 +57,24 @@ export default function AuthCallbackPage() {
       return;
     }
 
-    // 매직링크 플로우 (네이버): #access_token= 해시
-    // SIGNED_IN이 리스너 등록 전에 이미 발생했을 경우 INITIAL_SESSION으로만 오므로 함께 처리
-    let handled = false;
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (handled) return;
-      if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user) {
-        handled = true;
-        subscription.unsubscribe();
-        clearTimeout(timeout);
-        handlePostAuth(session.user.id, session.user.email, router);
-      }
-    });
+    // 매직링크 플로우 (네이버): #access_token= 해시에서 직접 setSession 호출
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const accessToken = hashParams.get("access_token");
+    const refreshToken = hashParams.get("refresh_token");
 
-    // 10초 이내 세션 미확립 시 로그인으로 복귀
-    const timeout = setTimeout(() => {
-      if (!handled) {
-        subscription.unsubscribe();
-        router.replace("/login?error=login_failed");
-      }
-    }, 10000);
+    if (accessToken && refreshToken) {
+      supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }).then(({ data, error }) => {
+        if (error || !data.user) {
+          router.replace(`/login?error=set_session_failed`);
+          return;
+        }
+        handlePostAuth(data.user.id, data.user.email, router);
+      });
+      return;
+    }
 
-    return () => {
-      subscription.unsubscribe();
-      clearTimeout(timeout);
-    };
+    // hash도 code도 없으면 실패
+    router.replace("/login?error=login_failed");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
