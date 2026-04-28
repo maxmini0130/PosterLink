@@ -48,7 +48,7 @@ export default function AuthCallbackPage() {
     if (tokenHash && otpType) {
       supabase.auth.verifyOtp({ token_hash: tokenHash, type: otpType as "magiclink" }).then(({ data, error }) => {
         if (error || !data.user) {
-          router.replace("/login?error=login_failed");
+          router.replace(`/login?error=verify_failed&msg=${encodeURIComponent(error?.message ?? "no_user")}`);
           return;
         }
         handlePostAuth(data.user.id, data.user.email, router);
