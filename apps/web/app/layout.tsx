@@ -10,12 +10,17 @@ export const metadata: Metadata = {
   },
   description: "청년, 소상공인, 문화 공고를 한눈에 — PosterLink",
   metadataBase: new URL("https://posterlink.co.kr"),
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
   openGraph: {
     type: "website",
     locale: "ko_KR",
     siteName: "PosterLink",
     title: "PosterLink — 공공 포스터 링크 플랫폼",
     description: "청년, 소상공인, 문화 공고를 한눈에 — PosterLink",
+    images: [{ url: "/logo.png", width: 512, height: 512, alt: "PosterLink" }],
   },
   twitter: {
     card: "summary_large_image",

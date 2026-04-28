@@ -58,6 +58,10 @@ export default function SignupPage() {
   };
 
   const handleSocialLogin = async (provider: 'kakao' | 'google') => {
+    if (!agreed) {
+      toast.error("이용약관 및 개인정보처리방침에 동의해주세요.");
+      return;
+    }
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
