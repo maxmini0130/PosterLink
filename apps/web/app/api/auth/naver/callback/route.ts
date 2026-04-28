@@ -54,48 +54,42 @@ export async function GET(request: NextRequest) {
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
-  // Ensure user exists in Supabase (no-op if already registered)
-  await supabaseAdmin.auth.admin.createUser({
-    email: naverUser.email,
-    email_confirm: true,
-    user_metadata: {
-      full_name: naverUser.name,
-      avatar_url: naverUser.profile_image,
-      provider: 'naver',
-    },
-  });
-
-  // Generate one-time sign-in token (hashed_token을 직접 전달해 Supabase verify redirect 우회)
+  // generateLink: 유저 없으면 자동 생성, 있으면 magic link만 생성
+  // createUser를 먼저 호출하면 내부 OTP를 덮어쓸 수 있으므로 제거
   const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
     type: 'magiclink',
     email: naverUser.email,
     options: {
-      data: { full_name: naverUser.name, avatar_url: naverUser.profile_image },
+      data: { full_name: naverUser.name, avatar_url: naverUser.profile_image, provider: 'naver' },
+      redirectTo: `${BASE_URL}/auth/callback`,
     },
   });
 
-  if (linkError) {
-    console.error('[Naver] generateLink error:', linkError.message);
-    return NextResponse.redirect(`${BASE_URL}/login?error=link_gen_failed`);
+  if (linkError || !linkData?.properties?.action_link) {
+    // 유저가 없어서 실패한 경우 먼저 생성 후 재시도
+    await supabaseAdmin.auth.admin.createUser({
+      email: naverUser.email,
+      email_confirm: true,
+      user_metadata: { full_name: naverUser.name, avatar_url: naverUser.profile_image, provider: 'naver' },
+    });
+    const { data: retryData, error: retryError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'magiclink',
+      email: naverUser.email,
+      options: {
+        data: { full_name: naverUser.name, avatar_url: naverUser.profile_image, provider: 'naver' },
+        redirectTo: `${BASE_URL}/auth/callback`,
+      },
+    });
+    if (retryError || !retryData?.properties?.action_link) {
+      console.error('[Naver] generateLink retry error:', retryError?.message);
+      return NextResponse.redirect(`${BASE_URL}/login?error=login_failed`);
+    }
+    const response = NextResponse.redirect(retryData.properties.action_link);
+    response.cookies.delete('naver_oauth_state');
+    return response;
   }
 
-  // hashed_token 또는 action_link에서 token 추출
-  const hashedToken = linkData?.properties?.hashed_token
-    ?? new URL(linkData?.properties?.action_link ?? 'http://x').searchParams.get('token');
-
-  if (!hashedToken) {
-    console.error('[Naver] no token in properties:', JSON.stringify(linkData?.properties));
-    return NextResponse.redirect(`${BASE_URL}/login?error=no_token`);
-  }
-
-  // email + raw OTP를 클라이언트에 전달 → verifyOtp({ email, token, type }) 사용
-  // token_hash 방식은 PKCE 이메일 확인 전용이므로 어드민 generateLink OTP에 맞지 않음
-  const callbackUrl = new URL(`${BASE_URL}/auth/callback`);
-  callbackUrl.searchParams.set('naver_email', naverUser.email);
-  callbackUrl.searchParams.set('naver_otp', linkData.properties.email_otp);
-  callbackUrl.searchParams.set('type', 'magiclink');
-
-  const response = NextResponse.redirect(callbackUrl.toString());
+  const response = NextResponse.redirect(linkData.properties.action_link);
   response.cookies.delete('naver_oauth_state');
   return response;
 }
