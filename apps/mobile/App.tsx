@@ -23,7 +23,7 @@ Notifications.setNotificationHandler({
 
 export default function App() {
   const [view, setView] = useState<'login' | 'home' | 'camera' | 'preview' | 'browse'>('login');
-  const [browseUrl, setBrowseUrl] = useState('https://posterlink.co.kr/posters');
+  const [browseUrl, setBrowseUrl] = useState('https://www.posterlink.kr/posters');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [user, setUser] = useState<any>(null);
@@ -50,7 +50,7 @@ export default function App() {
     responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
       const linkUrl = response.notification.request.content.data?.link_url as string | undefined;
       if (linkUrl) {
-        const targetUrl = `https://posterlink.co.kr${linkUrl}`;
+        const targetUrl = `https://www.posterlink.kr${linkUrl}`;
         setBrowseUrl(targetUrl);
         setView('browse');
       }
