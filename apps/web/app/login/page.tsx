@@ -1,32 +1,34 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
+
+const ERROR_MESSAGES: Record<string, string> = {
+  naver_not_configured: "네이버 로그인이 설정되지 않았습니다.",
+  invalid_state: "보안 검증 실패. 다시 시도해주세요.",
+  naver_token_failed: "네이버 인증 실패. 다시 시도해주세요.",
+  naver_email_required: "네이버 계정에 이메일이 없습니다.",
+  login_failed: "로그인 처리 중 오류가 발생했습니다.",
+};
+
+function LoginErrorHandler() {
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const error = searchParams.get("error");
+    if (error) toast.error(ERROR_MESSAGES[error] ?? `로그인 오류: ${error}`);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return null;
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const searchParams = useSearchParams();
-
-  useEffect(() => {
-    const error = searchParams.get("error");
-    if (error) {
-      const messages: Record<string, string> = {
-        naver_not_configured: "네이버 로그인이 설정되지 않았습니다.",
-        invalid_state: "보안 검증 실패. 다시 시도해주세요.",
-        naver_token_failed: "네이버 인증 실패. 다시 시도해주세요.",
-        naver_email_required: "네이버 계정에 이메일이 없습니다.",
-        login_failed: "로그인 처리 중 오류가 발생했습니다.",
-      };
-      toast.error(messages[error] ?? `로그인 오류: ${error}`);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,6 +56,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-white">
+      <Suspense fallback={null}><LoginErrorHandler /></Suspense>
       <h1 className="text-4xl font-black text-primary mb-2">PosterLink</h1>
       <p className="text-gray-500 mb-10">공공 포스터를 한눈에, 포스터링크</p>
       
