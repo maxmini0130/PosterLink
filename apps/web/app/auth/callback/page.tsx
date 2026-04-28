@@ -29,7 +29,7 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
 
-    // PKCE 코드 플로우 (카카오/구글): ?code= 쿼리 파라미터
+    // PKCE 코드 플로우 (카카오/구글)
     const code = params.get("code");
     if (code) {
       supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
@@ -42,12 +42,12 @@ export default function AuthCallbackPage() {
       return;
     }
 
-    // 네이버 OTP 플로우: ?naver_email= & ?naver_otp= (admin generateLink의 raw OTP 직접 검증)
+    // 네이버: email_otp를 query param으로 받아 직접 verifyOtp 호출
     const naverEmail = params.get("naver_email");
     const naverOtp = params.get("naver_otp");
     const otpType = params.get("type");
     if (naverEmail && naverOtp && otpType) {
-      supabase.auth.verifyOtp({ email: naverEmail, token: naverOtp, type: otpType as "magiclink" }).then(({ data, error }) => {
+      supabase.auth.verifyOtp({ email: naverEmail, token: naverOtp, type: "magiclink" }).then(({ data, error }) => {
         if (error || !data.user) {
           router.replace(`/login?error=verify_failed&msg=${encodeURIComponent(error?.message ?? "no_user")}`);
           return;
@@ -57,23 +57,6 @@ export default function AuthCallbackPage() {
       return;
     }
 
-    // 매직링크 플로우 (네이버): #access_token= 해시에서 직접 setSession 호출
-    const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    const accessToken = hashParams.get("access_token");
-    const refreshToken = hashParams.get("refresh_token");
-
-    if (accessToken && refreshToken) {
-      supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }).then(({ data, error }) => {
-        if (error || !data.user) {
-          router.replace(`/login?error=set_session_failed`);
-          return;
-        }
-        handlePostAuth(data.user.id, data.user.email, router);
-      });
-      return;
-    }
-
-    // hash도 code도 없으면 실패
     router.replace("/login?error=login_failed");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

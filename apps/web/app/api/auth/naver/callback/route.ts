@@ -14,7 +14,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${BASE_URL}/login?error=invalid_state`);
   }
 
-  // Naver OAuth: exchange authorization code for access token
   const redirectUri = `${BASE_URL}/api/auth/naver/callback`;
   const tokenUrl = new URL('https://nid.naver.com/oauth2.0/token');
   tokenUrl.searchParams.set('grant_type', 'authorization_code');
@@ -31,7 +30,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${BASE_URL}/login?error=naver_token_failed`);
   }
 
-  // Get Naver user profile
   const profileRes = await fetch('https://openapi.naver.com/v1/nid/me', {
     headers: { Authorization: `Bearer ${tokenData.access_token}` },
   });
@@ -48,15 +46,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${BASE_URL}/login?error=naver_email_required`);
   }
 
-  // Supabase admin client (server-side only — uses service role key)
   const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
-  // generateLink: 유저 없으면 자동 생성, 있으면 magic link만 생성
-  // createUser를 먼저 호출하면 내부 OTP를 덮어쓸 수 있으므로 제거
   const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
     type: 'magiclink',
     email: naverUser.email,
@@ -66,9 +61,8 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  if (linkError || !linkData?.properties?.action_link) {
-    const e1 = encodeURIComponent(linkError?.message ?? 'no_action_link');
-    // 유저가 없어서 실패한 경우 먼저 생성 후 재시도
+  if (linkError || !linkData?.properties?.email_otp) {
+    // 유저 없으면 생성 후 재시도
     const { error: createError } = await supabaseAdmin.auth.admin.createUser({
       email: naverUser.email,
       email_confirm: true,
@@ -82,20 +76,27 @@ export async function GET(request: NextRequest) {
         redirectTo: `${BASE_URL}/auth/callback`,
       },
     });
-    if (retryError || !retryData?.properties?.action_link) {
-      const e2 = encodeURIComponent(retryError?.message ?? 'no_action_link_retry');
+    if (retryError || !retryData?.properties?.email_otp) {
+      const e1 = encodeURIComponent(linkError?.message ?? 'no_otp');
+      const e2 = encodeURIComponent(retryError?.message ?? 'no_otp_retry');
       const e3 = encodeURIComponent(createError?.message ?? 'ok');
       return NextResponse.redirect(`${BASE_URL}/login?error=login_failed&e1=${e1}&e2=${e2}&create=${e3}`);
     }
-    const response = NextResponse.redirect(retryData.properties.action_link);
+    const callbackUrl = new URL(`${BASE_URL}/auth/callback`);
+    callbackUrl.searchParams.set('naver_email', naverUser.email);
+    callbackUrl.searchParams.set('naver_otp', retryData.properties.email_otp);
+    callbackUrl.searchParams.set('type', 'magiclink');
+    const response = NextResponse.redirect(callbackUrl.toString());
     response.cookies.delete('naver_oauth_state');
     return response;
   }
 
-  // 디버그: 리다이렉트 체인 대신 중간 페이지에서 직접 클릭하도록 변경
-  const bridgeUrl = new URL(`${BASE_URL}/auth/naver-bridge`);
-  bridgeUrl.searchParams.set('al', encodeURIComponent(linkData.properties.action_link));
-  const response = NextResponse.redirect(bridgeUrl.toString());
+  // email_otp를 query param으로 전달 — hash fragment 유실 문제 없음
+  const callbackUrl = new URL(`${BASE_URL}/auth/callback`);
+  callbackUrl.searchParams.set('naver_email', naverUser.email);
+  callbackUrl.searchParams.set('naver_otp', linkData.properties.email_otp);
+  callbackUrl.searchParams.set('type', 'magiclink');
+  const response = NextResponse.redirect(callbackUrl.toString());
   response.cookies.delete('naver_oauth_state');
   return response;
 }
