@@ -4,47 +4,62 @@ import { useEffect } from "react";
 import { supabase } from "../../../lib/supabase";
 import { useRouter } from "next/navigation";
 
+async function handlePostAuth(userId: string, email: string | undefined, router: ReturnType<typeof useRouter>) {
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id, primary_region_id")
+    .eq("id", userId)
+    .single();
+
+  if (!profile || !profile.primary_region_id) {
+    await supabase.from("profiles").upsert({
+      id: userId,
+      nickname: email?.split("@")[0] ?? "user",
+      role: "user"
+    }, { onConflict: "id" });
+    router.replace("/onboarding");
+  } else {
+    router.replace("/");
+  }
+}
+
 export default function AuthCallbackPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const handleCallback = async () => {
-      const code = new URLSearchParams(window.location.search).get("code");
-
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (error) {
+    // PKCE 코드 플로우 (카카오/구글): ?code= 쿼리 파라미터
+    const code = new URLSearchParams(window.location.search).get("code");
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
+        if (error || !data.user) {
           router.replace("/login?error=auth_callback_failed");
           return;
         }
-      }
+        handlePostAuth(data.user.id, data.user.email, router);
+      });
+      return;
+    }
 
-      // 소셜 로그인 후 프로필 존재 여부 확인 → 없으면 온보딩으로
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("id, primary_region_id")
-          .eq("id", user.id)
-          .single();
-
-        if (!profile || !profile.primary_region_id) {
-          await supabase.from("profiles").upsert({
-            id: user.id,
-            nickname: user.email?.split("@")[0] ?? "user",
-            role: "user"
-          }, { onConflict: "id" });
-          router.replace("/onboarding");
-        } else {
-          router.replace("/");
-        }
-      } else {
-        router.replace("/login");
+    // 매직링크 플로우 (네이버): #access_token= 해시 → onAuthStateChange로 감지
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session?.user) {
+        subscription.unsubscribe();
+        handlePostAuth(session.user.id, session.user.email, router);
       }
+    });
+
+    // 10초 이내 세션 미확립 시 로그인으로 복귀
+    const timeout = setTimeout(() => {
+      subscription.unsubscribe();
+      router.replace("/login?error=login_failed");
+    }, 10000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
     };
-
-    handleCallback();
-  }, [router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white">
