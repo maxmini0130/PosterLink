@@ -88,9 +88,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${BASE_URL}/login?error=no_token`);
   }
 
-  // Supabase verify URL을 거치지 않고 클라이언트가 직접 verifyOtp 호출
+  // email + raw OTP를 클라이언트에 전달 → verifyOtp({ email, token, type }) 사용
+  // token_hash 방식은 PKCE 이메일 확인 전용이므로 어드민 generateLink OTP에 맞지 않음
   const callbackUrl = new URL(`${BASE_URL}/auth/callback`);
-  callbackUrl.searchParams.set('token_hash', hashedToken);
+  callbackUrl.searchParams.set('naver_email', naverUser.email);
+  callbackUrl.searchParams.set('naver_otp', linkData.properties.email_otp);
   callbackUrl.searchParams.set('type', 'magiclink');
 
   const response = NextResponse.redirect(callbackUrl.toString());

@@ -42,11 +42,12 @@ export default function AuthCallbackPage() {
       return;
     }
 
-    // 네이버 token_hash 플로우: ?token_hash= 쿼리 파라미터 (Supabase verify redirect 우회)
-    const tokenHash = params.get("token_hash");
+    // 네이버 OTP 플로우: ?naver_email= & ?naver_otp= (admin generateLink의 raw OTP 직접 검증)
+    const naverEmail = params.get("naver_email");
+    const naverOtp = params.get("naver_otp");
     const otpType = params.get("type");
-    if (tokenHash && otpType) {
-      supabase.auth.verifyOtp({ token_hash: tokenHash, type: otpType as "magiclink" }).then(({ data, error }) => {
+    if (naverEmail && naverOtp && otpType) {
+      supabase.auth.verifyOtp({ email: naverEmail, token: naverOtp, type: otpType as "magiclink" }).then(({ data, error }) => {
         if (error || !data.user) {
           router.replace(`/login?error=verify_failed&msg=${encodeURIComponent(error?.message ?? "no_user")}`);
           return;
