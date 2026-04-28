@@ -4,6 +4,16 @@ import { createClient } from '@supabase/supabase-js';
 const _rawUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://posterlink.kr';
 const BASE_URL = _rawUrl.startsWith('http') ? _rawUrl : `https://${_rawUrl}`;
 
+async function derivePassword(naverId: string): Promise<string> {
+  const secret = process.env.NAVER_CLIENT_SECRET ?? '';
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(secret);
+  const msgData = encoder.encode(`naver:${naverId}`);
+  const cryptoKey = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', cryptoKey, msgData);
+  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
@@ -52,68 +62,47 @@ export async function GET(request: NextRequest) {
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
-  const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-    type: 'magiclink',
+  // 네이버 user ID로 결정론적 비밀번호 파생 — OTP/magic link 완전 우회
+  const password = await derivePassword(naverUser.id);
+  const userMeta = { full_name: naverUser.name, avatar_url: naverUser.profile_image, provider: 'naver' };
+
+  // 유저 존재 여부 확인
+  const { data: existingData } = await supabaseAdmin.auth.admin.getUserByEmail(naverUser.email);
+  if (existingData?.user) {
+    await supabaseAdmin.auth.admin.updateUserById(existingData.user.id, {
+      password,
+      user_metadata: userMeta,
+    });
+  } else {
+    const { error: createErr } = await supabaseAdmin.auth.admin.createUser({
+      email: naverUser.email,
+      password,
+      email_confirm: true,
+      user_metadata: userMeta,
+    });
+    if (createErr) {
+      return NextResponse.redirect(`${BASE_URL}/login?error=create_user_failed&msg=${encodeURIComponent(createErr.message)}`);
+    }
+  }
+
+  // 서버에서 직접 signInWithPassword — PKCE 불필요, OTP 레이트리밋 없음
+  const supabaseSignIn = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }
+  );
+  const { data: signInData, error: signInError } = await supabaseSignIn.auth.signInWithPassword({
     email: naverUser.email,
-    options: {
-      data: { full_name: naverUser.name, avatar_url: naverUser.profile_image, provider: 'naver' },
-      redirectTo: `${BASE_URL}/auth/callback`,
-    },
+    password,
   });
 
-  if (linkError || !linkData?.properties?.action_link) {
-    // 유저 없으면 생성 후 재시도
-    const { error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email: naverUser.email,
-      email_confirm: true,
-      user_metadata: { full_name: naverUser.name, avatar_url: naverUser.profile_image, provider: 'naver' },
-    });
-    const { data: retryData, error: retryError } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'magiclink',
-      email: naverUser.email,
-      options: {
-        data: { full_name: naverUser.name, avatar_url: naverUser.profile_image, provider: 'naver' },
-        redirectTo: `${BASE_URL}/auth/callback`,
-      },
-    });
-    if (retryError || !retryData?.properties?.action_link) {
-      const e1 = encodeURIComponent(linkError?.message ?? 'no_action_link');
-      const e2 = encodeURIComponent(retryError?.message ?? 'no_action_link_retry');
-      const e3 = encodeURIComponent(createError?.message ?? 'ok');
-      return NextResponse.redirect(`${BASE_URL}/login?error=login_failed&e1=${e1}&e2=${e2}&create=${e3}`);
-    }
-    return serverSideVerify(retryData.properties.action_link, BASE_URL);
+  if (signInError || !signInData.session) {
+    return NextResponse.redirect(`${BASE_URL}/login?error=signin_failed&msg=${encodeURIComponent(signInError?.message ?? 'no_session')}`);
   }
 
-  return serverSideVerify(linkData.properties.action_link, BASE_URL);
-}
-
-async function serverSideVerify(actionLink: string, baseUrl: string): Promise<NextResponse> {
-  // action_link를 서버에서 fetch해서 Location 헤더의 토큰을 추출
-  // 브라우저 hash fragment 유실 문제 완전 회피
-  const verifyRes = await fetch(actionLink, { redirect: 'manual' });
-  const location = verifyRes.headers.get('location') ?? '';
-
-  const status = verifyRes.status;
-  const hashIndex = location.indexOf('#');
-  if (hashIndex === -1) {
-    const loc = encodeURIComponent(location.slice(0, 100));
-    return NextResponse.redirect(`${baseUrl}/login?error=no_hash_in_redirect&status=${status}&loc=${loc}`);
-  }
-
-  const fragment = new URLSearchParams(location.substring(hashIndex + 1));
-  const accessToken = fragment.get('access_token');
-  const refreshToken = fragment.get('refresh_token');
-
-  if (!accessToken || !refreshToken) {
-    const fragDebug = encodeURIComponent(location.substring(hashIndex + 1, hashIndex + 120));
-    return NextResponse.redirect(`${baseUrl}/login?error=no_tokens_in_fragment&frag=${fragDebug}`);
-  }
-
-  // query param으로 전달 (hash fragment 아님)
-  const callbackUrl = new URL(`${baseUrl}/auth/callback`);
-  callbackUrl.searchParams.set('naver_at', accessToken);
-  callbackUrl.searchParams.set('naver_rt', refreshToken);
+  const callbackUrl = new URL(`${BASE_URL}/auth/callback`);
+  callbackUrl.searchParams.set('naver_at', signInData.session.access_token);
+  callbackUrl.searchParams.set('naver_rt', signInData.session.refresh_token);
   const response = NextResponse.redirect(callbackUrl.toString());
   response.cookies.delete('naver_oauth_state');
   return response;
