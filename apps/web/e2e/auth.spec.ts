@@ -7,7 +7,7 @@ test.describe("인증 - 로그인", () => {
     await expect(page.locator("text=카카오로 시작하기")).toBeVisible();
   });
 
-  test("로그인 페이지 - 네이버 버튼(준비중) 표시", async ({ page }) => {
+  test("로그인 페이지 - 네이버 버튼 표시", async ({ page }) => {
     await page.goto("/login");
     await expect(page.locator("text=네이버")).toBeVisible();
   });
