@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://posterlink.co.kr';
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://posterlink.kr';
 
 export async function GET() {
   const clientId = process.env.NAVER_CLIENT_ID;
