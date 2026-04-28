@@ -151,7 +151,10 @@ export default function SignupPage() {
           구글로 시작하기
         </button>
         <button
-          onClick={() => router.push('/api/auth/naver')}
+          onClick={() => {
+            if (!agreed) { toast.error("이용약관 및 개인정보처리방침에 동의해주세요."); return; }
+            window.location.href = '/api/auth/naver';
+          }}
           className="w-full py-4 bg-[#03C75A] text-white font-bold rounded-2xl flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
         >
           <span className="w-5 h-5 bg-white rounded-full flex items-center justify-center text-[11px] text-[#03C75A] font-black">N</span>
