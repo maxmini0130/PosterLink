@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://posterlink.kr';
 
 export async function GET() {
