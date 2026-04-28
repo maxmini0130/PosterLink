@@ -42,14 +42,13 @@ export default function AuthCallbackPage() {
       return;
     }
 
-    // 네이버: email_otp를 query param으로 받아 직접 verifyOtp 호출
-    const naverEmail = params.get("naver_email");
-    const naverOtp = params.get("naver_otp");
-    const otpType = params.get("type");
-    if (naverEmail && naverOtp && otpType) {
-      supabase.auth.verifyOtp({ email: naverEmail, token: naverOtp, type: "magiclink" }).then(({ data, error }) => {
+    // 네이버: 서버에서 action_link 팔로우 후 추출한 토큰으로 setSession
+    const naverAt = params.get("naver_at");
+    const naverRt = params.get("naver_rt");
+    if (naverAt && naverRt) {
+      supabase.auth.setSession({ access_token: naverAt, refresh_token: naverRt }).then(({ data, error }) => {
         if (error || !data.user) {
-          router.replace(`/login?error=verify_failed&msg=${encodeURIComponent(error?.message ?? "no_user")}`);
+          router.replace(`/login?error=set_session_failed&msg=${encodeURIComponent(error?.message ?? "no_user")}`);
           return;
         }
         handlePostAuth(data.user.id, data.user.email, router);

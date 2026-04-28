@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  if (linkError || !linkData?.properties?.email_otp) {
+  if (linkError || !linkData?.properties?.action_link) {
     // 유저 없으면 생성 후 재시도
     const { error: createError } = await supabaseAdmin.auth.admin.createUser({
       email: naverUser.email,
@@ -76,26 +76,42 @@ export async function GET(request: NextRequest) {
         redirectTo: `${BASE_URL}/auth/callback`,
       },
     });
-    if (retryError || !retryData?.properties?.email_otp) {
-      const e1 = encodeURIComponent(linkError?.message ?? 'no_otp');
-      const e2 = encodeURIComponent(retryError?.message ?? 'no_otp_retry');
+    if (retryError || !retryData?.properties?.action_link) {
+      const e1 = encodeURIComponent(linkError?.message ?? 'no_action_link');
+      const e2 = encodeURIComponent(retryError?.message ?? 'no_action_link_retry');
       const e3 = encodeURIComponent(createError?.message ?? 'ok');
       return NextResponse.redirect(`${BASE_URL}/login?error=login_failed&e1=${e1}&e2=${e2}&create=${e3}`);
     }
-    const callbackUrl = new URL(`${BASE_URL}/auth/callback`);
-    callbackUrl.searchParams.set('naver_email', naverUser.email);
-    callbackUrl.searchParams.set('naver_otp', retryData.properties.email_otp);
-    callbackUrl.searchParams.set('type', 'magiclink');
-    const response = NextResponse.redirect(callbackUrl.toString());
-    response.cookies.delete('naver_oauth_state');
-    return response;
+    return serverSideVerify(retryData.properties.action_link, BASE_URL);
   }
 
-  // email_otp를 query param으로 전달 — hash fragment 유실 문제 없음
-  const callbackUrl = new URL(`${BASE_URL}/auth/callback`);
-  callbackUrl.searchParams.set('naver_email', naverUser.email);
-  callbackUrl.searchParams.set('naver_otp', linkData.properties.email_otp);
-  callbackUrl.searchParams.set('type', 'magiclink');
+  return serverSideVerify(linkData.properties.action_link, BASE_URL);
+}
+
+async function serverSideVerify(actionLink: string, baseUrl: string): Promise<NextResponse> {
+  // action_link를 서버에서 fetch해서 Location 헤더의 토큰을 추출
+  // 브라우저 hash fragment 유실 문제 완전 회피
+  const verifyRes = await fetch(actionLink, { redirect: 'manual' });
+  const location = verifyRes.headers.get('location') ?? '';
+
+  const hashIndex = location.indexOf('#');
+  if (hashIndex === -1) {
+    const loc = encodeURIComponent(location.slice(0, 100));
+    return NextResponse.redirect(`${baseUrl}/login?error=no_hash_in_redirect&loc=${loc}`);
+  }
+
+  const fragment = new URLSearchParams(location.substring(hashIndex + 1));
+  const accessToken = fragment.get('access_token');
+  const refreshToken = fragment.get('refresh_token');
+
+  if (!accessToken || !refreshToken) {
+    return NextResponse.redirect(`${baseUrl}/login?error=no_tokens_in_fragment`);
+  }
+
+  // query param으로 전달 (hash fragment 아님)
+  const callbackUrl = new URL(`${baseUrl}/auth/callback`);
+  callbackUrl.searchParams.set('naver_at', accessToken);
+  callbackUrl.searchParams.set('naver_rt', refreshToken);
   const response = NextResponse.redirect(callbackUrl.toString());
   response.cookies.delete('naver_oauth_state');
   return response;
