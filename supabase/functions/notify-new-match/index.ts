@@ -25,33 +25,31 @@ serve(async (req) => {
       })
     }
 
-    // 포스터 정보 조회
+    // 포스터 상태 확인
     const { data: poster, error: posterError } = await supabase
       .from('posters')
       .select('id, title, poster_status')
       .eq('id', poster_id)
       .single()
 
-    if (posterError || !poster) throw posterError ?? new Error('Poster not found')
+    if (posterError || !poster) {
+      throw new Error(posterError?.message ?? 'Poster not found')
+    }
     if (poster.poster_status !== 'published') {
-      return new Response(JSON.stringify({ message: 'Poster is not published.' }), {
+      return new Response(JSON.stringify({ message: 'Poster is not published.', sentCount: 0 }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
       })
     }
 
-    // new_match 알림이 생성된 사용자 중 expo_push_token 보유자 조회
+    // new_match 알림 수신 대상 user_id 조회
     const { data: notifications, error: notifError } = await supabase
       .from('notifications')
-      .select(`
-        user_id,
-        profiles:user_id (expo_push_token)
-      `)
+      .select('user_id')
       .eq('type', 'new_match')
       .eq('target_id', poster_id)
 
-    if (notifError) throw notifError
-
+    if (notifError) throw new Error(notifError.message)
     if (!notifications || notifications.length === 0) {
       return new Response(JSON.stringify({ message: 'No matching notifications found.', sentCount: 0 }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -59,10 +57,25 @@ serve(async (req) => {
       })
     }
 
+    // expo_push_token 조회 (토큰 있는 사용자만)
+    const userIds = notifications.map((n: { user_id: string }) => n.user_id)
+    const { data: profiles, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, expo_push_token')
+      .in('id', userIds)
+      .not('expo_push_token', 'is', null)
+
+    if (profileError) throw new Error(profileError.message)
+    if (!profiles || profiles.length === 0) {
+      return new Response(JSON.stringify({ message: 'No users with push token.', sentCount: 0 }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      })
+    }
+
     let sentCount = 0
-    for (const notif of notifications) {
-      const profile = Array.isArray(notif.profiles) ? notif.profiles[0] : notif.profiles
-      if (!profile?.expo_push_token) continue
+    for (const profile of profiles) {
+      if (!profile.expo_push_token) continue
 
       const pushResponse = await fetch('https://exp.host/--/api/v2/push/send', {
         method: 'POST',
