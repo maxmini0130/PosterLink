@@ -65,21 +65,25 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  // Generate one-time sign-in link
+  // Generate one-time sign-in token (hashed_token을 직접 전달해 Supabase verify redirect 우회)
   const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
     type: 'magiclink',
     email: naverUser.email,
     options: {
       data: { full_name: naverUser.name, avatar_url: naverUser.profile_image },
-      redirectTo: `${BASE_URL}/auth/callback`,
     },
   });
 
-  if (linkError || !linkData?.properties?.action_link) {
+  if (linkError || !linkData?.properties?.hashed_token) {
     return NextResponse.redirect(`${BASE_URL}/login?error=login_failed`);
   }
 
-  const response = NextResponse.redirect(linkData.properties.action_link);
+  // Supabase verify URL을 거치지 않고 클라이언트가 직접 verifyOtp 호출
+  const callbackUrl = new URL(`${BASE_URL}/auth/callback`);
+  callbackUrl.searchParams.set('token_hash', linkData.properties.hashed_token);
+  callbackUrl.searchParams.set('type', 'magiclink');
+
+  const response = NextResponse.redirect(callbackUrl.toString());
   response.cookies.delete('naver_oauth_state');
   return response;
 }

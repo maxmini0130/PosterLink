@@ -27,12 +27,28 @@ export default function AuthCallbackPage() {
   const router = useRouter();
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+
     // PKCE 코드 플로우 (카카오/구글): ?code= 쿼리 파라미터
-    const code = new URLSearchParams(window.location.search).get("code");
+    const code = params.get("code");
     if (code) {
       supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
         if (error || !data.user) {
           router.replace("/login?error=auth_callback_failed");
+          return;
+        }
+        handlePostAuth(data.user.id, data.user.email, router);
+      });
+      return;
+    }
+
+    // 네이버 token_hash 플로우: ?token_hash= 쿼리 파라미터 (Supabase verify redirect 우회)
+    const tokenHash = params.get("token_hash");
+    const otpType = params.get("type");
+    if (tokenHash && otpType) {
+      supabase.auth.verifyOtp({ token_hash: tokenHash, type: otpType as "magiclink" }).then(({ data, error }) => {
+        if (error || !data.user) {
+          router.replace("/login?error=login_failed");
           return;
         }
         handlePostAuth(data.user.id, data.user.email, router);
