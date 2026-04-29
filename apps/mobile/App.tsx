@@ -315,6 +315,13 @@ export default function App() {
         </TouchableOpacity>
 
         <TouchableOpacity
+          onPress={() => { setBrowseUrl('https://www.posterlink.kr/mypage'); setView('browse'); }}
+          style={styles.linkButton}
+        >
+          <Text style={styles.linkText}>계정 관리 · 회원 탈퇴</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           onPress={() => supabase.auth.signOut().then(() => { setUser(null); setView('login'); })}
           style={styles.linkButton}
         >
