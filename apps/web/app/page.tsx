@@ -140,10 +140,10 @@ export default function Home() {
                 </div>
                 <span className="text-xs font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Recommended for you</span>
               </div>
-              <h2 className="text-3xl font-black text-gray-900 dark:text-slate-50 leading-tight">
+              <h2 className="text-3xl font-black text-gray-900 dark:text-slate-50 leading-tight break-keep">
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
-                  {userProfile?.regions?.name || "전국"} {userProfile?.age_band === '20s' ? '20대' : ''}
-                </span>를 위한<br />
+                  {userProfile?.regions?.name || "전국"}{userProfile?.age_band === '20s' ? ' 20대' : ''}
+                </span>를 위한{' '}
                 맞춤형 공고가 도착했어요 💡
               </h2>
             </div>

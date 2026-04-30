@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity, Image, TextInput,
-  Alert, ActivityIndicator, Platform,
+  Alert, ActivityIndicator, Platform, StatusBar as RNStatusBar,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { WebView } from 'react-native-webview';
@@ -262,7 +262,7 @@ export default function App() {
 
   // ── 메인 (풀스크린 WebView) ──────────────────────────────────────
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, paddingTop: RNStatusBar.currentHeight ?? 0, backgroundColor: '#fff' }}>
       <StatusBar style="dark" />
       <WebView
         ref={webViewRef}
