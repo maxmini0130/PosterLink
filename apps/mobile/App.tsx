@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Image, TextInput, Alert, ActivityIndicator, Platform, SafeAreaView } from 'react-native';
+import {
+  StyleSheet, Text, View, TouchableOpacity, Image, TextInput,
+  Alert, ActivityIndicator, Platform, SafeAreaView,
+} from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { WebView } from 'react-native-webview';
 import * as LocalAuthentication from 'expo-local-authentication';
@@ -21,9 +24,13 @@ Notifications.setNotificationHandler({
   }),
 });
 
+const HOME_URL = 'https://www.posterlink.kr';
+
+type View = 'browse' | 'login' | 'camera' | 'preview';
+
 export default function App() {
-  const [view, setView] = useState<'login' | 'home' | 'camera' | 'preview' | 'browse'>('login');
-  const [browseUrl, setBrowseUrl] = useState('https://www.posterlink.kr/posters');
+  const [view, setView] = useState<View>('browse');
+  const [browseUrl, setBrowseUrl] = useState(HOME_URL);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [user, setUser] = useState<any>(null);
@@ -31,32 +38,26 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [expoPushToken, setExpoPushToken] = useState('');
   const [biometricAvailable, setBiometricAvailable] = useState(false);
-  const [hasStoredSession, setHasStoredSession] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
-
+  const webViewRef = useRef<any>(null);
   const cameraRef = useRef<CameraView>(null);
   const notificationListener = useRef<any>();
   const responseListener = useRef<any>();
 
   useEffect(() => {
-    // 푸시 알림 설정
     registerForPushNotificationsAsync().then(token => {
       if (token) setExpoPushToken(token);
     });
 
-    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-      console.log('Notification Received:', notification);
-    });
+    notificationListener.current = Notifications.addNotificationReceivedListener(() => {});
     responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
       const linkUrl = response.notification.request.content.data?.link_url as string | undefined;
       if (linkUrl) {
-        const targetUrl = `https://www.posterlink.kr${linkUrl}`;
-        setBrowseUrl(targetUrl);
+        setBrowseUrl(`${HOME_URL}${linkUrl}`);
         setView('browse');
       }
     });
 
-    // 생체인식 지원 여부 확인
     Promise.all([
       LocalAuthentication.hasHardwareAsync(),
       LocalAuthentication.isEnrolledAsync(),
@@ -64,22 +65,9 @@ export default function App() {
       setBiometricAvailable(hasHardware && isEnrolled);
     });
 
-    // 기존 세션 확인 — 세션 있으면 생체인식으로 잠금 해제 유도
+    // 기존 세션 자동 복원
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setHasStoredSession(true);
-        // 생체인식 가능하면 로그인 화면 유지 (버튼으로 해제)
-        // 불가능하면 자동 로그인
-        LocalAuthentication.hasHardwareAsync().then(async (hasHardware) => {
-          const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-          if (hasHardware && isEnrolled) {
-            setView('login');
-          } else {
-            setUser(session.user);
-            setView('home');
-          }
-        });
-      }
+      if (session?.user) setUser(session.user);
     });
 
     return () => {
@@ -88,7 +76,6 @@ export default function App() {
     };
   }, []);
 
-  // 토큰 저장은 user/token 둘 다 준비됐을 때만
   useEffect(() => {
     if (user && expoPushToken) {
       supabase.from('profiles').update({ expo_push_token: expoPushToken }).eq('id', user.id);
@@ -96,22 +83,14 @@ export default function App() {
   }, [user, expoPushToken]);
 
   async function registerForPushNotificationsAsync() {
-    if (!Device.isDevice) {
-      console.log('실제 기기에서만 푸시 알림이 작동합니다.');
-      return;
-    }
-
+    if (!Device.isDevice) return;
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
     if (existingStatus !== 'granted') {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
-    if (finalStatus !== 'granted') {
-      Alert.alert('알림 권한이 거부되었습니다.');
-      return;
-    }
-
+    if (finalStatus !== 'granted') return;
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
         name: 'default',
@@ -120,11 +99,9 @@ export default function App() {
         lightColor: '#FF231F7C',
       });
     }
-
-    const token = (await Notifications.getExpoPushTokenAsync({
+    return (await Notifications.getExpoPushTokenAsync({
       projectId: Constants.expoConfig?.extra?.eas?.projectId,
     })).data;
-    return token;
   }
 
   const handleBiometricLogin = async () => {
@@ -137,10 +114,9 @@ export default function App() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         setUser(session.user);
-        setView('home');
+        setView('browse');
       } else {
         Alert.alert('세션 만료', '다시 로그인해주세요.');
-        setHasStoredSession(false);
       }
     }
   };
@@ -151,7 +127,7 @@ export default function App() {
     if (error) Alert.alert('오류', error.message);
     else if (data.user) {
       setUser(data.user);
-      setView('home');
+      setView('browse');
     }
     setLoading(false);
   };
@@ -168,11 +144,9 @@ export default function App() {
           ...(provider === 'kakao' && { scopes: 'profile_nickname profile_image' }),
         },
       });
-
       if (error || !data?.url) throw error ?? new Error('OAuth URL 생성 실패');
 
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-
       if (result.type === 'success' && result.url) {
         const parsed = new URL(result.url);
         const code = parsed.searchParams.get('code');
@@ -181,7 +155,7 @@ export default function App() {
           if (sessionError) throw sessionError;
           if (sessionData.user) {
             setUser(sessionData.user);
-            setView('home');
+            setView('browse');
           }
         }
       }
@@ -190,6 +164,16 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleLogout = () => {
+    Alert.alert('로그아웃', '로그아웃 하시겠습니까?', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '로그아웃', style: 'destructive',
+        onPress: () => supabase.auth.signOut().then(() => setUser(null)),
+      },
+    ]);
   };
 
   const takePicture = async () => {
@@ -205,20 +189,15 @@ export default function App() {
   const uploadPoster = async () => {
     if (!capturedImage || !user) return;
     setLoading(true);
-
     try {
       const fileName = `${user.id}/${Date.now()}_mobile.jpg`;
       const response = await fetch(capturedImage);
       const blob = await response.blob();
-
       const { error: storageError } = await supabase.storage
         .from('poster-originals')
         .upload(fileName, blob, { contentType: 'image/jpeg' });
       if (storageError) throw storageError;
-
       const { data: { publicUrl } } = supabase.storage.from('poster-originals').getPublicUrl(fileName);
-
-      // poster 초안 생성 + thumbnail_url 직접 저장
       const { error: dbError } = await supabase.from('posters').insert({
         title: `현장 수집_${new Date().toLocaleDateString()}`,
         poster_status: 'draft',
@@ -226,9 +205,8 @@ export default function App() {
         thumbnail_url: publicUrl,
       });
       if (dbError) throw dbError;
-
       Alert.alert('완료', '포스터 사진이 업로드되었습니다. 웹 대시보드에서 내용을 입력하고 검수를 요청해주세요.');
-      setView('home');
+      setView('browse');
       setCapturedImage(null);
     } catch (err: any) {
       Alert.alert('오류', err.message);
@@ -237,10 +215,71 @@ export default function App() {
     }
   };
 
+  // ── Browse (메인 화면) ────────────────────────────────────────
+  if (view === 'browse') {
+    const isHome = browseUrl === HOME_URL;
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+        <View style={styles.header}>
+          {!isHome ? (
+            <TouchableOpacity onPress={() => { setBrowseUrl(HOME_URL); }} style={styles.headerBtn}>
+              <Text style={styles.headerBtnText}>← 홈</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.headerBtn} />
+          )}
+
+          <Text style={styles.headerTitle}>PosterLink</Text>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {user ? (
+              <>
+                <TouchableOpacity onPress={() => setView('camera')} style={styles.headerIconBtn}>
+                  <Text style={styles.headerIconText}>📸</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleLogout} style={styles.headerBtn}>
+                  <Text style={[styles.headerBtnText, { color: '#9ca3af' }]}>로그아웃</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <TouchableOpacity onPress={() => setView('login')} style={styles.loginChip}>
+                <Text style={styles.loginChipText}>로그인</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        <WebView
+          ref={webViewRef}
+          source={{ uri: browseUrl }}
+          style={{ flex: 1 }}
+          startInLoadingState
+          onNavigationStateChange={navState => {
+            if (navState.url && navState.url !== browseUrl) {
+              setBrowseUrl(navState.url);
+            }
+          }}
+          renderLoading={() => (
+            <View style={styles.webviewLoading}>
+              <ActivityIndicator size="large" color="#1e3a8a" />
+            </View>
+          )}
+        />
+        <StatusBar style="auto" />
+      </SafeAreaView>
+    );
+  }
+
+  // ── 로그인 화면 ───────────────────────────────────────────────
   if (view === 'login') {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>PosterLink OPS</Text>
+        <TouchableOpacity onPress={() => setView('browse')} style={styles.backRow}>
+          <Text style={styles.backRowText}>← 돌아가기</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.title}>PosterLink</Text>
+
         <TextInput
           placeholder="이메일"
           value={email}
@@ -266,23 +305,14 @@ export default function App() {
           <View style={styles.dividerLine} />
         </View>
 
-        <TouchableOpacity
-          onPress={() => handleSocialLogin('kakao')}
-          style={styles.kakaoButton}
-          disabled={loading}
-        >
+        <TouchableOpacity onPress={() => handleSocialLogin('kakao')} style={styles.kakaoButton} disabled={loading}>
           <Text style={styles.kakaoButtonText}>K  카카오로 시작하기</Text>
         </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => handleSocialLogin('google')}
-          style={styles.googleButton}
-          disabled={loading}
-        >
+        <TouchableOpacity onPress={() => handleSocialLogin('google')} style={styles.googleButton} disabled={loading}>
           <Text style={styles.googleButtonText}>G  구글로 시작하기</Text>
         </TouchableOpacity>
 
-        {biometricAvailable && hasStoredSession && (
+        {biometricAvailable && (
           <TouchableOpacity onPress={handleBiometricLogin} style={styles.biometricButton}>
             <Text style={styles.biometricButtonText}>
               {Platform.OS === 'ios' ? '🔒 Face ID / Touch ID로 로그인' : '🔒 지문으로 로그인'}
@@ -294,67 +324,7 @@ export default function App() {
     );
   }
 
-  if (view === 'home') {
-    return (
-      <View style={styles.container}>
-        <View style={{ marginBottom: 40, alignItems: 'center' }}>
-          <Text style={styles.welcome}>안녕하세요, {user?.email?.split('@')[0]}님</Text>
-          {expoPushToken ? (
-            <Text style={styles.statusText}>✅ 알림 수신 대기 중</Text>
-          ) : (
-            <Text style={styles.statusTextDisabled}>❌ 알림 비활성 (실기기 권장)</Text>
-          )}
-        </View>
-
-        <TouchableOpacity onPress={() => setView('camera')} style={styles.captureButton}>
-          <Text style={styles.captureButtonText}>📸 포스터 촬영 시작</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => setView('browse')} style={styles.browseButton}>
-          <Text style={styles.browseButtonText}>🔍 공고 탐색하기</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => { setBrowseUrl('https://www.posterlink.kr/mypage'); setView('browse'); }}
-          style={styles.linkButton}
-        >
-          <Text style={styles.linkText}>계정 관리 · 회원 탈퇴</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => supabase.auth.signOut().then(() => { setUser(null); setView('login'); })}
-          style={styles.linkButton}
-        >
-          <Text style={styles.linkText}>로그아웃</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  if (view === 'browse') {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
-        <View style={styles.webviewHeader}>
-          <TouchableOpacity onPress={() => setView('home')} style={styles.backButton}>
-            <Text style={styles.backButtonText}>← 홈으로</Text>
-          </TouchableOpacity>
-          <Text style={styles.webviewTitle}>공고 탐색</Text>
-          <View style={{ width: 70 }} />
-        </View>
-        <WebView
-          source={{ uri: browseUrl }}
-          style={{ flex: 1 }}
-          startInLoadingState
-          renderLoading={() => (
-            <View style={styles.webviewLoading}>
-              <ActivityIndicator size="large" color="#1e3a8a" />
-            </View>
-          )}
-        />
-      </SafeAreaView>
-    );
-  }
-
+  // ── 카메라 ────────────────────────────────────────────────────
   if (view === 'camera') {
     if (!permission) return <View />;
     if (!permission.granted) {
@@ -370,7 +340,6 @@ export default function App() {
     return (
       <View style={{ flex: 1 }}>
         <CameraView style={{ flex: 1 }} ref={cameraRef}>
-          {/* 포스터 가이드 오버레이 */}
           <View style={styles.guideOverlay}>
             <View style={styles.guideBox}>
               <View style={[styles.guideCorner, styles.guideTopLeft]} />
@@ -381,7 +350,7 @@ export default function App() {
             <Text style={styles.guideText}>포스터를 프레임에 맞춰주세요</Text>
           </View>
           <View style={styles.cameraControls}>
-            <TouchableOpacity onPress={() => setView('home')} style={styles.iconButton}>
+            <TouchableOpacity onPress={() => setView('browse')} style={styles.iconButton}>
               <Text style={{ color: 'white', fontWeight: 'bold' }}>취소</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={takePicture} style={styles.shutterButton} />
@@ -392,6 +361,7 @@ export default function App() {
     );
   }
 
+  // ── 미리보기 ──────────────────────────────────────────────────
   if (view === 'preview') {
     return (
       <View style={styles.container}>
@@ -413,21 +383,24 @@ export default function App() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', padding: 24 },
+
+  // Header
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f3f4f6', backgroundColor: '#fff' },
+  headerTitle: { fontSize: 17, fontWeight: '800', color: '#1e3a8a' },
+  headerBtn: { width: 70, justifyContent: 'center' },
+  headerBtnText: { color: '#1e3a8a', fontWeight: 'bold', fontSize: 14 },
+  headerIconBtn: { padding: 4 },
+  headerIconText: { fontSize: 22 },
+  loginChip: { backgroundColor: '#1e3a8a', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
+  loginChipText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
+
+  // Login
+  backRow: { position: 'absolute', top: 56, left: 24 },
+  backRowText: { color: '#1e3a8a', fontWeight: 'bold', fontSize: 15 },
   title: { fontSize: 36, fontWeight: '900', color: '#1e3a8a', marginBottom: 40, letterSpacing: -1 },
-  welcome: { fontSize: 20, fontWeight: 'bold', color: '#111827', marginBottom: 4 },
-  statusText: { fontSize: 12, fontWeight: 'bold', color: '#10b981' },
-  statusTextDisabled: { fontSize: 12, fontWeight: 'bold', color: '#9ca3af' },
   input: { width: '100%', height: 60, backgroundColor: '#f9fafb', borderRadius: 16, paddingHorizontal: 20, marginBottom: 12, fontSize: 16, fontWeight: 'bold' },
   primaryButton: { width: '100%', height: 60, backgroundColor: '#1e3a8a', borderRadius: 20, alignItems: 'center', justifyContent: 'center', shadowColor: '#1e3a8a', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20 },
   buttonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  captureButton: { width: '100%', height: 120, backgroundColor: '#6ee7b7', borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 20, shadowColor: '#6ee7b7', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20 },
-  captureButtonText: { fontSize: 22, fontWeight: '900', color: '#1e3a8a' },
-  cameraControls: { position: 'absolute', bottom: 60, width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' },
-  shutterButton: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'white', borderWidth: 6, borderColor: 'rgba(255,255,255,0.3)' },
-  previewImage: { width: '100%', height: '70%', borderRadius: 32, marginBottom: 24 },
-  previewControls: { width: '100%', flexDirection: 'row', gap: 12 },
-  secondaryButton: { flex: 1, height: 60, backgroundColor: '#f3f4f6', borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  secondaryButtonText: { color: '#4b5563', fontWeight: 'bold' },
   divider: { flexDirection: 'row', alignItems: 'center', width: '100%', marginVertical: 20 },
   dividerLine: { flex: 1, height: 1, backgroundColor: '#f3f4f6' },
   dividerText: { marginHorizontal: 12, color: '#9ca3af', fontSize: 13, fontWeight: 'bold' },
@@ -437,15 +410,10 @@ const styles = StyleSheet.create({
   googleButtonText: { color: '#374151', fontSize: 15, fontWeight: 'bold' },
   biometricButton: { marginTop: 6, width: '100%', height: 56, backgroundColor: '#f0fdf4', borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#6ee7b7' },
   biometricButtonText: { color: '#059669', fontSize: 15, fontWeight: 'bold' },
-  browseButton: { width: '100%', height: 64, backgroundColor: '#eff6ff', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 12, borderWidth: 1.5, borderColor: '#bfdbfe' },
-  browseButtonText: { fontSize: 17, fontWeight: 'bold', color: '#1e3a8a' },
-  webviewHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  webviewTitle: { fontSize: 16, fontWeight: 'bold', color: '#111827' },
-  backButton: { paddingVertical: 6, paddingHorizontal: 4 },
-  backButtonText: { color: '#1e3a8a', fontWeight: 'bold', fontSize: 15 },
-  webviewLoading: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
-  linkButton: { marginTop: 24 },
-  linkText: { color: '#9ca3af', fontWeight: 'bold', textDecorationLine: 'underline' },
+
+  // Camera
+  cameraControls: { position: 'absolute', bottom: 60, width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' },
+  shutterButton: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'white', borderWidth: 6, borderColor: 'rgba(255,255,255,0.3)' },
   iconButton: { padding: 10 },
   guideOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', zIndex: 1 },
   guideBox: { width: '75%', aspectRatio: 3 / 4, borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)', borderRadius: 16, position: 'relative' },
@@ -455,4 +423,13 @@ const styles = StyleSheet.create({
   guideBottomLeft: { bottom: -2, left: -2, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 16 },
   guideBottomRight: { bottom: -2, right: -2, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 16 },
   guideText: { color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: 'bold', marginTop: 16, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+
+  // Preview
+  previewImage: { width: '100%', height: '70%', borderRadius: 32, marginBottom: 24 },
+  previewControls: { width: '100%', flexDirection: 'row', gap: 12 },
+  secondaryButton: { flex: 1, height: 60, backgroundColor: '#f3f4f6', borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  secondaryButtonText: { color: '#4b5563', fontWeight: 'bold' },
+
+  // WebView
+  webviewLoading: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
 });
