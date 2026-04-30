@@ -42,10 +42,10 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-gray-100 bg-white/80 backdrop-blur-md">
       <div className="container mx-auto px-4 max-w-4xl h-14 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 text-xl font-black text-blue-600 flex-shrink-0">
+        <a href="/" className="flex items-center gap-2 text-xl font-black text-blue-600 flex-shrink-0">
           <Image src="/logo.png" alt="PosterLink" width={32} height={32} className="rounded-lg" />
           <span className="hidden sm:inline">PosterLink</span>
-        </Link>
+        </a>
         <div className="flex items-center gap-1 flex-shrink-0">
           {isLoggedIn === false && (
             <>
