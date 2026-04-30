@@ -51,13 +51,15 @@ export function Header() {
             <>
               <Link
                 href="/login"
-                className="px-3 py-2 text-sm font-bold text-gray-600 hover:text-blue-600 transition-colors whitespace-nowrap"
+                className="px-2.5 py-1.5 text-xs font-bold text-gray-600 hover:text-blue-600 transition-colors rounded-lg"
+                style={{ whiteSpace: 'nowrap' }}
               >
                 로그인
               </Link>
               <Link
                 href="/signup"
-                className="px-3 py-2 text-sm font-black text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors whitespace-nowrap"
+                className="px-2.5 py-1.5 text-xs font-black text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                style={{ whiteSpace: 'nowrap' }}
               >
                 회원가입
               </Link>
