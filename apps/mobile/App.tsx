@@ -1,20 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity, Image, TextInput,
-  Alert, ActivityIndicator, Platform, SafeAreaView, Modal,
+  Alert, ActivityIndicator, Platform,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { WebView } from 'react-native-webview';
 import * as LocalAuthentication from 'expo-local-authentication';
-import * as Linking from 'expo-linking';
 import * as Notifications from 'expo-notifications';
-import * as WebBrowser from 'expo-web-browser';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { supabase } from './src/lib/supabase';
 import { StatusBar } from 'expo-status-bar';
-
-WebBrowser.maybeCompleteAuthSession();
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -25,25 +21,46 @@ Notifications.setNotificationHandler({
 });
 
 const HOME_URL = 'https://www.posterlink.kr';
+const SB_PROJECT = 'zxndgzsfrgwahwsdbjdj';
 
-type View = 'browse' | 'camera' | 'preview';
+// 웹앱 Supabase 세션을 2초마다 체크해서 네이티브로 전달
+const SESSION_BRIDGE_JS = `
+  (function() {
+    const KEY = 'sb-${SB_PROJECT}-auth-token';
+    function getCookie(name) {
+      var m = document.cookie.match(new RegExp('(^|;\\\\s*)' + name + '=([^;]*)'));
+      return m ? decodeURIComponent(m[2]) : null;
+    }
+    function checkSession() {
+      try {
+        var raw = getCookie(KEY) || localStorage.getItem(KEY);
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'auth',
+          payload: raw ? JSON.parse(raw) : null
+        }));
+      } catch(e) {}
+    }
+    checkSession();
+    setInterval(checkSession, 2000);
+    true;
+  })();
+`;
+
+type AppView = 'browse' | 'camera' | 'preview';
 
 export default function App() {
-  const [view, setView] = useState<View>('browse');
+  const [view, setView] = useState<AppView>('browse');
   const [browseUrl, setBrowseUrl] = useState(HOME_URL);
-  const [loginVisible, setLoginVisible] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [user, setUser] = useState<any>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [expoPushToken, setExpoPushToken] = useState('');
-  const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const webViewRef = useRef<any>(null);
   const cameraRef = useRef<CameraView>(null);
   const notificationListener = useRef<any>();
   const responseListener = useRef<any>();
+  const lastUserId = useRef<string | null>(null);
 
   useEffect(() => {
     registerForPushNotificationsAsync().then(token => {
@@ -59,15 +76,12 @@ export default function App() {
       }
     });
 
-    Promise.all([
-      LocalAuthentication.hasHardwareAsync(),
-      LocalAuthentication.isEnrolledAsync(),
-    ]).then(([hasHardware, isEnrolled]) => {
-      setBiometricAvailable(hasHardware && isEnrolled);
-    });
-
+    // 네이티브 기존 세션 복원
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) setUser(session.user);
+      if (session?.user) {
+        setUser(session.user);
+        lastUserId.current = session.user.id;
+      }
     });
 
     return () => {
@@ -104,88 +118,51 @@ export default function App() {
     })).data;
   }
 
-  const handleBiometricLogin = async () => {
-    const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: 'PosterLink 로그인',
-      fallbackLabel: '비밀번호 사용',
-      cancelLabel: '취소',
-    });
-    if (result.success) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUser(session.user);
-        setLoginVisible(false);
-      } else {
-        Alert.alert('세션 만료', '다시 로그인해주세요.');
-      }
-    }
-  };
-
-  const handleLogin = async () => {
-    setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) Alert.alert('오류', error.message);
-    else if (data.user) {
-      setUser(data.user);
-      setLoginVisible(false);
-    }
-    setLoading(false);
-  };
-
-  const handleSocialLogin = async (provider: 'kakao' | 'google') => {
-    setLoading(true);
+  // 웹앱 세션 → 네이티브 세션 동기화
+  const handleWebMessage = useCallback(async (event: any) => {
     try {
-      const redirectUrl = Linking.createURL('auth-callback');
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: true,
-          ...(provider === 'kakao' && { scopes: 'profile_nickname profile_image' }),
-        },
-      });
-      if (error || !data?.url) throw error ?? new Error('OAuth URL 생성 실패');
+      const msg = JSON.parse(event.nativeEvent.data);
+      if (msg.type !== 'auth') return;
 
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-      if (result.type === 'success' && result.url) {
-        const parsed = new URL(result.url);
-        const code = parsed.searchParams.get('code');
-        if (code) {
-          const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
-          if (sessionError) throw sessionError;
-          if (sessionData.user) {
-            setUser(sessionData.user);
-            setLoginVisible(false);
-          }
+      const payload = msg.payload;
+      if (payload?.access_token && payload?.user) {
+        // 새로운 사용자 세션이면 네이티브 Supabase에도 세션 설정
+        if (lastUserId.current !== payload.user.id) {
+          lastUserId.current = payload.user.id;
+          await supabase.auth.setSession({
+            access_token: payload.access_token,
+            refresh_token: payload.refresh_token,
+          });
+          setUser(payload.user);
         }
+      } else if (!payload && lastUserId.current) {
+        // 웹에서 로그아웃된 경우
+        lastUserId.current = null;
+        await supabase.auth.signOut();
+        setUser(null);
       }
-    } catch (err: any) {
-      Alert.alert('로그인 오류', err?.message ?? '소셜 로그인에 실패했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  };
+    } catch {}
+  }, []);
 
   const handleLogout = () => {
     Alert.alert('로그아웃', '로그아웃 하시겠습니까?', [
       { text: '취소', style: 'cancel' },
       {
         text: '로그아웃', style: 'destructive',
-        onPress: () => supabase.auth.signOut().then(() => setUser(null)),
+        onPress: async () => {
+          lastUserId.current = null;
+          await supabase.auth.signOut();
+          setUser(null);
+          // 웹앱도 로그아웃 (로그아웃 페이지로 이동)
+          webViewRef.current?.injectJavaScript(`
+            fetch('/api/auth/sign-out', { method: 'POST' }).finally(() => {
+              window.location.href = '/';
+            });
+            true;
+          `);
+        },
       },
     ]);
-  };
-
-  const handleFabPress = () => {
-    if (user) {
-      setView('camera');
-    } else {
-      setLoginVisible(true);
-    }
-  };
-
-  const handleFabLongPress = () => {
-    if (user) handleLogout();
   };
 
   const takePicture = async () => {
@@ -227,15 +204,15 @@ export default function App() {
     }
   };
 
-  // ── 카메라 ────────────────────────────────────────────────────
+  // ── 카메라 ──────────────────────────────────────────────────────
   if (view === 'camera') {
     if (!permission) return <View />;
     if (!permission.granted) {
       return (
         <View style={styles.centered}>
-          <Text style={styles.permissionText}>카메라 접근 권한이 필요합니다.</Text>
-          <TouchableOpacity onPress={requestPermission} style={styles.primaryButton}>
-            <Text style={styles.buttonText}>권한 허용</Text>
+          <Text style={styles.permText}>카메라 접근 권한이 필요합니다.</Text>
+          <TouchableOpacity onPress={requestPermission} style={styles.btn}>
+            <Text style={styles.btnText}>권한 허용</Text>
           </TouchableOpacity>
         </View>
       );
@@ -246,18 +223,18 @@ export default function App() {
         <CameraView style={{ flex: 1 }} ref={cameraRef}>
           <View style={styles.guideOverlay}>
             <View style={styles.guideBox}>
-              <View style={[styles.guideCorner, styles.guideTopLeft]} />
-              <View style={[styles.guideCorner, styles.guideTopRight]} />
-              <View style={[styles.guideCorner, styles.guideBottomLeft]} />
-              <View style={[styles.guideCorner, styles.guideBottomRight]} />
+              <View style={[styles.corner, styles.tl]} />
+              <View style={[styles.corner, styles.tr]} />
+              <View style={[styles.corner, styles.bl]} />
+              <View style={[styles.corner, styles.br]} />
             </View>
             <Text style={styles.guideText}>포스터를 프레임에 맞춰주세요</Text>
           </View>
-          <View style={styles.cameraControls}>
-            <TouchableOpacity onPress={() => setView('browse')} style={styles.iconButton}>
+          <View style={styles.camControls}>
+            <TouchableOpacity onPress={() => setView('browse')} style={styles.camBtn}>
               <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>취소</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={takePicture} style={styles.shutterButton} />
+            <TouchableOpacity onPress={takePicture} style={styles.shutter} />
             <View style={{ width: 50 }} />
           </View>
         </CameraView>
@@ -265,25 +242,25 @@ export default function App() {
     );
   }
 
-  // ── 미리보기 ──────────────────────────────────────────────────
+  // ── 미리보기 ────────────────────────────────────────────────────
   if (view === 'preview') {
     return (
       <View style={styles.centered}>
         <StatusBar style="dark" />
-        <Image source={{ uri: capturedImage! }} style={styles.previewImage} />
-        <View style={styles.previewControls}>
-          <TouchableOpacity onPress={() => setView('camera')} style={styles.secondaryButton}>
-            <Text style={styles.secondaryButtonText}>재촬영</Text>
+        <Image source={{ uri: capturedImage! }} style={styles.preview} />
+        <View style={styles.previewRow}>
+          <TouchableOpacity onPress={() => setView('camera')} style={styles.secBtn}>
+            <Text style={styles.secBtnText}>재촬영</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={uploadPoster} style={[styles.primaryButton, { flex: 1 }]} disabled={loading}>
-            {loading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>등록</Text>}
+          <TouchableOpacity onPress={uploadPoster} style={[styles.btn, { flex: 1 }]} disabled={loading}>
+            {loading ? <ActivityIndicator color="white" /> : <Text style={styles.btnText}>등록</Text>}
           </TouchableOpacity>
         </View>
       </View>
     );
   }
 
-  // ── 메인 (Browse + FAB + Login Modal) ────────────────────────
+  // ── 메인 (풀스크린 WebView) ──────────────────────────────────────
   return (
     <View style={{ flex: 1 }}>
       <StatusBar style="dark" />
@@ -292,141 +269,77 @@ export default function App() {
         source={{ uri: browseUrl }}
         style={{ flex: 1 }}
         startInLoadingState
+        injectedJavaScript={SESSION_BRIDGE_JS}
+        onMessage={handleWebMessage}
         onNavigationStateChange={navState => {
           if (navState.url) setBrowseUrl(navState.url);
         }}
         renderLoading={() => (
-          <View style={styles.webviewLoading}>
+          <View style={styles.loading}>
             <ActivityIndicator size="large" color="#1e3a8a" />
           </View>
         )}
       />
 
-      {/* 카메라 / 로그인 FAB */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={handleFabPress}
-        onLongPress={handleFabLongPress}
-        activeOpacity={0.85}
-      >
-        <Text style={styles.fabIcon}>{user ? '📸' : '🔑'}</Text>
-      </TouchableOpacity>
-
-      {/* 로그인 Modal */}
-      <Modal
-        visible={loginVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setLoginVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>로그인</Text>
-
-            <TextInput
-              placeholder="이메일"
-              value={email}
-              onChangeText={setEmail}
-              style={styles.input}
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
-            <TextInput
-              placeholder="비밀번호"
-              value={password}
-              onChangeText={setPassword}
-              style={styles.input}
-              secureTextEntry
-            />
-            <TouchableOpacity onPress={handleLogin} style={styles.primaryButton} disabled={loading}>
-              <Text style={styles.buttonText}>{loading ? '로그인 중...' : '이메일로 로그인'}</Text>
-            </TouchableOpacity>
-
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>간편 로그인</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <TouchableOpacity onPress={() => handleSocialLogin('kakao')} style={styles.kakaoButton} disabled={loading}>
-              <Text style={styles.kakaoButtonText}>K  카카오로 시작하기</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleSocialLogin('google')} style={styles.googleButton} disabled={loading}>
-              <Text style={styles.googleButtonText}>G  구글로 시작하기</Text>
-            </TouchableOpacity>
-
-            {biometricAvailable && (
-              <TouchableOpacity onPress={handleBiometricLogin} style={styles.biometricButton}>
-                <Text style={styles.biometricButtonText}>
-                  {Platform.OS === 'ios' ? '🔒 Face ID / Touch ID' : '🔒 지문으로 로그인'}
-                </Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity onPress={() => setLoginVisible(false)} style={styles.cancelButton}>
-              <Text style={styles.cancelButtonText}>닫기</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      {/* 카메라 FAB — 로그인 시에만 표시, 탭바 위에 위치 */}
+      {user && (
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => setView('camera')}
+          onLongPress={handleLogout}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.fabIcon}>📸</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   centered: { flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', padding: 24 },
-  permissionText: { marginBottom: 20, fontWeight: 'bold', color: '#374151', fontSize: 16 },
-
-  // Buttons
-  primaryButton: { width: '100%', height: 56, backgroundColor: '#1e3a8a', borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  buttonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  secondaryButton: { flex: 1, height: 56, backgroundColor: '#f3f4f6', borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  secondaryButtonText: { color: '#4b5563', fontWeight: 'bold', fontSize: 16 },
-  kakaoButton: { width: '100%', height: 52, backgroundColor: '#FEE500', borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  kakaoButtonText: { color: '#3c1e1e', fontSize: 15, fontWeight: 'bold' },
-  googleButton: { width: '100%', height: 52, backgroundColor: '#fff', borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 10, borderWidth: 1.5, borderColor: '#e5e7eb' },
-  googleButtonText: { color: '#374151', fontSize: 15, fontWeight: 'bold' },
-  biometricButton: { width: '100%', height: 52, backgroundColor: '#f0fdf4', borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#6ee7b7', marginBottom: 10 },
-  biometricButtonText: { color: '#059669', fontSize: 15, fontWeight: 'bold' },
-  cancelButton: { width: '100%', height: 48, alignItems: 'center', justifyContent: 'center' },
-  cancelButtonText: { color: '#9ca3af', fontSize: 15 },
-
-  // Input
-  input: { width: '100%', height: 56, backgroundColor: '#f9fafb', borderRadius: 14, paddingHorizontal: 18, marginBottom: 12, fontSize: 15, borderWidth: 1, borderColor: '#f3f4f6' },
-
-  // Divider
-  divider: { flexDirection: 'row', alignItems: 'center', width: '100%', marginVertical: 16 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: '#f3f4f6' },
-  dividerText: { marginHorizontal: 12, color: '#9ca3af', fontSize: 13, fontWeight: 'bold' },
-
-  // FAB
-  fab: { position: 'absolute', bottom: 28, right: 20, width: 60, height: 60, borderRadius: 30, backgroundColor: '#1e3a8a', alignItems: 'center', justifyContent: 'center', elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
-  fabIcon: { fontSize: 26 },
-
-  // Login Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  modalSheet: { backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40 },
-  modalHandle: { width: 40, height: 4, backgroundColor: '#e5e7eb', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 22, fontWeight: '900', color: '#1e3a8a', marginBottom: 20, textAlign: 'center' },
+  permText: { marginBottom: 20, fontWeight: 'bold', color: '#374151', fontSize: 16, textAlign: 'center' },
+  btn: { width: '100%', height: 56, backgroundColor: '#1e3a8a', borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  btnText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+  secBtn: { flex: 1, height: 56, backgroundColor: '#f3f4f6', borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  secBtnText: { color: '#4b5563', fontWeight: 'bold', fontSize: 16 },
 
   // Camera
-  cameraControls: { position: 'absolute', bottom: 60, width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' },
-  shutterButton: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'white', borderWidth: 6, borderColor: 'rgba(255,255,255,0.3)' },
-  iconButton: { padding: 12 },
+  camControls: { position: 'absolute', bottom: 60, width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' },
+  shutter: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'white', borderWidth: 6, borderColor: 'rgba(255,255,255,0.3)' },
+  camBtn: { padding: 12 },
   guideOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', zIndex: 1 },
-  guideBox: { width: '75%', aspectRatio: 3 / 4, borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)', borderRadius: 16, position: 'relative' },
-  guideCorner: { position: 'absolute', width: 24, height: 24, borderColor: '#3b82f6' },
-  guideTopLeft: { top: -2, left: -2, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 16 },
-  guideTopRight: { top: -2, right: -2, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 16 },
-  guideBottomLeft: { bottom: -2, left: -2, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 16 },
-  guideBottomRight: { bottom: -2, right: -2, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 16 },
+  guideBox: { width: '75%', aspectRatio: 3 / 4, borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)', borderRadius: 16, position: 'relative' },
+  corner: { position: 'absolute', width: 24, height: 24, borderColor: '#3b82f6' },
+  tl: { top: -2, left: -2, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 16 },
+  tr: { top: -2, right: -2, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 16 },
+  bl: { bottom: -2, left: -2, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 16 },
+  br: { bottom: -2, right: -2, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 16 },
   guideText: { color: 'rgba(255,255,255,0.85)', fontSize: 14, fontWeight: 'bold', marginTop: 16, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
 
   // Preview
-  previewImage: { width: '100%', height: '70%', borderRadius: 24, marginBottom: 24 },
-  previewControls: { width: '100%', flexDirection: 'row', gap: 12 },
+  preview: { width: '100%', height: '70%', borderRadius: 24, marginBottom: 24 },
+  previewRow: { width: '100%', flexDirection: 'row', gap: 12 },
 
-  // WebView
-  webviewLoading: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
+  // WebView loading
+  loading: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
+
+  // FAB: 웹앱 하단 탭바(~65px) + 여유(20px) = bottom 85
+  fab: {
+    position: 'absolute',
+    bottom: 85,
+    right: 16,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#1e3a8a',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+  },
+  fabIcon: { fontSize: 24 },
 });
