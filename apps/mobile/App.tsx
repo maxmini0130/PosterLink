@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity, Image, TextInput,
-  Alert, ActivityIndicator, Platform, StatusBar as RNStatusBar,
+  Alert, ActivityIndicator, Platform,
 } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { WebView } from 'react-native-webview';
 import * as LocalAuthentication from 'expo-local-authentication';
@@ -262,7 +263,8 @@ export default function App() {
 
   // ── 메인 (풀스크린 WebView) ──────────────────────────────────────
   return (
-    <View style={{ flex: 1, paddingTop: RNStatusBar.currentHeight ?? 0, backgroundColor: '#fff' }}>
+    <SafeAreaProvider>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }} edges={['top']}>
       <StatusBar style="dark" />
       <WebView
         ref={webViewRef}
@@ -292,7 +294,8 @@ export default function App() {
           <Text style={styles.fabIcon}>📸</Text>
         </TouchableOpacity>
       )}
-    </View>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 

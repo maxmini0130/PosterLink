@@ -131,7 +131,7 @@ export default function Home() {
           animate={{ y: 0, opacity: 1 }}
           className="mb-8"
         >
-          <div className="bg-white dark:bg-slate-800 p-8 rounded-[3rem] shadow-sm border border-gray-100 dark:border-slate-700 relative overflow-hidden transition-colors">
+          <div className="bg-white dark:bg-slate-800 p-5 sm:p-8 rounded-[2rem] sm:rounded-[3rem] shadow-sm border border-gray-100 dark:border-slate-700 relative overflow-hidden transition-colors">
             <div className="absolute -top-10 -right-10 w-40 h-40 bg-blue-50 dark:bg-blue-900/20 rounded-full blur-3xl opacity-60" />
             <div className="relative z-10">
               <div className="flex items-center gap-2 mb-3">
@@ -140,11 +140,10 @@ export default function Home() {
                 </div>
                 <span className="text-xs font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Recommended for you</span>
               </div>
-              <h2 className="text-3xl font-black text-gray-900 dark:text-slate-50 leading-tight break-keep">
+              <h2 className="text-xl sm:text-3xl font-black text-gray-900 dark:text-slate-50 leading-snug" style={{ wordBreak: 'keep-all' }}>
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
                   {userProfile?.regions?.name || "전국"}{userProfile?.age_band === '20s' ? ' 20대' : ''}
-                </span>를 위한{' '}
-                맞춤형 공고가 도착했어요 💡
+                </span>를 위한 맞춤형 공고가 도착했어요 💡
               </h2>
             </div>
           </div>
