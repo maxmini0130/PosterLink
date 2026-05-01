@@ -1,0 +1,202 @@
+================================================================
+PosterLink 작업 기록 — 2026-05-02
+================================================================
+
+작업 목적
+- Codex가 진행한 6개 커밋(OAuth 안정화, 세션 브릿지, Sentry, 의존성 정리)을 검토한다.
+- 남은 사전 오픈 준비 항목을 순서대로 완료한다.
+  (비밀번호 재설정 → 알림 설정 UI → 반려 사유 모달 → 푸시 토큰 정리 → E2E 테스트)
+- OCR AI 모델을 GPT-4o-mini → GPT-4o로 업그레이드한다.
+- Claude Code 자동 허용 권한 설정을 추가한다.
+
+================================================================
+1. Codex 작업 검토
+================================================================
+
+검토 대상 커밋 (총 6개, dfd5f1d → e785411):
+  dfd5f1d  fix: stabilize web and mobile auth flows
+  821d88e  fix: persist mobile social auth in webview
+  00d932d  fix: harden new-match push delivery
+  c3ff5b6  fix: add auth page home logo link
+  d3c696b  chore: align Expo safe area dependency
+  e785411  chore: update Sentry instrumentation setup
+
+검토 결과:
+- dfd5f1d: ExpoLinking.createURL 사용, isMobileOAuthCallback 필터, SSR 쿠키를
+  base64url 청크로 분할 작성하는 injectSessionToWebView 공통화. 채택.
+- 821d88e: handleNativeOAuth에서 setView('browse') + setBrowseUrl(HOME_URL)
+  설정 후 인젝션 실행. 로그인 후 홈으로 복귀하는 흐름 완성. 채택.
+- 00d932d: notify-new-match 보안 강화 (호출자 admin 역할 검증 추가). 채택.
+- c3ff5b6: 로그인/회원가입 화면 좌상단에 PosterLink 로고 링크 추가. 채택.
+- d3c696b: react-native-safe-area-context를 Expo SDK 51 권장 버전(4.10.5)으로 재정렬. 채택.
+- e785411: Next.js instrumentation 방식으로 Sentry 설정 파일 구조 변경. 채택.
+
+주의: next.config.mjs의 withSentryConfig 옵션 배치가 변경됨.
+  Codex가 새 API(webpack.treeshake.removeDebugLogging, webpack.automaticVercelMonitors)로
+  옮긴 것이 올바른 최신 방식임을 E2E deprecation 경고로 확인 후 수용.
+
+================================================================
+2. 비밀번호 재설정 구현
+================================================================
+
+커밋: eaf8e5d
+
+신규 파일:
+  apps/web/app/forgot-password/page.tsx
+  - 이메일 입력 폼
+  - supabase.auth.resetPasswordForEmail(email, { redirectTo: origin + '/reset-password' })
+  - 전송 성공 시 "이메일을 확인해주세요" 안내 화면으로 전환
+  - 상단 PosterLink 로고 링크 및 하단 "로그인으로 돌아가기" 링크 포함
+
+  apps/web/app/reset-password/page.tsx
+  - window.location.hash에서 type=recovery + access_token + refresh_token 파싱
+  - supabase.auth.setSession()으로 복구 세션 설정
+  - 새 비밀번호 + 확인 입력 폼 (최소 6자, 불일치 검사)
+  - supabase.auth.updateUser({ password }) 후 홈으로 2초 후 자동 이동
+
+수정 파일:
+  apps/web/app/login/page.tsx
+  - 비밀번호 필드 레이블 옆에 "비밀번호를 잊으셨나요?" 링크 추가 (/forgot-password)
+
+================================================================
+3. 알림 설정 UI 구현
+================================================================
+
+커밋: d2e8d16
+수정 파일: apps/web/app/mypage/page.tsx
+
+추가 내용:
+- togglingNotif 상태 추가 (중복 클릭 방지)
+- handleToggleNotification: profiles.is_notified 즉시 업데이트 + toast 피드백
+- Bell 아이콘 + 슬라이드 토글 UI
+  - 켜짐: 앰버색 Bell (fill), 파란 슬라이더 오른쪽
+  - 꺼짐: 회색 Bell (outline), 슬라이더 왼쪽
+- 기존 메뉴 그리드에 알림 설정 항목 추가
+
+================================================================
+4. 관리자 반려 사유 모달
+================================================================
+
+커밋: 161f7e7
+수정 파일: apps/web/app/admin/posters/page.tsx
+
+변경 내용:
+- 기존 반려 처리 방식(window.confirm) 제거
+- rejectModal / rejectReason / rejecting 상태 추가
+- handleStatusChange: rejected 선택 시 모달 오픈 (handleReject로 분리)
+- handleReject: rejection_reason 포함하여 supabase update
+- 모달 UI:
+  - 포스터 제목 표시
+  - 반려 사유 textarea (선택 입력, 등록자에게 표시됨 안내)
+  - 취소 / 반려하기 버튼 (처리 중 비활성화)
+
+신규 마이그레이션:
+  supabase/migrations/20260502000000_add_rejection_reason_to_posters.sql
+  - posters 테이블에 rejection_reason TEXT 컬럼 추가
+
+================================================================
+5. 푸시 실패 토큰 자동 정리
+================================================================
+
+커밋: 0deef24
+수정 파일: supabase/functions/notify-new-match/index.ts
+
+변경 내용:
+- 푸시 전송 응답의 tickets 배열에서 DeviceNotRegistered 에러 감지
+- 해당 user id를 invalidTokenUserIds에 수집
+- 루프 종료 후 profiles.expo_push_token을 null로 일괄 업데이트
+- 응답 JSON에 invalidTokensCleared 카운트 포함
+
+배경:
+  DeviceNotRegistered: 앱 삭제/재설치 등으로 Expo 토큰이 만료된 경우.
+  만료 토큰을 방치하면 이후 푸시마다 불필요한 API 호출이 발생하므로 즉시 정리.
+
+================================================================
+6. E2E 테스트 전체 실행
+================================================================
+
+실행: pnpm --filter web test:e2e
+결과: 35 passed, 1 skipped
+
+skipped 이유:
+  ocr.spec.ts의 일부 테스트 — 실 Supabase JWT 발급 없이 통과 여부만 확인하는 구조로,
+  기능 이상 없음.
+
+----------------------------------------------------------------
+E2E 실행 중 발견된 추가 수정:
+
+Sentry deprecation 경고 확인:
+  next.config.mjs에서 fd14e29 커밋이 disableLogger / automaticVercelMonitors를
+  top-level로 이동시켰으나, 이는 구 API 방식으로 오히려 deprecation 경고 발생.
+  Codex의 원래 새 API(webpack.treeshake.removeDebugLogging, webpack.automaticVercelMonitors)가
+  올바른 방식임을 확인하고 되돌림.
+
+커밋: c8dc244
+수정 파일: apps/web/next.config.mjs
+- withSentryConfig 옵션:
+  이전(잘못됨): disableLogger: true (top-level), automaticVercelMonitors: false (top-level)
+  이후(올바름): webpack.treeshake.removeDebugLogging: true, webpack.automaticVercelMonitors: false
+
+================================================================
+7. OCR AI 모델 업그레이드
+================================================================
+
+커밋: b420d89
+수정 파일: supabase/functions/process-ocr/index.ts
+
+변경 내용:
+  model: "gpt-4o-mini" → "gpt-4o"
+  max_tokens: 800 → 1000
+
+이유:
+  포스터 이미지에서 제목, 기관명, 마감일, 요약, 공식 URL을 추출하는 작업에서
+  정확도가 더 중요하다고 판단. GPT-4o는 GPT-4o-mini 대비 비전 인식 정확도가 높음.
+  max_tokens도 소폭 증가해 더 상세한 요약 응답을 허용.
+
+배포:
+  npx supabase functions deploy process-ocr --project-ref zxndgzsfrgwahwsdbjdj
+  결과: Deployed Functions on project zxndgzsfrgwahwsdbjdj: process-ocr
+
+================================================================
+8. Claude Code 자동 허용 설정
+================================================================
+
+수정 파일: .claude/settings.json
+
+기존 허용 목록이 너무 적어 매 도구 호출마다 수동 승인이 필요했음.
+아래 패턴을 추가하여 반복적인 클릭 없이 작업 진행 가능하도록 설정:
+
+  Bash(git *)      — 모든 git 명령
+  Bash(pnpm *)     — pnpm 명령
+  Bash(npm *)      — npm 명령
+  Bash(npx *)      — npx 명령
+  Bash(node *)     — node 직접 실행
+  Bash(ls *)       — 디렉토리 목록
+  Bash(cat *)      — 파일 내용 출력
+  Read(**)         — 모든 파일 읽기
+  WebSearch        — 웹 검색
+  WebFetch         — URL 가져오기
+
+참고: VSCode 채팅창에서 Shift+Tab으로 허용 모드 전환도 가능.
+
+================================================================
+9. 오늘 기준 결론
+================================================================
+
+완료된 사전 오픈 준비 항목:
+  ✅ 비밀번호 재설정 (forgot-password, reset-password 페이지)
+  ✅ 알림 설정 UI (마이페이지 is_notified 토글)
+  ✅ 관리자 반려 사유 모달 + DB 마이그레이션
+  ✅ 푸시 실패 토큰 자동 정리 (DeviceNotRegistered)
+  ✅ E2E 테스트 35/36 통과
+  ✅ Sentry deprecation 경고 해소
+  ✅ OCR 모델 GPT-4o로 업그레이드 + Supabase 재배포
+
+남은 작업:
+  - supabase/migrations/20260502000000_add_rejection_reason_to_posters.sql
+    → Supabase 대시보드 SQL Editor에서 실행 필요 (rejection_reason 컬럼 추가)
+  - 실제 기기에서 비밀번호 재설정 이메일 링크 동작 확인 권장
+  - 모바일 OAuth (Google/Kakao) 실기기 최종 검증 권장
+
+현재 main 브랜치: b420d89
+origin/main 동기화: ✅
