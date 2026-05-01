@@ -14,6 +14,42 @@ async function derivePassword(naverId: string): Promise<string> {
   return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+async function findAuthUserByEmail(
+  supabaseAdmin: any,
+  email: string
+) {
+  const normalizedEmail = email.toLowerCase();
+  let page = 1;
+
+  while (true) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+      page,
+      perPage: 1000,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    const users = (data.users ?? []) as Array<{ id: string; email?: string | null }>;
+    const matchedUser = users.find(
+      (user) => user.email?.toLowerCase() === normalizedEmail
+    );
+    if (matchedUser) {
+      return matchedUser;
+    }
+
+    const nextPage = 'nextPage' in data ? data.nextPage : null;
+    const lastPage = 'lastPage' in data ? data.lastPage : page;
+
+    if (!nextPage || page >= lastPage) {
+      return null;
+    }
+
+    page = nextPage;
+  }
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
@@ -67,12 +103,15 @@ export async function GET(request: NextRequest) {
   const userMeta = { full_name: naverUser.name, avatar_url: naverUser.profile_image, provider: 'naver' };
 
   // 유저 존재 여부 확인
-  const { data: existingData } = await supabaseAdmin.auth.admin.getUserByEmail(naverUser.email);
-  if (existingData?.user) {
-    await supabaseAdmin.auth.admin.updateUserById(existingData.user.id, {
+  const existingUser = await findAuthUserByEmail(supabaseAdmin, naverUser.email);
+  if (existingUser) {
+    const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(existingUser.id, {
       password,
       user_metadata: userMeta,
     });
+    if (updateErr) {
+      return NextResponse.redirect(`${BASE_URL}/login?error=update_user_failed&msg=${encodeURIComponent(updateErr.message)}`);
+    }
   } else {
     const { error: createErr } = await supabaseAdmin.auth.admin.createUser({
       email: naverUser.email,

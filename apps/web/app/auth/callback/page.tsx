@@ -28,6 +28,10 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const hash = window.location.hash.startsWith("#")
+      ? window.location.hash.slice(1)
+      : window.location.hash;
+    const hashParams = new URLSearchParams(hash);
 
     // PKCE 코드 플로우 (카카오/구글)
     const code = params.get("code");
@@ -35,6 +39,28 @@ export default function AuthCallbackPage() {
       supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
         if (error || !data.user) {
           router.replace("/login?error=auth_callback_failed");
+          return;
+        }
+        handlePostAuth(data.user.id, data.user.email, router);
+      });
+      return;
+    }
+
+    const mobileAt = hashParams.get("access_token") ?? params.get("access_token");
+    const mobileRt = hashParams.get("refresh_token") ?? params.get("refresh_token");
+    if (mobileAt && mobileRt) {
+      const cleanParams = new URLSearchParams(params);
+      cleanParams.delete("access_token");
+      cleanParams.delete("refresh_token");
+      const cleanSearch = cleanParams.toString();
+      window.history.replaceState(
+        null,
+        "",
+        cleanSearch ? `${window.location.pathname}?${cleanSearch}` : window.location.pathname
+      );
+      supabase.auth.setSession({ access_token: mobileAt, refresh_token: mobileRt }).then(({ data, error }) => {
+        if (error || !data.user) {
+          router.replace(`/login?error=set_session_failed&msg=${encodeURIComponent(error?.message ?? "no_user")}`);
           return;
         }
         handlePostAuth(data.user.id, data.user.email, router);

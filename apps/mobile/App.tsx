@@ -10,6 +10,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
+import * as ExpoLinking from 'expo-linking';
 import { supabase } from './src/lib/supabase';
 import { StatusBar } from 'expo-status-bar';
 import * as WebBrowser from 'expo-web-browser';
@@ -24,21 +25,62 @@ Notifications.setNotificationHandler({
 
 const HOME_URL = 'https://www.posterlink.kr';
 const SB_PROJECT = 'zxndgzsfrgwahwsdbjdj';
+const WEB_AUTH_CALLBACK_URL = `${HOME_URL}/auth/callback`;
+const MOBILE_OAUTH_REDIRECT_URI = ExpoLinking.createURL('auth-callback');
+const LEGACY_MOBILE_OAUTH_REDIRECT_URI = 'com.maxmini.posterlink://auth-callback';
 
 // 웹앱 Supabase 세션을 2초마다 체크해서 네이티브로 전달
 const SESSION_BRIDGE_JS = `
   (function() {
     const KEY = 'sb-${SB_PROJECT}-auth-token';
-    function getCookie(name) {
-      var m = document.cookie.match(new RegExp('(^|;\\\\s*)' + name + '=([^;]*)'));
-      return m ? decodeURIComponent(m[2]) : null;
+    function decodeBase64Url(value) {
+      try {
+        var normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+        while (normalized.length % 4) normalized += '=';
+        return atob(normalized);
+      } catch (e) {
+        return null;
+      }
+    }
+    function readCookieChunks(name) {
+      var cookies = document.cookie
+        .split(';')
+        .map(function(part) { return part.trim(); })
+        .filter(Boolean)
+        .map(function(part) {
+          var separatorIndex = part.indexOf('=');
+          return separatorIndex === -1
+            ? null
+            : {
+                name: part.slice(0, separatorIndex),
+                value: decodeURIComponent(part.slice(separatorIndex + 1))
+              };
+        })
+        .filter(function(part) {
+          return part && (part.name === name || part.name.indexOf(name + '.') === 0);
+        })
+        .sort(function(a, b) {
+          var left = a.name === name ? -1 : parseInt(a.name.slice(name.length + 1), 10);
+          var right = b.name === name ? -1 : parseInt(b.name.slice(name.length + 1), 10);
+          return left - right;
+        });
+
+      if (!cookies.length) return null;
+      return cookies.map(function(part) { return part.value; }).join('');
+    }
+    function readSession() {
+      var raw = readCookieChunks(KEY) || localStorage.getItem(KEY);
+      if (!raw) return null;
+      if (raw.indexOf('base64-') === 0) {
+        raw = decodeBase64Url(raw.slice('base64-'.length));
+      }
+      return raw ? JSON.parse(raw) : null;
     }
     function checkSession() {
       try {
-        var raw = getCookie(KEY) || localStorage.getItem(KEY);
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'auth',
-          payload: raw ? JSON.parse(raw) : null
+          payload: readSession()
         }));
       } catch(e) {}
     }
@@ -63,6 +105,10 @@ export default function App() {
   const notificationListener = useRef<any>();
   const responseListener = useRef<any>();
   const lastUserId = useRef<string | null>(null);
+  const isMobileOAuthCallback = useCallback((url: string) => (
+    url.startsWith(MOBILE_OAUTH_REDIRECT_URI) ||
+    url.startsWith(LEGACY_MOBILE_OAUTH_REDIRECT_URI)
+  ), []);
 
   useEffect(() => {
     registerForPushNotificationsAsync().then(token => {
@@ -88,7 +134,7 @@ export default function App() {
 
     // OAuth 딥링크 수신 → 토큰 파싱 후 세션 적용
     const handleDeepLink = async ({ url }: { url: string }) => {
-      if (!url.startsWith('com.maxmini.posterlink://auth-callback')) return;
+      if (!isMobileOAuthCallback(url)) return;
       // implicit flow: #access_token=...&refresh_token=...
       const hash = url.includes('#') ? url.split('#')[1] : '';
       const query = url.includes('?') ? url.split('?')[1] : '';
@@ -111,7 +157,7 @@ export default function App() {
       Notifications.removeNotificationSubscription(responseListener.current);
       linkingSub.remove();
     };
-  }, []);
+  }, [isMobileOAuthCallback]);
 
   useEffect(() => {
     if (user && expoPushToken) {
@@ -123,12 +169,16 @@ export default function App() {
   const injectSessionToWebView = useCallback((session: any, user: any) => {
     setUser(user);
     lastUserId.current = user.id;
-    const sessionStr = JSON.stringify(session);
+    setView('browse');
+    const authCallbackUrl = `${WEB_AUTH_CALLBACK_URL}#${new URLSearchParams({
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+    }).toString()}`;
+    setBrowseUrl(authCallbackUrl);
     webViewRef.current?.injectJavaScript(`
       (function() {
         try {
-          localStorage.setItem('sb-${SB_PROJECT}-auth-token', ${JSON.stringify(sessionStr)});
-          window.location.href = '/';
+          window.location.replace(${JSON.stringify(authCallbackUrl)});
         } catch(e) {}
       })();
       true;
@@ -168,14 +218,17 @@ export default function App() {
       const { data } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: 'com.maxmini.posterlink://auth-callback',
+          redirectTo: MOBILE_OAUTH_REDIRECT_URI,
           skipBrowserRedirect: true,
           ...(provider === 'kakao' && { scopes: 'profile_nickname profile_image' }),
         },
       });
-      if (!data?.url) return;
+      if (!data?.url) {
+        Alert.alert('로그인 실패', `${provider} 로그인 URL을 생성하지 못했습니다.`);
+        return;
+      }
 
-      const result = await WebBrowser.openAuthSessionAsync(data.url, 'com.maxmini.posterlink://');
+      const result = await WebBrowser.openAuthSessionAsync(data.url, MOBILE_OAUTH_REDIRECT_URI);
       if (result.type === 'success') {
         const callbackUrl = (result as any).url as string | undefined;
         if (callbackUrl) {
@@ -192,12 +245,14 @@ export default function App() {
             await applyOAuthSession(code);
           }
         }
+      } else if (result.type !== 'cancel') {
+        Alert.alert('로그인 실패', `${provider} 로그인 콜백을 받지 못했습니다. Redirect URL 설정을 확인해주세요.`);
       }
       // Android: Linking 이벤트로도 처리 (handleDeepLink)
     } finally {
       oauthInProgress.current = false;
     }
-  }, [applyOAuthSession]);
+  }, [applyOAuthSession, applyOAuthTokens]);
 
   async function registerForPushNotificationsAsync() {
     if (!Device.isDevice) return;

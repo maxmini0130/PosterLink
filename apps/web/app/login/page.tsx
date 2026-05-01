@@ -11,6 +11,11 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_state: "보안 검증 실패. 다시 시도해주세요.",
   naver_token_failed: "네이버 인증 실패. 다시 시도해주세요.",
   naver_email_required: "네이버 계정에 이메일이 없습니다.",
+  create_user_failed: "네이버 계정을 회원 정보로 생성하지 못했습니다.",
+  update_user_failed: "기존 네이버 계정 정보를 업데이트하지 못했습니다.",
+  signin_failed: "네이버 로그인 세션 생성에 실패했습니다.",
+  auth_callback_failed: "소셜 로그인 세션 교환에 실패했습니다.",
+  set_session_failed: "소셜 로그인 세션 저장에 실패했습니다.",
   login_failed: "로그인 처리 중 오류가 발생했습니다.",
 };
 
