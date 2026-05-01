@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -73,8 +74,17 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-white">
-      <h1 className="text-4xl font-black text-primary mb-2">PosterLink</h1>
+    <div className="relative min-h-screen flex flex-col items-center justify-center px-6 py-24 bg-white">
+      <Link
+        href="/"
+        aria-label="PosterLink 홈으로 이동"
+        className="absolute left-6 top-6 flex items-center gap-2 rounded-xl px-2 py-1 font-black text-primary transition-colors hover:bg-gray-50"
+      >
+        <Image src="/logo.png" alt="PosterLink" width={32} height={32} className="rounded-lg" priority />
+        <span>PosterLink</span>
+      </Link>
+
+      <h1 className="text-3xl font-black text-gray-900 mb-2">회원가입</h1>
       <p className="text-gray-500 mb-10">새로운 계정을 만들고 맞춤 정보를 받아보세요</p>
       
       <form onSubmit={handleSignup} className="w-full max-w-sm space-y-4">

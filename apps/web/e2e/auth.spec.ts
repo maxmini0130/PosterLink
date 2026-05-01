@@ -18,6 +18,12 @@ test.describe("인증 - 로그인", () => {
     await expect(signupLink.first()).toBeVisible();
   });
 
+  test("로그인 페이지 - 상단 로고 클릭 시 홈 이동", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByLabel("PosterLink 홈으로 이동").click();
+    await expect(page).toHaveURL("/");
+  });
+
   test("이메일 입력 필드 존재", async ({ page }) => {
     await page.goto("/login");
     await expect(page.locator("input[type='email'], input[name='email']").first()).toBeVisible();
@@ -48,6 +54,12 @@ test.describe("인증 - 회원가입", () => {
     await page.goto("/signup");
     const submitBtn = page.locator("button[type='submit'], button:has-text('이메일로 가입')").first();
     await expect(submitBtn).toBeDisabled();
+  });
+
+  test("회원가입 페이지 - 상단 로고 클릭 시 홈 이동", async ({ page }) => {
+    await page.goto("/signup");
+    await page.getByLabel("PosterLink 홈으로 이동").click();
+    await expect(page).toHaveURL("/");
   });
 });
 

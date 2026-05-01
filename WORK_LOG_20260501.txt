@@ -276,3 +276,20 @@ PosterLink 작업 기록 — 2026-05-01
   - pnpm exec expo config --type public OK
   - pnpm dlx expo-doctor OK, 16/16 checks passed
   - Babel transform for apps/mobile/App.tsx OK
+
+17. 2026-05-01 Auth page logo navigation
+- Reason:
+  - Login and signup pages showed PosterLink as a centered title, but did not provide a persistent top logo that returns users home.
+- Changes:
+  - apps/web/app/login/page.tsx
+    - added a top-left PosterLink logo link to /
+    - changed the main page title from PosterLink to login-specific Korean copy
+  - apps/web/app/signup/page.tsx
+    - added the same top-left PosterLink logo link to /
+    - changed the main page title from PosterLink to signup-specific Korean copy
+  - apps/web/e2e/auth.spec.ts
+    - added regression coverage for logo-to-home navigation on login and signup pages
+- Verification:
+  - pnpm --filter web lint OK
+  - pnpm --filter web build OK when rerun standalone
+  - pnpm --filter web test:e2e -- e2e/auth.spec.ts OK, 15/15 passed

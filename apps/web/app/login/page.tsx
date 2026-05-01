@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
@@ -71,12 +72,21 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-white p-6">
+    <div className="relative min-h-screen flex flex-col items-center justify-center bg-white px-6 py-24">
+      <Link
+        href="/"
+        aria-label="PosterLink 홈으로 이동"
+        className="absolute left-6 top-6 flex items-center gap-2 rounded-xl px-2 py-1 font-black text-primary transition-colors hover:bg-gray-50"
+      >
+        <Image src="/logo.png" alt="PosterLink" width={32} height={32} className="rounded-lg" priority />
+        <span>PosterLink</span>
+      </Link>
+
       <Suspense fallback={null}>
         <LoginErrorHandler />
       </Suspense>
 
-      <h1 className="mb-2 text-4xl font-black text-primary">PosterLink</h1>
+      <h1 className="mb-2 text-3xl font-black text-gray-900">로그인</h1>
       <p className="mb-10 text-gray-500">공공 포스터를 더 쉽게 찾고 공유하세요</p>
 
       <form onSubmit={handleLogin} className="w-full max-w-sm space-y-4">
