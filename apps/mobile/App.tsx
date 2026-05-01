@@ -86,32 +86,12 @@ export default function App() {
       }
     });
 
-    // OAuth 딥링크 수신 → 네이티브 코드 교환 → WebView에 세션 주입
+    // OAuth 딥링크 수신 → applyOAuthSession 위임
     const handleDeepLink = async ({ url }: { url: string }) => {
       if (!url.startsWith('com.maxmini.posterlink://auth-callback')) return;
-      const queryString = url.includes('?') ? url.split('?')[1] : '';
-      const code = new URLSearchParams(queryString).get('code');
-      if (!code) return;
-
-      const { data: sd } = await supabase.auth.exchangeCodeForSession(code);
-      if (sd?.session && sd.user) {
-        setUser(sd.user);
-        lastUserId.current = sd.user.id;
-        const sessionStr = JSON.stringify(sd.session);
-        webViewRef.current?.injectJavaScript(`
-          (function() {
-            try {
-              localStorage.setItem('sb-${SB_PROJECT}-auth-token', ${JSON.stringify(sessionStr)});
-              window.location.href = '/';
-            } catch(e) {}
-          })();
-          true;
-        `);
-      } else {
-        webViewRef.current?.injectJavaScript(
-          `window.location.href = '/login?error=auth_callback_failed'; true;`
-        );
-      }
+      const qs = url.includes('?') ? url.split('?')[1] : '';
+      const code = new URLSearchParams(qs).get('code');
+      if (code) await applyOAuthSession(code);
     };
     const linkingSub = Linking.addEventListener('url', handleDeepLink);
     Linking.getInitialURL().then(url => { if (url) handleDeepLink({ url }); });
@@ -129,24 +109,62 @@ export default function App() {
     }
   }, [user, expoPushToken]);
 
-  // WebView에서 Google/Kakao OAuth 인터셉트 → 네이티브로 처리
-  const handleNativeOAuth = useCallback(async (authorizeUrl: string) => {
-    const urlParams = new URLSearchParams(authorizeUrl.split('?')[1] || '');
-    const provider = urlParams.get('provider') as 'google' | 'kakao' | null;
-    if (provider !== 'google' && provider !== 'kakao') return;
-
-    const { data } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: 'com.maxmini.posterlink://auth-callback',
-        skipBrowserRedirect: true,
-        ...(provider === 'kakao' && { scopes: 'profile_nickname profile_image' }),
-      },
-    });
-    if (!data?.url) return;
-    // Chrome Custom Tab으로 열기 — 완료 후 딥링크로 앱 복귀
-    await WebBrowser.openAuthSessionAsync(data.url, 'com.maxmini.posterlink://');
+  // 코드 교환 + WebView 세션 주입 (공통)
+  const applyOAuthSession = useCallback(async (code: string) => {
+    const { data: sd, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (sd?.session && sd.user) {
+      setUser(sd.user);
+      lastUserId.current = sd.user.id;
+      const sessionStr = JSON.stringify(sd.session);
+      webViewRef.current?.injectJavaScript(`
+        (function() {
+          try {
+            localStorage.setItem('sb-${SB_PROJECT}-auth-token', ${JSON.stringify(sessionStr)});
+            window.location.href = '/';
+          } catch(e) {}
+        })();
+        true;
+      `);
+    } else {
+      Alert.alert('로그인 실패', error?.message ?? '인증 처리 중 오류가 발생했습니다.');
+    }
   }, []);
+
+  // WebView OAuth URL 감지 → 네이티브 PKCE + Chrome Custom Tab
+  const oauthInProgress = useRef(false);
+  const handleNativeOAuth = useCallback(async (authorizeUrl: string) => {
+    if (oauthInProgress.current) return;
+    oauthInProgress.current = true;
+    try {
+      const urlParams = new URLSearchParams(authorizeUrl.split('?')[1] || '');
+      const provider = urlParams.get('provider') as 'google' | 'kakao' | null;
+      if (provider !== 'google' && provider !== 'kakao') return;
+
+      const { data } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: 'com.maxmini.posterlink://auth-callback',
+          skipBrowserRedirect: true,
+          ...(provider === 'kakao' && { scopes: 'profile_nickname profile_image' }),
+        },
+      });
+      if (!data?.url) return;
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, 'com.maxmini.posterlink://');
+      // iOS / 일부 Android: openAuthSessionAsync가 콜백 URL 직접 반환
+      if (result.type === 'success') {
+        const callbackUrl = (result as any).url as string | undefined;
+        if (callbackUrl) {
+          const qs = callbackUrl.includes('?') ? callbackUrl.split('?')[1] : '';
+          const code = new URLSearchParams(qs).get('code');
+          if (code) await applyOAuthSession(code);
+        }
+      }
+      // Android 대부분: Linking 이벤트로 처리 (handleDeepLink)
+    } finally {
+      oauthInProgress.current = false;
+    }
+  }, [applyOAuthSession]);
 
   async function registerForPushNotificationsAsync() {
     if (!Device.isDevice) return;
@@ -337,10 +355,18 @@ export default function App() {
           })();
           true;
         `}
+        onLoadStart={({ nativeEvent }) => {
+          // Android: JS 기반 탐색은 onShouldStartLoadWithRequest를 우회함
+          // → onLoadStart + stopLoading()으로 인터셉트
+          if (nativeEvent.url.includes('/auth/v1/authorize')) {
+            webViewRef.current?.stopLoading();
+            handleNativeOAuth(nativeEvent.url);
+          }
+        }}
         onShouldStartLoadWithRequest={(request) => {
-          const { url } = request;
-          if (url.includes('/auth/v1/authorize')) {
-            handleNativeOAuth(url);
+          // iOS 및 클릭 기반 탐색 백업
+          if (request.url.includes('/auth/v1/authorize')) {
+            handleNativeOAuth(request.url);
             return false;
           }
           return true;
