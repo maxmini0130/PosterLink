@@ -91,6 +91,7 @@ export default function App() {
       if (!url.startsWith('com.maxmini.posterlink://auth-callback')) return;
       const qs = url.includes('?') ? url.split('?')[1] : '';
       const code = new URLSearchParams(qs).get('code');
+      Alert.alert('[DEBUG] DeepLink', `code: ${code ? code.substring(0, 20) + '...' : 'NONE'}`);
       if (code) await applyOAuthSession(code);
     };
     const linkingSub = Linking.addEventListener('url', handleDeepLink);
@@ -111,10 +112,12 @@ export default function App() {
 
   // 코드 교환 + WebView 세션 주입 (공통)
   const applyOAuthSession = useCallback(async (code: string) => {
+    Alert.alert('[DEBUG] applyOAuthSession', `code: ${code.substring(0, 20)}...`);
     const { data: sd, error } = await supabase.auth.exchangeCodeForSession(code);
     if (sd?.session && sd.user) {
       setUser(sd.user);
       lastUserId.current = sd.user.id;
+      Alert.alert('[DEBUG] 세션 교환 성공', `user: ${sd.user.email}`);
       const sessionStr = JSON.stringify(sd.session);
       webViewRef.current?.injectJavaScript(`
         (function() {
@@ -138,7 +141,11 @@ export default function App() {
     try {
       const urlParams = new URLSearchParams(authorizeUrl.split('?')[1] || '');
       const provider = urlParams.get('provider') as 'google' | 'kakao' | null;
-      if (provider !== 'google' && provider !== 'kakao') return;
+      Alert.alert('[DEBUG] handleNativeOAuth', `provider: ${provider}\nurl: ${authorizeUrl.substring(0, 60)}...`);
+      if (provider !== 'google' && provider !== 'kakao') {
+        Alert.alert('[DEBUG] provider 불일치', `감지된 provider: "${provider}"`);
+        return;
+      }
 
       const { data } = await supabase.auth.signInWithOAuth({
         provider,
@@ -148,10 +155,13 @@ export default function App() {
           ...(provider === 'kakao' && { scopes: 'profile_nickname profile_image' }),
         },
       });
-      if (!data?.url) return;
+      if (!data?.url) {
+        Alert.alert('[DEBUG] signInWithOAuth 실패', 'data.url 없음');
+        return;
+      }
 
       const result = await WebBrowser.openAuthSessionAsync(data.url, 'com.maxmini.posterlink://');
-      // iOS / 일부 Android: openAuthSessionAsync가 콜백 URL 직접 반환
+      Alert.alert('[DEBUG] openAuthSessionAsync', `type: ${result.type}\nurl: ${(result as any).url?.substring(0, 60) || 'none'}`);
       if (result.type === 'success') {
         const callbackUrl = (result as any).url as string | undefined;
         if (callbackUrl) {
@@ -357,6 +367,7 @@ export default function App() {
         `}
         onLoadStart={({ nativeEvent }) => {
           if (nativeEvent.url.includes('supabase.co/auth/v1/authorize')) {
+            Alert.alert('[DEBUG] onLoadStart 감지', nativeEvent.url.substring(0, 80) + '...');
             webViewRef.current?.stopLoading();
             handleNativeOAuth(nativeEvent.url);
           }
