@@ -20,9 +20,13 @@ export default withSentryConfig(nextConfig, {
   silent: true,
   widenClientFileUpload: true,
   hideSourceMaps: true,
-  disableLogger: true,
-  automaticVercelMonitors: false,
+  webpack: {
+    treeshake: {
+      removeDebugLogging: true,
+    },
+    automaticVercelMonitors: false,
+  },
   errorHandler: (err) => {
-    console.warn("[Sentry] 소스맵 업로드 실패 (빌드에 영향 없음):", err.message);
+    console.warn("[Sentry] Source map upload failed without blocking the build:", err.message);
   },
 });

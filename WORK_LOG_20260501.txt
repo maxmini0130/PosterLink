@@ -237,3 +237,27 @@ PosterLink 작업 기록 — 2026-05-01
   - pnpm --filter web lint OK
   - pnpm --filter web build OK
   - deno is not installed locally, so Edge Function syntax was reviewed by diff and not executed via deno check
+  - notify-new-match Edge Function deployed with Supabase CLI via pnpm dlx
+
+15. 2026-05-01 Sentry instrumentation cleanup
+- Reason:
+  - Next build showed Sentry deprecation warnings for sentry.server.config.ts, sentry.edge.config.ts, sentry.client.config.ts.
+  - next.config.mjs also used deprecated Sentry options: disableLogger and automaticVercelMonitors at the top level.
+- Changes:
+  - apps/web/instrumentation.ts
+    - added server/edge Sentry.init inside register()
+  - apps/web/instrumentation-client.ts
+    - moved browser Sentry.init and Replay config from sentry.client.config.ts
+    - added onRouterTransitionStart hook for navigation instrumentation
+  - apps/web/next.config.mjs
+    - replaced disableLogger with webpack.treeshake.removeDebugLogging
+    - moved automaticVercelMonitors under webpack
+    - cleaned the Sentry upload warning text
+  - removed old sentry.server.config.ts, sentry.edge.config.ts, sentry.client.config.ts
+  - apps/web/app/global-error.tsx
+    - cleaned visible Korean error copy
+- Verification:
+  - pnpm --filter web lint OK
+  - pnpm --filter web build OK
+  - Sentry deprecation/action-required warnings removed
+  - Remaining webpack cache big-string warnings are build-cache performance warnings, not Sentry config blockers
