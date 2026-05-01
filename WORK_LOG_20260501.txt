@@ -192,3 +192,24 @@ PosterLink 작업 기록 — 2026-05-01
   - Babel transform for apps/mobile/App.tsx OK
 - Next:
   - commit and trigger a new EAS Android preview build
+
+13. 2026-05-01 Mobile social login follow-up
+- User report:
+  - The new build still showed "소셜 로그인 세션 저장에 실패했습니다."
+- Reassessment:
+  - The failure was happening on the web callback page path, where the browser client tried to call supabase.auth.setSession().
+  - That path is brittle for the app because native auth already has a valid session, and the WebView only needs the same session persisted in the format expected by @supabase/ssr.
+- Change:
+  - apps/mobile/App.tsx
+    - stop routing native mobile auth through /auth/callback
+    - write both localStorage and SSR-compatible auth cookies directly inside the WebView
+    - use base64url encoding and 3180-byte chunking compatible with @supabase/ssr cookie storage
+    - clear stale auth cookie chunks before writing the new session
+  - apps/web/app/login/page.tsx
+    - rewrite the page in clean UTF-8 Korean
+    - include ?msg=... details in toast errors for faster diagnosis if another auth error appears
+- Verification:
+  - pnpm --filter web lint OK
+  - Babel transform for apps/mobile/App.tsx OK
+- Next:
+  - commit, push, and issue a new Android preview build

@@ -25,7 +25,6 @@ Notifications.setNotificationHandler({
 
 const HOME_URL = 'https://www.posterlink.kr';
 const SB_PROJECT = 'zxndgzsfrgwahwsdbjdj';
-const WEB_AUTH_CALLBACK_URL = `${HOME_URL}/auth/callback`;
 const MOBILE_OAUTH_REDIRECT_URI = ExpoLinking.createURL('auth-callback');
 const LEGACY_MOBILE_OAUTH_REDIRECT_URI = 'com.maxmini.posterlink://auth-callback';
 
@@ -170,15 +169,47 @@ export default function App() {
     setUser(user);
     lastUserId.current = user.id;
     setView('browse');
-    const authCallbackUrl = `${WEB_AUTH_CALLBACK_URL}#${new URLSearchParams({
-      access_token: session.access_token,
-      refresh_token: session.refresh_token,
-    }).toString()}`;
-    setBrowseUrl(authCallbackUrl);
+    setBrowseUrl(HOME_URL);
+    const sessionStr = JSON.stringify(session);
     webViewRef.current?.injectJavaScript(`
       (function() {
         try {
-          window.location.replace(${JSON.stringify(authCallbackUrl)});
+          var KEY = 'sb-${SB_PROJECT}-auth-token';
+          var MAX_CHUNK_SIZE = 3180;
+          var SESSION_JSON = ${JSON.stringify(sessionStr)};
+          function base64UrlEncode(value) {
+            var utf8 = unescape(encodeURIComponent(value));
+            var base64 = btoa(utf8);
+            return base64.replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/g, '');
+          }
+          function clearAuthCookies() {
+            document.cookie
+              .split(';')
+              .map(function(part) { return part.trim(); })
+              .filter(Boolean)
+              .forEach(function(part) {
+                var separatorIndex = part.indexOf('=');
+                var name = separatorIndex === -1 ? part : part.slice(0, separatorIndex);
+                if (name === KEY || name.indexOf(KEY + '.') === 0) {
+                  document.cookie = name + '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; samesite=lax';
+                }
+              });
+          }
+          function writeAuthCookies(value) {
+            var encoded = 'base64-' + base64UrlEncode(value);
+            clearAuthCookies();
+            if (encoded.length <= MAX_CHUNK_SIZE) {
+              document.cookie = KEY + '=' + encoded + '; path=/; max-age=34560000; samesite=lax';
+              return;
+            }
+            for (var i = 0; i * MAX_CHUNK_SIZE < encoded.length; i++) {
+              var chunk = encoded.slice(i * MAX_CHUNK_SIZE, (i + 1) * MAX_CHUNK_SIZE);
+              document.cookie = KEY + '.' + i + '=' + chunk + '; path=/; max-age=34560000; samesite=lax';
+            }
+          }
+          localStorage.setItem(KEY, SESSION_JSON);
+          writeAuthCookies(SESSION_JSON);
+          window.location.replace('/');
         } catch(e) {}
       })();
       true;
