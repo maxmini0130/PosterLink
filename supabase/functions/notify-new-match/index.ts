@@ -134,6 +134,7 @@ serve(async (req) => {
 
     let sentCount = 0;
     const sentNotificationIds = new Set<string>();
+    const invalidTokenUserIds: string[] = [];
 
     for (const profile of profiles) {
       if (!profile.expo_push_token) continue;
@@ -155,8 +156,18 @@ serve(async (req) => {
       if (!pushResponse.ok) continue;
 
       const pushPayload = await pushResponse.json().catch(() => null);
-      const tickets = Array.isArray(pushPayload?.data) ? pushPayload.data : [];
-      const hasSuccessfulTicket = tickets.some((ticket: { status?: string }) => ticket.status === "ok");
+      const tickets: Array<{ status?: string; details?: { error?: string } }> =
+        Array.isArray(pushPayload?.data) ? pushPayload.data : [];
+
+      const hasSuccessfulTicket = tickets.some((t) => t.status === "ok");
+
+      // 만료된 토큰은 즉시 정리 대상으로 수집
+      const hasInvalidToken = tickets.some(
+        (t) => t.status === "error" && t.details?.error === "DeviceNotRegistered"
+      );
+      if (hasInvalidToken) {
+        invalidTokenUserIds.push(profile.id);
+      }
 
       if (!hasSuccessfulTicket) continue;
 
@@ -164,6 +175,14 @@ serve(async (req) => {
       for (const notificationId of notificationIdsByUser.get(profile.id) ?? []) {
         sentNotificationIds.add(notificationId);
       }
+    }
+
+    // 만료 토큰 일괄 삭제
+    if (invalidTokenUserIds.length > 0) {
+      await serviceClient
+        .from("profiles")
+        .update({ expo_push_token: null })
+        .in("id", invalidTokenUserIds);
     }
 
     if (sentNotificationIds.size > 0) {
@@ -182,6 +201,7 @@ serve(async (req) => {
       sentCount,
       pendingCount: notifications.length,
       skippedCount: notifications.length - sentNotificationIds.size,
+      invalidTokensCleared: invalidTokenUserIds.length,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
