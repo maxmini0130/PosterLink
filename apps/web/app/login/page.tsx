@@ -44,14 +44,10 @@ export default function LoginPage() {
   };
 
   const handleSocialLogin = async (provider: 'kakao' | 'google') => {
-    const isNativeApp = typeof window !== 'undefined' && !!(window as any).__POSTERLINK_NATIVE__;
-    const redirectTo = isNativeApp
-      ? 'com.maxmini.posterlink://auth-callback'
-      : `${window.location.origin}/auth/callback`;
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo,
+        redirectTo: `${window.location.origin}/auth/callback`,
         ...(provider === 'kakao' && { scopes: 'profile_nickname profile_image' }),
       },
     });

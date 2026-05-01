@@ -12,6 +12,7 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { supabase } from './src/lib/supabase';
 import { StatusBar } from 'expo-status-bar';
+import * as WebBrowser from 'expo-web-browser';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -85,13 +86,31 @@ export default function App() {
       }
     });
 
-    // OAuth 딥링크 수신 처리 (com.maxmini.posterlink://auth-callback?code=...)
-    const handleDeepLink = ({ url }: { url: string }) => {
-      if (url.startsWith('com.maxmini.posterlink://auth-callback')) {
-        const queryString = url.includes('?') ? url.split('?')[1] : '';
-        const webCallbackUrl = `${HOME_URL}/auth/callback${queryString ? '?' + queryString : ''}`;
-        setBrowseUrl(webCallbackUrl);
-        setView('browse');
+    // OAuth 딥링크 수신 → 네이티브 코드 교환 → WebView에 세션 주입
+    const handleDeepLink = async ({ url }: { url: string }) => {
+      if (!url.startsWith('com.maxmini.posterlink://auth-callback')) return;
+      const queryString = url.includes('?') ? url.split('?')[1] : '';
+      const code = new URLSearchParams(queryString).get('code');
+      if (!code) return;
+
+      const { data: sd } = await supabase.auth.exchangeCodeForSession(code);
+      if (sd?.session && sd.user) {
+        setUser(sd.user);
+        lastUserId.current = sd.user.id;
+        const sessionStr = JSON.stringify(sd.session);
+        webViewRef.current?.injectJavaScript(`
+          (function() {
+            try {
+              localStorage.setItem('sb-${SB_PROJECT}-auth-token', ${JSON.stringify(sessionStr)});
+              window.location.href = '/';
+            } catch(e) {}
+          })();
+          true;
+        `);
+      } else {
+        webViewRef.current?.injectJavaScript(
+          `window.location.href = '/login?error=auth_callback_failed'; true;`
+        );
       }
     };
     const linkingSub = Linking.addEventListener('url', handleDeepLink);
@@ -109,6 +128,25 @@ export default function App() {
       supabase.from('profiles').update({ expo_push_token: expoPushToken }).eq('id', user.id);
     }
   }, [user, expoPushToken]);
+
+  // WebView에서 Google/Kakao OAuth 인터셉트 → 네이티브로 처리
+  const handleNativeOAuth = useCallback(async (authorizeUrl: string) => {
+    const urlParams = new URLSearchParams(authorizeUrl.split('?')[1] || '');
+    const provider = urlParams.get('provider') as 'google' | 'kakao' | null;
+    if (provider !== 'google' && provider !== 'kakao') return;
+
+    const { data } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: 'com.maxmini.posterlink://auth-callback',
+        skipBrowserRedirect: true,
+        ...(provider === 'kakao' && { scopes: 'profile_nickname profile_image' }),
+      },
+    });
+    if (!data?.url) return;
+    // Chrome Custom Tab으로 열기 — 완료 후 딥링크로 앱 복귀
+    await WebBrowser.openAuthSessionAsync(data.url, 'com.maxmini.posterlink://');
+  }, []);
 
   async function registerForPushNotificationsAsync() {
     if (!Device.isDevice) return;
@@ -287,7 +325,6 @@ export default function App() {
         scalesPageToFit={false}
         injectedJavaScriptBeforeContentLoaded={`
           (function() {
-            window.__POSTERLINK_NATIVE__ = true;
             var meta = document.querySelector('meta[name="viewport"]');
             if (meta) {
               meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
@@ -302,12 +339,8 @@ export default function App() {
         `}
         onShouldStartLoadWithRequest={(request) => {
           const { url } = request;
-          if (
-            url.includes('accounts.google.com') ||
-            url.includes('kauth.kakao.com') ||
-            url.includes('/auth/v1/authorize')
-          ) {
-            Linking.openURL(url);
+          if (url.includes('/auth/v1/authorize')) {
+            handleNativeOAuth(url);
             return false;
           }
           return true;
