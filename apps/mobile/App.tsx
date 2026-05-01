@@ -356,16 +356,13 @@ export default function App() {
           true;
         `}
         onLoadStart={({ nativeEvent }) => {
-          // Android: JS 기반 탐색은 onShouldStartLoadWithRequest를 우회함
-          // → onLoadStart + stopLoading()으로 인터셉트
-          if (nativeEvent.url.includes('/auth/v1/authorize')) {
+          if (nativeEvent.url.includes('supabase.co/auth/v1/authorize')) {
             webViewRef.current?.stopLoading();
             handleNativeOAuth(nativeEvent.url);
           }
         }}
         onShouldStartLoadWithRequest={(request) => {
-          // iOS 및 클릭 기반 탐색 백업
-          if (request.url.includes('/auth/v1/authorize')) {
+          if (request.url.includes('supabase.co/auth/v1/authorize')) {
             handleNativeOAuth(request.url);
             return false;
           }
@@ -374,7 +371,9 @@ export default function App() {
         injectedJavaScript={SESSION_BRIDGE_JS}
         onMessage={handleWebMessage}
         onNavigationStateChange={navState => {
-          if (navState.url) setBrowseUrl(navState.url);
+          if (navState.url && !navState.url.includes('supabase.co/auth')) {
+            setBrowseUrl(navState.url);
+          }
         }}
         renderLoading={() => (
           <View style={styles.loading}>
