@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
 import Link from "next/link";
-import { User, MessageSquare, Heart, LogOut, ChevronRight, MapPin, Calendar, Trash2 } from "lucide-react";
+import { User, MessageSquare, Heart, Bell, LogOut, ChevronRight, MapPin, Calendar, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
@@ -15,6 +15,7 @@ export default function MyPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [togglingNotif, setTogglingNotif] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -39,6 +40,23 @@ export default function MyPage() {
 
     fetchProfile();
   }, [router]);
+
+  const handleToggleNotification = async () => {
+    if (!profile || togglingNotif) return;
+    setTogglingNotif(true);
+    const next = !profile.is_notified;
+    const { error } = await supabase
+      .from("profiles")
+      .update({ is_notified: next })
+      .eq("id", profile.id);
+    if (error) {
+      toast.error("알림 설정 변경에 실패했습니다.");
+    } else {
+      setProfile((p: any) => ({ ...p, is_notified: next }));
+      toast.success(next ? "알림을 켰습니다" : "알림을 껐습니다");
+    }
+    setTogglingNotif(false);
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -111,6 +129,28 @@ export default function MyPage() {
             </div>
             <ChevronRight className="text-gray-200 group-hover:text-blue-600 transition-colors" />
           </Link>
+
+          {/* 알림 설정 토글 */}
+          <button
+            onClick={handleToggleNotification}
+            disabled={togglingNotif}
+            className="flex items-center justify-between p-6 bg-white rounded-3xl border border-gray-100 hover:border-blue-100 transition-all group shadow-sm disabled:opacity-60"
+          >
+            <div className="flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${profile?.is_notified ? "bg-amber-50 text-amber-500" : "bg-gray-50 text-gray-300"}`}>
+                <Bell size={22} fill={profile?.is_notified ? "currentColor" : "none"} />
+              </div>
+              <div className="text-left">
+                <p className="font-black text-gray-700">새 포스터 알림</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {profile?.is_notified ? "알림 켜짐 — 탭하면 끄기" : "알림 꺼짐 — 탭하면 켜기"}
+                </p>
+              </div>
+            </div>
+            <div className={`w-12 h-6 rounded-full transition-colors flex items-center px-1 ${profile?.is_notified ? "bg-primary" : "bg-gray-200"}`}>
+              <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${profile?.is_notified ? "translate-x-6" : "translate-x-0"}`} />
+            </div>
+          </button>
 
           <div className="p-2"></div>
 
