@@ -213,3 +213,27 @@ PosterLink 작업 기록 — 2026-05-01
   - Babel transform for apps/mobile/App.tsx OK
 - Next:
   - commit, push, and issue a new Android preview build
+
+14. 2026-05-01 new_match push hardening
+- Reason:
+  - Admin publish flow called notify-new-match with an anon fallback token when no user session was available.
+  - The Edge Function itself did not verify the caller role.
+  - Re-triggering the function could resend the same push notifications for the same poster.
+- Changes:
+  - apps/web/app/admin/posters/page.tsx
+    - removed anon-key fallback from notify-new-match calls
+    - require a real user session token for the Edge Function call
+    - show a clearer post-approval push summary in the admin UI
+  - supabase/functions/notify-new-match/index.ts
+    - verify Authorization header
+    - resolve the caller with auth.getUser()
+    - allow only admin / super_admin roles to trigger push delivery
+    - send pushes only for notifications where push_sent_at is null
+    - mark successfully pushed notifications with push_sent_at
+  - supabase/migrations/20260501010000_harden_notify_new_match_push.sql
+    - add notifications.push_sent_at
+    - add pending-push index for new_match notifications
+- Verification:
+  - pnpm --filter web lint OK
+  - pnpm --filter web build OK
+  - deno is not installed locally, so Edge Function syntax was reviewed by diff and not executed via deno check

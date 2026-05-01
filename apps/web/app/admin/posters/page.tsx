@@ -1,36 +1,50 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import toast from "react-hot-toast";
+import {
+  Check,
+  ExternalLink,
+  Eye,
+  FileCheck,
+  Image as ImageIcon,
+  PencilLine,
+  X,
+} from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-import { Check, X, ExternalLink, Image as ImageIcon, Eye, FileCheck, PencilLine } from "lucide-react";
-import Image from "next/image";
-import Link from "next/link";
-import toast from "react-hot-toast";
 
-type PosterStatus = 'review' | 'published' | 'rejected' | 'draft';
+type PosterStatus = "review" | "published" | "rejected" | "draft";
 
 export default function AdminPostersPage() {
   const [posters, setPosters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentFilter, setCurrentFilter] = useState<PosterStatus>('review');
+  const [currentFilter, setCurrentFilter] = useState<PosterStatus>("review");
 
   const fetchPosters = async (status: PosterStatus) => {
     setLoading(true);
+
     const { data, error } = await supabase
       .from("posters")
       .select("*")
       .eq("poster_status", status)
-      .order("created_at", { ascending: status === 'review' });
+      .order("created_at", { ascending: status === "review" });
 
-    if (error) { console.error(error); setLoading(false); return; }
+    if (error) {
+      console.error(error);
+      setLoading(false);
+      return;
+    }
+
     if (data) {
       const metaMap = await fetchCategoryRegionNames(data.map((poster: any) => poster.id));
       setPosters(data.map((poster: any) => ({ ...poster, ...metaMap[poster.id] })));
     }
+
     setLoading(false);
   };
 
@@ -38,62 +52,102 @@ export default function AdminPostersPage() {
     fetchPosters(currentFilter);
   }, [currentFilter]);
 
-  const handleStatusChange = async (id: string, newStatus: 'published' | 'rejected') => {
-    const confirmMsg = newStatus === 'published' ? "승인하시겠습니까? 즉시 서비스에 노출됩니다." : "반려하시겠습니까?";
+  const handleStatusChange = async (id: string, newStatus: "published" | "rejected") => {
+    const confirmMsg =
+      newStatus === "published"
+        ? "승인하시겠습니까? 즉시 서비스에 반영됩니다."
+        : "반려하시겠습니까?";
+
     if (!confirm(confirmMsg)) return;
 
     const { error } = await supabase
       .from("posters")
       .update({
         poster_status: newStatus,
-        published_at: newStatus === 'published' ? new Date().toISOString() : null
+        published_at: newStatus === "published" ? new Date().toISOString() : null,
       })
       .eq("id", id);
 
-    if (error) { toast.error(error.message); return; }
-
-    if (newStatus === 'published') {
-      // DB 트리거가 인앱 알림을 자동 생성한 뒤, Edge Function으로 Expo 푸시 발송
-      const { data: { session } } = await supabase.auth.getSession();
-      fetch(`${SUPABASE_URL}/functions/v1/notify-new-match`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token ?? SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({ poster_id: id }),
-      }).catch((err) => console.warn('notify-new-match push 실패:', err));
+    if (error) {
+      toast.error(error.message);
+      return;
     }
 
-    toast.success(newStatus === 'published' ? "승인 완료! 관심 사용자에게 알림이 발송됩니다." : "반려 처리되었습니다.");
+    let pushSummary: string | null = null;
+
+    if (newStatus === "published") {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        pushSummary = "포스터는 승인됐지만 푸시 알림을 보낼 세션이 없어 전송을 건너뛰었습니다.";
+      } else {
+        try {
+          const response = await fetch(`${SUPABASE_URL}/functions/v1/notify-new-match`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ poster_id: id }),
+          });
+
+          const payload = await response.json().catch(() => null);
+          if (!response.ok) {
+            throw new Error(payload?.error ?? "notify-new-match failed");
+          }
+
+          if (payload?.sentCount > 0) {
+            pushSummary = `관심 사용자 ${payload.sentCount}명에게 푸시 알림을 보냈습니다.`;
+          } else if (payload?.pendingCount === 0) {
+            pushSummary = "새로 보낼 푸시 알림 대상이 없었습니다.";
+          } else {
+            pushSummary = "알림 대상은 있었지만 유효한 푸시 토큰이 없어 앱 푸시는 보내지 못했습니다.";
+          }
+        } catch (notifyError: any) {
+          console.warn("notify-new-match push failed:", notifyError);
+          pushSummary = `포스터는 승인됐지만 푸시 알림 전송 중 오류가 발생했습니다. (${notifyError.message})`;
+        }
+      }
+    }
+
+    toast.success(newStatus === "published" ? "승인 완료!" : "반려 처리했습니다.");
+    if (pushSummary) {
+      toast(pushSummary, { icon: "📣" });
+    }
+
     fetchPosters(currentFilter);
   };
 
   const tabs: { label: string; value: PosterStatus }[] = [
-    { label: "검수 대기", value: 'review' },
-    { label: "승인 완료", value: 'published' },
-    { label: "반려됨", value: 'rejected' },
-    { label: "임시 저장", value: 'draft' },
+    { label: "검수 대기", value: "review" },
+    { label: "승인 완료", value: "published" },
+    { label: "반려됨", value: "rejected" },
+    { label: "임시 저장", value: "draft" },
   ];
 
   return (
     <div className="max-w-6xl mx-auto pb-20">
-      <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+      <div className="mb-10 flex flex-col gap-6 justify-between md:flex-row md:items-end">
         <div>
-          <h1 className="text-4xl font-black text-gray-900 dark:text-white italic tracking-tight">Poster Verification 🔍</h1>
-          <p className="text-gray-400 dark:text-slate-500 font-bold mt-2">운영자가 등록한 포스터의 정보를 확인하고 최종 게시를 결정합니다.</p>
+          <h1 className="text-4xl font-black italic tracking-tight text-gray-900 dark:text-white">
+            Poster Verification
+          </h1>
+          <p className="mt-2 font-bold text-gray-400 dark:text-slate-500">
+            운영자가 등록된 포스터 정보를 확인하고 최종 게시 여부를 결정합니다.
+          </p>
         </div>
       </div>
 
-      {/* Tabs Filter */}
-      <div className="flex flex-wrap gap-2 mb-8 bg-gray-100 dark:bg-slate-900 p-1.5 rounded-[1.5rem] w-fit">
+      <div className="mb-8 flex w-fit flex-wrap gap-2 rounded-[1.5rem] bg-gray-100 p-1.5 dark:bg-slate-900">
         {tabs.map((tab) => (
           <button
             key={tab.value}
             onClick={() => setCurrentFilter(tab.value)}
-            className={`px-6 py-3 rounded-2xl text-sm font-black transition-all ${
+            className={`rounded-2xl px-6 py-3 text-sm font-black transition-all ${
               currentFilter === tab.value
-                ? "bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm"
+                ? "bg-white text-indigo-600 shadow-sm dark:bg-slate-800 dark:text-indigo-400"
                 : "text-gray-400 hover:text-gray-600 dark:hover:text-slate-200"
             }`}
           >
@@ -104,19 +158,24 @@ export default function AdminPostersPage() {
 
       {loading ? (
         <div className="space-y-6">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="h-48 bg-white dark:bg-slate-900 rounded-[2.5rem] animate-pulse border border-gray-100 dark:border-slate-800" />
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="h-48 animate-pulse rounded-[2.5rem] border border-gray-100 bg-white dark:border-slate-800 dark:bg-slate-900"
+            />
           ))}
         </div>
       ) : posters.length > 0 ? (
         <div className="grid grid-cols-1 gap-6">
-          {posters.map((p) => (
-            <div key={p.id} className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-slate-800 flex flex-col md:flex-row gap-8 items-start hover:shadow-md dark:hover:shadow-indigo-900/10 transition-all group">
-              {/* Thumbnail Preview */}
-              <div className="w-full md:w-32 aspect-[3/4] bg-gray-50 dark:bg-slate-800 rounded-2xl flex-shrink-0 overflow-hidden border border-gray-100 dark:border-slate-700 flex items-center justify-center relative group/img">
-                {p.thumbnail_url ? (
+          {posters.map((poster) => (
+            <div
+              key={poster.id}
+              className="group flex flex-col gap-8 rounded-[2.5rem] border border-gray-100 bg-white p-8 shadow-sm transition-all hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:shadow-indigo-900/10 md:flex-row md:items-start"
+            >
+              <div className="group/img relative flex w-full flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-gray-100 bg-gray-50 aspect-[3/4] md:w-32 dark:border-slate-700 dark:bg-slate-800">
+                {poster.thumbnail_url ? (
                   <Image
-                    src={p.thumbnail_url}
+                    src={poster.thumbnail_url}
                     fill
                     sizes="128px"
                     className="object-cover transition-transform duration-500 group-hover/img:scale-110"
@@ -125,78 +184,86 @@ export default function AdminPostersPage() {
                 ) : (
                   <ImageIcon className="text-gray-200 dark:text-slate-700" size={32} />
                 )}
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
+
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover/img:opacity-100">
                   <Eye className="text-white" size={24} />
                 </div>
               </div>
 
-              {/* Info */}
               <div className="flex-1 space-y-4">
                 <div className="flex items-center gap-3">
-                  <span className={`px-2.5 py-1 text-[10px] font-black rounded-lg uppercase tracking-wider ${
-                    p.poster_status === 'published' ? 'bg-green-50 dark:bg-green-900/20 text-green-600' :
-                    p.poster_status === 'rejected' ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-600' :
-                    'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600'
-                  }`}>
-                    {p.poster_status.replace('_', ' ')}
+                  <span
+                    className={`rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${
+                      poster.poster_status === "published"
+                        ? "bg-green-50 text-green-600 dark:bg-green-900/20"
+                        : poster.poster_status === "rejected"
+                          ? "bg-rose-50 text-rose-600 dark:bg-rose-900/20"
+                          : "bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20"
+                    }`}
+                  >
+                    {poster.poster_status.replace("_", " ")}
                   </span>
-                  <span className="text-[11px] font-bold text-gray-400 dark:text-slate-500 italic">
-                    {new Date(p.created_at).toLocaleDateString()} 에 요청됨
+                  <span className="text-[11px] font-bold italic text-gray-400 dark:text-slate-500">
+                    {new Date(poster.created_at).toLocaleDateString()} 등록 요청
                   </span>
                 </div>
-                
-                <h3 className="text-2xl font-black text-gray-900 dark:text-white leading-tight">{p.title}</h3>
-                <p className="text-sm font-bold text-gray-500 dark:text-slate-400 flex items-center gap-2">
-                  <span className="text-indigo-500">@{p.source_org_name}</span>
-                  <span className="w-1 h-1 bg-gray-300 rounded-full" />
-                  <span>{p.regionName || '전국'}</span>
+
+                <h3 className="text-2xl font-black leading-tight text-gray-900 dark:text-white">
+                  {poster.title}
+                </h3>
+                <p className="flex items-center gap-2 text-sm font-bold text-gray-500 dark:text-slate-400">
+                  <span className="text-indigo-500">@{poster.source_org_name}</span>
+                  <span className="h-1 w-1 rounded-full bg-gray-300" />
+                  <span>{poster.regionName || "광역"}</span>
                 </p>
 
                 <div className="flex flex-wrap gap-2">
-                  <span className="px-3 py-1 bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-slate-400 text-[11px] font-black rounded-full border border-gray-100 dark:border-slate-700">
-                    분야: {p.categoryName || '기타'}
+                  <span className="rounded-full border border-gray-100 bg-gray-50 px-3 py-1 text-[11px] font-black text-gray-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+                    분야: {poster.categoryName || "기타"}
                   </span>
-                  <span className="px-3 py-1 bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-slate-400 text-[11px] font-black rounded-full border border-gray-100 dark:border-slate-700">
-                    마감: {p.application_end_at ? new Date(p.application_end_at).toLocaleDateString() : '상시'}
+                  <span className="rounded-full border border-gray-100 bg-gray-50 px-3 py-1 text-[11px] font-black text-gray-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+                    마감: {poster.application_end_at ? new Date(poster.application_end_at).toLocaleDateString() : "상시"}
                   </span>
                 </div>
               </div>
 
-              {/* Actions */}
-              <div className="w-full md:w-auto flex flex-row md:flex-col gap-3 justify-end h-full pt-2">
-                <Link 
-                  href={`/posters/${p.id}`} 
+              <div className="flex w-full flex-row justify-end gap-3 pt-2 md:w-auto md:flex-col">
+                <Link
+                  href={`/posters/${poster.id}`}
                   target="_blank"
                   title="공개 상세 보기"
                   aria-label="공개 상세 보기"
-                  className="p-4 bg-gray-50 dark:bg-slate-800 text-gray-400 dark:text-slate-500 rounded-2xl hover:bg-gray-100 dark:hover:bg-slate-700 transition-all border border-transparent hover:border-gray-200 dark:hover:border-slate-600"
+                  className="rounded-2xl border border-transparent bg-gray-50 p-4 text-gray-400 transition-all hover:border-gray-200 hover:bg-gray-100 dark:bg-slate-800 dark:text-slate-500 dark:hover:border-slate-600 dark:hover:bg-slate-700"
                 >
                   <ExternalLink size={20} />
                 </Link>
+
                 <Link
-                  href={`/operator/posters/${p.id}/edit?returnTo=admin`}
+                  href={`/operator/posters/${poster.id}/edit?returnTo=admin`}
                   title="포스터 수정"
                   aria-label="포스터 수정"
-                  className="p-4 bg-blue-50 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400 rounded-2xl hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all"
+                  className="rounded-2xl bg-blue-50 p-4 text-blue-600 transition-all hover:bg-blue-100 dark:bg-blue-900/10 dark:text-blue-400 dark:hover:bg-blue-900/30"
                 >
                   <PencilLine size={20} />
                 </Link>
-                {p.poster_status !== 'rejected' && (
-                  <button 
-                    onClick={() => handleStatusChange(p.id, 'rejected')}
+
+                {poster.poster_status !== "rejected" && (
+                  <button
+                    onClick={() => handleStatusChange(poster.id, "rejected")}
                     title="반려"
                     aria-label="반려"
-                    className="p-4 bg-rose-50 dark:bg-rose-900/10 text-rose-500 rounded-2xl hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-all"
+                    className="rounded-2xl bg-rose-50 p-4 text-rose-500 transition-all hover:bg-rose-100 dark:bg-rose-900/10 dark:hover:bg-rose-900/30"
                   >
                     <X size={20} />
                   </button>
                 )}
-                {p.poster_status !== 'published' && (
-                  <button 
-                    onClick={() => handleStatusChange(p.id, 'published')}
+
+                {poster.poster_status !== "published" && (
+                  <button
+                    onClick={() => handleStatusChange(poster.id, "published")}
                     title="승인"
                     aria-label="승인"
-                    className="p-4 md:p-6 bg-indigo-600 dark:bg-indigo-500 text-white rounded-[1.5rem] hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-all shadow-xl shadow-indigo-100 dark:shadow-none"
+                    className="rounded-[1.5rem] bg-indigo-600 p-4 text-white shadow-xl shadow-indigo-100 transition-all hover:bg-indigo-700 dark:bg-indigo-500 dark:shadow-none dark:hover:bg-indigo-600 md:p-6"
                   >
                     <Check size={24} strokeWidth={3} />
                   </button>
@@ -206,10 +273,14 @@ export default function AdminPostersPage() {
           ))}
         </div>
       ) : (
-        <div className="py-40 text-center bg-white dark:bg-slate-900 rounded-[3rem] border border-dashed border-gray-200 dark:border-slate-800">
-           <FileCheck className="mx-auto text-gray-200 dark:text-slate-800 mb-6" size={64} />
-           <p className="text-gray-400 dark:text-slate-500 font-black text-lg">해당 조건의 포스터가 없습니다.</p>
-           <p className="text-gray-300 dark:text-slate-600 text-sm mt-1">모든 검수가 완료되었거나 데이터가 비어있습니다. ✨</p>
+        <div className="rounded-[3rem] border border-dashed border-gray-200 bg-white py-40 text-center dark:border-slate-800 dark:bg-slate-900">
+          <FileCheck className="mx-auto mb-6 text-gray-200 dark:text-slate-800" size={64} />
+          <p className="text-lg font-black text-gray-400 dark:text-slate-500">
+            해당 조건의 포스터가 없습니다.
+          </p>
+          <p className="mt-1 text-sm text-gray-300 dark:text-slate-600">
+            모든 검수가 끝났거나 데이터가 비어 있습니다.
+          </p>
         </div>
       )}
     </div>
