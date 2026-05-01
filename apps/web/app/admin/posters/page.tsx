@@ -24,6 +24,9 @@ export default function AdminPostersPage() {
   const [posters, setPosters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentFilter, setCurrentFilter] = useState<PosterStatus>("review");
+  const [rejectModal, setRejectModal] = useState<{ id: string; title: string } | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejecting, setRejecting] = useState(false);
 
   const fetchPosters = async (status: PosterStatus) => {
     setLoading(true);
@@ -52,19 +55,38 @@ export default function AdminPostersPage() {
     fetchPosters(currentFilter);
   }, [currentFilter]);
 
-  const handleStatusChange = async (id: string, newStatus: "published" | "rejected") => {
-    const confirmMsg =
-      newStatus === "published"
-        ? "승인하시겠습니까? 즉시 서비스에 반영됩니다."
-        : "반려하시겠습니까?";
+  const handleReject = async () => {
+    if (!rejectModal) return;
+    setRejecting(true);
+    const { error } = await supabase
+      .from("posters")
+      .update({ poster_status: "rejected", rejection_reason: rejectReason.trim() || null })
+      .eq("id", rejectModal.id);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("반려 처리했습니다.");
+      setRejectModal(null);
+      setRejectReason("");
+      fetchPosters(currentFilter);
+    }
+    setRejecting(false);
+  };
 
-    if (!confirm(confirmMsg)) return;
+  const handleStatusChange = async (id: string, newStatus: "published" | "rejected", posterTitle?: string) => {
+    if (newStatus === "rejected") {
+      setRejectReason("");
+      setRejectModal({ id, title: posterTitle ?? id });
+      return;
+    }
+
+    if (!confirm("승인하시겠습니까? 즉시 서비스에 반영됩니다.")) return;
 
     const { error } = await supabase
       .from("posters")
       .update({
         poster_status: newStatus,
-        published_at: newStatus === "published" ? new Date().toISOString() : null,
+        published_at: new Date().toISOString(),
       })
       .eq("id", id);
 
@@ -249,7 +271,7 @@ export default function AdminPostersPage() {
 
                 {poster.poster_status !== "rejected" && (
                   <button
-                    onClick={() => handleStatusChange(poster.id, "rejected")}
+                    onClick={() => handleStatusChange(poster.id, "rejected", poster.title)}
                     title="반려"
                     aria-label="반려"
                     className="rounded-2xl bg-rose-50 p-4 text-rose-500 transition-all hover:bg-rose-100 dark:bg-rose-900/10 dark:hover:bg-rose-900/30"
@@ -281,6 +303,53 @@ export default function AdminPostersPage() {
           <p className="mt-1 text-sm text-gray-300 dark:text-slate-600">
             모든 검수가 끝났거나 데이터가 비어 있습니다.
           </p>
+        </div>
+      )}
+    </div>
+
+      {/* 반려 사유 모달 */}
+      {rejectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-6">
+          <div className="w-full max-w-md rounded-[2rem] bg-white p-8 shadow-2xl dark:bg-slate-900">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-10 h-10 bg-rose-50 rounded-2xl flex items-center justify-center">
+                <X size={20} className="text-rose-500" />
+              </div>
+              <h3 className="text-lg font-black text-gray-900 dark:text-white">포스터 반려</h3>
+            </div>
+            <p className="text-sm text-gray-400 mb-5 ml-[52px]">
+              <span className="font-semibold text-gray-600 dark:text-slate-300">{rejectModal.title}</span>
+            </p>
+            <div className="mb-5">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
+                반려 사유 <span className="text-gray-400 font-normal">(선택)</span>
+              </label>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="예: 이미지 품질 불량, 정보 오류, 정책 위반 등"
+                rows={3}
+                className="w-full rounded-2xl border border-gray-100 bg-gray-50 p-4 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:ring-2 focus:ring-rose-200 resize-none dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+              />
+              <p className="text-xs text-gray-400 mt-1.5">입력한 사유는 등록자에게 표시될 수 있습니다.</p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setRejectModal(null); setRejectReason(""); }}
+                disabled={rejecting}
+                className="flex-1 py-4 border border-gray-200 text-gray-500 font-black rounded-2xl hover:bg-gray-50 transition-all disabled:opacity-50 dark:border-slate-700 dark:text-slate-400"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleReject}
+                disabled={rejecting}
+                className="flex-1 py-4 bg-rose-500 text-white font-black rounded-2xl hover:bg-rose-600 transition-all disabled:opacity-50"
+              >
+                {rejecting ? "처리 중..." : "반려하기"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
