@@ -20,12 +20,8 @@ export default withSentryConfig(nextConfig, {
   silent: true,
   widenClientFileUpload: true,
   hideSourceMaps: true,
-  webpack: {
-    treeshake: {
-      removeDebugLogging: true,
-    },
-    automaticVercelMonitors: false,
-  },
+  disableLogger: true,
+  automaticVercelMonitors: false,
   errorHandler: (err) => {
     console.warn("[Sentry] Source map upload failed without blocking the build:", err.message);
   },
