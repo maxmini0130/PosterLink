@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity, Image, TextInput,
-  Alert, ActivityIndicator, Platform,
+  Alert, ActivityIndicator, Platform, Linking,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -85,9 +85,22 @@ export default function App() {
       }
     });
 
+    // OAuth 딥링크 수신 처리 (com.maxmini.posterlink://auth-callback?code=...)
+    const handleDeepLink = ({ url }: { url: string }) => {
+      if (url.startsWith('com.maxmini.posterlink://auth-callback')) {
+        const queryString = url.includes('?') ? url.split('?')[1] : '';
+        const webCallbackUrl = `${HOME_URL}/auth/callback${queryString ? '?' + queryString : ''}`;
+        setBrowseUrl(webCallbackUrl);
+        setView('browse');
+      }
+    };
+    const linkingSub = Linking.addEventListener('url', handleDeepLink);
+    Linking.getInitialURL().then(url => { if (url) handleDeepLink({ url }); });
+
     return () => {
       Notifications.removeNotificationSubscription(notificationListener.current);
       Notifications.removeNotificationSubscription(responseListener.current);
+      linkingSub.remove();
     };
   }, []);
 
@@ -274,6 +287,7 @@ export default function App() {
         scalesPageToFit={false}
         injectedJavaScriptBeforeContentLoaded={`
           (function() {
+            window.__POSTERLINK_NATIVE__ = true;
             var meta = document.querySelector('meta[name="viewport"]');
             if (meta) {
               meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
@@ -286,6 +300,18 @@ export default function App() {
           })();
           true;
         `}
+        onShouldStartLoadWithRequest={(request) => {
+          const { url } = request;
+          if (
+            url.includes('accounts.google.com') ||
+            url.includes('kauth.kakao.com') ||
+            url.includes('/auth/v1/authorize')
+          ) {
+            Linking.openURL(url);
+            return false;
+          }
+          return true;
+        }}
         injectedJavaScript={SESSION_BRIDGE_JS}
         onMessage={handleWebMessage}
         onNavigationStateChange={navState => {
