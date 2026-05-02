@@ -7,7 +7,7 @@ import { BottomNav } from "./components/BottomNav";
 import { Footer } from "./components/Footer";
 import { PosterCard } from "./components/PosterCard";
 import { fetchCategoryRegionNames } from "./lib/posterHelpers";
-import { fetchPosterLinkClickCounts } from "./lib/posterMetrics";
+import { fetchPosterMetricCounts } from "./lib/posterMetrics";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, ArrowRight, Zap, Bell, Heart, Search } from "lucide-react";
 import Link from "next/link";
@@ -27,14 +27,15 @@ export default function Home() {
       try {
         const attachPosterMeta = async (items: any[]) => {
           const posterIds = items.map((poster: any) => poster.id);
-          const [metaMap, clickCounts] = await Promise.all([
+          const [metaMap, metricCounts] = await Promise.all([
             fetchCategoryRegionNames(posterIds),
-            fetchPosterLinkClickCounts(posterIds),
+            fetchPosterMetricCounts(posterIds),
           ]);
           return items.map((poster: any) => ({
             ...poster,
             ...metaMap[poster.id],
-            linkClickCount: clickCounts[poster.id] ?? 0,
+            linkClickCount: metricCounts.linkClickCounts[poster.id] ?? 0,
+            favoriteCount: metricCounts.favoriteCounts[poster.id] ?? 0,
           }));
         };
 
@@ -215,6 +216,7 @@ export default function Home() {
                       deadline: poster.application_end_at,
                       image: poster.thumbnail_url,
                       linkClickCount: poster.linkClickCount,
+                      favoriteCount: poster.favoriteCount,
                       tags: [poster.categoryName, poster.regionName].filter((tag): tag is string => Boolean(tag))
                     }} 
                   />

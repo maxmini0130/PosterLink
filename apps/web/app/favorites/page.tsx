@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { fetchCategoryRegionNames } from "../lib/posterHelpers";
-import { fetchPosterLinkClickCounts } from "../lib/posterMetrics";
+import { fetchPosterMetricCounts } from "../lib/posterMetrics";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
 import { PosterCard } from "../components/PosterCard";
@@ -42,14 +42,15 @@ export default function FavoritesPage() {
 
           if (postersData) {
             const posterIds = postersData.map((p: any) => p.id);
-            const [metaMap, clickCounts] = await Promise.all([
+            const [metaMap, metricCounts] = await Promise.all([
               fetchCategoryRegionNames(posterIds),
-              fetchPosterLinkClickCounts(posterIds),
+              fetchPosterMetricCounts(posterIds),
             ]);
             setFavorites(postersData.map((p: any) => ({
               ...p,
               ...metaMap[p.id],
-              linkClickCount: clickCounts[p.id] ?? 0,
+              linkClickCount: metricCounts.linkClickCounts[p.id] ?? 0,
+              favoriteCount: metricCounts.favoriteCounts[p.id] ?? 0,
             })));
           }
         }
@@ -94,7 +95,8 @@ export default function FavoritesPage() {
                   deadline: poster.application_end_at,
                   tags: [poster.categoryName, poster.regionName].filter(Boolean),
                   image: poster.thumbnail_url,
-                  linkClickCount: poster.linkClickCount
+                  linkClickCount: poster.linkClickCount,
+                  favoriteCount: poster.favoriteCount
                 }} 
               />
             ))}

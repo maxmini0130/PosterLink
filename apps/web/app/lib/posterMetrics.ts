@@ -1,1 +1,2 @@
-export { fetchPosterLinkClickCounts } from '../../lib/posterMetrics';
+export { fetchPosterLinkClickCounts, fetchPosterMetricCounts } from '../../lib/posterMetrics';
+export type { PosterMetricCounts } from '../../lib/posterMetrics';

@@ -9,15 +9,16 @@ import { notFound } from "next/navigation";
 import Image from "next/image";
 import { supabase } from "../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
-import { fetchPosterLinkClickCounts } from "../../lib/posterMetrics";
+import { fetchPosterMetricCounts } from "../../lib/posterMetrics";
 import { Footer } from "../../components/Footer";
-import { Link2, MousePointerClick, Share2 } from "lucide-react";
+import { Heart, Link2, MousePointerClick, Share2 } from "lucide-react";
 
 export default function PosterDetailPage({ params }: { params: { id: string } }) {
   const [poster, setPoster] = useState<any>(null);
   const [links, setLinks] = useState<any[]>([]);
   const [isFavorited, setIsFavorited] = useState(false);
   const [linkClickCount, setLinkClickCount] = useState(0);
+  const [favoriteCount, setFavoriteCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -38,8 +39,9 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
 
         const metaMap = await fetchCategoryRegionNames([params.id]);
         setPoster({ ...data, ...metaMap[params.id] });
-        const clickCounts = await fetchPosterLinkClickCounts([params.id]);
-        setLinkClickCount(clickCounts[params.id] ?? 0);
+        const metricCounts = await fetchPosterMetricCounts([params.id]);
+        setLinkClickCount(metricCounts.linkClickCounts[params.id] ?? 0);
+        setFavoriteCount(metricCounts.favoriteCounts[params.id] ?? 0);
 
         // 2. 관련 링크 가져오기
         const { data: linkData } = await supabase
@@ -79,10 +81,16 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
 
     if (isFavorited) {
       const { error } = await supabase.from("favorites").delete().eq("user_id", user.id).eq("poster_id", params.id);
-      if (!error) setIsFavorited(false);
+      if (!error) {
+        setIsFavorited(false);
+        setFavoriteCount((count) => Math.max(0, count - 1));
+      }
     } else {
       const { error } = await supabase.from("favorites").insert({ user_id: user.id, poster_id: params.id });
-      if (!error) setIsFavorited(true);
+      if (!error) {
+        setIsFavorited(true);
+        setFavoriteCount((count) => count + 1);
+      }
     }
   };
 
@@ -168,9 +176,15 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
               </span>
             )}
           </div>
-          <div className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-amber-50 px-3 py-2 text-xs font-black text-amber-600">
-            <MousePointerClick size={14} />
-            공식 링크 클릭 {linkClickCount.toLocaleString()}
+          <div className="mt-4 flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-2 rounded-2xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-600">
+              <Heart size={14} fill="currentColor" />
+              찜 {favoriteCount.toLocaleString()}
+            </span>
+            <span className="inline-flex items-center gap-2 rounded-2xl bg-amber-50 px-3 py-2 text-xs font-black text-amber-600">
+              <MousePointerClick size={14} />
+              공식 링크 클릭 {linkClickCount.toLocaleString()}
+            </span>
           </div>
         </div>
 

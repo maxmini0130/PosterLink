@@ -20,28 +20,46 @@ export async function GET(request: Request) {
     .slice(0, 100);
 
   if (posterIds.length === 0) {
-    return NextResponse.json({ counts: {} });
+    return NextResponse.json({ clickCounts: {}, favoriteCounts: {}, counts: {} });
   }
 
   const supabaseAdmin = createSupabaseAdmin();
-  const { data, error } = await supabaseAdmin
-    .from("poster_link_click_logs")
-    .select("poster_id")
-    .in("poster_id", posterIds);
+  const [clicksRes, favoritesRes] = await Promise.all([
+    supabaseAdmin
+      .from("poster_link_click_logs")
+      .select("poster_id")
+      .in("poster_id", posterIds),
+    supabaseAdmin
+      .from("favorites")
+      .select("poster_id")
+      .in("poster_id", posterIds),
+  ]);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (clicksRes.error || favoritesRes.error) {
+    return NextResponse.json(
+      { error: clicksRes.error?.message ?? favoritesRes.error?.message },
+      { status: 500 }
+    );
   }
 
-  const counts = Object.fromEntries(posterIds.map((posterId) => [posterId, 0]));
-  for (const row of data ?? []) {
+  const clickCounts = Object.fromEntries(posterIds.map((posterId) => [posterId, 0]));
+  const favoriteCounts = Object.fromEntries(posterIds.map((posterId) => [posterId, 0]));
+
+  for (const row of clicksRes.data ?? []) {
     const posterId = row.poster_id as string | null;
-    if (posterId && posterId in counts) {
-      counts[posterId] += 1;
+    if (posterId && posterId in clickCounts) {
+      clickCounts[posterId] += 1;
     }
   }
 
-  return NextResponse.json({ counts });
+  for (const row of favoritesRes.data ?? []) {
+    const posterId = row.poster_id as string | null;
+    if (posterId && posterId in favoriteCounts) {
+      favoriteCounts[posterId] += 1;
+    }
+  }
+
+  return NextResponse.json({ clickCounts, favoriteCounts, counts: clickCounts });
 }
 
 export async function POST(request: Request) {
