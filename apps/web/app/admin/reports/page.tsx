@@ -69,6 +69,20 @@ export default function AdminReportsPage() {
       })
       .eq("id", reportId);
 
+    if (!error) {
+      await supabase.from("admin_actions").insert({
+        actor_user_id: user?.id ?? null,
+        target_type: "report",
+        target_id: reportId,
+        action_type: action === "hide" ? "hide" : "dismiss",
+        metadata_json: {
+          commentId,
+          reportStatus: action === "hide" ? "actioned" : "dismissed",
+          moderationAction: action,
+        },
+      });
+    }
+
     setActioning(false);
     setPendingAction(null);
 

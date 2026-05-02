@@ -28,6 +28,7 @@ export default function PosterListPage() {
 
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const pendingSearchLogRef = useRef<string | null>(null);
 
   // 1. Initial Data Load
   useEffect(() => {
@@ -81,6 +82,18 @@ export default function PosterListPage() {
       const metaMap = await fetchCategoryRegionNames(sortedData.map((poster: any) => poster.id));
       setPosters(sortedData.map((poster: any) => ({ ...poster, ...metaMap[poster.id] })));
       setDisplayCount(PAGE_SIZE);
+
+      const normalizedQuery = queryStr.trim();
+      if (normalizedQuery && pendingSearchLogRef.current === normalizedQuery) {
+        pendingSearchLogRef.current = null;
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          supabase.rpc("log_search", {
+            p_user_id: session?.user?.id ?? null,
+            p_query: normalizedQuery,
+            p_result_count: sortedData.length,
+          });
+        });
+      }
     } catch (err) {
       console.error("Error fetching posters:", err);
       setPosters([]);
@@ -106,16 +119,9 @@ export default function PosterListPage() {
     setRecentSearches(updated);
     localStorage.setItem("recent_searches", JSON.stringify(updated));
 
-    // 검색 로그 저장
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      supabase.rpc("log_search", {
-        p_user_id: session?.user?.id ?? null,
-        p_query: finalTerm.trim(),
-        p_result_count: 0,
-      });
-    });
-
-    setSearchQuery(finalTerm);
+    const normalizedTerm = finalTerm.trim();
+    pendingSearchLogRef.current = normalizedTerm;
+    setSearchQuery(normalizedTerm);
     setIsSearchFocused(false);
     searchInputRef.current?.blur();
   };

@@ -1,5 +1,8 @@
 import { MetadataRoute } from "next";
 
+const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://posterlink.co.kr";
+const appOrigin = appUrl.startsWith("http") ? appUrl : `https://${appUrl}`;
+
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
@@ -9,6 +12,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/admin/", "/operator/", "/mypage/", "/onboarding", "/api/"],
       },
     ],
-    sitemap: "https://posterlink.co.kr/sitemap.xml",
+    sitemap: `${appOrigin}/sitemap.xml`,
   };
 }

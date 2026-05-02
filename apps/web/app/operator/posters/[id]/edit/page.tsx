@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../../../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../../../lib/posterHelpers";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
-import { ChevronLeft, Loader2, Trash2, Camera } from "lucide-react";
+import { ChevronLeft, Loader2, Trash2, Camera, AlertCircle } from "lucide-react";
 import Image from "next/image";
 import { Button } from "@posterlink/ui";
 import { ImageCropper } from "../../../../components/ImageCropper";
@@ -24,6 +24,7 @@ export default function EditPosterPage() {
   const [originalImage, setOriginalImage] = useState<string | null>(null);
   const [newImageBlob, setNewImageBlob] = useState<Blob | null>(null);
   const [showCropper, setShowCropper] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -48,6 +49,8 @@ export default function EditPosterPage() {
       if (regs) setRegions(regs);
 
       if (poster) {
+        setRejectionReason(poster.poster_status === "rejected" ? poster.rejection_reason ?? null : null);
+
         const [{ data: linkData }, metaMap] = await Promise.all([
           supabase.from("poster_links").select("url").eq("poster_id", id).eq("is_primary", true).maybeSingle(),
           fetchCategoryRegionNames([id]),
@@ -188,6 +191,16 @@ export default function EditPosterPage() {
           )}
         </div>
       </div>
+
+      {rejectionReason && (
+        <div className="mb-8 flex gap-3 rounded-[2rem] border border-rose-100 bg-rose-50 p-5 text-rose-700">
+          <AlertCircle size={20} className="mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-black">관리자 반려 사유</p>
+            <p className="mt-1 text-sm font-bold leading-relaxed">{rejectionReason}</p>
+          </div>
+        </div>
+      )}
 
       {previewUrl && (
         <div className="mb-4 rounded-[2.5rem] overflow-hidden border border-gray-100 shadow-sm relative w-full h-[300px] group">

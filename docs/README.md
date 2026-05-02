@@ -36,6 +36,8 @@
   DB/Auth/Storage/RLS 전략 정리
 - `15_development_checklist.md`  
   바이브코딩 시작 전후 체크리스트
+- `17_service_launch_checklist.md`
+  사전 오픈 전 기능, 데이터, 운영, 배포 최종 점검표
 
 ## 권장 1차 구현 전략
 

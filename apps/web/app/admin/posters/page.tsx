@@ -58,6 +58,7 @@ export default function AdminPostersPage() {
   const handleReject = async () => {
     if (!rejectModal) return;
     setRejecting(true);
+    const { data: { user } } = await supabase.auth.getUser();
     const { error } = await supabase
       .from("posters")
       .update({ poster_status: "rejected", rejection_reason: rejectReason.trim() || null })
@@ -65,6 +66,14 @@ export default function AdminPostersPage() {
     if (error) {
       toast.error(error.message);
     } else {
+      await supabase.from("admin_actions").insert({
+        actor_user_id: user?.id ?? null,
+        target_type: "poster",
+        target_id: rejectModal.id,
+        action_type: "reject",
+        action_reason: rejectReason.trim() || null,
+        metadata_json: { title: rejectModal.title },
+      });
       toast.success("반려 처리했습니다.");
       setRejectModal(null);
       setRejectReason("");
@@ -82,11 +91,13 @@ export default function AdminPostersPage() {
 
     if (!confirm("승인하시겠습니까? 즉시 서비스에 반영됩니다.")) return;
 
+    const { data: { user } } = await supabase.auth.getUser();
     const { error } = await supabase
       .from("posters")
       .update({
         poster_status: newStatus,
         published_at: new Date().toISOString(),
+        rejection_reason: null,
       })
       .eq("id", id);
 
@@ -94,6 +105,14 @@ export default function AdminPostersPage() {
       toast.error(error.message);
       return;
     }
+
+    await supabase.from("admin_actions").insert({
+      actor_user_id: user?.id ?? null,
+      target_type: "poster",
+      target_id: id,
+      action_type: "approve",
+      metadata_json: { status: newStatus },
+    });
 
     let pushSummary: string | null = null;
 
@@ -150,6 +169,7 @@ export default function AdminPostersPage() {
   ];
 
   return (
+    <>
     <div className="max-w-6xl mx-auto pb-20">
       <div className="mb-10 flex flex-col gap-6 justify-between md:flex-row md:items-end">
         <div>
@@ -352,6 +372,6 @@ export default function AdminPostersPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

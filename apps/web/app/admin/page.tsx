@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import Link from "next/link";
-import { FileCheck, AlertTriangle, Settings, Users, TrendingUp, Clock } from "lucide-react";
+import { AlertTriangle, Clock, FileCheck, MousePointerClick, Search, Settings, TrendingUp, Users } from "lucide-react";
 
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState({
@@ -11,16 +11,26 @@ export default function AdminDashboardPage() {
     published: 0,
     reportsPending: 0,
     totalUsers: 0,
+    linkClicks: 0,
   });
+  const [popularKeywords, setPopularKeywords] = useState<string[]>([]);
+  const [recentActions, setRecentActions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchStats = async () => {
-      const [reviewRes, publishedRes, reportsRes, usersRes] = await Promise.all([
+      const [reviewRes, publishedRes, reportsRes, usersRes, linkClickRes, keywordRes, actionsRes] = await Promise.all([
         supabase.from("posters").select("id", { count: "exact", head: true }).eq("poster_status", "review"),
         supabase.from("posters").select("id", { count: "exact", head: true }).eq("poster_status", "published"),
         supabase.from("comment_reports").select("id", { count: "exact", head: true }).eq("report_status", "received"),
         supabase.from("profiles").select("id", { count: "exact", head: true }),
+        supabase.from("poster_link_click_logs").select("id", { count: "exact", head: true }),
+        supabase.rpc("get_popular_keywords", { p_limit: 5 }),
+        supabase
+          .from("admin_actions")
+          .select("target_type, action_type, action_reason, metadata_json, created_at")
+          .order("created_at", { ascending: false })
+          .limit(6),
       ]);
 
       setStats({
@@ -28,7 +38,10 @@ export default function AdminDashboardPage() {
         published: publishedRes.count ?? 0,
         reportsPending: reportsRes.count ?? 0,
         totalUsers: usersRes.count ?? 0,
+        linkClicks: linkClickRes.count ?? 0,
       });
+      setPopularKeywords((keywordRes.data ?? []).map((row: any) => row.keyword));
+      setRecentActions(actionsRes.data ?? []);
       setLoading(false);
     };
 
@@ -68,6 +81,14 @@ export default function AdminDashboardPage() {
       href: "/admin/settings",
       urgent: false,
     },
+    {
+      label: "공식 링크 클릭",
+      value: stats.linkClicks,
+      icon: <MousePointerClick size={24} />,
+      color: "bg-amber-50 text-amber-600",
+      href: "/admin",
+      urgent: false,
+    },
   ];
 
   const shortcuts = [
@@ -84,7 +105,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-12">
         {cards.map((card) => (
           <Link key={card.label} href={card.href}
             className={`bg-white p-6 rounded-[2rem] border shadow-sm hover:shadow-md transition-all ${card.urgent ? "border-rose-200 ring-2 ring-rose-50" : "border-gray-100"}`}
@@ -98,6 +119,64 @@ export default function AdminDashboardPage() {
             <p className="text-xs font-black text-gray-400 uppercase tracking-wider mt-1">{card.label}</p>
           </Link>
         ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-12">
+        <section className="rounded-[2rem] border border-gray-100 bg-white p-7 shadow-sm">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+              <Search size={18} />
+            </div>
+            <div>
+              <h2 className="text-sm font-black text-gray-900">인기 검색어</h2>
+              <p className="text-xs font-bold text-gray-400">최근 검색 로그 기준</p>
+            </div>
+          </div>
+          {popularKeywords.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {popularKeywords.map((keyword) => (
+                <span key={keyword} className="rounded-xl bg-gray-50 px-3 py-2 text-xs font-black text-gray-500">
+                  {keyword}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm font-bold text-gray-300">아직 검색 로그가 없습니다.</p>
+          )}
+        </section>
+
+        <section className="rounded-[2rem] border border-gray-100 bg-white p-7 shadow-sm">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+              <FileCheck size={18} />
+            </div>
+            <div>
+              <h2 className="text-sm font-black text-gray-900">최근 관리자 작업</h2>
+              <p className="text-xs font-bold text-gray-400">승인, 반려, 신고 처리, 기준정보 변경</p>
+            </div>
+          </div>
+          {recentActions.length > 0 ? (
+            <div className="space-y-3">
+              {recentActions.map((action, index) => (
+                <div key={`${action.created_at}-${index}`} className="flex items-center justify-between gap-3 rounded-2xl bg-gray-50 px-4 py-3">
+                  <div>
+                    <p className="text-xs font-black text-gray-700">
+                      {action.target_type} · {action.action_type}
+                    </p>
+                    {action.action_reason && (
+                      <p className="mt-0.5 line-clamp-1 text-[11px] font-bold text-gray-400">{action.action_reason}</p>
+                    )}
+                  </div>
+                  <span className="shrink-0 text-[10px] font-bold text-gray-300">
+                    {new Date(action.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm font-bold text-gray-300">아직 관리자 작업 로그가 없습니다.</p>
+          )}
+        </section>
       </div>
 
       {/* Shortcuts */}

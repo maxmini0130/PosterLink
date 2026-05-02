@@ -41,7 +41,7 @@ export default function OperatorPostersPage() {
 
     const { error } = await supabase
       .from("posters")
-      .update({ poster_status: "review" })
+      .update({ poster_status: "review", rejection_reason: null })
       .eq("id", id);
 
     if (error) toast.error(error.message);
@@ -116,6 +116,12 @@ export default function OperatorPostersPage() {
                     <div className="flex flex-col">
                       <span className="text-sm font-black text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-1">{p.title}</span>
                       <span className="text-[11px] font-bold text-gray-400 mt-1">{p.source_org_name}</span>
+                      {p.poster_status === "rejected" && p.rejection_reason && (
+                        <span className="mt-2 inline-flex w-fit max-w-md items-start gap-1.5 rounded-xl bg-rose-50 px-3 py-2 text-[11px] font-bold leading-relaxed text-rose-600">
+                          <AlertCircle size={13} className="mt-0.5 shrink-0" />
+                          {p.rejection_reason}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-5">

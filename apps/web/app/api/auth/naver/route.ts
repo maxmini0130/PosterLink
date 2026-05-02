@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-const _rawUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://posterlink.kr';
+const _rawUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://posterlink.co.kr';
 const BASE_URL = _rawUrl.startsWith('http') ? _rawUrl : `https://${_rawUrl}`;
 
 export async function GET() {

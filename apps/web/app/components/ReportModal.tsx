@@ -10,10 +10,12 @@ interface ReportModalProps {
 }
 
 const REASON_OPTIONS = [
-  { code: "obscene", label: "욕설/혐오 표현" },
-  { code: "false_info", label: "허위 정보" },
+  { code: "abuse", label: "욕설/비방" },
+  { code: "misinformation", label: "허위 정보" },
   { code: "spam", label: "광고/스팸" },
-  { code: "illegal", label: "불법 콘텐츠" },
+  { code: "privacy", label: "개인정보 노출" },
+  { code: "hate", label: "혐오 표현" },
+  { code: "political", label: "정치/분쟁 유도" },
   { code: "other", label: "기타" },
 ];
 
@@ -25,8 +27,11 @@ export function ReportModal({ title = "신고하기", onSubmit, onClose }: Repor
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    await onSubmit(reasonCode, reasonDetail);
-    setLoading(false);
+    try {
+      await onSubmit(reasonCode, reasonDetail);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

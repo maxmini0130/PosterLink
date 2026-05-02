@@ -82,6 +82,24 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
     }
   };
 
+  const logOfficialLinkClick = async (link: any) => {
+    if (!link?.url || link.url === "#") return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from("poster_link_click_logs").insert({
+        poster_id: params.id,
+        link_id: link.id ?? null,
+        user_id: user?.id ?? null,
+        link_type: link.link_type ?? null,
+        link_url: link.url,
+        referrer_path: window.location.pathname,
+      });
+    } catch (error) {
+      console.warn("Failed to log poster link click:", error);
+    }
+  };
+
   if (loading) {
     return <div className="p-10 text-center animate-pulse">상세 정보 불러오는 중...</div>;
   }
@@ -96,6 +114,7 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
 
   // 이미지 URL 구성 (Supabase Storage 경로 활용)
   const imageUrl = poster.thumbnail_url ?? null;
+  const primaryLink = links.find((link) => link.is_primary) || links[0] || null;
 
   return (
     <div className="min-h-screen bg-white pb-24 md:pb-10">
@@ -177,6 +196,8 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
                   key={link.id}
                   href={link.url}
                   target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => void logOfficialLinkClick(link)}
                   className="block p-4 border rounded-2xl hover:bg-gray-50 transition-colors text-sm font-bold text-gray-700 flex items-center justify-between"
                 >
                   {link.title || link.link_type}
@@ -230,8 +251,18 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
 
             {/* 공식 링크 중 하나를 메인 버튼으로 사용 */}
             <a
-              href={links.find(l => l.is_primary)?.url || links[0]?.url || "#"}
+              href={primaryLink?.url || "#"}
               target="_blank"
+              rel="noopener noreferrer"
+              onClick={(event) => {
+                if (!primaryLink) {
+                  event.preventDefault();
+                  toast.error("등록된 공식 링크가 없습니다.");
+                  return;
+                }
+
+                void logOfficialLinkClick(primaryLink);
+              }}
               className="flex-1 h-14 flex items-center justify-center bg-blue-600 text-white font-black rounded-2xl shadow-lg shadow-blue-200"
             >
               공식 홈페이지 바로가기

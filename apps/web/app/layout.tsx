@@ -3,6 +3,9 @@ import "./globals.css";
 import { ToastProvider } from "./components/ToastProvider";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
+const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://posterlink.co.kr";
+const appOrigin = appUrl.startsWith("http") ? appUrl : `https://${appUrl}`;
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -15,7 +18,7 @@ export const metadata: Metadata = {
     template: "%s | PosterLink",
   },
   description: "청년, 소상공인, 문화 공고를 한눈에 — PosterLink",
-  metadataBase: new URL("https://posterlink.co.kr"),
+  metadataBase: new URL(appOrigin),
   icons: {
     icon: "/logo.png",
     apple: "/logo.png",

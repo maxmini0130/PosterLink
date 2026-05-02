@@ -50,24 +50,57 @@ export default function AdminSettingsPage() {
     const payload: any = { name: newItemName, code: newItemCode };
     if (activeTab === 'regions') payload.level = 'sido';
     else payload.sort_order = categories.length + 1;
-    const { error } = await supabase.from(table).insert(payload);
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data, error } = await supabase.from(table).insert(payload).select("id").single();
     if (error) toast.error(error.message);
-    else { setNewItemName(""); setNewItemCode(""); fetchData(); }
+    else {
+      await supabase.from("admin_actions").insert({
+        actor_user_id: user?.id ?? null,
+        target_type: activeTab === "categories" ? "category" : "region",
+        target_id: data?.id ?? null,
+        action_type: "create",
+        metadata_json: { table, name: newItemName, code: newItemCode },
+      });
+      setNewItemName("");
+      setNewItemCode("");
+      fetchData();
+    }
     setSaving(false);
   };
 
   const handleDeleteItem = async (id: string) => {
     if (!confirm("정말 삭제하시겠습니까? 관련 데이터가 있을 경우 삭제되지 않을 수 있습니다.")) return;
     const table = activeTab === 'categories' ? 'categories' : 'regions';
+    const { data: { user } } = await supabase.auth.getUser();
     const { error } = await supabase.from(table).delete().eq("id", id);
     if (error) toast.error("삭제할 수 없습니다. 이미 사용 중인 데이터인지 확인하세요.");
-    else fetchData();
+    else {
+      await supabase.from("admin_actions").insert({
+        actor_user_id: user?.id ?? null,
+        target_type: activeTab === "categories" ? "category" : "region",
+        target_id: id,
+        action_type: "delete",
+        metadata_json: { table },
+      });
+      fetchData();
+    }
   };
 
   const handleRoleChange = async (userId: string, newRole: string) => {
+    const previousRole = users.find((u) => u.id === userId)?.role;
+    const { data: { user } } = await supabase.auth.getUser();
     const { error } = await supabase.from("profiles").update({ role: newRole }).eq("id", userId);
     if (error) toast.error(error.message);
-    else setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+    else {
+      await supabase.from("admin_actions").insert({
+        actor_user_id: user?.id ?? null,
+        target_type: "user",
+        target_id: userId,
+        action_type: "update",
+        metadata_json: { previousRole, newRole },
+      });
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+    }
   };
 
   const filteredUsers = users.filter(u =>

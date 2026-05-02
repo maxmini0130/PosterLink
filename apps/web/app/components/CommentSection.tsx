@@ -66,6 +66,25 @@ export function CommentSection({ posterId }: CommentSectionProps) {
 
   const handleReport = async (reasonCode: string, reasonDetail: string) => {
     if (!reportingCommentId) return;
+    if (!user) {
+      setReportingCommentId(null);
+      toast.error("로그인이 필요합니다.");
+      return;
+    }
+
+    const { data: existingReport, error: existingReportError } = await supabase
+      .from("comment_reports")
+      .select("id")
+      .eq("comment_id", reportingCommentId)
+      .eq("reporter_user_id", user.id)
+      .maybeSingle();
+
+    if (!existingReportError && existingReport) {
+      setReportingCommentId(null);
+      toast("이미 신고가 접수된 댓글입니다.", { icon: "ℹ️" });
+      return;
+    }
+
     const { error } = await supabase.from("comment_reports").insert({
       comment_id: reportingCommentId,
       reporter_user_id: user.id,
@@ -73,7 +92,13 @@ export function CommentSection({ posterId }: CommentSectionProps) {
       reason_detail: reasonDetail
     });
     setReportingCommentId(null);
-    if (error) toast.error(error.message);
+    if (error) {
+      if (error.code === "23505") {
+        toast("이미 신고가 접수된 댓글입니다.", { icon: "ℹ️" });
+      } else {
+        toast.error(error.message);
+      }
+    }
     else toast.success("신고가 접수되었습니다.");
   };
 

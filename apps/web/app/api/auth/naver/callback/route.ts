@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const _rawUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://posterlink.kr';
+const _rawUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://posterlink.co.kr';
 const BASE_URL = _rawUrl.startsWith('http') ? _rawUrl : `https://${_rawUrl}`;
 
 async function derivePassword(naverId: string): Promise<string> {
@@ -127,7 +127,7 @@ export async function GET(request: NextRequest) {
   // 서버에서 직접 signInWithPassword — PKCE 불필요, OTP 레이트리밋 없음
   const supabaseSignIn = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)!,
     { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }
   );
   const { data: signInData, error: signInError } = await supabaseSignIn.auth.signInWithPassword({
