@@ -20,11 +20,15 @@ export async function GET(request: Request) {
     .slice(0, 100);
 
   if (posterIds.length === 0) {
-    return NextResponse.json({ clickCounts: {}, favoriteCounts: {}, counts: {} });
+    return NextResponse.json({ viewCounts: {}, clickCounts: {}, favoriteCounts: {}, counts: {} });
   }
 
   const supabaseAdmin = createSupabaseAdmin();
-  const [clicksRes, favoritesRes] = await Promise.all([
+  const [viewsRes, clicksRes, favoritesRes] = await Promise.all([
+    supabaseAdmin
+      .from("poster_view_logs")
+      .select("poster_id")
+      .in("poster_id", posterIds),
     supabaseAdmin
       .from("poster_link_click_logs")
       .select("poster_id")
@@ -42,8 +46,18 @@ export async function GET(request: Request) {
     );
   }
 
+  const viewCounts = Object.fromEntries(posterIds.map((posterId) => [posterId, 0]));
   const clickCounts = Object.fromEntries(posterIds.map((posterId) => [posterId, 0]));
   const favoriteCounts = Object.fromEntries(posterIds.map((posterId) => [posterId, 0]));
+
+  if (!viewsRes.error) {
+    for (const row of viewsRes.data ?? []) {
+      const posterId = row.poster_id as string | null;
+      if (posterId && posterId in viewCounts) {
+        viewCounts[posterId] += 1;
+      }
+    }
+  }
 
   for (const row of clicksRes.data ?? []) {
     const posterId = row.poster_id as string | null;
@@ -59,7 +73,7 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ clickCounts, favoriteCounts, counts: clickCounts });
+  return NextResponse.json({ viewCounts, clickCounts, favoriteCounts, counts: clickCounts });
 }
 
 export async function POST(request: Request) {

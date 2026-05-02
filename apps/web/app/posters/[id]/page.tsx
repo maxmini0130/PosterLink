@@ -9,14 +9,15 @@ import { notFound } from "next/navigation";
 import Image from "next/image";
 import { supabase } from "../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
-import { fetchPosterMetricCounts } from "../../lib/posterMetrics";
+import { fetchPosterMetricCounts, logPosterView } from "../../lib/posterMetrics";
 import { Footer } from "../../components/Footer";
-import { Heart, Link2, MousePointerClick, Share2 } from "lucide-react";
+import { Eye, Heart, Link2, MousePointerClick, Share2 } from "lucide-react";
 
 export default function PosterDetailPage({ params }: { params: { id: string } }) {
   const [poster, setPoster] = useState<any>(null);
   const [links, setLinks] = useState<any[]>([]);
   const [isFavorited, setIsFavorited] = useState(false);
+  const [viewCount, setViewCount] = useState(0);
   const [linkClickCount, setLinkClickCount] = useState(0);
   const [favoriteCount, setFavoriteCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -40,8 +41,13 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
         const metaMap = await fetchCategoryRegionNames([params.id]);
         setPoster({ ...data, ...metaMap[params.id] });
         const metricCounts = await fetchPosterMetricCounts([params.id]);
+        setViewCount(metricCounts.viewCounts[params.id] ?? 0);
         setLinkClickCount(metricCounts.linkClickCounts[params.id] ?? 0);
         setFavoriteCount(metricCounts.favoriteCounts[params.id] ?? 0);
+        const logged = await logPosterView(params.id);
+        if (logged) {
+          setViewCount((count) => count + 1);
+        }
 
         // 2. 관련 링크 가져오기
         const { data: linkData } = await supabase
@@ -177,6 +183,10 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
             )}
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-2 rounded-2xl bg-sky-50 px-3 py-2 text-xs font-black text-sky-600">
+              <Eye size={14} />
+              조회 {viewCount.toLocaleString()}
+            </span>
             <span className="inline-flex items-center gap-2 rounded-2xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-600">
               <Heart size={14} fill="currentColor" />
               찜 {favoriteCount.toLocaleString()}

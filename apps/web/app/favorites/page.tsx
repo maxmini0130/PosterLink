@@ -49,6 +49,7 @@ export default function FavoritesPage() {
             setFavorites(postersData.map((p: any) => ({
               ...p,
               ...metaMap[p.id],
+              viewCount: metricCounts.viewCounts[p.id] ?? 0,
               linkClickCount: metricCounts.linkClickCounts[p.id] ?? 0,
               favoriteCount: metricCounts.favoriteCounts[p.id] ?? 0,
             })));
@@ -95,6 +96,7 @@ export default function FavoritesPage() {
                   deadline: poster.application_end_at,
                   tags: [poster.categoryName, poster.regionName].filter(Boolean),
                   image: poster.thumbnail_url,
+                  viewCount: poster.viewCount,
                   linkClickCount: poster.linkClickCount,
                   favoriteCount: poster.favoriteCount
                 }} 

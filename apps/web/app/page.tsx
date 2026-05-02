@@ -34,6 +34,7 @@ export default function Home() {
           return items.map((poster: any) => ({
             ...poster,
             ...metaMap[poster.id],
+            viewCount: metricCounts.viewCounts[poster.id] ?? 0,
             linkClickCount: metricCounts.linkClickCounts[poster.id] ?? 0,
             favoriteCount: metricCounts.favoriteCounts[poster.id] ?? 0,
           }));
@@ -215,6 +216,7 @@ export default function Home() {
                       org: poster.source_org_name,
                       deadline: poster.application_end_at,
                       image: poster.thumbnail_url,
+                      viewCount: poster.viewCount,
                       linkClickCount: poster.linkClickCount,
                       favoriteCount: poster.favoriteCount,
                       tags: [poster.categoryName, poster.regionName].filter((tag): tag is string => Boolean(tag))
