@@ -20,15 +20,36 @@ interface PosterCardProps {
 export function PosterCard({ poster }: PosterCardProps) {
   const dDay = getDDay(poster.deadline);
   const soon = isDeadlineSoon(poster.deadline);
+  const closed = dDay === "마감";
 
   return (
     <Link href={`/posters/${poster.id}`} className="group block">
-      <div className="relative aspect-[3/4] overflow-hidden rounded-2xl bg-gray-100 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 shadow-sm transition-all group-hover:shadow-md group-hover:-translate-y-1">
+      <div className={`relative aspect-[3/4] overflow-hidden rounded-2xl border shadow-sm transition-all group-hover:shadow-md group-hover:-translate-y-1 ${
+        closed
+          ? "border-slate-300 bg-slate-200 dark:border-slate-700 dark:bg-slate-800"
+          : "border-gray-100 bg-gray-100 dark:border-slate-700 dark:bg-slate-800"
+      }`}>
         {poster.image ? (
-          <Image src={poster.image} alt={poster.title} fill sizes="(max-width: 768px) 50vw, 200px" className="object-cover transition-transform duration-500 group-hover:scale-105" />
+          <Image
+            src={poster.image}
+            alt={poster.title}
+            fill
+            sizes="(max-width: 768px) 50vw, 200px"
+            className={`object-cover transition-transform duration-500 group-hover:scale-105 ${
+              closed ? "grayscale opacity-55" : ""
+            }`}
+          />
         ) : (
           <div className="h-full w-full bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center">
             <span className="text-blue-200 dark:text-slate-600 font-black text-2xl tracking-tighter opacity-50 uppercase">POSTER</span>
+          </div>
+        )}
+
+        {closed && (
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-950/25 backdrop-grayscale">
+            <span className="rounded-2xl bg-white/90 px-4 py-2 text-xs font-black text-slate-600 shadow-sm">
+              마감된 공고
+            </span>
           </div>
         )}
         
@@ -36,15 +57,19 @@ export function PosterCard({ poster }: PosterCardProps) {
         <div className={`absolute top-3 left-3 px-2.5 py-1 rounded-lg shadow-sm backdrop-blur-md transition-colors ${
           soon ? 'bg-rose-500/90 text-white' :
           dDay !== '마감' ? 'bg-blue-600/90 dark:bg-blue-500/90 text-white'
-          : 'bg-gray-400/90 dark:bg-slate-600/90 text-white'
+          : 'bg-slate-700/90 dark:bg-slate-600/90 text-white'
         }`}>
           <span className="text-[10px] font-black">{dDay}</span>
         </div>
       </div>
 
       <div className="mt-3 px-1">
-        <p className="text-[10px] text-gray-400 dark:text-slate-500 font-bold mb-1 truncate">{poster.org}</p>
-        <h4 className="text-sm font-bold text-gray-900 dark:text-slate-100 line-clamp-2 leading-snug group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors h-[2.5rem]">
+        <p className={`mb-1 truncate text-[10px] font-bold ${closed ? "text-slate-500" : "text-gray-400 dark:text-slate-500"}`}>{poster.org}</p>
+        <h4 className={`h-[2.5rem] text-sm font-bold leading-snug line-clamp-2 transition-colors ${
+          closed
+            ? "text-slate-500 line-through decoration-slate-500/50"
+            : "text-[color:var(--foreground)] group-hover:text-blue-600 dark:group-hover:text-blue-400"
+        }`}>
           {poster.title}
         </h4>
         <div className="mt-2 flex flex-wrap gap-1">
