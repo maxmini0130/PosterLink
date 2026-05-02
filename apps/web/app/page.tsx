@@ -20,6 +20,7 @@ export default function Home() {
   const [posters, setPosters] = useState<any[]>([]);
   const [urgentPosters, setUrgentPosters] = useState<any[]>([]);
   const [stats, setStats] = useState({ posters: 0, favorites: 0, notifications: 0 });
+  const [hideClosedPosters, setHideClosedPosters] = useState(true);
 
   useEffect(() => {
     const fetchHomeData = async () => {
@@ -68,7 +69,7 @@ export default function Home() {
             .select("id, title, source_org_name, application_end_at, poster_status, thumbnail_url")
             .eq("poster_status", "published")
             .order("created_at", { ascending: false })
-            .limit(8);
+            .limit(24);
 
           if (!publicError && publicData) {
             setPosters(await attachPosterMeta(publicData));
@@ -118,6 +119,12 @@ export default function Home() {
     hidden: { y: 20, opacity: 0 },
     visible: { y: 0, opacity: 1, transition: { type: "spring" as const, stiffness: 100 } }
   };
+
+  const isClosed = (poster: any) => {
+    if (!poster.application_end_at) return false;
+    return new Date(poster.application_end_at).getTime() < Date.now();
+  };
+  const visiblePosters = (hideClosedPosters ? posters.filter((poster) => !isClosed(poster)) : posters).slice(0, 8);
 
   if (loading) {
     return (
@@ -195,19 +202,42 @@ export default function Home() {
           viewport={{ once: true }}
           className="mb-16"
         >
-          <div className="flex items-center justify-between mb-8 px-2">
-            <div className="flex items-center gap-2">
-              <h3 className="text-xl font-black text-gray-900 dark:text-slate-50">새로 올라온 공고</h3>
-              <div className="w-2 h-2 bg-rose-500 rounded-full animate-pulse" />
+          <div className="mb-8 flex flex-col gap-4 px-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <h3 className="text-xl font-black text-gray-900 dark:text-slate-50">새로 올라온 공고</h3>
+                <div className="w-2 h-2 bg-rose-500 rounded-full animate-pulse" />
+              </div>
+              <Link href="/posters" className="text-xs font-black text-gray-400 dark:text-slate-500 flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors sm:hidden">
+                VIEW ALL <ArrowRight size={14} />
+              </Link>
             </div>
-            <Link href="/posters" className="text-xs font-black text-gray-400 dark:text-slate-500 flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-              VIEW ALL <ArrowRight size={14} />
-            </Link>
+            <div className="flex items-center justify-between gap-4 sm:justify-end">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={hideClosedPosters}
+                onClick={() => setHideClosedPosters((value) => !value)}
+                className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-[11px] font-black transition-colors ${
+                  hideClosedPosters
+                    ? "bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300"
+                    : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"
+                }`}
+              >
+                <span className={`flex h-5 w-9 items-center rounded-full p-0.5 transition-colors ${hideClosedPosters ? "bg-blue-600" : "bg-slate-300 dark:bg-slate-600"}`}>
+                  <span className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${hideClosedPosters ? "translate-x-4" : ""}`} />
+                </span>
+                마감 제외
+              </button>
+              <Link href="/posters" className="hidden text-xs font-black text-gray-400 dark:text-slate-500 sm:flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                VIEW ALL <ArrowRight size={14} />
+              </Link>
+            </div>
           </div>
           
-          {posters.length > 0 ? (
+          {visiblePosters.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-x-5 gap-y-10">
-              {posters.map((poster) => (
+              {visiblePosters.map((poster) => (
                 <motion.div key={poster.id} variants={itemVariants}>
                   <PosterCard 
                     poster={{
@@ -227,7 +257,9 @@ export default function Home() {
             </div>
           ) : (
             <div className="py-20 text-center bg-white dark:bg-slate-800 rounded-[3rem] border border-dashed border-gray-200 dark:border-slate-700">
-              <p className="text-gray-400 dark:text-slate-500 font-bold">아직 등록된 공고가 없습니다.</p>
+              <p className="text-gray-400 dark:text-slate-500 font-bold">
+                {hideClosedPosters ? "진행 중인 공고가 없습니다." : "아직 등록된 공고가 없습니다."}
+              </p>
             </div>
           )}
         </motion.section>

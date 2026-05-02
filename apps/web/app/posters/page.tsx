@@ -26,6 +26,7 @@ export default function PosterListPage() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState("latest");
+  const [hideClosedPosters, setHideClosedPosters] = useState(true);
 
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -70,7 +71,15 @@ export default function PosterListPage() {
 
       if (error) throw error;
 
-      const sortedData = [...(data ?? [])].sort((a: any, b: any) => {
+      const now = Date.now();
+      const filteredData = hideClosedPosters
+        ? (data ?? []).filter((poster: any) => {
+            if (!poster.application_end_at) return true;
+            return new Date(poster.application_end_at).getTime() >= now;
+          })
+        : (data ?? []);
+
+      const sortedData = [...filteredData].sort((a: any, b: any) => {
         if (sortBy === "deadline") {
           const aTime = a.application_end_at ? new Date(a.application_end_at).getTime() : Number.MAX_SAFE_INTEGER;
           const bTime = b.application_end_at ? new Date(b.application_end_at).getTime() : Number.MAX_SAFE_INTEGER;
@@ -117,7 +126,7 @@ export default function PosterListPage() {
     const timer = setTimeout(() => fetchPosters(), 300);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery, selectedCategoryId, selectedRegionId, sortBy]);
+  }, [searchQuery, selectedCategoryId, selectedRegionId, sortBy, hideClosedPosters]);
 
   // 3. Search Actions
   const handleSearchSubmit = (e?: React.FormEvent, term?: string) => {
@@ -208,10 +217,21 @@ export default function PosterListPage() {
 
         {/* Main List UI */}
         <div className="flex flex-col gap-6">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4">
              <h1 className="text-2xl font-black text-gray-900">Explore 🔍</h1>
-             <button className="p-3 bg-gray-50 text-gray-400 rounded-2xl hover:bg-blue-50 hover:text-blue-600 transition-all">
-                <Filter size={20} />
+             <button
+               type="button"
+               role="switch"
+               aria-checked={hideClosedPosters}
+               onClick={() => setHideClosedPosters((value) => !value)}
+               className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-[11px] font-black transition-colors ${
+                 hideClosedPosters ? "bg-blue-50 text-blue-600" : "bg-gray-50 text-gray-400"
+               }`}
+             >
+                <span className={`flex h-5 w-9 items-center rounded-full p-0.5 transition-colors ${hideClosedPosters ? "bg-blue-600" : "bg-gray-300"}`}>
+                  <span className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${hideClosedPosters ? "translate-x-4" : ""}`} />
+                </span>
+                마감 제외
              </button>
           </div>
           
@@ -265,7 +285,9 @@ export default function PosterListPage() {
 
           {/* Sort & Result Count */}
           <div className="flex items-center justify-between border-b border-gray-50 pb-4">
-             <span className="text-[11px] font-black text-gray-300 uppercase tracking-widest">Total {posters.length} Results</span>
+             <span className="text-[11px] font-black text-gray-300 uppercase tracking-widest">
+               Total {posters.length} Results {hideClosedPosters ? "· 진행 중" : "· 전체"}
+             </span>
 
              <div className="flex gap-4">
                <button onClick={() => setSortBy("latest")} className={`text-xs font-black transition-colors ${sortBy === 'latest' ? 'text-blue-600' : 'text-gray-300'}`}>LATEST</button>
