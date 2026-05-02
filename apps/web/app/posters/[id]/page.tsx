@@ -82,21 +82,32 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
     }
   };
 
-  const logOfficialLinkClick = async (link: any) => {
+  const logOfficialLinkClick = (link: any) => {
     if (!link?.url || link.url === "#") return;
 
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from("poster_link_click_logs").insert({
+    const body = JSON.stringify({
         poster_id: params.id,
         link_id: link.id ?? null,
-        user_id: user?.id ?? null,
         link_type: link.link_type ?? null,
         link_url: link.url,
         referrer_path: window.location.pathname,
+    });
+
+    try {
+      if (navigator.sendBeacon) {
+        const blob = new Blob([body], { type: "application/json" });
+        const queued = navigator.sendBeacon("/api/poster-link-clicks", blob);
+        if (queued) return;
+      }
+
+      void fetch("/api/poster-link-clicks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+        keepalive: true,
       });
     } catch (error) {
-      console.warn("Failed to log poster link click:", error);
+      console.warn("Failed to queue poster link click log:", error);
     }
   };
 

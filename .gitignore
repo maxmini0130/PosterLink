@@ -36,3 +36,5 @@ apps/web/playwright-report/
 
 # Claude Code memory
 .claude/
+.vercel
+.env*.local
