@@ -9,13 +9,15 @@ import { notFound } from "next/navigation";
 import Image from "next/image";
 import { supabase } from "../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
+import { fetchPosterLinkClickCounts } from "../../lib/posterMetrics";
 import { Footer } from "../../components/Footer";
-import { Link2, Share2 } from "lucide-react";
+import { Link2, MousePointerClick, Share2 } from "lucide-react";
 
 export default function PosterDetailPage({ params }: { params: { id: string } }) {
   const [poster, setPoster] = useState<any>(null);
   const [links, setLinks] = useState<any[]>([]);
   const [isFavorited, setIsFavorited] = useState(false);
+  const [linkClickCount, setLinkClickCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -36,6 +38,8 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
 
         const metaMap = await fetchCategoryRegionNames([params.id]);
         setPoster({ ...data, ...metaMap[params.id] });
+        const clickCounts = await fetchPosterLinkClickCounts([params.id]);
+        setLinkClickCount(clickCounts[params.id] ?? 0);
 
         // 2. 관련 링크 가져오기
         const { data: linkData } = await supabase
@@ -94,6 +98,7 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
     });
 
     try {
+      setLinkClickCount((count) => count + 1);
       if (navigator.sendBeacon) {
         const blob = new Blob([body], { type: "application/json" });
         const queued = navigator.sendBeacon("/api/poster-link-clicks", blob);
@@ -162,6 +167,10 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
                 #{poster.regionName}
               </span>
             )}
+          </div>
+          <div className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-amber-50 px-3 py-2 text-xs font-black text-amber-600">
+            <MousePointerClick size={14} />
+            공식 링크 클릭 {linkClickCount.toLocaleString()}
           </div>
         </div>
 

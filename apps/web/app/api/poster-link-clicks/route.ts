@@ -3,6 +3,47 @@ import { createClient } from "@supabase/supabase-js";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function createSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
+}
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const posterIds = (searchParams.get("posterIds") ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter((id) => uuidPattern.test(id))
+    .slice(0, 100);
+
+  if (posterIds.length === 0) {
+    return NextResponse.json({ counts: {} });
+  }
+
+  const supabaseAdmin = createSupabaseAdmin();
+  const { data, error } = await supabaseAdmin
+    .from("poster_link_click_logs")
+    .select("poster_id")
+    .in("poster_id", posterIds);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  const counts = Object.fromEntries(posterIds.map((posterId) => [posterId, 0]));
+  for (const row of data ?? []) {
+    const posterId = row.poster_id as string | null;
+    if (posterId && posterId in counts) {
+      counts[posterId] += 1;
+    }
+  }
+
+  return NextResponse.json({ counts });
+}
+
 export async function POST(request: Request) {
   let payload: {
     poster_id?: string;
@@ -28,11 +69,7 @@ export async function POST(request: Request) {
   }
 
   const linkId = payload.link_id && uuidPattern.test(payload.link_id) ? payload.link_id : null;
-  const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  );
+  const supabaseAdmin = createSupabaseAdmin();
 
   const { error } = await supabaseAdmin.from("poster_link_click_logs").insert({
     poster_id: payload.poster_id,

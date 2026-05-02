@@ -7,6 +7,7 @@ import { BottomNav } from "../components/BottomNav";
 import { Footer } from "../components/Footer";
 import { PosterCard } from "../components/PosterCard";
 import { fetchCategoryRegionNames } from "../lib/posterHelpers";
+import { fetchPosterLinkClickCounts } from "../lib/posterMetrics";
 import { Search, X, History, TrendingUp, Filter, ArrowLeft, ChevronDown } from "lucide-react";
 
 const PAGE_SIZE = 12;
@@ -79,8 +80,16 @@ export default function PosterListPage() {
         return new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime();
       });
 
-      const metaMap = await fetchCategoryRegionNames(sortedData.map((poster: any) => poster.id));
-      setPosters(sortedData.map((poster: any) => ({ ...poster, ...metaMap[poster.id] })));
+      const posterIds = sortedData.map((poster: any) => poster.id);
+      const [metaMap, clickCounts] = await Promise.all([
+        fetchCategoryRegionNames(posterIds),
+        fetchPosterLinkClickCounts(posterIds),
+      ]);
+      setPosters(sortedData.map((poster: any) => ({
+        ...poster,
+        ...metaMap[poster.id],
+        linkClickCount: clickCounts[poster.id] ?? 0,
+      })));
       setDisplayCount(PAGE_SIZE);
 
       const normalizedQuery = queryStr.trim();
@@ -280,6 +289,7 @@ export default function PosterListPage() {
                     org: poster.source_org_name,
                     deadline: poster.application_end_at,
                     image: poster.thumbnail_url,
+                    linkClickCount: poster.linkClickCount,
                     tags: [poster.categoryName, poster.regionName].filter((tag): tag is string => Boolean(tag))
                   }}
                 />

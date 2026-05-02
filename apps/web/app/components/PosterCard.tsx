@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { getDDay, isDeadlineSoon } from "@posterlink/lib";
+import { MousePointerClick } from "lucide-react";
 
 interface PosterCardProps {
   poster: {
@@ -10,6 +11,7 @@ interface PosterCardProps {
     deadline?: string;
     tags?: string[];
     image?: string;
+    linkClickCount?: number;
   };
 }
 
@@ -49,6 +51,10 @@ export function PosterCard({ poster }: PosterCardProps) {
               #{tag}
             </span>
           ))}
+        </div>
+        <div className="mt-2 flex items-center gap-1 text-[10px] font-black text-amber-500 dark:text-amber-400">
+          <MousePointerClick size={12} />
+          <span>공식 링크 클릭 {(poster.linkClickCount ?? 0).toLocaleString()}</span>
         </div>
       </div>
     </Link>

@@ -7,6 +7,7 @@ import { BottomNav } from "./components/BottomNav";
 import { Footer } from "./components/Footer";
 import { PosterCard } from "./components/PosterCard";
 import { fetchCategoryRegionNames } from "./lib/posterHelpers";
+import { fetchPosterLinkClickCounts } from "./lib/posterMetrics";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, ArrowRight, Zap, Bell, Heart, Search } from "lucide-react";
 import Link from "next/link";
@@ -25,8 +26,16 @@ export default function Home() {
       setLoading(true);
       try {
         const attachPosterMeta = async (items: any[]) => {
-          const metaMap = await fetchCategoryRegionNames(items.map((poster: any) => poster.id));
-          return items.map((poster: any) => ({ ...poster, ...metaMap[poster.id] }));
+          const posterIds = items.map((poster: any) => poster.id);
+          const [metaMap, clickCounts] = await Promise.all([
+            fetchCategoryRegionNames(posterIds),
+            fetchPosterLinkClickCounts(posterIds),
+          ]);
+          return items.map((poster: any) => ({
+            ...poster,
+            ...metaMap[poster.id],
+            linkClickCount: clickCounts[poster.id] ?? 0,
+          }));
         };
 
         // getSession reads from localStorage (no network) — safe even with deleted accounts
@@ -205,6 +214,7 @@ export default function Home() {
                       org: poster.source_org_name,
                       deadline: poster.application_end_at,
                       image: poster.thumbnail_url,
+                      linkClickCount: poster.linkClickCount,
                       tags: [poster.categoryName, poster.regionName].filter((tag): tag is string => Boolean(tag))
                     }} 
                   />
