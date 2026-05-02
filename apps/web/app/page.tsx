@@ -47,7 +47,7 @@ export default function Home() {
 
         // 로그인 시: 프로필 + 맞춤 추천
         let postersFetched = false;
-        if (user) {
+        if (user && hideClosedPosters) {
           const { data: profile } = await supabase.from("profiles").select("*, regions(name)").eq("id", user.id).single();
           setUserProfile(profile);
 
@@ -108,7 +108,7 @@ export default function Home() {
       }
     };
     fetchHomeData();
-  }, []);
+  }, [hideClosedPosters]);
 
   const containerVariants = {
     hidden: { opacity: 0 },

@@ -63,21 +63,62 @@ export default function PosterListPage() {
   const fetchPosters = async (queryStr = searchQuery) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc("search_posters_with_synonyms", {
-        p_query: queryStr.trim(),
-        p_category_id: selectedCategoryId,
-        p_region_id: selectedRegionId,
-      });
+      const normalizedQuery = queryStr.trim();
+      let data: any[] = [];
 
-      if (error) throw error;
+      if (hideClosedPosters) {
+        const { data: rpcData, error } = await supabase.rpc("search_posters_with_synonyms", {
+          p_query: normalizedQuery,
+          p_category_id: selectedCategoryId,
+          p_region_id: selectedRegionId,
+        });
+
+        if (error) throw error;
+        data = rpcData ?? [];
+      } else {
+        let query = supabase
+          .from("posters")
+          .select("id, title, source_org_name, application_end_at, poster_status, thumbnail_url, summary_short, created_at")
+          .eq("poster_status", "published");
+
+        if (normalizedQuery) {
+          query = query.or(`title.ilike.%${normalizedQuery}%,source_org_name.ilike.%${normalizedQuery}%,summary_short.ilike.%${normalizedQuery}%`);
+        }
+
+        const { data: directData, error } = await query
+          .order("created_at", { ascending: false })
+          .limit(100);
+
+        if (error) throw error;
+        data = directData ?? [];
+      }
 
       const now = Date.now();
-      const filteredData = hideClosedPosters
-        ? (data ?? []).filter((poster: any) => {
+      const dateFilteredData = hideClosedPosters
+        ? data.filter((poster: any) => {
             if (!poster.application_end_at) return true;
             return new Date(poster.application_end_at).getTime() >= now;
           })
-        : (data ?? []);
+        : data;
+
+      const basePosterIds = dateFilteredData.map((poster: any) => poster.id);
+      const [baseMetaMap, baseMetricCounts] = await Promise.all([
+        fetchCategoryRegionNames(basePosterIds),
+        fetchPosterMetricCounts(basePosterIds),
+      ]);
+
+      const enrichedData = dateFilteredData.map((poster: any) => ({
+        ...poster,
+        ...baseMetaMap[poster.id],
+        viewCount: baseMetricCounts.viewCounts[poster.id] ?? 0,
+        linkClickCount: baseMetricCounts.linkClickCounts[poster.id] ?? 0,
+        favoriteCount: baseMetricCounts.favoriteCounts[poster.id] ?? 0,
+      }));
+
+      const filteredData = enrichedData.filter((poster: any) => (
+        (!selectedCategoryId || poster.categoryId === selectedCategoryId) &&
+        (!selectedRegionId || poster.regionId === selectedRegionId)
+      ));
 
       const sortedData = [...filteredData].sort((a: any, b: any) => {
         if (sortBy === "deadline") {
@@ -89,21 +130,9 @@ export default function PosterListPage() {
         return new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime();
       });
 
-      const posterIds = sortedData.map((poster: any) => poster.id);
-      const [metaMap, metricCounts] = await Promise.all([
-        fetchCategoryRegionNames(posterIds),
-        fetchPosterMetricCounts(posterIds),
-      ]);
-      setPosters(sortedData.map((poster: any) => ({
-        ...poster,
-        ...metaMap[poster.id],
-        viewCount: metricCounts.viewCounts[poster.id] ?? 0,
-        linkClickCount: metricCounts.linkClickCounts[poster.id] ?? 0,
-        favoriteCount: metricCounts.favoriteCounts[poster.id] ?? 0,
-      })));
+      setPosters(sortedData);
       setDisplayCount(PAGE_SIZE);
 
-      const normalizedQuery = queryStr.trim();
       if (normalizedQuery && pendingSearchLogRef.current === normalizedQuery) {
         pendingSearchLogRef.current = null;
         supabase.auth.getSession().then(({ data: { session } }) => {
