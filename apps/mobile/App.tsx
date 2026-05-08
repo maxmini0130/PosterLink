@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { WebView } from 'react-native-webview';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as Notifications from 'expo-notifications';
@@ -89,7 +90,7 @@ const SESSION_BRIDGE_JS = `
   })();
 `;
 
-type AppView = 'browse' | 'camera' | 'preview';
+type AppView = 'browse' | 'chooser' | 'camera' | 'preview';
 
 export default function App() {
   const [view, setView] = useState<AppView>('browse');
@@ -374,6 +375,23 @@ export default function App() {
     }
   };
 
+  const pickFromGallery = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('권한 필요', '갤러리 접근 권한이 필요합니다.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+      allowsEditing: false,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setCapturedImage(result.assets[0].uri);
+      setView('preview');
+    }
+  };
+
   const uploadPoster = async () => {
     if (!capturedImage || !user) return;
     setLoading(true);
@@ -402,6 +420,40 @@ export default function App() {
       setLoading(false);
     }
   };
+
+  // ── 선택 화면 ────────────────────────────────────────────────────
+  if (view === 'chooser') {
+    return (
+      <View style={styles.centered}>
+        <StatusBar style="dark" />
+        <Text style={styles.chooserTitle}>포스터 등록</Text>
+        <Text style={styles.chooserSub}>등록 방법을 선택하세요</Text>
+        <View style={styles.chooserRow}>
+          <TouchableOpacity
+            style={styles.chooserCard}
+            onPress={() => setView('camera')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.chooserCardIcon}>📸</Text>
+            <Text style={styles.chooserCardLabel}>카메라 촬영</Text>
+            <Text style={styles.chooserCardDesc}>지금 바로 찍기</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.chooserCard}
+            onPress={pickFromGallery}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.chooserCardIcon}>🖼️</Text>
+            <Text style={styles.chooserCardLabel}>갤러리 선택</Text>
+            <Text style={styles.chooserCardDesc}>사진 불러오기</Text>
+          </TouchableOpacity>
+        </View>
+        <TouchableOpacity onPress={() => setView('browse')} style={styles.chooserCancel}>
+          <Text style={styles.chooserCancelText}>취소</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   // ── 카메라 ──────────────────────────────────────────────────────
   if (view === 'camera') {
@@ -514,10 +566,10 @@ export default function App() {
       {/* FAB — 역할에 따라 분기 */}
       {user && userRole !== null && (
         ['operator', 'admin', 'super_admin'].includes(userRole) ? (
-          // 운영자/관리자: 카메라 촬영
+          // 운영자/관리자: 선택 화면으로
           <TouchableOpacity
             style={styles.fab}
-            onPress={() => setView('camera')}
+            onPress={() => setView('chooser')}
             onLongPress={handleLogout}
             activeOpacity={0.85}
           >
@@ -591,5 +643,25 @@ const styles = StyleSheet.create({
   fabRequest: {
     backgroundColor: '#4f46e5',
   },
+
+  // Chooser
+  chooserTitle: { fontSize: 22, fontWeight: '900', color: '#111827', marginBottom: 6 },
+  chooserSub: { fontSize: 14, fontWeight: '600', color: '#9ca3af', marginBottom: 32 },
+  chooserRow: { flexDirection: 'row', gap: 16, marginBottom: 32 },
+  chooserCard: {
+    flex: 1,
+    backgroundColor: '#f9fafb',
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    paddingVertical: 28,
+    alignItems: 'center',
+    gap: 8,
+  },
+  chooserCardIcon: { fontSize: 36 },
+  chooserCardLabel: { fontSize: 15, fontWeight: '900', color: '#1e3a8a' },
+  chooserCardDesc: { fontSize: 12, fontWeight: '600', color: '#9ca3af' },
+  chooserCancel: { paddingVertical: 14, paddingHorizontal: 40 },
+  chooserCancelText: { fontSize: 15, fontWeight: '700', color: '#9ca3af' },
   fabIcon: { fontSize: 24 },
 });
