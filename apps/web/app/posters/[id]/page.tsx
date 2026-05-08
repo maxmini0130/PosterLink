@@ -11,7 +11,7 @@ import { supabase } from "../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
 import { fetchPosterMetricCounts, logPosterView } from "../../lib/posterMetrics";
 import { Footer } from "../../components/Footer";
-import { Eye, Heart, Link2, MousePointerClick, Share2 } from "lucide-react";
+import { Eye, FileText, Heart, Link2, MousePointerClick, Share2 } from "lucide-react";
 
 export default function PosterDetailPage({ params }: { params: { id: string } }) {
   const [poster, setPoster] = useState<any>(null);
@@ -155,7 +155,15 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
           {imageUrl ? (
             <Image src={imageUrl} alt={poster.title} fill sizes="(max-width: 672px) 100vw, 672px" className="object-cover" />
           ) : (
-            <span className="text-gray-300 font-bold">이미지가 없습니다</span>
+            <div className="flex h-full w-full flex-col justify-between bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-8">
+              <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-blue-500 shadow-sm">
+                <FileText size={34} />
+              </div>
+              <div>
+                <p className="mb-3 text-sm font-black uppercase tracking-wider text-blue-400">{poster.source_org_name || "PosterLink"}</p>
+                <p className="text-3xl font-black leading-tight text-slate-800">{poster.title}</p>
+              </div>
+            </div>
           )}
         </div>
 

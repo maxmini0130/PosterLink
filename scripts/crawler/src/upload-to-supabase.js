@@ -120,7 +120,7 @@ async function uploadToSupabase(filePath) {
 
     const { data: existingPoster, error: existingErr } = await supabase
       .from("posters")
-      .select("id, poster_status")
+      .select("id, poster_status, title, summary_short, thumbnail_url")
       .eq("source_key", sourceKey)
       .maybeSingle();
 
@@ -134,6 +134,19 @@ async function uploadToSupabase(filePath) {
     if (existingPoster?.id) {
       skip++;
       skippedSourceKeys.push(sourceKey);
+      const updates = {};
+      if (posterRecord.title !== "제목 없음" && (!existingPoster.title || existingPoster.title === "제목 없음")) {
+        updates.title = posterRecord.title;
+      }
+      if (posterRecord.summary_short && !existingPoster.summary_short) {
+        updates.summary_short = posterRecord.summary_short;
+      }
+      if (posterRecord.thumbnail_url && !existingPoster.thumbnail_url) {
+        updates.thumbnail_url = posterRecord.thumbnail_url;
+      }
+      if (Object.keys(updates).length > 0) {
+        await supabase.from("posters").update(updates).eq("id", existingPoster.id);
+      }
       process.stdout.write("-");
       continue;
     }

@@ -28,6 +28,18 @@ function resolveUrl(base, relative) {
   }
 }
 
+function isLikelyContentImage(src) {
+  if (!src) return false;
+  const normalized = src.toLowerCase();
+  return !["icon", "logo", "btn", "banner", "sns", "facebook", "twitter"].some((word) => normalized.includes(word));
+}
+
+function addImage(images, baseUrl, src) {
+  if (!isLikelyContentImage(src)) return;
+  const resolved = resolveUrl(baseUrl, src);
+  if (!images.includes(resolved)) images.push(resolved);
+}
+
 export default {
   name: "generic-board",
 
@@ -118,14 +130,21 @@ export default {
 
     // 이미지 URL 추출
     const images = [];
+    $("meta[property='og:image'], meta[name='twitter:image'], link[rel='image_src']").each((_, el) => {
+      addImage(images, postUrl, $(el).attr("content") || $(el).attr("href"));
+    });
+
     for (const s of sel.detailImages.split(", ")) {
       $(s).each((_, img) => {
-        const src = $(img).attr("src");
-        if (src && !src.includes("icon") && !src.includes("logo") && !src.includes("btn")) {
-          images.push(resolveUrl(postUrl, src));
-        }
+        addImage(images, postUrl, $(img).attr("src") || $(img).attr("data-src") || $(img).attr("data-original"));
       });
       if (images.length > 0) break;
+    }
+
+    if (images.length === 0) {
+      $("img").each((_, img) => {
+        addImage(images, postUrl, $(img).attr("src") || $(img).attr("data-src") || $(img).attr("data-original"));
+      });
     }
 
     // 첨부파일

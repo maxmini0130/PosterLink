@@ -9,7 +9,7 @@ import {
   ExternalLink,
   Eye,
   FileCheck,
-  Image as ImageIcon,
+  FileText,
   PencilLine,
   X,
 } from "lucide-react";
@@ -224,7 +224,15 @@ export default function AdminPostersPage() {
                     alt="Poster"
                   />
                 ) : (
-                  <ImageIcon className="text-gray-200 dark:text-slate-700" size={32} />
+                  <div className="flex h-full w-full flex-col justify-between bg-gradient-to-br from-indigo-50 via-white to-blue-50 p-4 dark:from-slate-800 dark:via-slate-900 dark:to-indigo-950">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/80 text-indigo-500 shadow-sm dark:bg-slate-950/60 dark:text-indigo-300">
+                      <FileText size={22} />
+                    </div>
+                    <div>
+                      <p className="mb-1 line-clamp-1 text-[10px] font-black text-indigo-400">{poster.source_org_name || "PosterLink"}</p>
+                      <p className="line-clamp-4 text-sm font-black leading-snug text-slate-800 dark:text-slate-100">{poster.title}</p>
+                    </div>
+                  </div>
                 )}
 
                 <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover/img:opacity-100">

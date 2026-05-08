@@ -81,6 +81,12 @@ export async function saveSeen(seenSet) {
   await fs.writeFile(seenFile, JSON.stringify([...seenSet]), "utf-8");
 }
 
+function dropUndefinedValues(object) {
+  return Object.fromEntries(
+    Object.entries(object).filter(([, value]) => value !== undefined)
+  );
+}
+
 // ── 메인 크롤 엔진 ───────────────────────────────
 export async function crawlSite(site, adapter, options = {}) {
   const { maxPages = 3, dryRun = false } = options;
@@ -118,7 +124,7 @@ export async function crawlSite(site, adapter, options = {}) {
             const detail = await adapter.parseDetail(post.url, site);
             const fullPost = {
               ...post,
-              ...detail,
+              ...dropUndefinedValues(detail),
               board: board.name,
               category: board.category,
               site: site.name,

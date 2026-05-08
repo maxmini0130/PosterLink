@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { getDDay, isDeadlineSoon } from "@posterlink/lib";
-import { Eye, Heart, MousePointerClick } from "lucide-react";
+import { Eye, FileText, Heart, MousePointerClick } from "lucide-react";
 
 interface PosterCardProps {
   poster: {
@@ -40,8 +40,18 @@ export function PosterCard({ poster }: PosterCardProps) {
             }`}
           />
         ) : (
-          <div className="h-full w-full bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center">
-            <span className="text-blue-200 dark:text-slate-600 font-black text-2xl tracking-tighter opacity-50 uppercase">POSTER</span>
+          <div className="flex h-full w-full flex-col justify-between bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-4 dark:from-slate-700 dark:via-slate-800 dark:to-slate-900">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/80 text-blue-500 shadow-sm dark:bg-slate-900/60 dark:text-blue-300">
+              <FileText size={24} />
+            </div>
+            <div>
+              <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-blue-400 dark:text-blue-300">
+                {poster.org || "PosterLink"}
+              </p>
+              <p className="line-clamp-4 text-base font-black leading-snug text-slate-800 dark:text-slate-100">
+                {poster.title}
+              </p>
+            </div>
           </div>
         )}
 
