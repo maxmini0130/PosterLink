@@ -98,6 +98,7 @@ async function uploadToSupabase(filePath) {
   let success = 0;
   let skip = 0;
   let fail = 0;
+  const skippedSourceKeys = [];
 
   for (const post of posts) {
     const sourceKey = post.sourceUrl || post.url;
@@ -125,7 +126,12 @@ async function uploadToSupabase(filePath) {
 
     if (posterErr || !poster?.id) {
       // ignoreDuplicates=true 이면 중복 시 data가 null — 정상 스킵
-      if (!poster?.id) { skip++; process.stdout.write("-"); continue; }
+      if (!poster?.id) {
+        skip++;
+        skippedSourceKeys.push(sourceKey);
+        process.stdout.write("-");
+        continue;
+      }
       fail++;
       process.stdout.write("✗");
       console.error(`\n  포스터 저장 실패: ${post.title} — ${posterErr?.message}`);
@@ -164,6 +170,52 @@ async function uploadToSupabase(filePath) {
   console.log(`  성공: ${success}건`);
   console.log(`  중복(스킵): ${skip}건`);
   console.log(`  실패: ${fail}건`);
+
+  if (skippedSourceKeys.length > 0) {
+    const { data: existingRows, error: existingError } = await supabase
+      .from("posters")
+      .select("poster_status")
+      .in("source_key", skippedSourceKeys);
+
+    if (existingError) {
+      console.warn(`  중복 포스터 상태 확인 실패: ${existingError.message}`);
+    } else {
+      const existingStatusCounts = {};
+      for (const row of existingRows ?? []) {
+        existingStatusCounts[row.poster_status] = (existingStatusCounts[row.poster_status] ?? 0) + 1;
+      }
+      console.log(`  중복 포스터 기존 상태: ${JSON.stringify(existingStatusCounts)}`);
+    }
+  }
+
+  const { data: statusRows, error: statusError } = await supabase
+    .from("posters")
+    .select("poster_status");
+  if (statusError) {
+    console.warn(`  전체 상태 카운트 확인 실패: ${statusError.message}`);
+  } else {
+    const statusCounts = {};
+    for (const row of statusRows ?? []) {
+      statusCounts[row.poster_status] = (statusCounts[row.poster_status] ?? 0) + 1;
+    }
+    console.log(`  현재 posters 상태별 카운트: ${JSON.stringify(statusCounts)}`);
+  }
+
+  const { data: latestCrawlerRows, error: latestError } = await supabase
+    .from("posters")
+    .select("title, source_org_name, poster_status, created_at, source_key")
+    .not("source_key", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(5);
+  if (latestError) {
+    console.warn(`  최근 크롤러 포스터 확인 실패: ${latestError.message}`);
+  } else {
+    console.log("  최근 크롤러 포스터:");
+    for (const row of latestCrawlerRows ?? []) {
+      console.log(`    - [${row.poster_status}] ${row.source_org_name ?? "-"} / ${row.title} / ${row.created_at}`);
+    }
+  }
+
   console.log(`\n👉 /admin/posters 에서 검수 후 승인하세요.\n`);
 }
 
