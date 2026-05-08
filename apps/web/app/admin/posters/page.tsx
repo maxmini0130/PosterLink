@@ -31,6 +31,7 @@ export default function AdminPostersPage() {
   const [rejecting, setRejecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkProcessing, setBulkProcessing] = useState(false);
+  const [previewPoster, setPreviewPoster] = useState<any | null>(null);
 
   const fetchPosters = async (status: PosterStatus) => {
     setLoading(true);
@@ -432,6 +433,15 @@ export default function AdminPostersPage() {
                   <ExternalLink size={20} />
                 </Link>
 
+                <button
+                  onClick={() => setPreviewPoster(poster)}
+                  title="검수 미리보기"
+                  aria-label="검수 미리보기"
+                  className="rounded-2xl bg-indigo-50 p-4 text-indigo-600 transition-all hover:bg-indigo-100 dark:bg-indigo-900/10 dark:text-indigo-400 dark:hover:bg-indigo-900/30"
+                >
+                  <Eye size={20} />
+                </button>
+
                 <Link
                   href={`/operator/posters/${poster.id}/edit?returnTo=admin`}
                   title="포스터 수정"
@@ -564,6 +574,122 @@ export default function AdminPostersPage() {
               >
                 {bulkProcessing ? "처리 중..." : "선택 반려"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {previewPoster && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl dark:bg-slate-950">
+            <div className="flex items-start justify-between gap-4 border-b border-gray-100 p-5 dark:border-slate-800">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-wider text-indigo-500">Review Preview</p>
+                <h3 className="mt-1 text-xl font-black leading-tight text-gray-900 dark:text-white">{previewPoster.title}</h3>
+                <p className="mt-1 text-sm font-bold text-gray-400">{previewPoster.source_org_name || "기관 미상"}</p>
+              </div>
+              <button
+                onClick={() => setPreviewPoster(null)}
+                className="rounded-2xl bg-gray-50 p-3 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:bg-slate-900 dark:hover:bg-slate-800 dark:hover:text-white"
+                aria-label="닫기"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="grid flex-1 overflow-y-auto md:grid-cols-[minmax(280px,420px)_1fr]">
+              <div className="bg-gray-50 p-5 dark:bg-slate-900">
+                <div className="aspect-[3/4] overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-slate-800 dark:bg-slate-950">
+                  {previewPoster.thumbnail_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={previewPoster.thumbnail_url} alt={previewPoster.title} className="h-full w-full object-contain" />
+                  ) : (
+                    <div className="flex h-full w-full flex-col justify-between bg-gradient-to-br from-indigo-50 via-white to-blue-50 p-6 dark:from-slate-800 dark:via-slate-900 dark:to-indigo-950">
+                      <FileText className="text-indigo-500" size={40} />
+                      <p className="text-2xl font-black leading-tight text-slate-800 dark:text-slate-100">{previewPoster.title}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-6 p-6">
+                <div className="flex flex-wrap gap-2">
+                  <span className="rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-black text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-300">
+                    {previewPoster.poster_status}
+                  </span>
+                  <span className="rounded-full bg-gray-50 px-3 py-1.5 text-xs font-black text-gray-500 dark:bg-slate-900 dark:text-slate-400">
+                    {previewPoster.categoryName || "기타"}
+                  </span>
+                  <span className="rounded-full bg-gray-50 px-3 py-1.5 text-xs font-black text-gray-500 dark:bg-slate-900 dark:text-slate-400">
+                    {previewPoster.regionName || "지역 미상"}
+                  </span>
+                </div>
+
+                <div className="grid gap-3 text-sm">
+                  <div className="rounded-2xl border border-gray-100 p-4 dark:border-slate-800">
+                    <p className="mb-1 text-xs font-black text-gray-400">마감일</p>
+                    <p className="font-bold text-gray-900 dark:text-white">
+                      {previewPoster.application_end_at ? new Date(previewPoster.application_end_at).toLocaleDateString() : "상시"}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-gray-100 p-4 dark:border-slate-800">
+                    <p className="mb-1 text-xs font-black text-gray-400">등록일</p>
+                    <p className="font-bold text-gray-900 dark:text-white">{new Date(previewPoster.created_at).toLocaleString()}</p>
+                  </div>
+                  {previewPoster.summary_short && (
+                    <div className="rounded-2xl border border-gray-100 p-4 dark:border-slate-800">
+                      <p className="mb-2 text-xs font-black text-gray-400">요약</p>
+                      <p className="whitespace-pre-wrap text-sm font-bold leading-relaxed text-gray-700 dark:text-slate-200">
+                        {previewPoster.summary_short}
+                      </p>
+                    </div>
+                  )}
+                  {previewPoster.source_key && (
+                    <a
+                      href={previewPoster.source_key}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex w-fit items-center gap-2 rounded-2xl bg-gray-900 px-4 py-3 text-xs font-black text-white transition-colors hover:bg-black dark:bg-white dark:text-slate-950"
+                    >
+                      <ExternalLink size={15} />
+                      원문 열기
+                    </a>
+                  )}
+                </div>
+
+                {previewPoster.poster_status !== "published" && (
+                  <div className="flex flex-wrap gap-2 border-t border-gray-100 pt-5 dark:border-slate-800">
+                    <button
+                      onClick={() => {
+                        setPreviewPoster(null);
+                        void handleStatusChange(previewPoster.id, "published");
+                      }}
+                      className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white transition-colors hover:bg-indigo-700"
+                    >
+                      <Check size={17} />
+                      승인
+                    </button>
+                    <button
+                      onClick={() => {
+                        const poster = previewPoster;
+                        setPreviewPoster(null);
+                        handleStatusChange(poster.id, "rejected", poster.title);
+                      }}
+                      className="flex items-center gap-2 rounded-2xl bg-rose-50 px-5 py-3 text-sm font-black text-rose-500 transition-colors hover:bg-rose-100 dark:bg-rose-900/10 dark:hover:bg-rose-900/20"
+                    >
+                      <X size={17} />
+                      반려
+                    </button>
+                    <Link
+                      href={`/operator/posters/${previewPoster.id}/edit?returnTo=admin`}
+                      className="flex items-center gap-2 rounded-2xl bg-blue-50 px-5 py-3 text-sm font-black text-blue-600 transition-colors hover:bg-blue-100 dark:bg-blue-900/10 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                    >
+                      <PencilLine size={17} />
+                      수정
+                    </Link>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
