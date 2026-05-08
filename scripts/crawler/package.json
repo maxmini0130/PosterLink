@@ -1,0 +1,21 @@
+{
+  "name": "posterlink-crawler",
+  "version": "1.0.0",
+  "description": "PosterLink 공공기관 포스터 크롤러",
+  "type": "module",
+  "scripts": {
+    "crawl": "node src/index.js",
+    "crawl:dry": "node src/index.js --dry-run",
+    "upload": "node src/upload-to-supabase.js",
+    "list": "node src/index.js --list"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.103.2",
+    "axios": "^1.7.0",
+    "cheerio": "^1.0.0",
+    "dayjs": "^1.11.0",
+    "dotenv": "^16.4.0",
+    "p-queue": "^8.0.0",
+    "winston": "^3.11.0"
+  }
+}

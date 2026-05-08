@@ -1,0 +1,5 @@
+node_modules/
+.env
+data/results/
+data/seen_urls.json
+data/crawler.log
