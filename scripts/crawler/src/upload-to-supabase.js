@@ -86,11 +86,38 @@ const CATEGORY_CODE_MAP = {
   "입법": "CAT_OTHER",
 };
 
+function hasPosterImage(post) {
+  return Array.isArray(post.images) && post.images.length > 0 && Boolean(post.images[0]);
+}
+
+async function cleanupImageLessCrawlerReviews() {
+  const { count, error } = await supabase
+    .from("posters")
+    .delete({ count: "exact" })
+    .not("source_key", "is", null)
+    .eq("poster_status", "review")
+    .is("thumbnail_url", null);
+
+  if (error) {
+    console.warn(`이미지 없는 크롤러 검수대기 정리 실패: ${error.message}`);
+    return 0;
+  }
+
+  return count ?? 0;
+}
+
 async function uploadToSupabase(filePath) {
   const raw = await fs.readFile(filePath, "utf-8");
   const posts = JSON.parse(raw);
+  const imagePosts = posts.filter(hasPosterImage);
+  const skippedNoImage = posts.length - imagePosts.length;
 
-  console.log(`\n📤 ${posts.length}건을 Supabase에 업로드합니다...\n`);
+  console.log(`\n📤 ${imagePosts.length}건을 Supabase에 업로드합니다. (이미지 없음 제외: ${skippedNoImage}건)\n`);
+
+  const cleanedCount = await cleanupImageLessCrawlerReviews();
+  if (cleanedCount > 0) {
+    console.log(`이미지 없는 기존 크롤러 검수대기 ${cleanedCount}건 정리`);
+  }
 
   // 카테고리 맵 로드
   const categoryMap = await loadCategoryMap();
@@ -100,7 +127,7 @@ async function uploadToSupabase(filePath) {
   let fail = 0;
   const skippedSourceKeys = [];
 
-  for (const post of posts) {
+  for (const post of imagePosts) {
     const sourceKey = post.sourceUrl || post.url;
     if (!sourceKey) { fail++; continue; }
 

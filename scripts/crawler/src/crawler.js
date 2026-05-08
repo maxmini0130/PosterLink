@@ -81,6 +81,10 @@ export async function saveSeen(seenSet) {
   await fs.writeFile(seenFile, JSON.stringify([...seenSet]), "utf-8");
 }
 
+function hasPosterImage(post) {
+  return Array.isArray(post.images) && post.images.length > 0;
+}
+
 function dropUndefinedValues(object) {
   return Object.fromEntries(
     Object.entries(object).filter(([, value]) => value !== undefined)
@@ -131,6 +135,12 @@ export async function crawlSite(site, adapter, options = {}) {
               siteId: site.id,
               crawledAt: dayjs().toISOString(),
             };
+            if (!hasPosterImage(fullPost)) {
+              seen.add(post.url);
+              logger.info(`  Skip (no poster image): ${post.title}`);
+              continue;
+            }
+
             allPosts.push(fullPost);
             seen.add(post.url);
             logger.info(`  ✓ ${post.title}`);
