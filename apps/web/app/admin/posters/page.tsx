@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import {
@@ -362,11 +361,10 @@ export default function AdminPostersPage() {
 
               <div className="group/img relative flex w-full flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-gray-100 bg-gray-50 aspect-[3/4] md:w-32 dark:border-slate-700 dark:bg-slate-800">
                 {poster.thumbnail_url ? (
-                  <Image
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
                     src={poster.thumbnail_url}
-                    fill
-                    sizes="128px"
-                    className="object-cover transition-transform duration-500 group-hover/img:scale-110"
+                    className="h-full w-full object-cover transition-transform duration-500 group-hover/img:scale-110"
                     alt="Poster"
                   />
                 ) : (

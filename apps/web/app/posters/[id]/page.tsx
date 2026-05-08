@@ -6,7 +6,6 @@ import { Header } from "../../components/Header";
 import { BottomNav } from "../../components/BottomNav";
 import { CommentSection } from "../../components/CommentSection";
 import { notFound } from "next/navigation";
-import Image from "next/image";
 import { supabase } from "../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
 import { fetchPosterMetricCounts, logPosterView } from "../../lib/posterMetrics";
@@ -153,7 +152,8 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
         {/* 포스터 이미지 */}
         <div className="aspect-[3/4] rounded-2xl overflow-hidden border shadow-lg mb-6 bg-gray-100 flex items-center justify-center relative">
           {imageUrl ? (
-            <Image src={imageUrl} alt={poster.title} fill sizes="(max-width: 672px) 100vw, 672px" className="object-cover" />
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={imageUrl} alt={poster.title} className="h-full w-full object-cover" />
           ) : (
             <div className="flex h-full w-full flex-col justify-between bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-8">
               <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-blue-500 shadow-sm">

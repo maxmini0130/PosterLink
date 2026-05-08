@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import { getDDay, isDeadlineSoon } from "@posterlink/lib";
 import { Eye, FileText, Heart, MousePointerClick } from "lucide-react";
 
@@ -30,12 +29,11 @@ export function PosterCard({ poster }: PosterCardProps) {
           : "border-gray-100 bg-gray-100 dark:border-slate-700 dark:bg-slate-800"
       }`}>
         {poster.image ? (
-          <Image
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
             src={poster.image}
             alt={poster.title}
-            fill
-            sizes="(max-width: 768px) 50vw, 200px"
-            className={`object-cover transition-transform duration-500 group-hover:scale-105 ${
+            className={`h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 ${
               closed ? "grayscale opacity-55" : ""
             }`}
           />
