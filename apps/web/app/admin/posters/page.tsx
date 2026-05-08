@@ -6,11 +6,13 @@ import Link from "next/link";
 import toast from "react-hot-toast";
 import {
   Check,
+  CheckSquare,
   ExternalLink,
   Eye,
   FileCheck,
   FileText,
   PencilLine,
+  Square,
   X,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
@@ -25,8 +27,11 @@ export default function AdminPostersPage() {
   const [loading, setLoading] = useState(true);
   const [currentFilter, setCurrentFilter] = useState<PosterStatus>("review");
   const [rejectModal, setRejectModal] = useState<{ id: string; title: string } | null>(null);
+  const [bulkRejectOpen, setBulkRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejecting, setRejecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkProcessing, setBulkProcessing] = useState(false);
 
   const fetchPosters = async (status: PosterStatus) => {
     setLoading(true);
@@ -48,6 +53,7 @@ export default function AdminPostersPage() {
       setPosters(data.map((poster: any) => ({ ...poster, ...metaMap[poster.id] })));
     }
 
+    setSelectedIds([]);
     setLoading(false);
   };
 
@@ -161,6 +167,91 @@ export default function AdminPostersPage() {
     fetchPosters(currentFilter);
   };
 
+  const selectablePosters = posters.filter((poster) => poster.poster_status !== "published");
+  const selectableIds = selectablePosters.map((poster) => poster.id);
+  const selectedCount = selectedIds.length;
+  const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selectedIds.includes(id));
+
+  const toggleSelectAll = () => {
+    setSelectedIds(allSelected ? [] : selectableIds);
+  };
+
+  const togglePosterSelection = (id: string) => {
+    setSelectedIds((ids) => ids.includes(id) ? ids.filter((selectedId) => selectedId !== id) : [...ids, id]);
+  };
+
+  const handleBulkApprove = async () => {
+    if (selectedCount === 0) return;
+    if (!confirm(`선택한 ${selectedCount}건을 승인하시겠습니까? 즉시 서비스에 반영됩니다.`)) return;
+
+    setBulkProcessing(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase
+      .from("posters")
+      .update({
+        poster_status: "published",
+        published_at: new Date().toISOString(),
+        rejection_reason: null,
+      })
+      .in("id", selectedIds);
+
+    if (error) {
+      toast.error(error.message);
+      setBulkProcessing(false);
+      return;
+    }
+
+    await supabase.from("admin_actions").insert(selectedIds.map((id) => ({
+      actor_user_id: user?.id ?? null,
+      target_type: "poster",
+      target_id: id,
+      action_type: "approve",
+      metadata_json: { status: "published", bulk: true },
+    })));
+
+    toast.success(`${selectedCount}건을 승인했습니다.`);
+    setSelectedIds([]);
+    setBulkProcessing(false);
+    fetchPosters(currentFilter);
+  };
+
+  const handleBulkReject = async () => {
+    if (selectedCount === 0) return;
+
+    setBulkProcessing(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    const reason = rejectReason.trim() || null;
+    const { error } = await supabase
+      .from("posters")
+      .update({
+        poster_status: "rejected",
+        rejection_reason: reason,
+      })
+      .in("id", selectedIds);
+
+    if (error) {
+      toast.error(error.message);
+      setBulkProcessing(false);
+      return;
+    }
+
+    await supabase.from("admin_actions").insert(selectedIds.map((id) => ({
+      actor_user_id: user?.id ?? null,
+      target_type: "poster",
+      target_id: id,
+      action_type: "reject",
+      action_reason: reason,
+      metadata_json: { bulk: true },
+    })));
+
+    toast.success(`${selectedCount}건을 반려했습니다.`);
+    setBulkRejectOpen(false);
+    setRejectReason("");
+    setSelectedIds([]);
+    setBulkProcessing(false);
+    fetchPosters(currentFilter);
+  };
+
   const tabs: { label: string; value: PosterStatus }[] = [
     { label: "검수 대기", value: "review" },
     { label: "승인 완료", value: "published" },
@@ -198,6 +289,44 @@ export default function AdminPostersPage() {
         ))}
       </div>
 
+      {posters.length > 0 && (
+        <div className="mb-6 flex flex-col gap-3 rounded-[2rem] border border-gray-100 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between">
+          <button
+            type="button"
+            onClick={toggleSelectAll}
+            disabled={selectableIds.length === 0 || bulkProcessing}
+            className="flex items-center gap-3 text-sm font-black text-gray-600 transition-colors hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-300 dark:hover:text-indigo-400"
+          >
+            {allSelected ? <CheckSquare size={20} className="text-indigo-600" /> : <Square size={20} />}
+            전체 선택
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-400 dark:bg-slate-800">
+              {selectedCount}/{selectableIds.length}
+            </span>
+          </button>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleBulkApprove}
+              disabled={selectedCount === 0 || bulkProcessing}
+              className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-3 text-xs font-black text-white shadow-lg shadow-indigo-100 transition-all hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none dark:shadow-none"
+            >
+              <Check size={16} />
+              선택 승인
+            </button>
+            <button
+              type="button"
+              onClick={() => { setRejectReason(""); setBulkRejectOpen(true); }}
+              disabled={selectedCount === 0 || bulkProcessing}
+              className="flex items-center gap-2 rounded-2xl bg-rose-50 px-4 py-3 text-xs font-black text-rose-500 transition-all hover:bg-rose-100 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-300 dark:bg-rose-900/10 dark:hover:bg-rose-900/20"
+            >
+              <X size={16} />
+              선택 반려
+            </button>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="space-y-6">
           {[1, 2, 3].map((i) => (
@@ -212,8 +341,25 @@ export default function AdminPostersPage() {
           {posters.map((poster) => (
             <div
               key={poster.id}
-              className="group flex flex-col gap-8 rounded-[2.5rem] border border-gray-100 bg-white p-8 shadow-sm transition-all hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:shadow-indigo-900/10 md:flex-row md:items-start"
+              className={`group flex flex-col gap-8 rounded-[2.5rem] border bg-white p-8 shadow-sm transition-all hover:shadow-md dark:bg-slate-900 dark:hover:shadow-indigo-900/10 md:flex-row md:items-start ${
+                selectedIds.includes(poster.id)
+                  ? "border-indigo-300 ring-4 ring-indigo-50 dark:border-indigo-500 dark:ring-indigo-950"
+                  : "border-gray-100 dark:border-slate-800"
+              }`}
             >
+              {poster.poster_status !== "published" && (
+                <button
+                  type="button"
+                  onClick={() => togglePosterSelection(poster.id)}
+                  disabled={bulkProcessing}
+                  className="self-start rounded-2xl bg-gray-50 p-3 text-gray-300 transition-colors hover:bg-indigo-50 hover:text-indigo-600 disabled:opacity-40 dark:bg-slate-800 dark:hover:bg-indigo-900/20"
+                  title="선택"
+                  aria-label="선택"
+                >
+                  {selectedIds.includes(poster.id) ? <CheckSquare size={22} /> : <Square size={22} />}
+                </button>
+              )}
+
               <div className="group/img relative flex w-full flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-gray-100 bg-gray-50 aspect-[3/4] md:w-32 dark:border-slate-700 dark:bg-slate-800">
                 {poster.thumbnail_url ? (
                   <Image
@@ -375,6 +521,50 @@ export default function AdminPostersPage() {
                 className="flex-1 py-4 bg-rose-500 text-white font-black rounded-2xl hover:bg-rose-600 transition-all disabled:opacity-50"
               >
                 {rejecting ? "처리 중..." : "반려하기"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {bulkRejectOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-6">
+          <div className="w-full max-w-md rounded-[2rem] bg-white p-8 shadow-2xl dark:bg-slate-900">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-10 h-10 bg-rose-50 rounded-2xl flex items-center justify-center">
+                <X size={20} className="text-rose-500" />
+              </div>
+              <h3 className="text-lg font-black text-gray-900 dark:text-white">선택 포스터 반려</h3>
+            </div>
+            <p className="text-sm text-gray-400 mb-5 ml-[52px]">
+              선택한 {selectedCount}건을 반려합니다.
+            </p>
+            <div className="mb-5">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
+                반려 사유 <span className="text-gray-400 font-normal">(선택)</span>
+              </label>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="예: 이미지 품질 불량, 정보 오류, 정책 위반 등"
+                rows={3}
+                className="w-full rounded-2xl border border-gray-100 bg-gray-50 p-4 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:ring-2 focus:ring-rose-200 resize-none dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setBulkRejectOpen(false); setRejectReason(""); }}
+                disabled={bulkProcessing}
+                className="flex-1 py-4 border border-gray-200 text-gray-500 font-black rounded-2xl hover:bg-gray-50 transition-all disabled:opacity-50 dark:border-slate-700 dark:text-slate-400"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleBulkReject}
+                disabled={bulkProcessing || selectedCount === 0}
+                className="flex-1 py-4 bg-rose-500 text-white font-black rounded-2xl hover:bg-rose-600 transition-all disabled:opacity-50"
+              >
+                {bulkProcessing ? "처리 중..." : "선택 반려"}
               </button>
             </div>
           </div>
