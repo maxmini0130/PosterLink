@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, FileCheck, ShieldCheck, LogOut, Settings, AlertTriangle, Bell, Loader2, ClipboardList, Menu, X, Home } from "lucide-react";
+import { LayoutDashboard, FileCheck, ShieldCheck, LogOut, Settings, AlertTriangle, Bell, Loader2, ClipboardList, Menu, X, Home, Inbox } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
@@ -57,6 +57,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <Link href="/admin/posters" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl hover:bg-white/10 transition-all font-black text-sm group">
         <FileCheck size={20} className="text-indigo-400 group-hover:text-white transition-colors" />
         <span>포스터 검수</span>
+      </Link>
+      <Link href="/admin/requests" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl hover:bg-white/10 transition-all font-black text-sm group">
+        <Inbox size={20} className="text-indigo-400 group-hover:text-white transition-colors" />
+        <span>등록 요청</span>
       </Link>
       <Link href="/admin/reports" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl hover:bg-white/10 transition-all font-black text-sm group">
         <AlertTriangle size={20} className="text-indigo-400 group-hover:text-white transition-colors" />

@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
 import Link from "next/link";
-import { User, MessageSquare, Heart, Bell, LogOut, ChevronRight, MapPin, Calendar, Trash2 } from "lucide-react";
+import { User, MessageSquare, Heart, Bell, LogOut, ChevronRight, MapPin, Calendar, Trash2, Star, PlusCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
@@ -91,13 +91,19 @@ export default function MyPage() {
             <User size={40} strokeWidth={2.5} />
           </div>
           <h2 className="text-2xl font-black text-gray-900 mb-1">{profile?.nickname || '닉네임 없음'}</h2>
-          <div className="flex gap-2 mb-6">
+          <div className="flex gap-2 mb-4 flex-wrap justify-center">
             <span className="text-[11px] font-bold text-gray-400 bg-gray-50 px-2.5 py-1 rounded-lg flex items-center gap-1">
               <MapPin size={12} /> {profile?.regions?.name || '지역 미설정'}
             </span>
             <span className="text-[11px] font-bold text-gray-400 bg-gray-50 px-2.5 py-1 rounded-lg flex items-center gap-1">
               <Calendar size={12} /> {profile?.age_band?.replace('s', '대') || '연령 미설정'}
             </span>
+          </div>
+          {/* 포인트 */}
+          <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 px-4 py-2 rounded-2xl mb-6">
+            <Star size={15} className="text-amber-500" fill="currentColor" />
+            <span className="text-sm font-black text-amber-700">{(profile?.points ?? 0).toLocaleString()} P</span>
+            <span className="text-xs text-amber-500 font-bold">보유 포인트</span>
           </div>
           
           <Link 
@@ -118,6 +124,16 @@ export default function MyPage() {
               <span className="font-black text-gray-700">내가 찜한 포스터</span>
             </div>
             <ChevronRight className="text-gray-200 group-hover:text-blue-600 transition-colors" />
+          </Link>
+
+          <Link href="/posters/request" className="flex items-center justify-between p-6 bg-white rounded-3xl border border-gray-100 hover:border-indigo-100 transition-all group shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                <PlusCircle size={22} />
+              </div>
+              <span className="font-black text-gray-700">포스터 등록 요청하기</span>
+            </div>
+            <ChevronRight className="text-gray-200 group-hover:text-indigo-600 transition-colors" />
           </Link>
 
           <Link href="/mypage/comments" className="flex items-center justify-between p-6 bg-white rounded-3xl border border-gray-100 hover:border-blue-100 transition-all group shadow-sm">

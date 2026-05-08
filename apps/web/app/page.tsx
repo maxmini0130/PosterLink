@@ -9,7 +9,7 @@ import { PosterCard } from "./components/PosterCard";
 import { fetchCategoryRegionNames } from "./lib/posterHelpers";
 import { fetchPosterMetricCounts } from "./lib/posterMetrics";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, ArrowRight, Zap, Bell, Heart, Search } from "lucide-react";
+import { Sparkles, ArrowRight, Zap, Bell, Heart, Search, PlusCircle } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -194,8 +194,34 @@ export default function Home() {
           </Link>
         </motion.div>
 
+        {/* 포스터 등록 요청 배너 */}
+        {userProfile && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="mb-8"
+          >
+            <Link
+              href="/posters/request"
+              className="flex items-center justify-between gap-4 bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 border border-indigo-100 dark:border-indigo-800 rounded-2xl p-4 hover:shadow-md transition-all group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-800/50 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center shrink-0">
+                  <PlusCircle size={20} />
+                </div>
+                <div>
+                  <p className="font-black text-sm text-gray-900 dark:text-white">포스터 발견했나요?</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 font-bold">등록 요청 시 승인되면 <span className="text-indigo-600 dark:text-indigo-400">+50 포인트</span></p>
+                </div>
+              </div>
+              <ArrowRight size={18} className="text-indigo-400 group-hover:translate-x-1 transition-transform shrink-0" />
+            </Link>
+          </motion.div>
+        )}
+
         {/* Latest Feed with Stagger Animation */}
-        <motion.section 
+        <motion.section
           variants={containerVariants}
           initial="hidden"
           whileInView="visible"

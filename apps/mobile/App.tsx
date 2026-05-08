@@ -95,6 +95,7 @@ export default function App() {
   const [view, setView] = useState<AppView>('browse');
   const [browseUrl, setBrowseUrl] = useState(HOME_URL);
   const [user, setUser] = useState<any>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [expoPushToken, setExpoPushToken] = useState('');
@@ -159,8 +160,17 @@ export default function App() {
   }, [isMobileOAuthCallback]);
 
   useEffect(() => {
-    if (user && expoPushToken) {
-      supabase.from('profiles').update({ expo_push_token: expoPushToken }).eq('id', user.id);
+    if (user) {
+      supabase.from('profiles').select('role, expo_push_token').eq('id', user.id).single().then(({ data }) => {
+        if (data) {
+          setUserRole(data.role);
+          if (expoPushToken && data.expo_push_token !== expoPushToken) {
+            supabase.from('profiles').update({ expo_push_token: expoPushToken }).eq('id', user.id);
+          }
+        }
+      });
+    } else {
+      setUserRole(null);
     }
   }, [user, expoPushToken]);
 
@@ -501,16 +511,32 @@ export default function App() {
         )}
       />
 
-      {/* 카메라 FAB — 로그인 시에만 표시, 탭바 위에 위치 */}
-      {user && (
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={() => setView('camera')}
-          onLongPress={handleLogout}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.fabIcon}>📸</Text>
-        </TouchableOpacity>
+      {/* FAB — 역할에 따라 분기 */}
+      {user && userRole !== null && (
+        ['operator', 'admin', 'super_admin'].includes(userRole) ? (
+          // 운영자/관리자: 카메라 촬영
+          <TouchableOpacity
+            style={styles.fab}
+            onPress={() => setView('camera')}
+            onLongPress={handleLogout}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.fabIcon}>📸</Text>
+          </TouchableOpacity>
+        ) : (
+          // 일반 사용자: 포스터 등록 요청
+          <TouchableOpacity
+            style={[styles.fab, styles.fabRequest]}
+            onPress={() => {
+              setBrowseUrl(`${HOME_URL}/posters/request`);
+              setView('browse');
+            }}
+            onLongPress={handleLogout}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.fabIcon}>📌</Text>
+          </TouchableOpacity>
+        )
       )}
       </SafeAreaView>
     </SafeAreaProvider>
@@ -561,6 +587,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
     shadowRadius: 6,
+  },
+  fabRequest: {
+    backgroundColor: '#4f46e5',
   },
   fabIcon: { fontSize: 24 },
 });
