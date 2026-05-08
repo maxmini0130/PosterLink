@@ -16,7 +16,7 @@ import WebSocket from "ws";
 
 const SUPABASE_URL = process.env.SUPABASE_URL?.trim();
 const SUPABASE_KEY = process.env.SUPABASE_KEY?.trim();
-const CRAWLER_USER_ID = process.env.CRAWLER_USER_ID ?? null;
+const CRAWLER_USER_ID = process.env.CRAWLER_USER_ID?.trim() || null;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error("❌ .env 파일에 SUPABASE_URL 과 SUPABASE_KEY 를 설정하세요.");
@@ -118,23 +118,36 @@ async function uploadToSupabase(filePath) {
       thumbnail_url: post.images?.[0] || null,
     };
 
+    const { data: existingPoster, error: existingErr } = await supabase
+      .from("posters")
+      .select("id, poster_status")
+      .eq("source_key", sourceKey)
+      .maybeSingle();
+
+    if (existingErr) {
+      fail++;
+      process.stdout.write("✗");
+      console.error(`\n  기존 포스터 확인 실패: ${post.title} — ${existingErr.message}`);
+      continue;
+    }
+
+    if (existingPoster?.id) {
+      skip++;
+      skippedSourceKeys.push(sourceKey);
+      process.stdout.write("-");
+      continue;
+    }
+
     const { data: poster, error: posterErr } = await supabase
       .from("posters")
-      .upsert(posterRecord, { onConflict: "source_key", ignoreDuplicates: true })
+      .insert(posterRecord)
       .select("id")
       .single();
 
     if (posterErr || !poster?.id) {
-      // ignoreDuplicates=true 이면 중복 시 data가 null — 정상 스킵
-      if (!poster?.id) {
-        skip++;
-        skippedSourceKeys.push(sourceKey);
-        process.stdout.write("-");
-        continue;
-      }
       fail++;
       process.stdout.write("✗");
-      console.error(`\n  포스터 저장 실패: ${post.title} — ${posterErr?.message}`);
+      console.error(`\n  포스터 저장 실패: ${post.title} — ${posterErr?.message ?? "insert returned no row"}`);
       continue;
     }
 
