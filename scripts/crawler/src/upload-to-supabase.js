@@ -14,8 +14,8 @@ import fs from "fs/promises";
 import { createClient } from "@supabase/supabase-js";
 import WebSocket from "ws";
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_KEY;
+const SUPABASE_URL = process.env.SUPABASE_URL?.trim();
+const SUPABASE_KEY = process.env.SUPABASE_KEY?.trim();
 const CRAWLER_USER_ID = process.env.CRAWLER_USER_ID ?? null;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
@@ -23,7 +23,33 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
   process.exit(1);
 }
 
+const keyType = SUPABASE_KEY.startsWith("sb_secret_")
+  ? "secret"
+  : SUPABASE_KEY.startsWith("sb_publishable_")
+    ? "publishable"
+    : SUPABASE_KEY.startsWith("eyJ")
+      ? "legacy-jwt"
+      : "unknown";
+
+console.log(`Supabase URL: ${new URL(SUPABASE_URL).host}`);
+console.log(`Supabase key type: ${keyType}, length: ${SUPABASE_KEY.length}`);
+
+if (SUPABASE_KEY.includes("*")) {
+  console.error("❌ SUPABASE_KEY가 마스킹된 값처럼 보입니다. Dashboard의 실제 키 전체를 복사해야 합니다.");
+  process.exit(1);
+}
+
+if (keyType === "publishable") {
+  console.error("❌ SUPABASE_KEY에 publishable/anon 계열 키가 들어갔습니다. secret 또는 legacy service_role 키가 필요합니다.");
+  process.exit(1);
+}
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+  },
   realtime: {
     transport: WebSocket,
   },
