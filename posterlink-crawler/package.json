@@ -1,0 +1,18 @@
+{
+  "name": "posterlink-crawler",
+  "version": "1.0.0",
+  "description": "PosterLink 공공기관 포스터 크롤러",
+  "type": "module",
+  "scripts": {
+    "crawl": "node src/index.js",
+    "crawl:site": "node src/index.js --site",
+    "test": "node src/index.js --dry-run"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "cheerio": "^1.0.0",
+    "dayjs": "^1.11.0",
+    "p-queue": "^8.0.0",
+    "winston": "^3.11.0"
+  }
+}
