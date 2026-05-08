@@ -1,12 +1,16 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-// 인증 필요 경로 (로그인만 확인)
+// 로그인 필요 경로
 const AUTH_REQUIRED = ['/mypage', '/favorites', '/notifications', '/onboarding'];
 // 관리자 전용 경로
 const ADMIN_REQUIRED = ['/admin'];
 // 운영자 이상 전용 경로
 const OPERATOR_REQUIRED = ['/operator'];
+// 온보딩 완료 여부를 체크할 경로 (로그인 사용자 대상)
+const ONBOARDING_CHECK = ['/', '/posters', '/favorites', '/notifications', '/mypage'];
+// 온보딩 체크에서 제외할 경로 (접두사 매칭)
+const ONBOARDING_SKIP = ['/onboarding', '/login', '/signup', '/auth', '/terms', '/privacy', '/api'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -30,7 +34,7 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  // 비로그인 → 로그인 필요 경로 차단
+  // 비로그인 → 인증 필요 경로 차단
   if (!user) {
     const needsAuth =
       AUTH_REQUIRED.some((p) => pathname.startsWith(p)) ||
@@ -45,26 +49,38 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  // 관리자/운영자 경로 → role 확인 (DB 조회)
-  const needsRole =
+  // 로그인 사용자: role + onboarding_completed 한 번에 조회
+  const needsRoleCheck =
     ADMIN_REQUIRED.some((p) => pathname.startsWith(p)) ||
     OPERATOR_REQUIRED.some((p) => pathname.startsWith(p));
 
-  if (needsRole) {
+  const needsOnboardingCheck =
+    !ONBOARDING_SKIP.some((p) => pathname.startsWith(p)) &&
+    ONBOARDING_CHECK.some((p) => pathname === p || (p !== '/' && pathname.startsWith(p)));
+
+  if (needsRoleCheck || needsOnboardingCheck) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, onboarding_completed')
       .eq('id', user.id)
       .single();
 
     const role = profile?.role ?? 'user';
+    const onboardingDone = profile?.onboarding_completed ?? false;
 
+    // 온보딩 미완료 → /onboarding으로
+    if (needsOnboardingCheck && !onboardingDone) {
+      return NextResponse.redirect(new URL('/onboarding', request.url));
+    }
+
+    // 관리자 권한 체크
     if (ADMIN_REQUIRED.some((p) => pathname.startsWith(p))) {
       if (role !== 'admin' && role !== 'super_admin') {
         return NextResponse.redirect(new URL('/', request.url));
       }
     }
 
+    // 운영자 권한 체크
     if (OPERATOR_REQUIRED.some((p) => pathname.startsWith(p))) {
       if (role !== 'operator' && role !== 'admin' && role !== 'super_admin') {
         return NextResponse.redirect(new URL('/', request.url));

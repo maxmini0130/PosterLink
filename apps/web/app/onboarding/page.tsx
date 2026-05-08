@@ -6,8 +6,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@posterlink/ui";
 import { motion, AnimatePresence } from "framer-motion";
-import { MapPin, Star, ChevronRight, Check, Shield } from "lucide-react";
+import { MapPin, Star, ChevronRight, Check, Shield, User } from "lucide-react";
 import toast from "react-hot-toast";
+
+const TOTAL_STEPS = 5;
 
 export default function OnboardingPage() {
   const [step, setStep] = useState(0);
@@ -20,17 +22,24 @@ export default function OnboardingPage() {
 
   const [selectedRegionId, setSelectedRegionId] = useState("");
   const [selectedAgeBand, setSelectedAgeBand] = useState("");
+  const [selectedGender, setSelectedGender] = useState("");
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
 
   const router = useRouter();
 
   const ageBands = [
-    { label: "청소년", value: "teen", desc: "13~18세" },
-    { label: "20대", value: "20s", desc: "대학생/취준생" },
-    { label: "30대", value: "30s", desc: "직장인/신혼부부" },
-    { label: "40대", value: "40s", desc: "학부모/중장년" },
-    { label: "50대", value: "50s", desc: "중장년/자영업" },
-    { label: "60대 이상", value: "60_plus", desc: "시니어/어르신" }
+    { label: "청소년", value: "teen",    desc: "13~18세" },
+    { label: "20대",   value: "20s",     desc: "대학생/취준생" },
+    { label: "30대",   value: "30s",     desc: "직장인/신혼부부" },
+    { label: "40대",   value: "40s",     desc: "학부모/중장년" },
+    { label: "50대",   value: "50s",     desc: "중장년/자영업" },
+    { label: "60대 이상", value: "60_plus", desc: "시니어/어르신" },
+  ];
+
+  const genders = [
+    { label: "남성",       value: "male",             emoji: "🙋‍♂️" },
+    { label: "여성",       value: "female",           emoji: "🙋‍♀️" },
+    { label: "선택 안 함", value: "prefer_not_to_say", emoji: "🤍" },
   ];
 
   useEffect(() => {
@@ -68,7 +77,9 @@ export default function OnboardingPage() {
         .update({
           primary_region_id: selectedRegionId,
           age_band: selectedAgeBand,
-          role: 'user'
+          gender: selectedGender || "prefer_not_to_say",
+          role: "user",
+          onboarding_completed: true,
         })
         .eq("id", currentUser.id);
 
@@ -94,12 +105,14 @@ export default function OnboardingPage() {
     (step === 0 && !agreed) ||
     (step === 1 && !selectedRegionId) ||
     (step === 2 && !selectedAgeBand) ||
-    (step === 3 && selectedCategoryIds.length === 0);
+    (step === 3 && !selectedGender) ||
+    (step === 4 && selectedCategoryIds.length === 0);
 
   const stepTitles = [
     <>서비스 이용을<br />시작하기 전에 👋</>,
     <>Welcome! ✨<br />살고 계신 지역을<br />알려주세요.</>,
     <>Good Choice! 👍<br />연령대를<br />알려주세요.</>,
+    <>Almost There! 🎯<br />성별을<br />알려주세요.</>,
     <>Last Step! 💡<br />관심 있는 정보를<br />모두 선택하세요.</>,
   ];
 
@@ -113,9 +126,13 @@ export default function OnboardingPage() {
     <div className="min-h-screen bg-white flex flex-col p-8 max-w-lg mx-auto overflow-hidden">
       <div className="flex-1 pt-12">
         <header className="mb-12">
+          {/* 진행 바 */}
           <div className="flex gap-1.5 mb-6">
-            {[0, 1, 2, 3].map(i => (
-              <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${step >= i ? 'w-8 bg-blue-600' : 'w-2 bg-gray-100'}`} />
+            {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+              <div
+                key={i}
+                className={`h-1.5 rounded-full transition-all duration-500 ${step > i ? 'w-8 bg-blue-600' : step === i ? 'w-8 bg-blue-300' : 'w-2 bg-gray-100'}`}
+              />
             ))}
           </div>
 
@@ -140,7 +157,7 @@ export default function OnboardingPage() {
         </header>
 
         <div className="min-h-[350px]">
-          {/* Step 0: 개인정보 수집 동의 */}
+          {/* Step 0: 개인정보 동의 */}
           {step === 0 && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
               <div className="rounded-3xl border-2 border-gray-50 bg-gray-50 p-6 space-y-4">
@@ -210,7 +227,7 @@ export default function OnboardingPage() {
                 >
                   <div className="text-left">
                     <p className={`text-base font-black ${selectedAgeBand === a.value ? 'text-white' : 'text-gray-900'}`}>{a.label}</p>
-                    <p className={`text-[11px] font-bold ${selectedAgeBand === a.value ? 'text-gray-400' : 'text-gray-400'}`}>{a.desc}</p>
+                    <p className="text-[11px] font-bold text-gray-400">{a.desc}</p>
                   </div>
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${selectedAgeBand === a.value ? 'bg-white text-gray-900' : 'bg-white text-transparent border border-gray-100 group-hover:text-gray-200'}`}>
                     <Check size={16} strokeWidth={4} />
@@ -220,8 +237,32 @@ export default function OnboardingPage() {
             </motion.div>
           )}
 
-          {/* Step 3: 관심 카테고리 선택 */}
+          {/* Step 3: 성별 선택 */}
           {step === 3 && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
+              <p className="text-xs text-gray-400 font-bold mb-4 px-1">
+                성별 정보는 맞춤 공고 추천에만 사용되며, 언제든지 변경할 수 있습니다.
+              </p>
+              {genders.map((g) => (
+                <button
+                  key={g.value}
+                  onClick={() => setSelectedGender(g.value)}
+                  className={`w-full p-6 rounded-[2rem] border-2 transition-all flex items-center justify-between group ${selectedGender === g.value ? 'border-blue-600 bg-blue-50/50 shadow-xl shadow-blue-50' : 'border-gray-50 bg-gray-50 hover:bg-white hover:border-gray-100'}`}
+                >
+                  <div className="flex items-center gap-4">
+                    <span className="text-2xl">{g.emoji}</span>
+                    <p className={`text-base font-black ${selectedGender === g.value ? 'text-blue-700' : 'text-gray-900'}`}>{g.label}</p>
+                  </div>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${selectedGender === g.value ? 'bg-blue-600 text-white' : 'bg-white text-transparent border border-gray-100 group-hover:text-gray-200'}`}>
+                    <Check size={16} strokeWidth={4} />
+                  </div>
+                </button>
+              ))}
+            </motion.div>
+          )}
+
+          {/* Step 4: 관심 카테고리 */}
+          {step === 4 && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-wrap gap-2.5">
               {categories.map((c) => {
                 const isSelected = selectedCategoryIds.includes(c.id);
@@ -244,10 +285,10 @@ export default function OnboardingPage() {
       <footer className="mt-12">
         <Button
           disabled={isNextDisabled}
-          onClick={() => step < 3 ? setStep(step + 1) : handleComplete()}
+          onClick={() => step < TOTAL_STEPS - 1 ? setStep(step + 1) : handleComplete()}
           className="w-full h-18 text-lg font-black bg-gray-900 hover:bg-black text-white rounded-[2rem] shadow-2xl transition-all disabled:bg-gray-100 disabled:text-gray-300 flex items-center justify-center gap-3 group"
         >
-          {submitting ? "SAVING..." : step === 3 ? "START POSTERLINK" : "NEXT STEP"}
+          {submitting ? "SAVING..." : step === TOTAL_STEPS - 1 ? "START POSTERLINK" : "NEXT STEP"}
           {!submitting && <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />}
         </Button>
       </footer>

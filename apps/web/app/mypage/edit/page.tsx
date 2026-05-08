@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { Header } from "../../components/Header";
 import { BottomNav } from "../../components/BottomNav";
-import { ChevronLeft, Check, Loader2, MapPin, Calendar, Tag } from "lucide-react";
+import { ChevronLeft, Check, Loader2, MapPin, Calendar, Tag, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@posterlink/ui";
 
@@ -19,8 +19,15 @@ export default function ProfileEditPage() {
     nickname: "",
     primaryRegionId: "",
     ageBand: "",
+    gender: "",
     selectedCategoryIds: [] as string[]
   });
+
+  const genders = [
+    { label: "남성",       value: "male" },
+    { label: "여성",       value: "female" },
+    { label: "선택 안 함", value: "prefer_not_to_say" },
+  ];
 
   const router = useRouter();
 
@@ -52,7 +59,8 @@ export default function ProfileEditPage() {
           ...prev,
           nickname: profileRes.data.nickname || "",
           primaryRegionId: profileRes.data.primary_region_id || "",
-          ageBand: profileRes.data.age_band || ""
+          ageBand: profileRes.data.age_band || "",
+          gender: profileRes.data.gender || "",
         }));
       }
       
@@ -85,7 +93,8 @@ export default function ProfileEditPage() {
           nickname: formData.nickname,
           primary_region_id: formData.primaryRegionId || null,
           age_band: formData.ageBand as any,
-          role: "user"
+          gender: formData.gender || null,
+          role: "user",
         }, { onConflict: "id" });
 
       if (profileError) throw profileError;
@@ -187,6 +196,29 @@ export default function ProfileEditPage() {
               </select>
             </section>
           </div>
+
+          {/* Gender */}
+          <section>
+            <label className="flex items-center gap-2 text-sm font-black text-gray-400 uppercase mb-3 px-1">
+              <User size={14} /> GENDER
+            </label>
+            <div className="flex gap-2">
+              {genders.map((g) => (
+                <button
+                  key={g.value}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, gender: g.value })}
+                  className={`flex-1 py-4 rounded-2xl text-sm font-black transition-all ${
+                    formData.gender === g.value
+                      ? "bg-blue-600 text-white shadow-lg shadow-blue-100"
+                      : "bg-gray-50 text-gray-400 hover:bg-gray-100"
+                  }`}
+                >
+                  {g.label}
+                </button>
+              ))}
+            </div>
+          </section>
 
           {/* Categories */}
           <section>
