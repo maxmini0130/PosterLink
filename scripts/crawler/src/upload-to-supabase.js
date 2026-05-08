@@ -90,6 +90,17 @@ function hasPosterImage(post) {
   return Array.isArray(post.images) && post.images.length > 0 && Boolean(post.images[0]);
 }
 
+function normalizeSummary(content) {
+  if (!content) return null;
+
+  const cleaned = content
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned) return null;
+  return cleaned.length > 300 ? `${cleaned.slice(0, 300).trim()}...` : cleaned;
+}
+
 async function cleanupImageLessCrawlerReviews() {
   const { count, error } = await supabase
     .from("posters")
@@ -135,7 +146,7 @@ async function uploadToSupabase(filePath) {
     const posterRecord = {
       title: (post.title || "제목 없음").substring(0, 200),
       source_org_name: post.site || null,
-      summary_short: post.content ? post.content.substring(0, 500) : null,
+      summary_short: normalizeSummary(post.content),
       poster_status: "review",         // 관리자 검수 대기
       source_key: sourceKey,           // 중복 방지 키
       created_by: CRAWLER_USER_ID,     // 크롤러 봇 계정 (null 가능)

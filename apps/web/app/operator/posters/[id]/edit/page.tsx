@@ -6,7 +6,6 @@ import { supabase } from "../../../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../../../lib/posterHelpers";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { ChevronLeft, Loader2, Trash2, Camera, AlertCircle } from "lucide-react";
-import Image from "next/image";
 import { Button } from "@posterlink/ui";
 import { ImageCropper } from "../../../../components/ImageCropper";
 
@@ -204,7 +203,8 @@ export default function EditPosterPage() {
 
       {previewUrl && (
         <div className="mb-4 rounded-[2.5rem] overflow-hidden border border-gray-100 shadow-sm relative w-full h-[300px] group">
-          <Image src={previewUrl} alt="포스터 이미지" fill sizes="(max-width: 768px) 100vw, 768px" className="object-contain bg-gray-50" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={previewUrl} alt="포스터 이미지" className="h-full w-full object-contain bg-gray-50" />
           <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <label htmlFor="edit-poster-upload" className="cursor-pointer bg-white px-4 py-2 rounded-xl text-xs font-black text-gray-900 shadow-xl flex items-center gap-2">
               <Camera size={14} /> 이미지 교체
