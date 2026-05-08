@@ -90,7 +90,7 @@ BEGIN
                     WHEN EXISTS (
                         SELECT 1
                         FROM poster_audiences pa
-                        JOIN audience_groups ag ON ag.id = pa.audience_group_id
+                        JOIN audience_groups ag ON ag.id = pa.audience_id
                         WHERE pa.poster_id = p.id
                           AND (ag.min_age IS NULL OR v_age_num IS NULL OR v_age_num >= ag.min_age)
                           AND (ag.max_age IS NULL OR v_age_num IS NULL OR v_age_num <= ag.max_age)

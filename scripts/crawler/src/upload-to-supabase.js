@@ -12,6 +12,7 @@
 import "dotenv/config";
 import fs from "fs/promises";
 import { createClient } from "@supabase/supabase-js";
+import WebSocket from "ws";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
@@ -22,7 +23,11 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
   process.exit(1);
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  realtime: {
+    transport: WebSocket,
+  },
+});
 
 // 카테고리 코드 → DB UUID 매핑 (시작 시 한 번 로드)
 async function loadCategoryMap() {
@@ -38,21 +43,21 @@ async function loadCategoryMap() {
 
 // 크롤러 카테고리 레이블 → PosterLink categories.code 매핑
 const CATEGORY_CODE_MAP = {
-  "공지": "general",
-  "공고": "announcement",
-  "채용": "job",
-  "문화": "culture",
-  "장학": "scholarship",
-  "일자리": "job",
-  "노동": "welfare",
-  "청소년": "youth",
-  "복지": "welfare",
-  "노인복지": "welfare",
-  "체육": "sports",
-  "안전": "general",
-  "급식": "childcare",
-  "동주민센터": "community",
-  "입법": "general",
+  "공지": "CAT_OTHER",
+  "공고": "CAT_OTHER",
+  "채용": "CAT_EDUCATION",
+  "문화": "CAT_CULTURE",
+  "장학": "CAT_EDUCATION",
+  "일자리": "CAT_EDUCATION",
+  "노동": "CAT_WELFARE",
+  "청소년": "CAT_EDUCATION",
+  "복지": "CAT_WELFARE",
+  "노인복지": "CAT_WELFARE",
+  "체육": "CAT_HEALTH",
+  "안전": "CAT_OTHER",
+  "급식": "CAT_FAMILY",
+  "동주민센터": "CAT_OTHER",
+  "입법": "CAT_OTHER",
 };
 
 async function uploadToSupabase(filePath) {
@@ -104,17 +109,20 @@ async function uploadToSupabase(filePath) {
     const posterId = poster.id;
 
     // ── 2. poster_links 저장 (원본 URL) ─────────────────────
-    await supabase.from("poster_links").upsert({
+    const { error: linkErr } = await supabase.from("poster_links").insert({
       poster_id: posterId,
-      link_type: "source",
+      link_type: "official_notice",
       url: sourceKey,
       title: "원문 보기",
       is_primary: true,
-    }, { onConflict: "poster_id,url", ignoreDuplicates: true });
+    });
+    if (linkErr) {
+      console.warn(`\n  원문 링크 저장 실패: ${post.title} — ${linkErr.message}`);
+    }
 
     // ── 3. poster_categories 저장 ───────────────────────────
-    const categoryCode = CATEGORY_CODE_MAP[post.category] || "general";
-    const categoryId = categoryMap[categoryCode] || categoryMap["general"];
+    const categoryCode = CATEGORY_CODE_MAP[post.category] || "CAT_OTHER";
+    const categoryId = categoryMap[categoryCode] || categoryMap["CAT_OTHER"];
     if (categoryId) {
       await supabase.from("poster_categories").upsert({
         poster_id: posterId,
