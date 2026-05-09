@@ -12,7 +12,8 @@ export async function GET(request: NextRequest) {
   const rt = searchParams.get("refresh_token");
 
   const cookieStore = cookies();
-  const pendingCookies: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
+  // pending: exchangeCodeForSession이 세팅한 쿠키를 이후 쿼리에서도 읽을 수 있도록 병합
+  const pendingMap = new Map<string, { value: string; options: Record<string, unknown> }>();
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,10 +21,15 @@ export async function GET(request: NextRequest) {
     {
       cookies: {
         getAll() {
-          return cookieStore.getAll();
+          const base = cookieStore.getAll();
+          const merged = new Map(base.map((c) => [c.name, c.value]));
+          pendingMap.forEach(({ value }, name) => merged.set(name, value));
+          return Array.from(merged.entries()).map(([name, value]) => ({ name, value }));
         },
         setAll(cookiesToSet) {
-          pendingCookies.push(...cookiesToSet);
+          cookiesToSet.forEach(({ name, value, options }) =>
+            pendingMap.set(name, { value, options })
+          );
         },
       },
     }
@@ -31,7 +37,7 @@ export async function GET(request: NextRequest) {
 
   function redirect(url: string) {
     const res = NextResponse.redirect(url);
-    pendingCookies.forEach(({ name, value, options }) =>
+    pendingMap.forEach(({ value, options }, name) =>
       res.cookies.set(name, value, options)
     );
     return res;
@@ -84,7 +90,7 @@ export async function GET(request: NextRequest) {
     .single();
 
   if (!profile || !profile.primary_region_id) {
-    await supabase.from("profiles").upsert(
+    const { error: upsertError } = await supabase.from("profiles").upsert(
       {
         id: userId!,
         nickname: userEmail?.split("@")[0] ?? "user",
@@ -92,6 +98,11 @@ export async function GET(request: NextRequest) {
       },
       { onConflict: "id" }
     );
+    if (upsertError) {
+      return redirect(
+        `${origin}/login?error=auth_callback_failed&msg=${encodeURIComponent(upsertError.message)}`
+      );
+    }
     return redirect(`${origin}/onboarding`);
   }
 
