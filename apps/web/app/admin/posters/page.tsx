@@ -12,6 +12,7 @@ import {
   FileText,
   PencilLine,
   Square,
+  Trash2,
   X,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
@@ -253,6 +254,89 @@ export default function AdminPostersPage() {
     fetchPosters(currentFilter);
   };
 
+  const handleDeleteRejected = async (poster: any) => {
+    if (poster.poster_status !== "rejected") {
+      toast.error("반려된 포스터만 완전 삭제할 수 있습니다.");
+      return;
+    }
+
+    if (!confirm(`반려된 포스터를 완전 삭제할까요?\n\n${poster.title}\n\n삭제하면 다음 크롤링에서 새 항목으로 다시 들어올 수 있고, 연결된 링크/카테고리/조회 로그도 함께 삭제됩니다.`)) {
+      return;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase
+      .from("posters")
+      .delete()
+      .eq("id", poster.id)
+      .eq("poster_status", "rejected");
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    await supabase.from("admin_actions").insert({
+      actor_user_id: user?.id ?? null,
+      target_type: "poster",
+      target_id: poster.id,
+      action_type: "delete",
+      action_reason: "rejected poster permanently deleted",
+      metadata_json: {
+        title: poster.title,
+        status: "rejected",
+        source_key: poster.source_key ?? null,
+      },
+    });
+
+    toast.success("반려 포스터를 완전 삭제했습니다.");
+    setPreviewPoster((current: any | null) => current?.id === poster.id ? null : current);
+    fetchPosters(currentFilter);
+  };
+
+  const handleBulkDeleteRejected = async () => {
+    const rejectedPosters = posters.filter((poster) => selectedIds.includes(poster.id) && poster.poster_status === "rejected");
+    if (rejectedPosters.length === 0) return;
+
+    if (!confirm(`선택한 반려 포스터 ${rejectedPosters.length}건을 완전 삭제할까요?\n\n삭제하면 다음 크롤링에서 새 항목으로 다시 들어올 수 있고, 연결된 데이터도 함께 삭제됩니다.`)) {
+      return;
+    }
+
+    setBulkProcessing(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    const ids = rejectedPosters.map((poster) => poster.id);
+    const { error } = await supabase
+      .from("posters")
+      .delete()
+      .in("id", ids)
+      .eq("poster_status", "rejected");
+
+    if (error) {
+      toast.error(error.message);
+      setBulkProcessing(false);
+      return;
+    }
+
+    await supabase.from("admin_actions").insert(rejectedPosters.map((poster) => ({
+      actor_user_id: user?.id ?? null,
+      target_type: "poster",
+      target_id: poster.id,
+      action_type: "delete",
+      action_reason: "rejected poster permanently deleted",
+      metadata_json: {
+        title: poster.title,
+        status: "rejected",
+        source_key: poster.source_key ?? null,
+        bulk: true,
+      },
+    })));
+
+    toast.success(`반려 포스터 ${rejectedPosters.length}건을 완전 삭제했습니다.`);
+    setSelectedIds([]);
+    setBulkProcessing(false);
+    fetchPosters(currentFilter);
+  };
+
   const tabs: { label: string; value: PosterStatus }[] = [
     { label: "검수 대기", value: "review" },
     { label: "승인 완료", value: "published" },
@@ -324,6 +408,17 @@ export default function AdminPostersPage() {
               <X size={16} />
               선택 반려
             </button>
+            {currentFilter === "rejected" && (
+              <button
+                type="button"
+                onClick={handleBulkDeleteRejected}
+                disabled={selectedCount === 0 || bulkProcessing}
+                className="flex items-center gap-2 rounded-2xl bg-red-600 px-4 py-3 text-xs font-black text-white transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-300"
+              >
+                <Trash2 size={16} />
+                선택 완전 삭제
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -471,6 +566,17 @@ export default function AdminPostersPage() {
                     className="rounded-[1.5rem] bg-indigo-600 p-4 text-white shadow-xl shadow-indigo-100 transition-all hover:bg-indigo-700 dark:bg-indigo-500 dark:shadow-none dark:hover:bg-indigo-600 md:p-6"
                   >
                     <Check size={24} strokeWidth={3} />
+                  </button>
+                )}
+
+                {poster.poster_status === "rejected" && (
+                  <button
+                    onClick={() => handleDeleteRejected(poster)}
+                    title="완전 삭제"
+                    aria-label="완전 삭제"
+                    className="rounded-2xl bg-red-600 p-4 text-white shadow-xl shadow-red-100 transition-all hover:bg-red-700 dark:shadow-none"
+                  >
+                    <Trash2 size={20} />
                   </button>
                 )}
               </div>
@@ -688,6 +794,17 @@ export default function AdminPostersPage() {
                       <PencilLine size={17} />
                       수정
                     </Link>
+                    {previewPoster.poster_status === "rejected" && (
+                      <button
+                        onClick={() => {
+                          void handleDeleteRejected(previewPoster);
+                        }}
+                        className="flex items-center gap-2 rounded-2xl bg-red-600 px-5 py-3 text-sm font-black text-white transition-colors hover:bg-red-700"
+                      >
+                        <Trash2 size={17} />
+                        완전 삭제
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
