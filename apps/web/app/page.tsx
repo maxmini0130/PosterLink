@@ -93,13 +93,12 @@ export default function Home() {
         if (urgentData && urgentData.length > 0) setUrgentPosters(urgentData);
 
         // 서비스 통계
-        const [postersCount, favCount, notifCount] = await Promise.all([
-          supabase.from("posters").select("id", { count: "exact", head: true }).eq("poster_status", "published"),
+        const [favCount, notifCount] = await Promise.all([
           user ? supabase.from("favorites").select("id", { count: "exact", head: true }).eq("user_id", user.id) : Promise.resolve({ count: 0 }),
           user ? supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("is_read", false) : Promise.resolve({ count: 0 }),
         ]);
         setStats({
-          posters: postersCount.count ?? 0,
+          posters: 0,
           favorites: (favCount as any).count ?? 0,
           notifications: (notifCount as any).count ?? 0,
         });
@@ -125,7 +124,9 @@ export default function Home() {
     if (!poster.application_end_at) return false;
     return new Date(poster.application_end_at).getTime() < Date.now();
   };
-  const visiblePosters = (hideClosedPosters ? posters.filter((poster) => !isClosed(poster)) : posters).slice(0, 8);
+  const filteredPosters = hideClosedPosters ? posters.filter((poster) => !isClosed(poster)) : posters;
+  const visiblePosters = filteredPosters.slice(0, 8);
+  const displayedPosterCount = filteredPosters.length;
 
   if (loading) {
     return (
@@ -177,7 +178,7 @@ export default function Home() {
         >
           <Link href="/posters" className="flex flex-col items-center py-4 bg-blue-50 dark:bg-blue-900/20 rounded-[1.5rem] hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors group">
             <Search size={18} className="text-blue-500 mb-1" />
-            <p className="text-lg font-black text-blue-600 dark:text-blue-400">{stats.posters}</p>
+            <p className="text-lg font-black text-blue-600 dark:text-blue-400">{displayedPosterCount}</p>
             <p className="text-[10px] font-black text-blue-400 uppercase">공고</p>
           </Link>
           <Link href="/favorites" className="flex flex-col items-center py-4 bg-rose-50 dark:bg-rose-900/20 rounded-[1.5rem] hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-colors">
