@@ -75,16 +75,27 @@ export default function OnboardingPage() {
 
       const { error: profileError } = await supabase
         .from("profiles")
-        .update({
-          primary_region_id: selectedRegionId,
-          age_band: selectedAgeBand,
-          gender: selectedGender || "prefer_not_to_say",
-          role: "user",
-          onboarding_completed: true,
-        })
-        .eq("id", currentUser.id);
+        .upsert(
+          {
+            id: currentUser.id,
+            primary_region_id: selectedRegionId,
+            age_band: selectedAgeBand,
+            gender: selectedGender || "prefer_not_to_say",
+            role: "user",
+            onboarding_completed: true,
+          },
+          { onConflict: "id" }
+        );
 
       if (profileError) throw profileError;
+
+      // profile upsert 후 실제로 존재하는지 확인
+      const { data: createdProfile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", currentUser.id)
+        .single();
+      if (!createdProfile) throw new Error("프로필 생성 실패: 다시 로그인해주세요.");
 
       const { error: deleteError } = await supabase
         .from("user_interest_categories")
