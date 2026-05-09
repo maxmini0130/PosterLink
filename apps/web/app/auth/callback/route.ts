@@ -12,8 +12,7 @@ export async function GET(request: NextRequest) {
   const rt = searchParams.get("refresh_token");
 
   const cookieStore = cookies();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pendingCookies: Array<{ name: string; value: string; options: any }> = [];
+  const pendingCookies: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
