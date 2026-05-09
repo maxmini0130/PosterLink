@@ -90,15 +90,105 @@ function hasPosterImage(post) {
   return Array.isArray(post.images) && post.images.length > 0 && Boolean(post.images[0]);
 }
 
-function normalizeSummary(content) {
-  if (!content) return null;
+const VOLATILE_SOURCE_PARAMS = new Set([
+  "cp",
+  "page",
+  "pageIndex",
+  "recordCountPerPage",
+  "sortOrder",
+  "sortDirection",
+  "listType",
+  "baNotice",
+  "baCommSelec",
+  "baOpenDay",
+  "baUse",
+  "searchKeyword",
+  "searchCondition",
+]);
 
-  const cleaned = content
+function normalizeSourceKey(sourceUrl) {
+  if (!sourceUrl) return null;
+
+  try {
+    const url = new URL(sourceUrl);
+    for (const param of VOLATILE_SOURCE_PARAMS) {
+      url.searchParams.delete(param);
+    }
+
+    const sortedParams = [...url.searchParams.entries()].sort(([a], [b]) => a.localeCompare(b));
+    url.search = "";
+    for (const [key, value] of sortedParams) {
+      url.searchParams.append(key, value);
+    }
+
+    url.hash = "";
+    return url.href;
+  } catch {
+    return String(sourceUrl).trim();
+  }
+}
+
+function cleanSummaryText(value) {
+  return String(value ?? "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;|&#160;/gi, " ")
+    .replace(/\bRSS\b/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
 
-  if (!cleaned) return null;
-  return cleaned.length > 300 ? `${cleaned.slice(0, 300).trim()}...` : cleaned;
+function pickField(text, labels) {
+  for (const label of labels) {
+    const pattern = new RegExp(`${label}\\s*[:：]?\\s*([^\\n。.!?]{4,90})`, "i");
+    const match = text.match(pattern);
+    if (match?.[1]) return match[1].replace(/\s+/g, " ").trim();
+  }
+  return null;
+}
+
+function pickDateRange(text) {
+  const patterns = [
+    /(신청|접수|모집|운영|교육)\s*(기간|일시)?\s*[:：]?\s*([~.\-\/()\d\s년월일:]+(?:까지|부터)?)/,
+    /(\d{4}[.\-\/년]\s*\d{1,2}[.\-\/월]\s*\d{1,2}일?\s*(?:\([^)]*\))?\s*[~\-]\s*\d{4}?[.\-\/년]?\s*\d{1,2}[.\-\/월]\s*\d{1,2}일?)/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    const value = match?.[3] ?? match?.[1];
+    if (value) return value.replace(/\s+/g, " ").trim();
+  }
+
+  return null;
+}
+
+function normalizeSummary(post) {
+  const title = cleanSummaryText(post.title);
+  const content = cleanSummaryText(post.content);
+  if (!content && !title) return null;
+
+  const source = `${title}\n${content}`;
+  const parts = [];
+  const period = pickDateRange(source);
+  const target = pickField(source, ["대상", "지원대상", "모집대상", "참여대상", "신청대상"]);
+  const benefit = pickField(source, ["내용", "지원내용", "주요내용", "사업내용", "교육내용", "프로그램"]);
+  const contact = pickField(source, ["문의", "문의처", "연락처"]);
+
+  if (target) parts.push(`대상: ${target}`);
+  if (period) parts.push(`기간: ${period}`);
+  if (benefit) parts.push(`내용: ${benefit}`);
+  if (contact) parts.push(`문의: ${contact}`);
+
+  if (parts.length > 0) {
+    return parts.join(" · ").slice(0, 300);
+  }
+
+  const sentence = content
+    .split(/(?<=[.!?。])\s+|[\n\r]+/)
+    .map((line) => line.trim())
+    .find((line) => line.length >= 20 && !/(목록|공유|첨부파일|이전글|다음글)/.test(line));
+
+  const fallback = sentence || content || title;
+  return fallback.length > 300 ? `${fallback.slice(0, 297).trim()}...` : fallback;
 }
 
 function normalizeImageUrl(imageUrl, sourceUrl) {
@@ -153,27 +243,30 @@ async function uploadToSupabase(filePath) {
   const skippedSourceKeys = [];
 
   for (const post of imagePosts) {
-    const sourceKey = post.sourceUrl || post.url;
+    const sourceUrl = post.sourceUrl || post.url;
+    const sourceKey = normalizeSourceKey(sourceUrl);
     if (!sourceKey) { fail++; continue; }
 
     // ── 1. posters 테이블 upsert ─────────────────────────────
     const posterRecord = {
       title: (post.title || "제목 없음").substring(0, 200),
       source_org_name: post.site || null,
-      summary_short: normalizeSummary(post.content),
+      summary_short: normalizeSummary(post),
       poster_status: "review",         // 관리자 검수 대기
       source_key: sourceKey,           // 중복 방지 키
       created_by: CRAWLER_USER_ID,     // 크롤러 봇 계정 (null 가능)
       application_end_at: post.deadline
         ? (() => { try { return new Date(post.deadline).toISOString(); } catch { return null; } })()
         : null,
-      thumbnail_url: normalizeImageUrl(post.images?.[0], sourceKey),
+      thumbnail_url: normalizeImageUrl(post.images?.[0], sourceUrl),
     };
 
+    const sourceKeyCandidates = [...new Set([sourceKey, sourceUrl].filter(Boolean))];
     const { data: existingPoster, error: existingErr } = await supabase
       .from("posters")
-      .select("id, poster_status, title, summary_short, thumbnail_url")
-      .eq("source_key", sourceKey)
+      .select("id, poster_status, title, summary_short, thumbnail_url, source_key")
+      .in("source_key", sourceKeyCandidates)
+      .limit(1)
       .maybeSingle();
 
     if (existingErr) {
@@ -195,6 +288,9 @@ async function uploadToSupabase(filePath) {
       }
       if (posterRecord.thumbnail_url && (!existingPoster.thumbnail_url || !/^https?:\/\//i.test(existingPoster.thumbnail_url))) {
         updates.thumbnail_url = posterRecord.thumbnail_url;
+      }
+      if (existingPoster.source_key !== sourceKey) {
+        updates.source_key = sourceKey;
       }
       if (Object.keys(updates).length > 0) {
         await supabase.from("posters").update(updates).eq("id", existingPoster.id);
@@ -222,7 +318,7 @@ async function uploadToSupabase(filePath) {
     const { error: linkErr } = await supabase.from("poster_links").insert({
       poster_id: posterId,
       link_type: "official_notice",
-      url: sourceKey,
+      url: sourceUrl,
       title: "원문 보기",
       is_primary: true,
     });
