@@ -73,43 +73,19 @@ export default function OnboardingPage() {
       }
       const currentUser = user;
 
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .upsert(
-          {
-            id: currentUser.id,
-            primary_region_id: selectedRegionId,
-            age_band: selectedAgeBand,
-            gender: selectedGender || "prefer_not_to_say",
-            role: "user",
-            onboarding_completed: true,
-          },
-          { onConflict: "id" }
-        );
-
-      if (profileError) throw profileError;
-
-      // profile upsert 후 실제로 존재하는지 확인
-      const { data: createdProfile } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("id", currentUser.id)
-        .single();
-      if (!createdProfile) throw new Error("프로필 생성 실패: 다시 로그인해주세요.");
-
-      const { error: deleteError } = await supabase
-        .from("user_interest_categories")
-        .delete()
-        .eq("user_id", currentUser.id);
-      if (deleteError) throw deleteError;
-
-      if (selectedCategoryIds.length > 0) {
-        const uniqueIds = [...new Set(selectedCategoryIds)];
-        const inserts = uniqueIds.map(catId => ({ user_id: currentUser.id, category_id: catId }));
-        const { error: insertError } = await supabase
-          .from("user_interest_categories")
-          .insert(inserts);
-        if (insertError) throw insertError;
+      const res = await fetch("/api/onboarding/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          regionId: selectedRegionId,
+          ageBand: selectedAgeBand,
+          gender: selectedGender || "prefer_not_to_say",
+          categoryIds: selectedCategoryIds,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? "프로필 저장 실패");
       }
 
       router.push("/");
