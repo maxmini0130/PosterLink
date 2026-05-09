@@ -32,10 +32,10 @@ test.describe("포스터 목록", () => {
     }
   });
 
-  test("정렬 변경 (DEADLINE)", async ({ page }) => {
+  test("정렬 변경 (마감임박)", async ({ page }) => {
     await page.goto("/posters");
     await page.waitForLoadState("networkidle");
-    await page.click("text=DEADLINE");
+    await page.getByRole("button", { name: "마감임박" }).click();
     await page.waitForLoadState("networkidle");
   });
 
