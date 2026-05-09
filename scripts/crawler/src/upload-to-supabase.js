@@ -57,7 +57,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
 
 // 카테고리 코드 → DB UUID 매핑 (시작 시 한 번 로드)
 async function loadCategoryMap() {
-  const { data, error } = await supabase.from("categories").select("id, code, name");
+  const { data, error } = await supabase.from("categories").select("id, code, name, sort_order");
   if (error) throw new Error("categories 로드 실패: " + error.message);
   const map = {};
   for (const cat of data) {
@@ -66,6 +66,49 @@ async function loadCategoryMap() {
   }
   return map;
 }
+
+const CATEGORY_DEFINITIONS = {
+  CAT_WELFARE: {
+    name: "지원금/복지",
+    sort_order: 1,
+    keywords: ["복지", "지원금", "수당", "보조금", "급여", "장애", "장애인", "노인", "저소득", "취약", "돌봄", "상담", "센터", "가족돌봄", "생활지원", "누구나"],
+  },
+  CAT_EDUCATION: {
+    name: "교육/취업",
+    sort_order: 2,
+    keywords: ["교육", "취업", "채용", "일자리", "훈련", "강좌", "강의", "특강", "멘토링", "컨설팅", "자격증", "학교", "교육생", "수강", "커리어", "NCS", "AI", "창업"],
+  },
+  CAT_CULTURE: {
+    name: "문화/행사",
+    sort_order: 3,
+    keywords: ["문화", "행사", "축제", "전시", "공연", "체험", "클래스", "원데이", "버스킹", "도서관", "예술", "영화", "음악", "공예", "탐방"],
+  },
+  CAT_HOUSING: {
+    name: "주거/금융",
+    sort_order: 4,
+    keywords: ["주거", "월세", "전세", "임대", "부동산", "대출", "금융", "재무", "자산", "저축", "계좌", "카드", "환급"],
+  },
+  CAT_BUSINESS: {
+    name: "소상공인",
+    sort_order: 5,
+    keywords: ["소상공인", "자영업", "상인", "가게", "점포", "시장", "사업자", "로컬", "벤처", "창업", "기업", "중소기업"],
+  },
+  CAT_FAMILY: {
+    name: "육아/가족",
+    sort_order: 6,
+    keywords: ["육아", "가족", "부모", "아동", "어린이", "청소년", "보육", "출산", "아이", "돌봄", "가족센터", "1인가구", "반려"],
+  },
+  CAT_HEALTH: {
+    name: "건강/의료",
+    sort_order: 7,
+    keywords: ["건강", "의료", "병원", "검진", "치료", "재활", "운동", "체육", "보건", "심리", "마음", "상담", "고혈압", "장애인돌봄"],
+  },
+  CAT_OTHER: {
+    name: "기타",
+    sort_order: 99,
+    keywords: [],
+  },
+};
 
 // 크롤러 카테고리 레이블 → PosterLink categories.code 매핑
 const CATEGORY_CODE_MAP = {
@@ -85,6 +128,79 @@ const CATEGORY_CODE_MAP = {
   "동주민센터": "CAT_OTHER",
   "입법": "CAT_OTHER",
 };
+
+async function ensureCategory(categoryMap, code) {
+  if (categoryMap[code]) return categoryMap[code];
+
+  const definition = CATEGORY_DEFINITIONS[code] ?? CATEGORY_DEFINITIONS.CAT_OTHER;
+  const { data, error } = await supabase
+    .from("categories")
+    .upsert({
+      code,
+      name: definition.name,
+      sort_order: definition.sort_order,
+      is_active: true,
+    }, { onConflict: "code" })
+    .select("id")
+    .single();
+
+  if (error) {
+    console.warn(`  카테고리 자동 생성 실패: ${code} — ${error.message}`);
+    return categoryMap.CAT_OTHER;
+  }
+
+  categoryMap[code] = data.id;
+  categoryMap[definition.name] = data.id;
+  console.log(`\n  카테고리 자동 생성/확인: ${definition.name} (${code})`);
+  return data.id;
+}
+
+function inferCategoryCodes(post) {
+  const source = [
+    post.title,
+    post.content,
+    post.summary_short,
+    post.site,
+    post.board,
+    post.category,
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  const scores = new Map();
+  const mappedCode = CATEGORY_CODE_MAP[post.category];
+  if (mappedCode) scores.set(mappedCode, 8);
+
+  for (const [code, definition] of Object.entries(CATEGORY_DEFINITIONS)) {
+    if (code === "CAT_OTHER") continue;
+
+    let score = scores.get(code) ?? 0;
+    for (const keyword of definition.keywords) {
+      if (source.includes(keyword.toLowerCase())) score += 3;
+    }
+    if (score > 0) scores.set(code, score);
+  }
+
+  const ranked = [...scores.entries()]
+    .filter(([, score]) => score >= 3)
+    .sort((a, b) => b[1] - a[1])
+    .map(([code]) => code);
+
+  const uniqueCodes = [...new Set(ranked)];
+  if (uniqueCodes.length === 0) return ["CAT_OTHER"];
+
+  return uniqueCodes.slice(0, 2);
+}
+
+async function assignPosterCategories(posterId, post, categoryMap) {
+  const categoryCodes = inferCategoryCodes(post);
+  for (const categoryCode of categoryCodes) {
+    const categoryId = await ensureCategory(categoryMap, categoryCode);
+    if (!categoryId) continue;
+    await supabase.from("poster_categories").upsert({
+      poster_id: posterId,
+      category_id: categoryId,
+    }, { onConflict: "poster_id,category_id", ignoreDuplicates: true });
+  }
+}
 
 function hasPosterImage(post) {
   return Array.isArray(post.images) && post.images.length > 0 && Boolean(post.images[0]);
@@ -295,6 +411,7 @@ async function uploadToSupabase(filePath) {
       if (Object.keys(updates).length > 0) {
         await supabase.from("posters").update(updates).eq("id", existingPoster.id);
       }
+      await assignPosterCategories(existingPoster.id, post, categoryMap);
       process.stdout.write("-");
       continue;
     }
@@ -327,14 +444,7 @@ async function uploadToSupabase(filePath) {
     }
 
     // ── 3. poster_categories 저장 ───────────────────────────
-    const categoryCode = CATEGORY_CODE_MAP[post.category] || "CAT_OTHER";
-    const categoryId = categoryMap[categoryCode] || categoryMap["CAT_OTHER"];
-    if (categoryId) {
-      await supabase.from("poster_categories").upsert({
-        poster_id: posterId,
-        category_id: categoryId,
-      }, { onConflict: "poster_id,category_id", ignoreDuplicates: true });
-    }
+    await assignPosterCategories(posterId, post, categoryMap);
 
     success++;
     process.stdout.write("✓");
