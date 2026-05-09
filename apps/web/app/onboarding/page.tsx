@@ -85,10 +85,19 @@ export default function OnboardingPage() {
 
       if (profileError) throw profileError;
 
+      const { error: deleteError } = await supabase
+        .from("user_interest_categories")
+        .delete()
+        .eq("user_id", currentUser.id);
+      if (deleteError) throw deleteError;
+
       if (selectedCategoryIds.length > 0) {
-        await supabase.from("user_interest_categories").delete().eq("user_id", currentUser.id);
-        const inserts = selectedCategoryIds.map(catId => ({ user_id: currentUser.id, category_id: catId }));
-        await supabase.from("user_interest_categories").insert(inserts);
+        const uniqueIds = [...new Set(selectedCategoryIds)];
+        const inserts = uniqueIds.map(catId => ({ user_id: currentUser.id, category_id: catId }));
+        const { error: insertError } = await supabase
+          .from("user_interest_categories")
+          .insert(inserts);
+        if (insertError) throw insertError;
       }
 
       localStorage.removeItem("onboarding_uid");
