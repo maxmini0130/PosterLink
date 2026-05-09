@@ -2,8 +2,8 @@ name: Daily Crawler
 
 on:
   schedule:
-    - cron: "0 1 * * *"   # 매일 01:00 UTC = 한국 10:00 KST
-  workflow_dispatch:        # 수동 실행 버튼
+    - cron: "0 1 * * *"   # Every day 01:00 UTC = 10:00 KST
+  workflow_dispatch:
 
 jobs:
   crawl-and-upload:
@@ -27,17 +27,21 @@ jobs:
       - name: Run crawler
         run: node src/index.js
         env:
-          NODE_TLS_REJECT_UNAUTHORIZED: "0"   # 일부 사이트 자체서명 인증서 허용
+          NODE_TLS_REJECT_UNAUTHORIZED: "0"
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          POSTER_IMAGE_CLASSIFIER: auto
+          OPENAI_POSTER_IMAGE_MODEL: gpt-5-mini
+          POSTER_IMAGE_MIN_CONFIDENCE: "0.65"
 
       - name: Upload to Supabase
         run: |
           TODAY=$(date +%Y-%m-%d)
           FILE="data/results/all_${TODAY}.json"
           if [ -f "$FILE" ]; then
-            echo "📤 Uploading $FILE"
+            echo "Uploading $FILE"
             node src/upload-to-supabase.js "$FILE"
           else
-            echo "⚠️ 결과 파일 없음: $FILE"
+            echo "No result file: $FILE"
             ls data/results/ || true
           fi
         env:

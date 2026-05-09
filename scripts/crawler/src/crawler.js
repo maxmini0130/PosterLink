@@ -6,6 +6,7 @@ import { createLogger, format, transports } from "winston";
 import PQueue from "p-queue";
 import fs from "fs/promises";
 import path from "path";
+import { classifyPosterImage } from "./poster-image-classifier.js";
 
 // ── Logger ──────────────────────────────────────
 export const logger = createLogger({
@@ -142,9 +143,21 @@ export async function crawlSite(site, adapter, options = {}) {
               continue;
             }
 
-            allPosts.push(fullPost);
+            const imageClassification = await classifyPosterImage(fullPost.images[0], {
+              title: fullPost.title,
+              site: fullPost.site,
+              sourceUrl: fullPost.sourceUrl || fullPost.url,
+            });
+
+            if (!imageClassification.isPoster) {
+              seen.add(post.url);
+              logger.info(`  Skip (not poster image): ${post.title} — ${imageClassification.reason}`);
+              continue;
+            }
+
+            allPosts.push({ ...fullPost, imageClassification });
             seen.add(post.url);
-            logger.info(`  ✓ ${post.title}`);
+            logger.info(`  ✓ ${post.title}${imageClassification.model !== "none" ? ` [poster ${Math.round(imageClassification.confidence * 100)}%]` : ""}`);
           } catch (err) {
             logger.error(`  ✗ Detail parse failed: ${post.url} — ${err.message}`);
           }
