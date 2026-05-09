@@ -38,7 +38,8 @@ export default function AuthCallbackPage() {
     if (code) {
       supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
         if (error || !data.user) {
-          router.replace("/login?error=auth_callback_failed");
+          console.error("[auth/callback] exchangeCodeForSession failed:", error?.message, error?.status);
+          router.replace(`/login?error=auth_callback_failed&msg=${encodeURIComponent(error?.message ?? "no_user")}`);
           return;
         }
         handlePostAuth(data.user.id, data.user.email, router);
