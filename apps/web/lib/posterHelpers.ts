@@ -3,6 +3,8 @@ import { supabase } from "./supabase";
 export interface PosterWithMeta {
   categoryId: string | null;
   regionId: string | null;
+  categoryIds: string[];
+  regionIds: string[];
   categoryName: string | null;
   regionName: string | null;
 }
@@ -37,17 +39,27 @@ export async function fetchCategoryRegionNames(posterIds: string[]): Promise<Rec
   const regMap = Object.fromEntries((regs.data ?? []).map((r: any) => [r.id, r.name]));
   const firstCategoryByPoster = new Map<string, string>();
   const firstRegionByPoster = new Map<string, string>();
+  const categoryIdsByPoster = new Map<string, string[]>();
+  const regionIdsByPoster = new Map<string, string[]>();
 
   for (const link of categoryLinks as any[]) {
     if (!firstCategoryByPoster.has(link.poster_id)) {
       firstCategoryByPoster.set(link.poster_id, link.category_id);
     }
+    categoryIdsByPoster.set(link.poster_id, [
+      ...(categoryIdsByPoster.get(link.poster_id) ?? []),
+      link.category_id,
+    ]);
   }
 
   for (const link of regionLinks as any[]) {
     if (!firstRegionByPoster.has(link.poster_id)) {
       firstRegionByPoster.set(link.poster_id, link.region_id);
     }
+    regionIdsByPoster.set(link.poster_id, [
+      ...(regionIdsByPoster.get(link.poster_id) ?? []),
+      link.region_id,
+    ]);
   }
 
   const result: Record<string, PosterWithMeta> = {};
@@ -57,6 +69,8 @@ export async function fetchCategoryRegionNames(posterIds: string[]): Promise<Rec
     result[posterId] = {
       categoryId,
       regionId,
+      categoryIds: categoryIdsByPoster.get(posterId) ?? [],
+      regionIds: regionIdsByPoster.get(posterId) ?? [],
       categoryName: categoryId ? catMap[categoryId] ?? null : null,
       regionName: regionId ? regMap[regionId] ?? null : null,
     };

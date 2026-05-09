@@ -27,6 +27,7 @@ export default function PosterListPage() {
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState("latest");
   const [hideClosedPosters, setHideClosedPosters] = useState(true);
+  const [myMatchesOnly, setMyMatchesOnly] = useState(false);
 
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -65,6 +66,19 @@ export default function PosterListPage() {
     try {
       const normalizedQuery = queryStr.trim();
       let data: any[] = [];
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user ?? null;
+      let userPrimaryRegionId: string | null = null;
+      let userInterestCategoryIds: string[] = [];
+
+      if (user && myMatchesOnly) {
+        const [profileRes, interestRes] = await Promise.all([
+          supabase.from("profiles").select("primary_region_id").eq("id", user.id).maybeSingle(),
+          supabase.from("user_interest_categories").select("category_id").eq("user_id", user.id),
+        ]);
+        userPrimaryRegionId = profileRes.data?.primary_region_id ?? null;
+        userInterestCategoryIds = (interestRes.data ?? []).map((row: any) => row.category_id).filter(Boolean);
+      }
 
       if (hideClosedPosters) {
         const { data: rpcData, error } = await supabase.rpc("search_posters_with_synonyms", {
@@ -116,15 +130,37 @@ export default function PosterListPage() {
       }));
 
       const filteredData = enrichedData.filter((poster: any) => (
-        (!selectedCategoryId || poster.categoryId === selectedCategoryId) &&
-        (!selectedRegionId || poster.regionId === selectedRegionId)
+        (!selectedCategoryId || poster.categoryIds?.includes(selectedCategoryId)) &&
+        (!selectedRegionId || poster.regionIds?.includes(selectedRegionId)) &&
+        (!myMatchesOnly || (user && (
+          (userPrimaryRegionId && poster.regionIds?.includes(userPrimaryRegionId)) ||
+          poster.categoryIds?.some((categoryId: string) => userInterestCategoryIds.includes(categoryId))
+        )))
       ));
 
       const sortedData = [...filteredData].sort((a: any, b: any) => {
         if (sortBy === "deadline") {
-          const aTime = a.application_end_at ? new Date(a.application_end_at).getTime() : Number.MAX_SAFE_INTEGER;
-          const bTime = b.application_end_at ? new Date(b.application_end_at).getTime() : Number.MAX_SAFE_INTEGER;
+          const deadlineRank = (poster: any) => {
+            if (!poster.application_end_at) return Number.MAX_SAFE_INTEGER;
+            const time = new Date(poster.application_end_at).getTime();
+            return time < now ? Number.MAX_SAFE_INTEGER - 1 : time;
+          };
+          const aTime = deadlineRank(a);
+          const bTime = deadlineRank(b);
           return aTime - bTime;
+        }
+        if (sortBy === "popular") {
+          const score = (poster: any) => (poster.viewCount ?? 0) + ((poster.linkClickCount ?? 0) * 2) + ((poster.favoriteCount ?? 0) * 3);
+          return score(b) - score(a);
+        }
+        if (sortBy === "views") {
+          return (b.viewCount ?? 0) - (a.viewCount ?? 0);
+        }
+        if (sortBy === "favorites") {
+          return (b.favoriteCount ?? 0) - (a.favoriteCount ?? 0);
+        }
+        if (sortBy === "clicks") {
+          return (b.linkClickCount ?? 0) - (a.linkClickCount ?? 0);
         }
 
         return new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime();
@@ -155,7 +191,7 @@ export default function PosterListPage() {
     const timer = setTimeout(() => fetchPosters(), 300);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery, selectedCategoryId, selectedRegionId, sortBy, hideClosedPosters]);
+  }, [searchQuery, selectedCategoryId, selectedRegionId, sortBy, hideClosedPosters, myMatchesOnly]);
 
   // 3. Search Actions
   const handleSearchSubmit = (e?: React.FormEvent, term?: string) => {
@@ -248,6 +284,21 @@ export default function PosterListPage() {
         <div className="flex flex-col gap-6">
           <div className="flex items-center justify-between gap-4">
              <h1 className="text-2xl font-black text-gray-900">Explore 🔍</h1>
+             <div className="flex flex-wrap items-center justify-end gap-2">
+             <button
+               type="button"
+               role="switch"
+               aria-checked={myMatchesOnly}
+               onClick={() => setMyMatchesOnly((value) => !value)}
+               className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-[11px] font-black transition-colors ${
+                 myMatchesOnly ? "bg-indigo-50 text-indigo-600" : "bg-gray-50 text-gray-400"
+               }`}
+             >
+                <span className={`flex h-5 w-9 items-center rounded-full p-0.5 transition-colors ${myMatchesOnly ? "bg-indigo-600" : "bg-gray-300"}`}>
+                  <span className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${myMatchesOnly ? "translate-x-4" : ""}`} />
+                </span>
+                내 맞춤
+             </button>
              <button
                type="button"
                role="switch"
@@ -262,6 +313,7 @@ export default function PosterListPage() {
                 </span>
                 마감 제외
              </button>
+             </div>
           </div>
           
           {/* Main Search Bar (Trigger) */}
@@ -276,8 +328,13 @@ export default function PosterListPage() {
           </div>
 
           {/* Active Filter Badges */}
-          {(selectedCategoryId || selectedRegionId || searchQuery) && (
+          {(selectedCategoryId || selectedRegionId || searchQuery || myMatchesOnly) && (
             <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-top-1">
+              {myMatchesOnly && (
+                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs font-black rounded-lg shadow-lg shadow-indigo-100">
+                  내 맞춤 <button onClick={() => setMyMatchesOnly(false)}><X size={12}/></button>
+                </span>
+              )}
               {searchQuery && (
                 <span className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-black rounded-lg shadow-lg shadow-blue-100">
                   &ldquo;{searchQuery}&rdquo; <button onClick={() => setSearchQuery("")}><X size={12}/></button>
@@ -315,12 +372,16 @@ export default function PosterListPage() {
           {/* Sort & Result Count */}
           <div className="flex items-center justify-between border-b border-gray-50 pb-4">
              <span className="text-[11px] font-black text-gray-300 uppercase tracking-widest">
-               Total {posters.length} Results {hideClosedPosters ? "· 진행 중" : "· 전체"}
+               Total {posters.length} Results {hideClosedPosters ? "· 진행 중" : "· 전체"} {myMatchesOnly ? "· 내 맞춤" : ""}
              </span>
 
-             <div className="flex gap-4">
-               <button onClick={() => setSortBy("latest")} className={`text-xs font-black transition-colors ${sortBy === 'latest' ? 'text-blue-600' : 'text-gray-300'}`}>LATEST</button>
-               <button onClick={() => setSortBy("deadline")} className={`text-xs font-black transition-colors ${sortBy === 'deadline' ? 'text-blue-600' : 'text-gray-300'}`}>DEADLINE</button>
+             <div className="flex flex-wrap justify-end gap-3">
+               <button onClick={() => setSortBy("latest")} className={`text-xs font-black transition-colors ${sortBy === 'latest' ? 'text-blue-600' : 'text-gray-300'}`}>최신</button>
+               <button onClick={() => setSortBy("deadline")} className={`text-xs font-black transition-colors ${sortBy === 'deadline' ? 'text-blue-600' : 'text-gray-300'}`}>마감임박</button>
+               <button onClick={() => setSortBy("popular")} className={`text-xs font-black transition-colors ${sortBy === 'popular' ? 'text-blue-600' : 'text-gray-300'}`}>인기</button>
+               <button onClick={() => setSortBy("views")} className={`text-xs font-black transition-colors ${sortBy === 'views' ? 'text-blue-600' : 'text-gray-300'}`}>조회</button>
+               <button onClick={() => setSortBy("favorites")} className={`text-xs font-black transition-colors ${sortBy === 'favorites' ? 'text-blue-600' : 'text-gray-300'}`}>찜</button>
+               <button onClick={() => setSortBy("clicks")} className={`text-xs font-black transition-colors ${sortBy === 'clicks' ? 'text-blue-600' : 'text-gray-300'}`}>클릭</button>
              </div>
           </div>
         </div>
