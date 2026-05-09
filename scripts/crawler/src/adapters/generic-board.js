@@ -4,6 +4,7 @@
 // 사이트별로 selector가 다를 수 있으므로 site.selectors로 오버라이드 가능
 
 import { fetchPage, logger } from "../crawler.js";
+import { filterAndOrderPosterImages } from "../poster-image-rules.js";
 
 // 기본 셀렉터 (그누보드 표준)
 const DEFAULT_SELECTORS = {
@@ -174,12 +175,21 @@ export default {
       if (m) { deadline = m[1].replace(/[./]/g, "-"); break; }
     }
 
+    const posterImages = await filterAndOrderPosterImages(images, {
+      title,
+      content,
+      site: site.name,
+      sourceUrl: postUrl,
+    });
+
     return {
       title: title || undefined,
       content: content ? content.substring(0, 500) : undefined,
       date,
       deadline,
-      images,
+      images: posterImages.images,
+      posterImageRule: posterImages.posterImageRule,
+      posterImageCandidates: posterImages.posterImageCandidates,
       attachments,
       sourceUrl: postUrl,
     };

@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import { fetchPage } from "../crawler.js";
+import { filterAndOrderPosterImages } from "../poster-image-rules.js";
 
 const BASE_URL = "https://youth.seoul.go.kr";
 
@@ -100,11 +101,20 @@ export default {
       if (href && name) attachments.push({ name, url: resolveUrl(postUrl, href) });
     });
 
+    const posterImages = await filterAndOrderPosterImages(images, {
+      title,
+      content: detailText || overviewText,
+      site: "청년몽땅정보통",
+      sourceUrl: postUrl,
+    });
+
     return {
       title: title || undefined,
       content: detailText || overviewText || undefined,
       deadline: end,
-      images,
+      images: posterImages.images,
+      posterImageRule: posterImages.posterImageRule,
+      posterImageCandidates: posterImages.posterImageCandidates,
       attachments,
       sourceUrl: postUrl,
     };

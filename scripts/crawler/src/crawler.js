@@ -144,14 +144,20 @@ export async function crawlSite(site, adapter, options = {}) {
               continue;
             }
 
-            const imageSelection = await selectBestPosterImage(fullPost.images, {
-              title: fullPost.title,
-              site: fullPost.site,
-              board: fullPost.board,
-              category: fullPost.category,
-              content: fullPost.content,
-              sourceUrl: fullPost.sourceUrl || fullPost.url,
-            });
+            const imageSelection = fullPost.posterImageRule
+              ? {
+                  selectedImageUrl: fullPost.images[0],
+                  selectedRule: fullPost.posterImageRule,
+                  candidates: fullPost.posterImageCandidates ?? [],
+                }
+              : await selectBestPosterImage(fullPost.images, {
+                  title: fullPost.title,
+                  site: fullPost.site,
+                  board: fullPost.board,
+                  category: fullPost.category,
+                  content: fullPost.content,
+                  sourceUrl: fullPost.sourceUrl || fullPost.url,
+                });
 
             if (!imageSelection.selectedImageUrl) {
               seen.add(post.url);
@@ -159,11 +165,6 @@ export async function crawlSite(site, adapter, options = {}) {
               logger.info(`  Skip (image rules): ${post.title} — ${bestRejected?.reason ?? "no usable poster image"}`);
               continue;
             }
-
-            const orderedImages = [
-              imageSelection.selectedImageUrl,
-              ...fullPost.images.filter((imageUrl) => imageUrl !== imageSelection.selectedImageUrl),
-            ];
 
             const imageClassification = await classifyPosterImage(imageSelection.selectedImageUrl, {
               title: fullPost.title,
@@ -186,7 +187,7 @@ export async function crawlSite(site, adapter, options = {}) {
               continue;
             }
 
-            allPosts.push({ ...fullPost, images: orderedImages, imageClassification, posterImageCheck });
+            allPosts.push({ ...fullPost, imageClassification, posterImageCheck });
             seen.add(post.url);
             logger.info(`  ✓ ${post.title} [rule ${imageSelection.selectedRule.score}]${imageClassification.model !== "none" ? ` [poster ${Math.round(imageClassification.confidence * 100)}%]` : ""}`);
           } catch (err) {

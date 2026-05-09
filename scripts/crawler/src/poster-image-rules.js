@@ -294,3 +294,30 @@ export async function selectBestPosterImage(images, context = {}) {
     candidates,
   };
 }
+
+export async function filterAndOrderPosterImages(images, context = {}) {
+  const selection = await selectBestPosterImage(images, context);
+
+  if (!selection.selectedImageUrl) {
+    return {
+      images: [],
+      posterImageRule: null,
+      posterImageCandidates: selection.candidates,
+    };
+  }
+
+  const passingImages = selection.candidates
+    .filter((candidate) => candidate.rule.passes)
+    .map((candidate) => candidate.imageUrl);
+
+  const orderedImages = [
+    selection.selectedImageUrl,
+    ...passingImages.filter((imageUrl) => imageUrl !== selection.selectedImageUrl),
+  ];
+
+  return {
+    images: orderedImages,
+    posterImageRule: selection.selectedRule,
+    posterImageCandidates: selection.candidates,
+  };
+}

@@ -3,6 +3,7 @@
 // 마포구청은 자체 CMS를 사용하며, 동 주민센터도 동일 도메인 하위 경로 사용
 
 import { fetchPage } from "../crawler.js";
+import { filterAndOrderPosterImages } from "../poster-image-rules.js";
 
 function resolveUrl(base, relative) {
   try { return new URL(relative, base).href; } catch { return relative; }
@@ -125,12 +126,21 @@ export default {
       if (m) { deadline = m[1].replace(/[./]/g, "-"); break; }
     }
 
+    const posterImages = await filterAndOrderPosterImages(images, {
+      title,
+      content,
+      site: site.name,
+      sourceUrl: postUrl,
+    });
+
     return {
       title: title || undefined,
       content: content ? content.substring(0, 500) : undefined,
       date,
       deadline,
-      images,
+      images: posterImages.images,
+      posterImageRule: posterImages.posterImageRule,
+      posterImageCandidates: posterImages.posterImageCandidates,
       attachments,
       sourceUrl: postUrl,
     };
