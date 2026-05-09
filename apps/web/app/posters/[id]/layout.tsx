@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { resolvePosterImageUrl } from "../../../lib/posterImage";
 
 interface Props {
   params: { id: string };
@@ -18,7 +19,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const { data: poster } = await supabase
     .from("posters")
-    .select("title, source_org_name, summary_short, thumbnail_url")
+    .select("title, source_org_name, summary_short, thumbnail_url, source_key")
     .eq("id", params.id)
     .single();
 
@@ -26,7 +27,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const title = poster.title;
   const description = poster.summary_short || `${poster.source_org_name} 공고 — PosterLink에서 확인하세요.`;
-  const image = poster.thumbnail_url;
+  const image = resolvePosterImageUrl(poster.thumbnail_url, poster.source_key);
 
   return {
     title,

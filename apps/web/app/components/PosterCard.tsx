@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getDDay, isDeadlineSoon } from "@posterlink/lib";
 import { Eye, FileText, Heart, MousePointerClick } from "lucide-react";
+import { resolvePosterImageUrl } from "../../lib/posterImage";
 
 interface PosterCardProps {
   poster: {
@@ -10,6 +11,7 @@ interface PosterCardProps {
     deadline?: string;
     tags?: string[];
     image?: string;
+    sourceUrl?: string;
     viewCount?: number;
     linkClickCount?: number;
     favoriteCount?: number;
@@ -20,6 +22,7 @@ export function PosterCard({ poster }: PosterCardProps) {
   const dDay = getDDay(poster.deadline);
   const soon = isDeadlineSoon(poster.deadline);
   const closed = dDay === "마감";
+  const imageUrl = resolvePosterImageUrl(poster.image, poster.sourceUrl);
 
   return (
     <Link href={`/posters/${poster.id}`} className="group block">
@@ -28,10 +31,10 @@ export function PosterCard({ poster }: PosterCardProps) {
           ? "border-slate-300 bg-slate-200 dark:border-slate-700 dark:bg-slate-800"
           : "border-gray-100 bg-gray-100 dark:border-slate-700 dark:bg-slate-800"
       }`}>
-        {poster.image ? (
+        {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={poster.image}
+            src={imageUrl}
             alt={poster.title}
             className={`h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 ${
               closed ? "grayscale opacity-55" : ""

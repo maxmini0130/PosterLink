@@ -8,6 +8,7 @@ import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { ChevronLeft, Loader2, Trash2, Camera, AlertCircle } from "lucide-react";
 import { Button } from "@posterlink/ui";
 import { ImageCropper } from "../../../../components/ImageCropper";
+import { resolvePosterImageUrl } from "../../../../../lib/posterImage";
 
 export default function EditPosterPage() {
   const router = useRouter();
@@ -34,6 +35,7 @@ export default function EditPosterPage() {
     summaryShort: "",
     officialLink: "",
     thumbnailUrl: "",
+    sourceKey: "",
   });
 
   useEffect(() => {
@@ -65,6 +67,7 @@ export default function EditPosterPage() {
           summaryShort: poster.summary_short || "",
           officialLink: linkData?.url || "",
           thumbnailUrl: poster.thumbnail_url || "",
+          sourceKey: poster.source_key || "",
         });
       }
 
@@ -167,7 +170,7 @@ export default function EditPosterPage() {
 
   if (initialLoading) return <div className="p-20 text-center font-bold text-blue-600">데이터 로드 중...</div>;
 
-  const previewUrl = newImageBlob ? URL.createObjectURL(newImageBlob) : formData.thumbnailUrl;
+  const previewUrl = newImageBlob ? URL.createObjectURL(newImageBlob) : resolvePosterImageUrl(formData.thumbnailUrl, formData.sourceKey);
 
   return (
     <div className="max-w-3xl mx-auto pb-20">

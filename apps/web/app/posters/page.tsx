@@ -78,7 +78,7 @@ export default function PosterListPage() {
       } else {
         let query = supabase
           .from("posters")
-          .select("id, title, source_org_name, application_end_at, poster_status, thumbnail_url, summary_short, created_at")
+          .select("id, title, source_org_name, application_end_at, poster_status, thumbnail_url, source_key, summary_short, created_at")
           .eq("poster_status", "published");
 
         if (normalizedQuery) {
@@ -342,6 +342,7 @@ export default function PosterListPage() {
                     org: poster.source_org_name,
                     deadline: poster.application_end_at,
                     image: poster.thumbnail_url,
+                    sourceUrl: poster.source_key,
                     viewCount: poster.viewCount,
                     linkClickCount: poster.linkClickCount,
                     favoriteCount: poster.favoriteCount,

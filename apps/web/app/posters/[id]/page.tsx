@@ -9,6 +9,7 @@ import { notFound } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
 import { fetchPosterMetricCounts, logPosterView } from "../../lib/posterMetrics";
+import { resolvePosterImageUrl } from "../../../lib/posterImage";
 import { Footer } from "../../components/Footer";
 import { Eye, FileText, Heart, Link2, MousePointerClick, Share2 } from "lucide-react";
 
@@ -142,7 +143,7 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
     : null;
 
   // 이미지 URL 구성 (Supabase Storage 경로 활용)
-  const imageUrl = poster.thumbnail_url ?? null;
+  const imageUrl = resolvePosterImageUrl(poster.thumbnail_url, poster.source_key);
   const primaryLink = links.find((link) => link.is_primary) || links[0] || null;
 
   return (

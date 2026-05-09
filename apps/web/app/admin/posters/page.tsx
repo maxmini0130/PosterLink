@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
+import { resolvePosterImageUrl } from "../../../lib/posterImage";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 
@@ -361,10 +362,10 @@ export default function AdminPostersPage() {
               )}
 
               <div className="group/img relative flex w-full flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-gray-100 bg-gray-50 aspect-[3/4] md:w-32 dark:border-slate-700 dark:bg-slate-800">
-                {poster.thumbnail_url ? (
+                {resolvePosterImageUrl(poster.thumbnail_url, poster.source_key) ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={poster.thumbnail_url}
+                    src={resolvePosterImageUrl(poster.thumbnail_url, poster.source_key) ?? ""}
                     className="h-full w-full object-cover transition-transform duration-500 group-hover/img:scale-110"
                     alt="Poster"
                   />
@@ -600,9 +601,9 @@ export default function AdminPostersPage() {
             <div className="grid flex-1 overflow-y-auto md:grid-cols-[minmax(280px,420px)_1fr]">
               <div className="bg-gray-50 p-5 dark:bg-slate-900">
                 <div className="aspect-[3/4] overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-slate-800 dark:bg-slate-950">
-                  {previewPoster.thumbnail_url ? (
+                  {resolvePosterImageUrl(previewPoster.thumbnail_url, previewPoster.source_key) ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={previewPoster.thumbnail_url} alt={previewPoster.title} className="h-full w-full object-contain" />
+                    <img src={resolvePosterImageUrl(previewPoster.thumbnail_url, previewPoster.source_key) ?? ""} alt={previewPoster.title} className="h-full w-full object-contain" />
                   ) : (
                     <div className="flex h-full w-full flex-col justify-between bg-gradient-to-br from-indigo-50 via-white to-blue-50 p-6 dark:from-slate-800 dark:via-slate-900 dark:to-indigo-950">
                       <FileText className="text-indigo-500" size={40} />

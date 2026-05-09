@@ -101,6 +101,20 @@ function normalizeSummary(content) {
   return cleaned.length > 300 ? `${cleaned.slice(0, 300).trim()}...` : cleaned;
 }
 
+function normalizeImageUrl(imageUrl, sourceUrl) {
+  if (!imageUrl) return null;
+  const value = String(imageUrl).trim();
+  if (!value) return null;
+  if (/^(https?:|data:)/i.test(value)) return value;
+  if (value.startsWith("//")) return `https:${value}`;
+
+  try {
+    return new URL(value, sourceUrl).href;
+  } catch {
+    return value;
+  }
+}
+
 async function cleanupImageLessCrawlerReviews() {
   const { count, error } = await supabase
     .from("posters")
@@ -153,7 +167,7 @@ async function uploadToSupabase(filePath) {
       application_end_at: post.deadline
         ? (() => { try { return new Date(post.deadline).toISOString(); } catch { return null; } })()
         : null,
-      thumbnail_url: post.images?.[0] || null,
+      thumbnail_url: normalizeImageUrl(post.images?.[0], sourceKey),
     };
 
     const { data: existingPoster, error: existingErr } = await supabase
@@ -179,7 +193,7 @@ async function uploadToSupabase(filePath) {
       if (posterRecord.summary_short && !existingPoster.summary_short) {
         updates.summary_short = posterRecord.summary_short;
       }
-      if (posterRecord.thumbnail_url && !existingPoster.thumbnail_url) {
+      if (posterRecord.thumbnail_url && (!existingPoster.thumbnail_url || !/^https?:\/\//i.test(existingPoster.thumbnail_url))) {
         updates.thumbnail_url = posterRecord.thumbnail_url;
       }
       if (Object.keys(updates).length > 0) {

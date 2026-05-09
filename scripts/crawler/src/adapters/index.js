@@ -4,6 +4,7 @@
 
 import genericBoard from "./generic-board.js";
 import mapoGu from "./mapo-gu.js";
+import youthSeoul from "./youth-seoul.js";
 
 // 대부분의 기관은 그누보드(Gnuboard) 계열이라 generic-board로 커버 가능
 // 구조가 다른 사이트만 전용 어댑터 작성
@@ -15,6 +16,7 @@ const adapters = {
   // 마포구청 & 동 주민센터 (동일 CMS)
   "mapo-gu": mapoGu,
   "mapo-dong": mapoGu, // 주민센터도 같은 도메인/구조
+  "youth-seoul": youthSeoul,
 
   // 아래는 generic-board를 기본으로 사용하되,
   // 실제 크롤링 시 HTML 구조가 다르면 전용 어댑터를 추가

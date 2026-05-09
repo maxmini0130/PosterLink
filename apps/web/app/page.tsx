@@ -8,10 +8,10 @@ import { Footer } from "./components/Footer";
 import { PosterCard } from "./components/PosterCard";
 import { fetchCategoryRegionNames } from "./lib/posterHelpers";
 import { fetchPosterMetricCounts } from "./lib/posterMetrics";
+import { resolvePosterImageUrl } from "../lib/posterImage";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, ArrowRight, Zap, Bell, Heart, Search, PlusCircle } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
 
 
 export default function Home() {
@@ -66,7 +66,7 @@ export default function Home() {
         if (!postersFetched) {
           const { data: publicData, error: publicError } = await supabase
             .from("posters")
-            .select("id, title, source_org_name, application_end_at, poster_status, thumbnail_url")
+            .select("id, title, source_org_name, application_end_at, poster_status, thumbnail_url, source_key")
             .eq("poster_status", "published")
             .order("created_at", { ascending: false })
             .limit(24);
@@ -272,6 +272,7 @@ export default function Home() {
                       org: poster.source_org_name,
                       deadline: poster.application_end_at,
                       image: poster.thumbnail_url,
+                      sourceUrl: poster.source_key,
                       viewCount: poster.viewCount,
                       linkClickCount: poster.linkClickCount,
                       favoriteCount: poster.favoriteCount,
@@ -322,8 +323,9 @@ export default function Home() {
                             className="flex gap-4 p-5 bg-white/10 backdrop-blur-md rounded-[2rem] border border-white/20 hover:bg-white/20 transition-colors"
                           >
                             <div className="w-16 h-20 bg-white/20 rounded-2xl flex-shrink-0 overflow-hidden relative">
-                              {poster.thumbnail_url && (
-                                <Image src={poster.thumbnail_url} alt={poster.title} fill className="object-cover" sizes="64px" />
+                              {resolvePosterImageUrl(poster.thumbnail_url, poster.source_key) && (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={resolvePosterImageUrl(poster.thumbnail_url, poster.source_key) ?? ""} alt={poster.title} className="h-full w-full object-cover" />
                               )}
                             </div>
                             <div className="flex-1 flex flex-col justify-between py-1 min-w-0">

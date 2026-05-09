@@ -96,6 +96,7 @@ export default function FavoritesPage() {
                   deadline: poster.application_end_at,
                   tags: [poster.categoryName, poster.regionName].filter(Boolean),
                   image: poster.thumbnail_url,
+                  sourceUrl: poster.source_key,
                   viewCount: poster.viewCount,
                   linkClickCount: poster.linkClickCount,
                   favoriteCount: poster.favoriteCount

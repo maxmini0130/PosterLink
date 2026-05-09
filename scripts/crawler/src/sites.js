@@ -364,4 +364,18 @@ export const sites = [
       },
     ],
   },
+  {
+    id: "youth-seoul",
+    name: "청년몽땅정보통",
+    domain: "https://youth.seoul.go.kr",
+    adapter: "youth-seoul",
+    maxPages: 10,
+    boards: [
+      {
+        name: "청년지원정보",
+        url: "https://youth.seoul.go.kr/infoData/sprtInfo/list.do?key=2309130006",
+        category: "복지",
+      },
+    ],
+  },
 ];

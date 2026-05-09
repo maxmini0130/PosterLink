@@ -94,6 +94,7 @@ function dropUndefinedValues(object) {
 // ── 메인 크롤 엔진 ───────────────────────────────
 export async function crawlSite(site, adapter, options = {}) {
   const { maxPages = 3, dryRun = false } = options;
+  const siteMaxPages = site.maxPages ?? maxPages;
   const seen = await loadSeen();
   const allPosts = [];
   const queue = new PQueue({ concurrency: 1, interval: 2000, intervalCap: 1 }); // 2초 간격
@@ -106,7 +107,7 @@ export async function crawlSite(site, adapter, options = {}) {
     await queue.add(async () => {
       try {
         // 1) 목록 페이지에서 게시물 링크 추출
-        const posts = await adapter.parseList(board.url, site, maxPages);
+        const posts = await adapter.parseList(board.url, site, siteMaxPages);
         logger.info(`  Found ${posts.length} posts on list page`);
 
         // 2) 각 게시물 상세 페이지 파싱
