@@ -32,6 +32,7 @@ jobs:
           POSTER_IMAGE_CLASSIFIER: auto
           OPENAI_POSTER_IMAGE_MODEL: gpt-5-mini
           POSTER_IMAGE_MIN_CONFIDENCE: "0.65"
+          POSTER_IMAGE_RULE_MIN_SCORE: "45"
 
       - name: Upload to Supabase
         run: |

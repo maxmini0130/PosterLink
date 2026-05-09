@@ -7,6 +7,7 @@ import PQueue from "p-queue";
 import fs from "fs/promises";
 import path from "path";
 import { classifyPosterImage } from "./poster-image-classifier.js";
+import { selectBestPosterImage } from "./poster-image-rules.js";
 
 // ── Logger ──────────────────────────────────────
 export const logger = createLogger({
@@ -143,11 +144,41 @@ export async function crawlSite(site, adapter, options = {}) {
               continue;
             }
 
-            const imageClassification = await classifyPosterImage(fullPost.images[0], {
+            const imageSelection = await selectBestPosterImage(fullPost.images, {
               title: fullPost.title,
               site: fullPost.site,
+              board: fullPost.board,
+              category: fullPost.category,
+              content: fullPost.content,
               sourceUrl: fullPost.sourceUrl || fullPost.url,
             });
+
+            if (!imageSelection.selectedImageUrl) {
+              seen.add(post.url);
+              const bestRejected = imageSelection.candidates[0]?.rule;
+              logger.info(`  Skip (image rules): ${post.title} — ${bestRejected?.reason ?? "no usable poster image"}`);
+              continue;
+            }
+
+            const orderedImages = [
+              imageSelection.selectedImageUrl,
+              ...fullPost.images.filter((imageUrl) => imageUrl !== imageSelection.selectedImageUrl),
+            ];
+
+            const imageClassification = await classifyPosterImage(imageSelection.selectedImageUrl, {
+              title: fullPost.title,
+              site: fullPost.site,
+              board: fullPost.board,
+              category: fullPost.category,
+              content: fullPost.content,
+              sourceUrl: fullPost.sourceUrl || fullPost.url,
+              rule: imageSelection.selectedRule,
+            });
+
+            const posterImageCheck = {
+              rule: imageSelection.selectedRule,
+              model: imageClassification,
+            };
 
             if (!imageClassification.isPoster) {
               seen.add(post.url);
@@ -155,9 +186,9 @@ export async function crawlSite(site, adapter, options = {}) {
               continue;
             }
 
-            allPosts.push({ ...fullPost, imageClassification });
+            allPosts.push({ ...fullPost, images: orderedImages, imageClassification, posterImageCheck });
             seen.add(post.url);
-            logger.info(`  ✓ ${post.title}${imageClassification.model !== "none" ? ` [poster ${Math.round(imageClassification.confidence * 100)}%]` : ""}`);
+            logger.info(`  ✓ ${post.title} [rule ${imageSelection.selectedRule.score}]${imageClassification.model !== "none" ? ` [poster ${Math.round(imageClassification.confidence * 100)}%]` : ""}`);
           } catch (err) {
             logger.error(`  ✗ Detail parse failed: ${post.url} — ${err.message}`);
           }
