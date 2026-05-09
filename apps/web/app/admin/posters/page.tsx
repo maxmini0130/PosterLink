@@ -18,6 +18,7 @@ import {
 import { supabase } from "../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
 import { resolvePosterImageUrl } from "../../../lib/posterImage";
+import { PosterImageFallback } from "../../components/PosterImageFallback";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 
@@ -457,24 +458,15 @@ export default function AdminPostersPage() {
               )}
 
               <div className="group/img relative flex w-full flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-gray-100 bg-gray-50 aspect-[3/4] md:w-32 dark:border-slate-700 dark:bg-slate-800">
-                {resolvePosterImageUrl(poster.thumbnail_url, poster.source_key) ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={resolvePosterImageUrl(poster.thumbnail_url, poster.source_key) ?? ""}
-                    className="h-full w-full object-cover transition-transform duration-500 group-hover/img:scale-110"
-                    alt="Poster"
-                  />
-                ) : (
-                  <div className="flex h-full w-full flex-col justify-between bg-gradient-to-br from-indigo-50 via-white to-blue-50 p-4 dark:from-slate-800 dark:via-slate-900 dark:to-indigo-950">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/80 text-indigo-500 shadow-sm dark:bg-slate-950/60 dark:text-indigo-300">
-                      <FileText size={22} />
-                    </div>
-                    <div>
-                      <p className="mb-1 line-clamp-1 text-[10px] font-black text-indigo-400">{poster.source_org_name || "PosterLink"}</p>
-                      <p className="line-clamp-4 text-sm font-black leading-snug text-slate-800 dark:text-slate-100">{poster.title}</p>
-                    </div>
-                  </div>
-                )}
+                <PosterImageFallback
+                  src={resolvePosterImageUrl(poster.thumbnail_url, poster.source_key)}
+                  alt={poster.title}
+                  title={poster.title}
+                  org={poster.source_org_name}
+                  fallbackClassName="p-4"
+                  imgClassName="h-full w-full object-cover transition-transform duration-500 group-hover/img:scale-110"
+                  iconSize={22}
+                />
 
                 <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover/img:opacity-100">
                   <Eye className="text-white" size={24} />
@@ -707,15 +699,15 @@ export default function AdminPostersPage() {
             <div className="grid flex-1 overflow-y-auto md:grid-cols-[minmax(280px,420px)_1fr]">
               <div className="bg-gray-50 p-5 dark:bg-slate-900">
                 <div className="aspect-[3/4] overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-slate-800 dark:bg-slate-950">
-                  {resolvePosterImageUrl(previewPoster.thumbnail_url, previewPoster.source_key) ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={resolvePosterImageUrl(previewPoster.thumbnail_url, previewPoster.source_key) ?? ""} alt={previewPoster.title} className="h-full w-full object-contain" />
-                  ) : (
-                    <div className="flex h-full w-full flex-col justify-between bg-gradient-to-br from-indigo-50 via-white to-blue-50 p-6 dark:from-slate-800 dark:via-slate-900 dark:to-indigo-950">
-                      <FileText className="text-indigo-500" size={40} />
-                      <p className="text-2xl font-black leading-tight text-slate-800 dark:text-slate-100">{previewPoster.title}</p>
-                    </div>
-                  )}
+                  <PosterImageFallback
+                    src={resolvePosterImageUrl(previewPoster.thumbnail_url, previewPoster.source_key)}
+                    alt={previewPoster.title}
+                    title={previewPoster.title}
+                    org={previewPoster.source_org_name}
+                    fallbackClassName="p-6"
+                    imgClassName="h-full w-full object-contain"
+                    iconSize={40}
+                  />
                 </div>
               </div>
 

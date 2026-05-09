@@ -6,6 +6,7 @@ import { Header } from "./components/Header";
 import { BottomNav } from "./components/BottomNav";
 import { Footer } from "./components/Footer";
 import { PosterCard } from "./components/PosterCard";
+import { PosterImageFallback } from "./components/PosterImageFallback";
 import { fetchCategoryRegionNames } from "./lib/posterHelpers";
 import { fetchPosterMetricCounts } from "./lib/posterMetrics";
 import { resolvePosterImageUrl } from "../lib/posterImage";
@@ -323,10 +324,15 @@ export default function Home() {
                             className="flex gap-4 p-5 bg-white/10 backdrop-blur-md rounded-[2rem] border border-white/20 hover:bg-white/20 transition-colors"
                           >
                             <div className="w-16 h-20 bg-white/20 rounded-2xl flex-shrink-0 overflow-hidden relative">
-                              {resolvePosterImageUrl(poster.thumbnail_url, poster.source_key) && (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={resolvePosterImageUrl(poster.thumbnail_url, poster.source_key) ?? ""} alt={poster.title} className="h-full w-full object-cover" />
-                              )}
+                              <PosterImageFallback
+                                src={resolvePosterImageUrl(poster.thumbnail_url, poster.source_key)}
+                                alt={poster.title}
+                                title={poster.title}
+                                org={poster.source_org_name}
+                                fallbackClassName="p-2"
+                                imgClassName="h-full w-full object-cover"
+                                iconSize={18}
+                              />
                             </div>
                             <div className="flex-1 flex flex-col justify-between py-1 min-w-0">
                               <h4 className="text-sm font-black text-white line-clamp-2 leading-snug">
