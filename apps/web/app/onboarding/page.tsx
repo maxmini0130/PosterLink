@@ -66,11 +66,12 @@ export default function OnboardingPage() {
   const handleComplete = async () => {
     setSubmitting(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: { session } } = await supabase.auth.getSession();
-      const fallbackUid = typeof window !== "undefined" ? localStorage.getItem("onboarding_uid") : null;
-      const currentUser = user ?? session?.user ?? (fallbackUid ? { id: fallbackUid } : null);
-      if (!currentUser) throw new Error("로그인 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        router.replace("/login?error=login_failed");
+        return;
+      }
+      const currentUser = user;
 
       const { error: profileError } = await supabase
         .from("profiles")
@@ -100,7 +101,6 @@ export default function OnboardingPage() {
         if (insertError) throw insertError;
       }
 
-      localStorage.removeItem("onboarding_uid");
       router.push("/");
     } catch (error: any) {
       toast.error("프로필 저장 실패: " + error.message);
