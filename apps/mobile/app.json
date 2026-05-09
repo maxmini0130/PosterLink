@@ -25,7 +25,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "포스터 촬영을 위해 카메라 권한이 필요합니다.",
         "NSPhotoLibraryUsageDescription": "갤러리에서 포스터를 선택하기 위해 권한이 필요합니다.",
-        "NSFaceIDUsageDescription": "빠른 로그인을 위해 생체 인증이 필요합니다."
+        "NSFaceIDUsageDescription": "빠른 로그인을 위해 생체 인증이 필요합니다.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -42,7 +43,8 @@
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT",
         "android.permission.RECEIVE_BOOT_COMPLETED",
-        "android.permission.VIBRATE"
+        "android.permission.VIBRATE",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
