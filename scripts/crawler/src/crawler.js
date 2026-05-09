@@ -7,6 +7,7 @@ import PQueue from "p-queue";
 import fs from "fs/promises";
 import path from "path";
 import { classifyPosterImage } from "./poster-image-classifier.js";
+import { getPostExclusionReason } from "./post-candidate-filter.js";
 import { selectBestPosterImage } from "./poster-image-rules.js";
 
 // ── Logger ──────────────────────────────────────
@@ -116,6 +117,13 @@ export async function crawlSite(site, adapter, options = {}) {
         for (const post of posts) {
           if (seen.has(post.url)) {
             logger.info(`  Skip (seen): ${post.title}`);
+            continue;
+          }
+
+          const postExclusion = getPostExclusionReason(post);
+          if (postExclusion) {
+            seen.add(post.url);
+            logger.info(`  Skip (post filter: ${postExclusion.rule}): ${post.title} — ${postExclusion.reason}`);
             continue;
           }
 
