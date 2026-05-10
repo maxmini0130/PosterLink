@@ -45,6 +45,21 @@ export default function Home() {
         // getSession reads from localStorage (no network) — safe even with deleted accounts
         const { data: { session } } = await supabase.auth.getSession();
         const user = session?.user ?? null;
+        const nowIso = new Date().toISOString();
+
+        const countPublishedPosters = async () => {
+          let countQuery = supabase
+            .from("posters")
+            .select("id", { count: "exact", head: true })
+            .eq("poster_status", "published");
+
+          if (hideClosedPosters) {
+            countQuery = countQuery.or(`application_end_at.is.null,application_end_at.gte.${nowIso}`);
+          }
+
+          const { count } = await countQuery;
+          return count ?? 0;
+        };
 
         // 로그인 시: 프로필 + 맞춤 추천
         let postersFetched = false;
@@ -65,10 +80,16 @@ export default function Home() {
 
         // 비로그인 또는 RPC 결과 없을 때: 공개 포스터 최신순
         if (!postersFetched) {
-          const { data: publicData, error: publicError } = await supabase
+          let publicQuery = supabase
             .from("posters")
             .select("id, title, source_org_name, application_end_at, poster_status, thumbnail_url, source_key")
-            .eq("poster_status", "published")
+            .eq("poster_status", "published");
+
+          if (hideClosedPosters) {
+            publicQuery = publicQuery.or(`application_end_at.is.null,application_end_at.gte.${nowIso}`);
+          }
+
+          const { data: publicData, error: publicError } = await publicQuery
             .order("created_at", { ascending: false })
             .limit(24);
 
@@ -78,7 +99,6 @@ export default function Home() {
         }
 
         // 마감 임박 공고 (로그인 여부 무관)
-        const now = new Date().toISOString();
         const sevenDaysLater = new Date();
         sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
 
@@ -86,19 +106,20 @@ export default function Home() {
           .from("posters")
           .select("*")
           .eq("poster_status", "published")
-          .gte("application_end_at", now)
+          .gte("application_end_at", nowIso)
           .lte("application_end_at", sevenDaysLater.toISOString())
           .order("application_end_at", { ascending: true })
           .limit(4);
         if (urgentData && urgentData.length > 0) setUrgentPosters(urgentData);
 
         // 서비스 통계
-        const [favCount, notifCount] = await Promise.all([
+        const [posterCount, favCount, notifCount] = await Promise.all([
+          countPublishedPosters(),
           user ? supabase.from("favorites").select("id", { count: "exact", head: true }).eq("user_id", user.id) : Promise.resolve({ count: 0 }),
           user ? supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("is_read", false) : Promise.resolve({ count: 0 }),
         ]);
         setStats({
-          posters: 0,
+          posters: posterCount,
           favorites: (favCount as any).count ?? 0,
           notifications: (notifCount as any).count ?? 0,
         });
@@ -126,7 +147,7 @@ export default function Home() {
   };
   const filteredPosters = hideClosedPosters ? posters.filter((poster) => !isClosed(poster)) : posters;
   const visiblePosters = filteredPosters.slice(0, 8);
-  const displayedPosterCount = filteredPosters.length;
+  const displayedPosterCount = stats.posters;
 
   if (loading) {
     return (
