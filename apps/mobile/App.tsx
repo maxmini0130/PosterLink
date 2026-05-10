@@ -29,6 +29,23 @@ const SB_PROJECT = 'zxndgzsfrgwahwsdbjdj';
 const MOBILE_OAUTH_REDIRECT_URI = ExpoLinking.createURL('auth-callback');
 const LEGACY_MOBILE_OAUTH_REDIRECT_URI = 'com.maxmini.posterlink://auth-callback';
 
+function CameraFabIcon() {
+  return (
+    <View style={styles.cameraIconBody}>
+      <View style={styles.cameraIconLens} />
+      <View style={styles.cameraIconTop} />
+    </View>
+  );
+}
+
+function RequestFabIcon() {
+  return (
+    <View style={styles.requestIconBody}>
+      <Text style={styles.requestIconPlus}>+</Text>
+    </View>
+  );
+}
+
 // 웹앱 Supabase 세션을 2초마다 체크해서 네이티브로 전달
 const SESSION_BRIDGE_JS = `
   (function() {
@@ -106,6 +123,16 @@ export default function App() {
   const notificationListener = useRef<any>();
   const responseListener = useRef<any>();
   const lastUserId = useRef<string | null>(null);
+  const isAuthPage = useCallback((url: string) => {
+    try {
+      const { pathname } = new URL(url);
+      return ['/login', '/signup', '/forgot-password', '/reset-password', '/onboarding', '/auth/callback'].some((path) => (
+        pathname === path || pathname.startsWith(`${path}/`)
+      ));
+    } catch {
+      return false;
+    }
+  }, []);
   const isMobileOAuthCallback = useCallback((url: string) => (
     url.startsWith(MOBILE_OAUTH_REDIRECT_URI) ||
     url.startsWith(LEGACY_MOBILE_OAUTH_REDIRECT_URI)
@@ -511,6 +538,9 @@ export default function App() {
     );
   }
 
+  const showFab = Boolean(user && userRole !== null && !isAuthPage(browseUrl));
+  const canCaptureDirectly = userRole !== null && ['operator', 'admin', 'super_admin'].includes(userRole);
+
   // ── 메인 (풀스크린 WebView) ──────────────────────────────────────
   return (
     <SafeAreaProvider>
@@ -564,8 +594,8 @@ export default function App() {
       />
 
       {/* FAB — 역할에 따라 분기 */}
-      {user && userRole !== null && (
-        ['operator', 'admin', 'super_admin'].includes(userRole) ? (
+      {showFab && (
+        canCaptureDirectly ? (
           // 운영자/관리자: 선택 화면으로
           <TouchableOpacity
             style={styles.fab}
@@ -573,7 +603,7 @@ export default function App() {
             onLongPress={handleLogout}
             activeOpacity={0.85}
           >
-            <Text style={styles.fabIcon}>📸</Text>
+            <CameraFabIcon />
           </TouchableOpacity>
         ) : (
           // 일반 사용자: 포스터 등록 요청
@@ -586,7 +616,7 @@ export default function App() {
             onLongPress={handleLogout}
             activeOpacity={0.85}
           >
-            <Text style={styles.fabIcon}>📌</Text>
+            <RequestFabIcon />
           </TouchableOpacity>
         )
       )}
@@ -643,6 +673,48 @@ const styles = StyleSheet.create({
   fabRequest: {
     backgroundColor: '#4f46e5',
   },
+  cameraIconBody: {
+    width: 27,
+    height: 21,
+    borderRadius: 7,
+    borderWidth: 2.5,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cameraIconLens: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  cameraIconTop: {
+    position: 'absolute',
+    top: -6,
+    left: 6,
+    width: 11,
+    height: 6,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
+    backgroundColor: '#fff',
+  },
+  requestIconBody: {
+    width: 27,
+    height: 27,
+    borderRadius: 9,
+    borderWidth: 2.5,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  requestIconPlus: {
+    color: '#fff',
+    fontSize: 25,
+    lineHeight: 25,
+    fontWeight: '900',
+    marginTop: -2,
+  },
 
   // Chooser
   chooserTitle: { fontSize: 22, fontWeight: '900', color: '#111827', marginBottom: 6 },
@@ -663,5 +735,4 @@ const styles = StyleSheet.create({
   chooserCardDesc: { fontSize: 12, fontWeight: '600', color: '#9ca3af' },
   chooserCancel: { paddingVertical: 14, paddingHorizontal: 40 },
   chooserCancelText: { fontSize: 15, fontWeight: '700', color: '#9ca3af' },
-  fabIcon: { fontSize: 24 },
 });
