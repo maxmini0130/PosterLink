@@ -99,7 +99,7 @@ test.describe("관리자 등록 요청 검수", () => {
 
     const tabs = ["대기중", "승인됨", "반려됨"];
     for (const tab of tabs) {
-      const el = page.locator(`button:has-text('${tab}'), text=${tab}`).first();
+      const el = page.getByText(tab).first();
       if (await el.count() > 0) {
         await expect(el).toBeVisible();
       }
