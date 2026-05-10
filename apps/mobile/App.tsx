@@ -124,6 +124,7 @@ export default function App() {
   const notificationListener = useRef<any>();
   const responseListener = useRef<any>();
   const lastUserId = useRef<string | null>(null);
+  const lastWebAccessToken = useRef<string | null>(null);
   const isAuthPage = useCallback((url: string) => {
     try {
       const { pathname } = new URL(url);
@@ -355,9 +356,22 @@ export default function App() {
 
       const payload = msg.payload;
       if (payload?.access_token && payload?.user) {
+        const tokenChanged = lastWebAccessToken.current !== payload.access_token;
+        if (tokenChanged) {
+          const { data: verifiedUser, error: verifyError } = await supabase.auth.getUser(payload.access_token);
+          if (verifyError || verifiedUser.user?.id !== payload.user.id) {
+            lastUserId.current = null;
+            lastWebAccessToken.current = null;
+            setWebAuthenticated(false);
+            setUser(null);
+            await supabase.auth.signOut();
+            return;
+          }
+          lastWebAccessToken.current = payload.access_token;
+        }
         setWebAuthenticated(true);
         // 새로운 사용자 세션이면 네이티브 Supabase에도 세션 설정
-        if (lastUserId.current !== payload.user.id) {
+        if (lastUserId.current !== payload.user.id || tokenChanged) {
           lastUserId.current = payload.user.id;
           await supabase.auth.setSession({
             access_token: payload.access_token,
@@ -368,10 +382,12 @@ export default function App() {
       } else if (!payload && lastUserId.current) {
         // 웹에서 로그아웃된 경우
         lastUserId.current = null;
+        lastWebAccessToken.current = null;
         setWebAuthenticated(false);
         await supabase.auth.signOut();
         setUser(null);
       } else if (!payload) {
+        lastWebAccessToken.current = null;
         setWebAuthenticated(false);
       }
     } catch {}
@@ -384,6 +400,7 @@ export default function App() {
         text: '로그아웃', style: 'destructive',
         onPress: async () => {
           lastUserId.current = null;
+          lastWebAccessToken.current = null;
           await supabase.auth.signOut();
           setWebAuthenticated(false);
           setUser(null);
@@ -591,6 +608,9 @@ export default function App() {
         onNavigationStateChange={navState => {
           if (navState.url && !navState.url.includes('supabase.co/auth')) {
             setBrowseUrl(navState.url);
+            if (isAuthPage(navState.url)) {
+              setWebAuthenticated(false);
+            }
           }
         }}
         renderLoading={() => (
