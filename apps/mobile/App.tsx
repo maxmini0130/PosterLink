@@ -114,6 +114,7 @@ export default function App() {
   const [browseUrl, setBrowseUrl] = useState(HOME_URL);
   const [user, setUser] = useState<any>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [webAuthenticated, setWebAuthenticated] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [expoPushToken, setExpoPushToken] = useState('');
@@ -205,6 +206,7 @@ export default function App() {
   // WebView에 세션 주입하는 공통 함수
   const injectSessionToWebView = useCallback((session: any, user: any) => {
     setUser(user);
+    setWebAuthenticated(true);
     lastUserId.current = user.id;
     setView('browse');
     setBrowseUrl(HOME_URL);
@@ -353,6 +355,7 @@ export default function App() {
 
       const payload = msg.payload;
       if (payload?.access_token && payload?.user) {
+        setWebAuthenticated(true);
         // 새로운 사용자 세션이면 네이티브 Supabase에도 세션 설정
         if (lastUserId.current !== payload.user.id) {
           lastUserId.current = payload.user.id;
@@ -365,8 +368,11 @@ export default function App() {
       } else if (!payload && lastUserId.current) {
         // 웹에서 로그아웃된 경우
         lastUserId.current = null;
+        setWebAuthenticated(false);
         await supabase.auth.signOut();
         setUser(null);
+      } else if (!payload) {
+        setWebAuthenticated(false);
       }
     } catch {}
   }, []);
@@ -379,6 +385,7 @@ export default function App() {
         onPress: async () => {
           lastUserId.current = null;
           await supabase.auth.signOut();
+          setWebAuthenticated(false);
           setUser(null);
           // 웹앱도 로그아웃 (로그아웃 페이지로 이동)
           webViewRef.current?.injectJavaScript(`
@@ -538,7 +545,7 @@ export default function App() {
     );
   }
 
-  const showFab = Boolean(user && userRole !== null && !isAuthPage(browseUrl));
+  const showFab = Boolean(webAuthenticated && user && userRole !== null && !isAuthPage(browseUrl));
   const canCaptureDirectly = userRole !== null && ['operator', 'admin', 'super_admin'].includes(userRole);
 
   // ── 메인 (풀스크린 WebView) ──────────────────────────────────────
