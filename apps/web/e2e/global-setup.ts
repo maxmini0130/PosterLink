@@ -4,6 +4,7 @@ import path from "path";
 
 const BASE_URL = "http://localhost:4000";
 const AUTH_DIR = path.join(__dirname, ".auth");
+const LOCAL_ENV_PATH = path.join(__dirname, "../.env.local");
 
 // 빈 storageState (로그인 안 된 상태)
 const EMPTY_STATE = JSON.stringify({ cookies: [], origins: [] });
@@ -16,6 +17,25 @@ function writeEmptyState(filePath: string) {
   if (!fs.existsSync(filePath)) fs.writeFileSync(filePath, EMPTY_STATE);
 }
 
+function loadLocalEnv() {
+  if (!fs.existsSync(LOCAL_ENV_PATH)) return;
+
+  const lines = fs.readFileSync(LOCAL_ENV_PATH, "utf8").split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+
+    const separatorIndex = trimmed.indexOf("=");
+    if (separatorIndex <= 0) continue;
+
+    const key = trimmed.slice(0, separatorIndex).trim();
+    const rawValue = trimmed.slice(separatorIndex + 1).trim();
+    if (!key || process.env[key] !== undefined) continue;
+
+    process.env[key] = rawValue.replace(/^['"]|['"]$/g, "");
+  }
+}
+
 async function loginAs(email: string, password: string, storageStatePath: string) {
   const browser = await chromium.launch();
   const context = await browser.newContext();
@@ -26,7 +46,7 @@ async function loginAs(email: string, password: string, storageStatePath: string
 
   await page.fill('input[name="email"]', email);
   await page.fill('input[name="password"]', password);
-  await page.click('button:has-text("이메일로 로그인")');
+  await page.locator('button[type="submit"], form button').first().click();
 
   // 홈으로 이동할 때까지 대기 (최대 10초)
   await page.waitForURL((url) => !url.toString().includes("/login"), { timeout: 10000 }).catch(() => {});
@@ -37,6 +57,7 @@ async function loginAs(email: string, password: string, storageStatePath: string
 }
 
 export default async function globalSetup(_config: FullConfig) {
+  loadLocalEnv();
   ensureAuthDir();
 
   const accounts = [
