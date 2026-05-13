@@ -84,12 +84,12 @@ export const sites = [
     boards: [
       {
         name: "공지사항",
-        url: "https://council.mapo.seoul.kr/content/board/notice/list.do",
+        url: "https://council.mapo.seoul.kr/kr/news/bbsNotice.do",
         category: "공지",
       },
       {
         name: "입법예고",
-        url: "https://council.mapo.seoul.kr/content/board/legislation/list.do",
+        url: "https://council.mapo.seoul.kr/kr/news/bbsLaw.do",
         category: "입법",
       },
     ],
@@ -106,12 +106,12 @@ export const sites = [
     boards: [
       {
         name: "공지사항",
-        url: "https://www.mfmc.or.kr/mfmc/community/notice.do",
+        url: "https://www.mfmc.or.kr/view/bbs/board.php?tbname=notice",
         category: "공지",
       },
       {
         name: "채용공고",
-        url: "https://www.mfmc.or.kr/mfmc/community/recruit.do",
+        url: "https://www.mfmc.or.kr/view/bbs/board.php?tbname=recruit",
         category: "채용",
       },
     ],
@@ -140,12 +140,12 @@ export const sites = [
   {
     id: "mapo-scholarship",
     name: "마포인재육성장학재단",
-    domain: "https://www.mapocf.or.kr",
+    domain: "http://www.mapojh.or.kr",
     adapter: "generic-board",
     boards: [
       {
         name: "공지사항",
-        url: "https://www.mapocf.or.kr/bbs/board.php?bo_table=notice",
+        url: "http://www.mapojh.or.kr/notice",
         category: "장학",
       },
     ],
@@ -157,12 +157,12 @@ export const sites = [
   {
     id: "mapo-culture",
     name: "마포문화원",
-    domain: "https://www.mapocc.or.kr",
+    domain: "http://www.mapocc.or.kr",
     adapter: "generic-board",
     boards: [
       {
         name: "공지사항",
-        url: "https://www.mapocc.or.kr/bbs/board.php?bo_table=notice",
+        url: "http://www.mapocc.or.kr/board/notice",
         category: "문화",
       },
     ],
@@ -174,12 +174,12 @@ export const sites = [
   {
     id: "mapo-employ",
     name: "마포구고용복지지원센터",
-    domain: "https://www.mapomyjob.com",
+    domain: "https://mapoworkfare.or.kr",
     adapter: "mapo-employ",
     boards: [
       {
-        name: "공공일자리",
-        url: "https://www.mapomyjob.com/jobs/public-list.php",
+        name: "공지사항",
+        url: "https://mapoworkfare.or.kr/notice",
         category: "일자리",
       },
     ],
@@ -191,12 +191,12 @@ export const sites = [
   {
     id: "mapo-labor",
     name: "마포구노동자종합지원센터",
-    domain: "https://www.mapolabor.or.kr",
+    domain: "https://mapolabor.org",
     adapter: "generic-board",
     boards: [
       {
         name: "공지사항",
-        url: "https://www.mapolabor.or.kr/bbs/board.php?bo_table=notice",
+        url: "https://mapolabor.org/community/news",
         category: "노동",
       },
     ],
@@ -225,12 +225,12 @@ export const sites = [
   {
     id: "dohwa-youth",
     name: "구립도화청소년문화의집",
-    domain: "https://www.dohwayouth.or.kr",
+    domain: "http://www.dhyouth.or.kr",
     adapter: "generic-board",
     boards: [
       {
         name: "공지사항",
-        url: "https://www.dohwayouth.or.kr/bbs/board.php?bo_table=notice",
+        url: "http://www.dhyouth.or.kr/new2024/board/notice",
         category: "청소년",
       },
     ],
@@ -242,12 +242,12 @@ export const sites = [
   {
     id: "mapo-youth",
     name: "구립마포청소년문화의집",
-    domain: "https://www.mapoyouth.or.kr",
+    domain: "https://www.mycc.or.kr",
     adapter: "generic-board",
     boards: [
       {
         name: "공지사항",
-        url: "https://www.mapoyouth.or.kr/bbs/board.php?bo_table=notice",
+        url: "https://www.mycc.or.kr/p_community/sub01.php",
         category: "청소년",
       },
     ],
@@ -298,12 +298,12 @@ export const sites = [
   {
     id: "mapo-sports",
     name: "마포구민체육센터",
-    domain: "https://www.maposports.or.kr",
+    domain: "http://www.maposc.or.kr",
     adapter: "generic-board",
     boards: [
       {
         name: "공지사항",
-        url: "https://www.maposports.or.kr/bbs/board.php?bo_table=notice",
+        url: "http://www.maposc.or.kr/subpage/index/22",
         category: "체육",
       },
     ],
@@ -315,12 +315,12 @@ export const sites = [
   {
     id: "kesco",
     name: "한국전기안전공사",
-    domain: "https://www.koelsa.or.kr",
+    domain: "https://www.kesco.or.kr",
     adapter: "kesco",
     boards: [
       {
         name: "공지사항",
-        url: "https://www.koelsa.or.kr/main/board/noticeList.do",
+        url: "https://www.kesco.or.kr/sfcont/selectPageListSfCont.do",
         category: "안전",
       },
     ],
@@ -332,12 +332,12 @@ export const sites = [
   {
     id: "mapo-kids-meal",
     name: "마포구어린이급식관리지원센터",
-    domain: "https://mapo.ccfsm.or.kr",
+    domain: "https://ccfsm.foodnara.go.kr",
     adapter: "ccfsm",
     boards: [
       {
         name: "공지사항",
-        url: "https://mapo.ccfsm.or.kr/board/notice/list",
+        url: "https://ccfsm.foodnara.go.kr/mapo/",
         category: "급식",
       },
     ],

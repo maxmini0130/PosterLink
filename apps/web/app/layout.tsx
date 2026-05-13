@@ -29,12 +29,13 @@ export const metadata: Metadata = {
     siteName: "PosterLink",
     title: "PosterLink — 공공 포스터 링크 플랫폼",
     description: "청년, 소상공인, 문화 공고를 한눈에 — PosterLink",
-    images: [{ url: "/logo.png", width: 512, height: 512, alt: "PosterLink" }],
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "PosterLink — 공공 포스터 링크 플랫폼" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "PosterLink",
     description: "청년, 소상공인, 문화 공고를 한눈에 — PosterLink",
+    images: ["/opengraph-image"],
   },
 };
 
