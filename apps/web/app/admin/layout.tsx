@@ -5,10 +5,11 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, FileCheck, ShieldCheck, LogOut, Settings, AlertTriangle, Bell, Loader2, ClipboardList, Menu, X, Home, Inbox } from "lucide-react";
+import { LayoutDashboard, FileCheck, ShieldCheck, LogOut, Settings, AlertTriangle, Bell, Loader2, ClipboardList, Menu, X, Home, Inbox, UserCog } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const router = useRouter();
 
@@ -28,6 +29,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       if (profile?.role === "admin" || profile?.role === "super_admin") {
         setIsAdmin(true);
+        setIsSuperAdmin(profile.role === "super_admin");
       } else {
         toast.error("관리자 권한이 없습니다.");
         router.push("/");
@@ -74,6 +76,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <Settings size={20} className="text-indigo-400 group-hover:text-white transition-colors" />
         <span>기준정보 관리</span>
       </Link>
+      {isSuperAdmin && (
+        <Link href="/admin/users" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl hover:bg-white/10 transition-all font-black text-sm group">
+          <UserCog size={20} className="text-violet-400 group-hover:text-white transition-colors" />
+          <span>사용자 권한 관리</span>
+        </Link>
+      )}
       <div className="border-t border-white/10 my-3" />
       <Link href="/operator/posters" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl hover:bg-white/10 transition-all font-black text-sm group">
         <ClipboardList size={20} className="text-emerald-400 group-hover:text-white transition-colors" />
