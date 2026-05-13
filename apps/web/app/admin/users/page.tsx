@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { Loader2, UserCog, ChevronUp, ChevronDown, User, Wrench, ShieldCheck } from "lucide-react";
 
-type UserRole = "user" | "operator" | "admin";
+type UserRole = "user" | "operator" | "admin" | "super_admin";
 
 interface ManagedUser {
   id: string;
@@ -21,12 +21,14 @@ const ROLE_TABS: { value: UserRole; label: string; color: string }[] = [
   { value: "user", label: "일반 사용자", color: "text-gray-500" },
   { value: "operator", label: "운영자", color: "text-emerald-500" },
   { value: "admin", label: "관리자", color: "text-indigo-500" },
+  { value: "super_admin", label: "슈퍼 관리자", color: "text-violet-500" },
 ];
 
 const ROLE_BADGE: Record<UserRole, string> = {
   user: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300",
   operator: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
   admin: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300",
+  super_admin: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
 };
 
 export default function AdminUsersPage() {
@@ -218,6 +220,15 @@ export default function AdminUsersPage() {
                       >
                         <ChevronDown size={13} />
                         사용자로 강등
+                      </button>
+                    )}
+                    {activeTab === "super_admin" && (
+                      <button
+                        onClick={() => changeRole(u.id, "admin")}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-xl text-xs font-black hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors"
+                      >
+                        <ChevronDown size={13} />
+                        관리자로 강등
                       </button>
                     )}
                   </>

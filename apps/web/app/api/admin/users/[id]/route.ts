@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "../../../../../lib/supabase-server";
 
-const ALLOWED_ROLES = ["user", "operator", "admin"] as const;
+const ALLOWED_ROLES = ["user", "operator", "admin", "super_admin"] as const;
 type AllowedRole = (typeof ALLOWED_ROLES)[number];
 
 const adminClient = () =>
