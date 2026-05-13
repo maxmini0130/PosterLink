@@ -41,13 +41,21 @@ export async function POST(request: Request) {
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
+  // 기존 role을 유지하기 위해 현재 값을 먼저 조회
+  const { data: existing } = await admin
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  const currentRole = existing?.role ?? "user";
+
   const { error: profileError } = await admin.from("profiles").upsert(
     {
       id: user.id,
       primary_region_id: regionId,
       age_band: ageBand,
       gender: gender || "prefer_not_to_say",
-      role: "user",
+      role: currentRole,
       onboarding_completed: true,
     },
     { onConflict: "id" }
