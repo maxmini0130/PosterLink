@@ -27,6 +27,10 @@ function normalizeSourceKey(sourceUrl) {
   }
 }
 
+function findSiteForUrl(sourceUrl) {
+  return sites.find((site) => sourceUrl.startsWith(site.domain)) ?? sites.find((site) => site.id === "mapo-youth");
+}
+
 async function main() {
   const sourceHost = process.argv[2] ?? "mycc.or.kr";
   const dryRun = process.argv.includes("--dry-run");
@@ -54,7 +58,7 @@ async function main() {
     }
 
     try {
-      const detail = await genericBoard.parseDetail(sourceUrl, sites.find((site) => site.id === "mapo-youth"));
+      const detail = await genericBoard.parseDetail(sourceUrl, findSiteForUrl(sourceUrl));
       const updates = {};
       if (detail.title && looksMojibake(row.title)) updates.title = detail.title.substring(0, 200);
       if (looksMojibake(row.summary_short)) {

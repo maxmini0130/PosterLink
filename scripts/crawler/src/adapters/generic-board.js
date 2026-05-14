@@ -41,6 +41,14 @@ function addImage(images, baseUrl, src) {
   if (!images.includes(resolved)) images.push(resolved);
 }
 
+function cleanTitleCandidate(value, site) {
+  const title = String(value ?? "").trim().replace(/\s+/g, " ");
+  if (!title) return "";
+  if (title === site?.name) return "";
+  if (/상세보기|공지사항\s*\|/.test(title)) return "";
+  return title;
+}
+
 export default {
   name: "generic-board",
 
@@ -113,11 +121,17 @@ export default {
       title = $(s).first().text().trim();
       if (title) break;
     }
+    title = cleanTitleCandidate(title, site);
     if (!title) {
-      title = $("th").first().text().trim().replace(/^\[[^\]]+\]\s*/, "");
+      title = cleanTitleCandidate($("th").first().text().replace(/^\[[^\]]+\]\s*/, ""), site);
     }
     if (!title) {
-      title = $("title").first().text().trim();
+      const bodyText = $("body").text().replace(/\s+/g, " ").trim();
+      const match = bodyText.match(/게시판\s*내용보기\s+(.+?)\s+작성자\s*:/);
+      title = cleanTitleCandidate(match?.[1], site);
+    }
+    if (!title) {
+      title = cleanTitleCandidate($("title").first().text(), site);
     }
 
     // 본문
