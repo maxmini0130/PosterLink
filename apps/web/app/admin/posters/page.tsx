@@ -35,6 +35,7 @@ export default function AdminPostersPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkProcessing, setBulkProcessing] = useState(false);
   const [previewPoster, setPreviewPoster] = useState<any | null>(null);
+  const [imageLightbox, setImageLightbox] = useState<{ src: string; title: string; org?: string | null } | null>(null);
 
   const fetchPosters = async (status: PosterStatus) => {
     setLoading(true);
@@ -457,7 +458,15 @@ export default function AdminPostersPage() {
                 </button>
               )}
 
-              <div className="group/img relative flex w-full flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-gray-100 bg-gray-50 aspect-[3/4] md:w-32 dark:border-slate-700 dark:bg-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  const src = resolvePosterImageUrl(poster.thumbnail_url, poster.source_key);
+                  if (src) setImageLightbox({ src, title: poster.title, org: poster.source_org_name });
+                }}
+                className="group/img relative flex w-full flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-gray-100 bg-gray-50 aspect-[3/4] md:w-32 dark:border-slate-700 dark:bg-slate-800"
+                aria-label="포스터 이미지 크게 보기"
+              >
                 <PosterImageFallback
                   src={resolvePosterImageUrl(poster.thumbnail_url, poster.source_key)}
                   alt={poster.title}
@@ -471,7 +480,7 @@ export default function AdminPostersPage() {
                 <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover/img:opacity-100">
                   <Eye className="text-white" size={24} />
                 </div>
-              </div>
+              </button>
 
               <div className="flex-1 space-y-4">
                 <div className="flex items-center gap-3">
@@ -802,6 +811,35 @@ export default function AdminPostersPage() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {imageLightbox && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
+          onClick={() => setImageLightbox(null)}
+        >
+          <div className="absolute left-4 right-4 top-4 flex items-start justify-between gap-4 text-white md:left-8 md:right-8 md:top-8">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-black">{imageLightbox.title}</p>
+              {imageLightbox.org && <p className="mt-1 truncate text-xs font-bold text-white/60">{imageLightbox.org}</p>}
+            </div>
+            <button
+              type="button"
+              onClick={() => setImageLightbox(null)}
+              className="shrink-0 rounded-2xl bg-white/10 p-3 text-white transition-colors hover:bg-white/20"
+              aria-label="이미지 닫기"
+            >
+              <X size={22} />
+            </button>
+          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={imageLightbox.src}
+            alt={imageLightbox.title}
+            className="max-h-[86vh] max-w-[94vw] rounded-2xl object-contain shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          />
         </div>
       )}
     </>
