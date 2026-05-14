@@ -113,6 +113,12 @@ export default {
       title = $(s).first().text().trim();
       if (title) break;
     }
+    if (!title) {
+      title = $("th").first().text().trim().replace(/^\[[^\]]+\]\s*/, "");
+    }
+    if (!title) {
+      title = $("title").first().text().trim();
+    }
 
     // 본문
     let content = "";

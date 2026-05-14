@@ -253,6 +253,13 @@ function cleanSummaryText(value) {
     .trim();
 }
 
+function looksMojibake(value) {
+  const text = String(value ?? "");
+  if (!text) return false;
+  const replacementCount = (text.match(/\uFFFD/g) ?? []).length;
+  return replacementCount >= 2 || /[�]{1,}/.test(text);
+}
+
 function pickField(text, labels) {
   for (const label of labels) {
     const pattern = new RegExp(`${label}\\s*[:：]?\\s*([^\\n。.!?]{4,90})`, "i");
@@ -396,11 +403,16 @@ async function uploadToSupabase(filePath) {
       skip++;
       skippedSourceKeys.push(sourceKey);
       const updates = {};
-      if (posterRecord.title !== "제목 없음" && (!existingPoster.title || existingPoster.title === "제목 없음")) {
+      if (
+        posterRecord.title !== "제목 없음" &&
+        (!existingPoster.title || existingPoster.title === "제목 없음" || looksMojibake(existingPoster.title))
+      ) {
         updates.title = posterRecord.title;
       }
-      if (posterRecord.summary_short && !existingPoster.summary_short) {
+      if (posterRecord.summary_short && (!existingPoster.summary_short || looksMojibake(existingPoster.summary_short))) {
         updates.summary_short = posterRecord.summary_short;
+      } else if (existingPoster.summary_short && looksMojibake(existingPoster.summary_short)) {
+        updates.summary_short = null;
       }
       if (posterRecord.thumbnail_url && (!existingPoster.thumbnail_url || !/^https?:\/\//i.test(existingPoster.thumbnail_url))) {
         updates.thumbnail_url = posterRecord.thumbnail_url;
