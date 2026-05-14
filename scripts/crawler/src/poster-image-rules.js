@@ -11,6 +11,8 @@ const HARD_REJECT_URL_PATTERNS = [
   /(?:^|[\/_.-])btn(?:[\/_.-]|$)/i,
   /(?:^|[\/_.-])button(?:[\/_.-]|$)/i,
   /(?:^|[\/_.-])sns(?:[\/_.-]|$)/i,
+  /(?:^|[\/_.-])wa[_-]?mark(?:[\/_.-]|$)/i,
+  /web[_-]?accessibility|accessibility[_-]?mark/i,
   /(?:facebook|twitter|instagram|youtube|kakao|naver_blog)/i,
 ];
 

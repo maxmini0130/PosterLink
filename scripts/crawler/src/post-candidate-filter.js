@@ -1,5 +1,15 @@
 const TITLE_EXCLUDE_RULES = [
   {
+    name: "metadata-title",
+    pattern: /^(작성자|관리자|번호|제목|공지사항|조회수|첨부파일|maposc)$/i,
+    reason: "board metadata captured as title",
+  },
+  {
+    name: "metadata-title-prefix",
+    pattern: /^작성자\s*:/i,
+    reason: "board metadata captured as title",
+  },
+  {
     name: "rss-or-feed",
     pattern: /^(rss|feed)$/i,
     reason: "RSS/feed navigation item",

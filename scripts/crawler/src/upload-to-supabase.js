@@ -260,6 +260,15 @@ function looksMojibake(value) {
   return replacementCount >= 2 || /[�]{1,}/.test(text);
 }
 
+function isInvalidCrawlerTitle(value) {
+  const title = String(value ?? "").replace(/\s+/g, " ").trim();
+  return (
+    !title ||
+    /^(작성자|관리자|번호|제목|공지사항|조회수|첨부파일|maposc)$/i.test(title) ||
+    /^작성자\s*:/i.test(title)
+  );
+}
+
 function pickField(text, labels) {
   for (const label of labels) {
     const pattern = new RegExp(`${label}\\s*[:：]?\\s*([^\\n。.!?]{4,90})`, "i");
@@ -383,6 +392,12 @@ async function uploadToSupabase(filePath) {
         : null,
       thumbnail_url: normalizeImageUrl(post.images?.[0], sourceUrl),
     };
+    if (isInvalidCrawlerTitle(posterRecord.title)) {
+      fail++;
+      process.stdout.write("!");
+      console.warn(`\n  잘못된 제목으로 판단되어 저장 건너뜀: ${posterRecord.title} — ${sourceUrl}`);
+      continue;
+    }
 
     const sourceKeyCandidates = [...new Set([sourceKey, sourceUrl].filter(Boolean))];
     const { data: existingPoster, error: existingErr } = await supabase
