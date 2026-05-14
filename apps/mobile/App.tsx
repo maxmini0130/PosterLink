@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity, Image, TextInput,
-  Alert, ActivityIndicator, Platform, Linking,
+  Alert, ActivityIndicator, Platform, Linking, BackHandler,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -203,6 +203,26 @@ export default function App() {
       setUserRole(null);
     }
   }, [user, expoPushToken]);
+
+  useEffect(() => {
+    const backSub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (view === 'preview') {
+        setCapturedImage(null);
+        setView('chooser');
+        return true;
+      }
+      if (view === 'camera') {
+        setView('chooser');
+        return true;
+      }
+      if (view === 'chooser') {
+        setView('browse');
+        return true;
+      }
+      return false;
+    });
+    return () => backSub.remove();
+  }, [view]);
 
   // WebView에 세션 주입하는 공통 함수
   const injectSessionToWebView = useCallback((session: any, user: any) => {
@@ -447,14 +467,30 @@ export default function App() {
     if (!capturedImage || !user) return;
     setLoading(true);
     try {
-      const fileName = `${user.id}/${Date.now()}_mobile.jpg`;
-      const response = await fetch(capturedImage);
-      const blob = await response.blob();
-      const { error: storageError } = await supabase.storage
-        .from('poster-originals')
-        .upload(fileName, blob, { contentType: 'image/jpeg' });
-      if (storageError) throw storageError;
-      const { data: { publicUrl } } = supabase.storage.from('poster-originals').getPublicUrl(fileName);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('로그인 세션을 확인하지 못했습니다.');
+
+      const uploadFormData = new FormData();
+      uploadFormData.append('image', {
+        uri: capturedImage,
+        name: `mobile_${Date.now()}.jpg`,
+        type: 'image/jpeg',
+      } as any);
+
+      const uploadRes = await fetch(`${HOME_URL}/api/upload/poster`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: uploadFormData,
+      });
+      const uploadJson = await uploadRes.json().catch(() => null);
+      if (!uploadRes.ok) {
+        throw new Error(uploadJson?.error ?? `이미지 업로드 실패 (${uploadRes.status})`);
+      }
+      const publicUrl = uploadJson?.publicUrl;
+      if (!publicUrl) throw new Error('업로드된 이미지 URL을 받지 못했습니다.');
+
       const { error: dbError } = await supabase.from('posters').insert({
         title: `현장 수집_${new Date().toLocaleDateString()}`,
         poster_status: 'draft',
@@ -466,7 +502,7 @@ export default function App() {
       setView('browse');
       setCapturedImage(null);
     } catch (err: any) {
-      Alert.alert('오류', err.message);
+      Alert.alert('오류', err?.message ?? '포스터 등록 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
@@ -549,9 +585,24 @@ export default function App() {
     return (
       <View style={styles.centered}>
         <StatusBar style="dark" />
+        <TouchableOpacity
+          onPress={() => {
+            setCapturedImage(null);
+            setView('chooser');
+          }}
+          style={styles.previewClose}
+          disabled={loading}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.previewCloseText}>닫기</Text>
+        </TouchableOpacity>
         <Image source={{ uri: capturedImage! }} style={styles.preview} />
         <View style={styles.previewRow}>
-          <TouchableOpacity onPress={() => setView('camera')} style={styles.secBtn}>
+          <TouchableOpacity
+            onPress={() => setView('camera')}
+            style={styles.secBtn}
+            disabled={loading}
+          >
             <Text style={styles.secBtnText}>재촬영</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={uploadPoster} style={[styles.btn, { flex: 1 }]} disabled={loading}>
@@ -676,6 +727,17 @@ const styles = StyleSheet.create({
   // Preview
   preview: { width: '100%', height: '70%', borderRadius: 24, marginBottom: 24 },
   previewRow: { width: '100%', flexDirection: 'row', gap: 12 },
+  previewClose: {
+    position: 'absolute',
+    top: 56,
+    left: 24,
+    zIndex: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 999,
+    backgroundColor: 'rgba(17,24,39,0.72)',
+  },
+  previewCloseText: { color: '#fff', fontSize: 14, fontWeight: '900' },
 
   // WebView loading
   loading: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
