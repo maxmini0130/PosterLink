@@ -135,15 +135,24 @@ export default function NewPosterPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("인증 오류");
 
-      // 1. 보정된 이미지 업로드
-      const fileName = `${Date.now()}_cropped.jpg`;
-      const filePath = `${user.id}/${fileName}`;
+      // 1. 이미지를 서버 API를 통해 업로드 (모바일 WebView 호환)
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve((reader.result as string).split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(croppedImageBlob!);
+      });
 
-      const { error: uploadError } = await supabase.storage
-        .from("poster-originals")
-        .upload(filePath, croppedImageBlob, { contentType: 'image/jpeg' });
-
-      if (uploadError) throw uploadError;
+      const uploadRes = await fetch("/api/upload/poster", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: base64 }),
+      });
+      if (!uploadRes.ok) {
+        const d = await uploadRes.json();
+        throw new Error(d.error ?? "이미지 업로드 실패");
+      }
+      const { publicUrl } = await uploadRes.json();
 
       // 2. 포스터 정보 저장
       const { data: poster, error: posterError } = await supabase
@@ -178,8 +187,6 @@ export default function NewPosterPage() {
       }
 
       // 3. 이미지 URL을 posters에 직접 저장
-      const { data: { publicUrl } } = supabase.storage.from("poster-originals").getPublicUrl(filePath);
-
       const { error: thumbnailError } = await supabase.from("posters").update({ thumbnail_url: publicUrl }).eq("id", poster.id);
       if (thumbnailError) throw thumbnailError;
 
