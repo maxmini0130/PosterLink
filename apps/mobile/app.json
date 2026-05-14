@@ -66,6 +66,12 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "owner": "maxmini"
+    "owner": "maxmini",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/dd58cb12-9739-4dfb-bcda-6bc4947094b0"
+    }
   }
 }
