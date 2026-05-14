@@ -238,13 +238,20 @@ export default function NewPosterPage() {
           <input type="file" id="poster-upload" className="hidden" accept="image/*" onChange={handleImageChange} />
           <label htmlFor="poster-upload" className="cursor-pointer flex flex-col items-center justify-center min-h-[350px]">
             {imagePreview ? (
-              <div className="relative group">
+              <div className="flex flex-col items-center gap-4">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={imagePreview} alt="Preview" className="max-h-[450px] rounded-[2rem] shadow-2xl border-4 border-white" />
-                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-[2rem] flex items-center justify-center">
-                  <div className="bg-white px-4 py-2 rounded-xl text-xs font-black text-gray-900 shadow-xl flex items-center gap-2">
+                <img src={imagePreview} alt="Preview" className="max-h-[400px] rounded-[2rem] shadow-2xl border-4 border-white" />
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => { setImagePreview(null); setCroppedImageBlob(null); setOriginalImage(null); }}
+                    className="px-5 py-2.5 rounded-2xl bg-gray-100 text-gray-600 text-xs font-black hover:bg-gray-200 transition-colors"
+                  >
+                    사진 제거
+                  </button>
+                  <label htmlFor="poster-upload" className="cursor-pointer flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-blue-50 text-blue-600 text-xs font-black hover:bg-blue-100 transition-colors">
                     <Camera size={14} /> 사진 변경 / 다시 보정
-                  </div>
+                  </label>
                 </div>
               </div>
             ) : (

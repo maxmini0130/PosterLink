@@ -113,13 +113,16 @@ export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperPr
     <div className="fixed inset-0 z-[100] bg-black flex flex-col">
       {/* 헤더 */}
       <div className="flex items-center justify-between p-4 md:p-6 text-white bg-black/50 backdrop-blur-md z-10">
-        <button onClick={onCancel} className="p-2 hover:bg-white/10 rounded-full transition-all">
-          <X size={24} />
+        <button
+          onClick={onCancel}
+          className="flex items-center gap-1.5 px-4 py-2.5 bg-white/10 hover:bg-white/20 rounded-2xl transition-all active:scale-95 font-black text-sm"
+        >
+          <X size={18} /> 취소
         </button>
         <h2 className="text-sm font-black uppercase tracking-widest">이미지 편집</h2>
         <button
           onClick={getCroppedImg}
-          className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white font-black rounded-2xl shadow-lg transition-all active:scale-95"
+          className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-lg transition-all active:scale-95 text-sm"
         >
           <Check size={18} /> 완료
         </button>
