@@ -1,6 +1,7 @@
 // src/crawler.js
 import axios from "axios";
 import * as cheerio from "cheerio";
+import iconv from "iconv-lite";
 import dayjs from "dayjs";
 import { createLogger, format, transports } from "winston";
 import PQueue from "p-queue";
@@ -33,10 +34,25 @@ const client = axios.create({
   },
 });
 
+function detectCharset(contentType, htmlBuffer) {
+  // 1. HTTP Content-Type 헤더에서 charset 추출
+  if (contentType) {
+    const m = contentType.match(/charset=([^\s;]+)/i);
+    if (m) return m[1].toLowerCase();
+  }
+  // 2. HTML <meta charset> 또는 http-equiv에서 추출 (앞 2KB만 검색)
+  const head = htmlBuffer.slice(0, 2048).toString("ascii");
+  const m1 = head.match(/charset=["']?([^\s"';>]+)/i);
+  if (m1) return m1[1].toLowerCase();
+  return "utf-8";
+}
+
 export async function fetchPage(url) {
   try {
-    const res = await client.get(url, { responseType: "text" });
-    return cheerio.load(res.data);
+    const res = await client.get(url, { responseType: "arraybuffer" });
+    const charset = detectCharset(res.headers["content-type"], res.data);
+    const html = iconv.decode(Buffer.from(res.data), charset);
+    return cheerio.load(html);
   } catch (err) {
     logger.error(`Fetch failed: ${url} — ${err.message}`);
     return null;
