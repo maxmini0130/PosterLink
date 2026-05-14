@@ -44,16 +44,33 @@ export default function NewPosterPage() {
     fetchBaseData();
   }, []);
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+  const compressForCropper = (file: File): Promise<string> =>
+    new Promise((resolve) => {
+      const MAX = 2400;
       const reader = new FileReader();
       reader.onloadend = () => {
-        setOriginalImage(reader.result as string);
-        setShowCropper(true);
+        const img = new Image();
+        img.onload = () => {
+          const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+          const w = Math.round(img.width * scale);
+          const h = Math.round(img.height * scale);
+          const canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL("image/jpeg", 0.9));
+        };
+        img.src = reader.result as string;
       };
       reader.readAsDataURL(file);
-    }
+    });
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const compressed = await compressForCropper(file);
+    setOriginalImage(compressed);
+    setShowCropper(true);
   };
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -65,12 +82,28 @@ export default function NewPosterPage() {
     runOcr(blob);
   };
 
+  const resizeBlobForOcr = (blob: Blob): Promise<string> =>
+    new Promise((resolve) => {
+      const MAX = 1000;
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL("image/jpeg", 0.85));
+      };
+      img.src = url;
+    });
+
   const runOcr = (blob: Blob) => {
     setIsAnalyzing(true);
-    const reader = new FileReader();
-    reader.readAsDataURL(blob);
-    reader.onloadend = () => {
-      const base64data = reader.result as string;
+    resizeBlobForOcr(blob).then((base64data) => {
       supabase.auth.getSession().then(({ data: { session } }) => {
       supabase.functions.invoke('process-ocr', {
         body: { imageBase64: base64data.split(',')[1] },
@@ -90,7 +123,7 @@ export default function NewPosterPage() {
         }
       }).finally(() => setIsAnalyzing(false));
       }); // getSession
-    };
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

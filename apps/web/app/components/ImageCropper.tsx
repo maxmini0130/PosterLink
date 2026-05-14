@@ -10,6 +10,16 @@ interface ImageCropperProps {
   onCancel: () => void;
 }
 
+type AspectOption = { label: string; value: number | undefined };
+
+const ASPECT_OPTIONS: AspectOption[] = [
+  { label: "자유", value: undefined },
+  { label: "3:4", value: 3 / 4 },
+  { label: "1:1", value: 1 },
+  { label: "4:3", value: 4 / 3 },
+  { label: "9:16", value: 9 / 16 },
+];
+
 export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperProps) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -17,6 +27,7 @@ export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperPr
   const [brightness, setBrightness] = useState(100);
   const [contrast, setContrast] = useState(100);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
+  const [aspectIndex, setAspectIndex] = useState(1); // default 3:4
 
   const onCropChange = (crop: any) => setCrop(crop);
   const onZoomChange = (zoom: any) => setZoom(zoom);
@@ -43,16 +54,13 @@ export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperPr
       const ctx = canvas.getContext("2d");
       if (!ctx || !croppedAreaPixels) return;
 
-      // 회전을 적용하려면 전체 이미지를 회전 후 크롭해야 함
       const radians = getRadianAngle(rotation);
       const sin = Math.abs(Math.sin(radians));
       const cos = Math.abs(Math.cos(radians));
 
-      // 회전된 전체 이미지의 바운딩 박스 크기
       const rotW = img.width * cos + img.height * sin;
       const rotH = img.width * sin + img.height * cos;
 
-      // 1단계: 회전된 전체 이미지를 임시 캔버스에 그리기
       const rotCanvas = document.createElement("canvas");
       rotCanvas.width = rotW;
       rotCanvas.height = rotH;
@@ -63,28 +71,30 @@ export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperPr
       rotCtx.translate(-img.width / 2, -img.height / 2);
       rotCtx.drawImage(img, 0, 0);
 
-      // 2단계: 회전된 이미지에서 크롭 영역 추출
-      canvas.width = croppedAreaPixels.width;
-      canvas.height = croppedAreaPixels.height;
+      // 출력 최대 크기를 1500px로 제한 (모바일 업로드 최적화)
+      const MAX_OUTPUT = 1500;
+      const rawW = croppedAreaPixels.width;
+      const rawH = croppedAreaPixels.height;
+      const scale = Math.min(1, MAX_OUTPUT / Math.max(rawW, rawH));
+      canvas.width = Math.round(rawW * scale);
+      canvas.height = Math.round(rawH * scale);
 
-      // 밝기/대비 필터 적용
       ctx.filter = `brightness(${brightness}%) contrast(${contrast}%)`;
-
       ctx.drawImage(
         rotCanvas,
         croppedAreaPixels.x,
         croppedAreaPixels.y,
-        croppedAreaPixels.width,
-        croppedAreaPixels.height,
+        rawW,
+        rawH,
         0,
         0,
-        croppedAreaPixels.width,
-        croppedAreaPixels.height
+        canvas.width,
+        canvas.height
       );
 
       canvas.toBlob((blob) => {
         if (blob) onCropComplete(blob);
-      }, "image/jpeg", 0.92);
+      }, "image/jpeg", 0.88);
     } catch (e) {
       console.error(e);
     }
@@ -97,13 +107,16 @@ export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperPr
     setZoom(1);
   };
 
+  const currentAspect = ASPECT_OPTIONS[aspectIndex].value;
+
   return (
     <div className="fixed inset-0 z-[100] bg-black flex flex-col">
+      {/* 헤더 */}
       <div className="flex items-center justify-between p-4 md:p-6 text-white bg-black/50 backdrop-blur-md z-10">
         <button onClick={onCancel} className="p-2 hover:bg-white/10 rounded-full transition-all">
           <X size={24} />
         </button>
-        <h2 className="text-sm font-black uppercase tracking-widest">Image Correction</h2>
+        <h2 className="text-sm font-black uppercase tracking-widest">이미지 편집</h2>
         <button
           onClick={getCroppedImg}
           className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white font-black rounded-2xl shadow-lg transition-all active:scale-95"
@@ -112,6 +125,24 @@ export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperPr
         </button>
       </div>
 
+      {/* 비율 선택 */}
+      <div className="flex items-center gap-2 px-4 py-2 bg-black/40 overflow-x-auto">
+        {ASPECT_OPTIONS.map((opt, i) => (
+          <button
+            key={opt.label}
+            onClick={() => setAspectIndex(i)}
+            className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-black transition-all ${
+              aspectIndex === i
+                ? "bg-blue-600 text-white"
+                : "bg-white/10 text-gray-300 hover:bg-white/20"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 크로퍼 */}
       <div
         className="flex-1 relative bg-neutral-900"
         style={{ filter: `brightness(${brightness}%) contrast(${contrast}%)` }}
@@ -121,15 +152,15 @@ export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperPr
           crop={crop}
           zoom={zoom}
           rotation={rotation}
-          aspect={3 / 4}
+          aspect={currentAspect}
           onCropChange={onCropChange}
           onCropComplete={onCropCompleteInternal}
           onZoomChange={onZoomChange}
         />
       </div>
 
-      <div className="p-6 md:p-10 bg-black/50 backdrop-blur-md space-y-5">
-        {/* 줌 */}
+      {/* 슬라이더 */}
+      <div className="p-4 md:p-8 bg-black/50 backdrop-blur-md space-y-4">
         <div className="flex items-center gap-4">
           <ZoomIn className="text-gray-400 shrink-0" size={18} />
           <input
@@ -144,7 +175,6 @@ export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperPr
           <span className="text-[10px] font-bold text-gray-500 w-10 text-right">{Number(zoom).toFixed(1)}x</span>
         </div>
 
-        {/* 회전 */}
         <div className="flex items-center gap-4">
           <RotateCw className="text-gray-400 shrink-0" size={18} />
           <input
@@ -159,7 +189,6 @@ export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperPr
           <span className="text-[10px] font-bold text-gray-500 w-10 text-right">{rotation}°</span>
         </div>
 
-        {/* 밝기 */}
         <div className="flex items-center gap-4">
           <Sun className="text-gray-400 shrink-0" size={18} />
           <input
@@ -174,7 +203,6 @@ export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperPr
           <span className="text-[10px] font-bold text-gray-500 w-10 text-right">{brightness}%</span>
         </div>
 
-        {/* 대비 */}
         <div className="flex items-center gap-4">
           <Contrast className="text-gray-400 shrink-0" size={18} />
           <input
@@ -189,7 +217,6 @@ export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperPr
           <span className="text-[10px] font-bold text-gray-500 w-10 text-right">{contrast}%</span>
         </div>
 
-        {/* 초기화 버튼 */}
         {(brightness !== 100 || contrast !== 100 || rotation !== 0 || zoom !== 1) && (
           <button
             onClick={resetAdjustments}
