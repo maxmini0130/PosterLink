@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Home, ShieldCheck } from "lucide-react";
 
 export default function OperatorLayout({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<string | null>(null);
@@ -38,6 +39,19 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
           <Link href="/operator" className="block p-3 hover:bg-white/20 rounded-xl">📊 대시보드</Link>
           <Link href="/operator/posters" className="block p-3 bg-white/10 rounded-xl hover:bg-white/20">포스터 관리</Link>
           <Link href="/operator/posters/new" className="block p-3 hover:bg-white/20 rounded-xl">+ 새 포스터 등록</Link>
+
+          <div className="border-t border-white/20 pt-4 space-y-2">
+            {(role === "admin" || role === "super_admin") && (
+              <Link href="/admin" className="flex items-center gap-2 p-3 hover:bg-white/20 rounded-xl text-sm">
+                <ShieldCheck size={16} />
+                관리자 페이지
+              </Link>
+            )}
+            <Link href="/" className="flex items-center gap-2 p-3 hover:bg-white/20 rounded-xl text-sm">
+              <Home size={16} />
+              홈으로
+            </Link>
+          </div>
         </nav>
       </aside>
 
