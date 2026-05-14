@@ -18,7 +18,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.maxmini.posterlink",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "infoPlist": {
         "NSCameraUsageDescription": "포스터 촬영을 위해 카메라 권한이 필요합니다.",
         "NSPhotoLibraryUsageDescription": "갤러리에서 포스터를 선택하기 위해 권한이 필요합니다.",
