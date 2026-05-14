@@ -28,6 +28,7 @@ export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperPr
   const [contrast, setContrast] = useState(100);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
   const [aspectIndex, setAspectIndex] = useState(1); // default 3:4
+  const [processing, setProcessing] = useState(false);
 
   const onCropChange = (crop: any) => setCrop(crop);
   const onZoomChange = (zoom: any) => setZoom(zoom);
@@ -48,11 +49,13 @@ export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperPr
   const getRadianAngle = (degree: number) => (degree * Math.PI) / 180;
 
   const getCroppedImg = async () => {
+    if (processing) return;
+    setProcessing(true);
     try {
       const img = await createImage(image);
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
-      if (!ctx || !croppedAreaPixels) return;
+      if (!ctx) return;
 
       const radians = getRadianAngle(rotation);
       const sin = Math.abs(Math.sin(radians));
@@ -73,8 +76,14 @@ export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperPr
 
       // 출력 최대 크기를 1500px로 제한 (모바일 업로드 최적화)
       const MAX_OUTPUT = 1500;
-      const rawW = croppedAreaPixels.width;
-      const rawH = croppedAreaPixels.height;
+      const cropArea = croppedAreaPixels ?? {
+        x: 0,
+        y: 0,
+        width: rotW,
+        height: rotH,
+      };
+      const rawW = cropArea.width;
+      const rawH = cropArea.height;
       const scale = Math.min(1, MAX_OUTPUT / Math.max(rawW, rawH));
       canvas.width = Math.round(rawW * scale);
       canvas.height = Math.round(rawH * scale);
@@ -82,8 +91,8 @@ export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperPr
       ctx.filter = `brightness(${brightness}%) contrast(${contrast}%)`;
       ctx.drawImage(
         rotCanvas,
-        croppedAreaPixels.x,
-        croppedAreaPixels.y,
+        cropArea.x,
+        cropArea.y,
         rawW,
         rawH,
         0,
@@ -94,9 +103,11 @@ export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperPr
 
       canvas.toBlob((blob) => {
         if (blob) onCropComplete(blob);
+        setProcessing(false);
       }, "image/jpeg", 0.88);
     } catch (e) {
       console.error(e);
+      setProcessing(false);
     }
   };
 
@@ -114,6 +125,7 @@ export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperPr
       {/* 헤더 */}
       <div className="flex items-center justify-between p-4 md:p-6 text-white bg-black/50 backdrop-blur-md z-10">
         <button
+          type="button"
           onClick={onCancel}
           className="flex items-center gap-1.5 px-4 py-2.5 bg-white/10 hover:bg-white/20 rounded-2xl transition-all active:scale-95 font-black text-sm"
         >
@@ -121,10 +133,12 @@ export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperPr
         </button>
         <h2 className="text-sm font-black uppercase tracking-widest">이미지 편집</h2>
         <button
+          type="button"
           onClick={getCroppedImg}
-          className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-lg transition-all active:scale-95 text-sm"
+          disabled={processing}
+          className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-lg transition-all active:scale-95 text-sm disabled:bg-gray-600 disabled:text-gray-300"
         >
-          <Check size={18} /> 완료
+          <Check size={18} /> {processing ? "처리 중" : "완료"}
         </button>
       </div>
 
@@ -132,6 +146,7 @@ export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperPr
       <div className="flex items-center gap-2 px-4 py-2 bg-black/40 overflow-x-auto">
         {ASPECT_OPTIONS.map((opt, i) => (
           <button
+            type="button"
             key={opt.label}
             onClick={() => setAspectIndex(i)}
             className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-black transition-all ${
@@ -222,6 +237,7 @@ export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperPr
 
         {(brightness !== 100 || contrast !== 100 || rotation !== 0 || zoom !== 1) && (
           <button
+            type="button"
             onClick={resetAdjustments}
             className="w-full py-2 text-xs font-black text-gray-400 hover:text-white transition-colors"
           >

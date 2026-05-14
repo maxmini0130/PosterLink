@@ -1,7 +1,7 @@
 "use client";
 import toast from "react-hot-toast";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "../../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { Button } from "@posterlink/ui";
@@ -21,6 +21,7 @@ export default function NewPosterPage() {
   const [croppedImageBlob, setCroppedImageBlob] = useState<Blob | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [showCropper, setShowCropper] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   
   const [formData, setFormData] = useState({
     title: "",
@@ -44,8 +45,27 @@ export default function NewPosterPage() {
     fetchBaseData();
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (imagePreview) URL.revokeObjectURL(imagePreview);
+    };
+  }, [imagePreview]);
+
+  const goBackToList = () => {
+    router.push("/operator/posters");
+  };
+
+  const clearSelectedImage = () => {
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    setImagePreview(null);
+    setCroppedImageBlob(null);
+    setOriginalImage(null);
+    setShowCropper(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const compressForCropper = (file: File): Promise<string> =>
-    new Promise((resolve) => {
+    new Promise((resolve, reject) => {
       const MAX = 2400;
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -60,22 +80,30 @@ export default function NewPosterPage() {
           canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
           resolve(canvas.toDataURL("image/jpeg", 0.9));
         };
+        img.onerror = () => reject(new Error("이미지를 불러오지 못했습니다."));
         img.src = reader.result as string;
       };
+      reader.onerror = () => reject(new Error("파일을 읽지 못했습니다."));
       reader.readAsDataURL(file);
     });
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const compressed = await compressForCropper(file);
-    setOriginalImage(compressed);
-    setShowCropper(true);
+    try {
+      const compressed = await compressForCropper(file);
+      setOriginalImage(compressed);
+      setShowCropper(true);
+    } catch (err: any) {
+      toast.error(err.message ?? "이미지를 열지 못했습니다.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const onCropComplete = (blob: Blob) => {
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
     setCroppedImageBlob(blob);
     setImagePreview(URL.createObjectURL(blob));
     setShowCropper(false);
@@ -83,7 +111,7 @@ export default function NewPosterPage() {
   };
 
   const resizeBlobForOcr = (blob: Blob): Promise<string> =>
-    new Promise((resolve) => {
+    new Promise((resolve, reject) => {
       const MAX = 1000;
       const url = URL.createObjectURL(blob);
       const img = new Image();
@@ -98,32 +126,42 @@ export default function NewPosterPage() {
         URL.revokeObjectURL(url);
         resolve(canvas.toDataURL("image/jpeg", 0.85));
       };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("OCR용 이미지를 만들지 못했습니다."));
+      };
       img.src = url;
     });
 
-  const runOcr = (blob: Blob) => {
+  const runOcr = async (blob: Blob) => {
     setIsAnalyzing(true);
-    resizeBlobForOcr(blob).then((base64data) => {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-      supabase.functions.invoke('process-ocr', {
+    try {
+      const base64data = await resizeBlobForOcr(blob);
+      const { data: { session } } = await supabase.auth.getSession();
+      const { data, error } = await supabase.functions.invoke('process-ocr', {
         body: { imageBase64: base64data.split(',')[1] },
         headers: session ? { Authorization: `Bearer ${session.access_token}` } : {}
-      }).then(({ data, error }) => {
-        if (error) { console.error("OCR Error:", error); return; }
-        if (data) {
-          setFormData(prev => ({
-            ...prev,
-            title: data.title || prev.title,
-            sourceOrgName: data.sourceOrgName || prev.sourceOrgName,
-            appEndAt: data.appEndAt || prev.appEndAt,
-            summaryShort: data.summaryShort || prev.summaryShort,
-            officialLink: data.officialLink || prev.officialLink,
-            categoryId: categories.find(c => c.code === data.categoryId)?.id || prev.categoryId
-          }));
-        }
-      }).finally(() => setIsAnalyzing(false));
-      }); // getSession
-    });
+      });
+      if (error) {
+        console.error("OCR Error:", error);
+        return;
+      }
+      if (data) {
+        setFormData(prev => ({
+          ...prev,
+          title: data.title || prev.title,
+          sourceOrgName: data.sourceOrgName || prev.sourceOrgName,
+          appEndAt: data.appEndAt || prev.appEndAt,
+          summaryShort: data.summaryShort || prev.summaryShort,
+          officialLink: data.officialLink || prev.officialLink,
+          categoryId: categories.find(c => c.code === data.categoryId)?.id || prev.categoryId
+        }));
+      }
+    } catch (err) {
+      console.error("OCR Error:", err);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -136,20 +174,14 @@ export default function NewPosterPage() {
       if (!user) throw new Error("인증 오류");
 
       // 1. 이미지를 서버 API를 통해 업로드 (모바일 WebView 호환)
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve((reader.result as string).split(",")[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(croppedImageBlob!);
-      });
-
+      const uploadFormData = new FormData();
+      uploadFormData.append("image", croppedImageBlob, "poster.jpg");
       const uploadRes = await fetch("/api/upload/poster", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64: base64 }),
+        body: uploadFormData,
       });
       if (!uploadRes.ok) {
-        const d = await uploadRes.json();
+        const d = await uploadRes.json().catch(() => ({ error: "이미지 업로드 실패" }));
         throw new Error(d.error ?? "이미지 업로드 실패");
       }
       const { publicUrl } = await uploadRes.json();
@@ -219,12 +251,12 @@ export default function NewPosterPage() {
         <ImageCropper 
           image={originalImage} 
           onCropComplete={onCropComplete} 
-          onCancel={() => setShowCropper(false)} 
+          onCancel={() => setShowCropper(false)}
         />
       )}
 
       <div className="flex items-center gap-4 mb-8">
-        <button onClick={() => router.back()} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+        <button type="button" onClick={goBackToList} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
           <ChevronLeft size={24} />
         </button>
         <h1 className="text-2xl font-black text-gray-900">
@@ -242,16 +274,16 @@ export default function NewPosterPage() {
               <p className="text-gray-400 text-xs font-bold mt-1">포스터 정보를 자동으로 추출하고 있습니다.</p>
             </div>
           )}
-          <input type="file" id="poster-upload" className="hidden" accept="image/*" onChange={handleImageChange} />
-          <label htmlFor="poster-upload" className="cursor-pointer flex flex-col items-center justify-center min-h-[350px]">
+          <input ref={fileInputRef} type="file" id="poster-upload" className="hidden" accept="image/*" onChange={handleImageChange} />
+          <div className="flex flex-col items-center justify-center min-h-[350px]">
             {imagePreview ? (
               <div className="flex flex-col items-center gap-4">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={imagePreview} alt="Preview" className="max-h-[400px] rounded-[2rem] shadow-2xl border-4 border-white" />
-                <div className="flex gap-3">
+                <div className="flex flex-wrap justify-center gap-3">
                   <button
                     type="button"
-                    onClick={() => { setImagePreview(null); setCroppedImageBlob(null); setOriginalImage(null); }}
+                    onClick={clearSelectedImage}
                     className="px-5 py-2.5 rounded-2xl bg-gray-100 text-gray-600 text-xs font-black hover:bg-gray-200 transition-colors"
                   >
                     사진 제거
@@ -262,15 +294,15 @@ export default function NewPosterPage() {
                 </div>
               </div>
             ) : (
-              <div className="text-center">
+              <label htmlFor="poster-upload" className="cursor-pointer text-center">
                 <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-[2rem] flex items-center justify-center mx-auto mb-5 group-hover:scale-110 transition-transform">
                   <Camera size={36} />
                 </div>
                 <p className="text-gray-900 font-black text-lg">포스터 사진 촬영 또는 업로드</p>
                 <p className="text-gray-400 text-sm mt-1 font-bold italic">업로드 후 자르기/회전 보정이 시작됩니다.</p>
-              </div>
+              </label>
             )}
-          </label>
+          </div>
         </section>
 
         {/* 상세 정보 입력 영역 (기존과 동일) */}
