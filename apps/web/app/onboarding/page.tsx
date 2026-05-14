@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { MapPin, Star, ChevronRight, Check, Shield, User } from "lucide-react";
 import toast from "react-hot-toast";
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 6;
 
 export default function OnboardingPage() {
   const [step, setStep] = useState(0);
@@ -20,6 +20,7 @@ export default function OnboardingPage() {
   const [regions, setRegions] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
 
+  const [nickname, setNickname] = useState("");
   const [selectedRegionId, setSelectedRegionId] = useState("");
   const [selectedAgeBand, setSelectedAgeBand] = useState("");
   const [selectedGender, setSelectedGender] = useState("");
@@ -77,6 +78,7 @@ export default function OnboardingPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          nickname: nickname.trim(),
           regionId: selectedRegionId,
           ageBand: selectedAgeBand,
           gender: selectedGender || "prefer_not_to_say",
@@ -99,13 +101,15 @@ export default function OnboardingPage() {
   const isNextDisabled =
     submitting ||
     (step === 0 && !agreed) ||
-    (step === 1 && !selectedRegionId) ||
-    (step === 2 && !selectedAgeBand) ||
-    (step === 3 && !selectedGender) ||
-    (step === 4 && selectedCategoryIds.length === 0);
+    (step === 1 && nickname.trim().length < 2) ||
+    (step === 2 && !selectedRegionId) ||
+    (step === 3 && !selectedAgeBand) ||
+    (step === 4 && !selectedGender) ||
+    (step === 5 && selectedCategoryIds.length === 0);
 
   const stepTitles = [
     <>서비스 이용을<br />시작하기 전에 👋</>,
+    <>반갑습니다! 😊<br />닉네임을<br />설정해주세요.</>,
     <>Welcome! ✨<br />살고 계신 지역을<br />알려주세요.</>,
     <>Good Choice! 👍<br />연령대를<br />알려주세요.</>,
     <>Almost There! 🎯<br />성별을<br />알려주세요.</>,
@@ -146,6 +150,8 @@ export default function OnboardingPage() {
               <p className="text-gray-400 font-bold mt-3 text-sm italic">
                 {step === 0
                   ? "아래 약관에 동의하신 후 서비스를 이용하실 수 있습니다."
+                  : step === 1
+                  ? "포스터링크에서 사용할 닉네임을 설정해주세요."
                   : "맞춤형 공고 추천을 위해 꼭 필요한 정보입니다."}
               </p>
             </motion.div>
@@ -196,8 +202,36 @@ export default function OnboardingPage() {
             </motion.div>
           )}
 
-          {/* Step 1: 지역 선택 */}
+          {/* Step 1: 닉네임 설정 */}
           {step === 1 && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+              <div className="space-y-2">
+                <div className="relative">
+                  <User size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={nickname}
+                    onChange={(e) => setNickname(e.target.value.slice(0, 20))}
+                    placeholder="닉네임을 입력하세요"
+                    maxLength={20}
+                    className="w-full pl-12 pr-16 py-5 rounded-[2rem] border-2 border-gray-100 bg-gray-50 text-gray-900 font-black text-base placeholder:text-gray-300 focus:outline-none focus:border-blue-400 focus:bg-white transition-all"
+                  />
+                  <span className="absolute right-5 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-300">
+                    {nickname.length}/20
+                  </span>
+                </div>
+                {nickname.length > 0 && nickname.trim().length < 2 && (
+                  <p className="text-xs text-rose-400 font-bold px-2">닉네임은 2자 이상 입력해주세요.</p>
+                )}
+              </div>
+              <p className="text-xs text-gray-400 font-bold px-2">
+                서비스 내에서 표시되는 이름입니다. 나중에 프로필에서 변경할 수 있어요.
+              </p>
+            </motion.div>
+          )}
+
+          {/* Step 2: 지역 선택 */}
+          {step === 2 && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-2 gap-3">
               {regions.map((r) => (
                 <button
@@ -212,8 +246,8 @@ export default function OnboardingPage() {
             </motion.div>
           )}
 
-          {/* Step 2: 연령대 선택 */}
-          {step === 2 && (
+          {/* Step 3: 연령대 선택 */}
+          {step === 3 && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
               {ageBands.map((a) => (
                 <button
@@ -233,8 +267,8 @@ export default function OnboardingPage() {
             </motion.div>
           )}
 
-          {/* Step 3: 성별 선택 */}
-          {step === 3 && (
+          {/* Step 4: 성별 선택 */}
+          {step === 4 && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
               <p className="text-xs text-gray-400 font-bold mb-4 px-1">
                 성별 정보는 맞춤 공고 추천에만 사용되며, 언제든지 변경할 수 있습니다.
@@ -257,8 +291,8 @@ export default function OnboardingPage() {
             </motion.div>
           )}
 
-          {/* Step 4: 관심 카테고리 */}
-          {step === 4 && (
+          {/* Step 5: 관심 카테고리 */}
+          {step === 5 && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-wrap gap-2.5">
               {categories.map((c) => {
                 const isSelected = selectedCategoryIds.includes(c.id);

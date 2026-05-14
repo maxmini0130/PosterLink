@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { regionId, ageBand, gender, categoryIds } = body;
+  const { nickname, regionId, ageBand, gender, categoryIds } = body;
 
   if (!regionId || !ageBand || !gender) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -49,17 +49,19 @@ export async function POST(request: Request) {
     .single();
   const currentRole = existing?.role ?? "user";
 
-  const { error: profileError } = await admin.from("profiles").upsert(
-    {
-      id: user.id,
-      primary_region_id: regionId,
-      age_band: ageBand,
-      gender: gender || "prefer_not_to_say",
-      role: currentRole,
-      onboarding_completed: true,
-    },
-    { onConflict: "id" }
-  );
+  const profileData: Record<string, unknown> = {
+    id: user.id,
+    primary_region_id: regionId,
+    age_band: ageBand,
+    gender: gender || "prefer_not_to_say",
+    role: currentRole,
+    onboarding_completed: true,
+  };
+  if (nickname && nickname.trim().length >= 2) {
+    profileData.nickname = nickname.trim();
+  }
+
+  const { error: profileError } = await admin.from("profiles").upsert(profileData, { onConflict: "id" });
 
   if (profileError) {
     return NextResponse.json({ error: profileError.message }, { status: 500 });
