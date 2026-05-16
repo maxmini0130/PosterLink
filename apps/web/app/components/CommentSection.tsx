@@ -8,6 +8,22 @@ import { ReportModal } from "./ReportModal";
 import { MessageSquare, Send, AlertTriangle, Trash2, ChevronDown } from "lucide-react";
 
 const PAGE_SIZE = 5;
+type CommentType = "question" | "review";
+
+const COMMENT_TYPE_META: Record<CommentType, { label: string; placeholder: string; empty: string; badgeClass: string }> = {
+  question: {
+    label: "질문",
+    placeholder: "공고에 대해 궁금한 점을 질문으로 남겨주세요.",
+    empty: "첫 번째 질문을 남겨보세요.",
+    badgeClass: "bg-blue-50 text-blue-600",
+  },
+  review: {
+    label: "후기",
+    placeholder: "신청 경험, 참여 후기, 도움이 된 점을 후기로 남겨주세요.",
+    empty: "첫 번째 후기를 남겨보세요.",
+    badgeClass: "bg-emerald-50 text-emerald-600",
+  },
+};
 
 interface CommentSectionProps {
   posterId: string;
@@ -17,6 +33,7 @@ export function CommentSection({ posterId }: CommentSectionProps) {
   const [comments, setComments] = useState<any[]>([]);
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   const [newComment, setNewComment] = useState("");
+  const [selectedType, setSelectedType] = useState<CommentType>("question");
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [reportingCommentId, setReportingCommentId] = useState<string | null>(null);
@@ -42,6 +59,10 @@ export function CommentSection({ posterId }: CommentSectionProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [posterId]);
 
+  useEffect(() => {
+    setDisplayCount(PAGE_SIZE);
+  }, [selectedType]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return void toast.error("로그인이 필요합니다.");
@@ -53,7 +74,7 @@ export function CommentSection({ posterId }: CommentSectionProps) {
       poster_id: posterId,
       user_id: user.id,
       body: newComment,
-      comment_type: 'general'
+      comment_type: selectedType
     });
 
     if (error) toast.error(error.message);
@@ -109,6 +130,15 @@ export function CommentSection({ posterId }: CommentSectionProps) {
     else fetchComments();
   };
 
+  const normalizedComments = comments.map((comment) => ({
+    ...comment,
+    comment_type: comment.comment_type === "review" ? "review" : "question",
+  }));
+  const questionCount = normalizedComments.filter((comment) => comment.comment_type === "question").length;
+  const reviewCount = normalizedComments.filter((comment) => comment.comment_type === "review").length;
+  const filteredComments = normalizedComments.filter((comment) => comment.comment_type === selectedType);
+  const selectedMeta = COMMENT_TYPE_META[selectedType];
+
   return (
     <>
     {reportingCommentId && (
@@ -121,7 +151,24 @@ export function CommentSection({ posterId }: CommentSectionProps) {
     <section className="mt-12 border-t border-gray-100 pt-10">
       <div className="flex items-center gap-2 mb-6">
         <MessageSquare className="text-blue-600" size={22} />
-        <h2 className="text-xl font-black text-gray-900">질문/후기 ({comments.length})</h2>
+        <h2 className="text-xl font-black text-gray-900">질문과 후기</h2>
+      </div>
+
+      <div className="mb-6 grid grid-cols-2 gap-2 rounded-2xl bg-gray-50 p-1.5">
+        {(["question", "review"] as CommentType[]).map((type) => (
+          <button
+            key={type}
+            type="button"
+            onClick={() => setSelectedType(type)}
+            className={`rounded-xl px-4 py-3 text-sm font-black transition-all ${
+              selectedType === type
+                ? "bg-white text-blue-600 shadow-sm"
+                : "text-gray-400 hover:text-gray-700"
+            }`}
+          >
+            {COMMENT_TYPE_META[type].label} {type === "question" ? questionCount : reviewCount}
+          </button>
+        ))}
       </div>
 
       {/* 삭제 확인 인라인 모달 */}
@@ -140,10 +187,26 @@ export function CommentSection({ posterId }: CommentSectionProps) {
 
       {/* 댓글 작성 폼 */}
       <form onSubmit={handleSubmit} className="mb-10 relative">
+        <div className="mb-3 flex flex-wrap gap-2">
+          {(["question", "review"] as CommentType[]).map((type) => (
+            <button
+              key={type}
+              type="button"
+              onClick={() => setSelectedType(type)}
+              className={`rounded-2xl px-4 py-2 text-xs font-black transition-colors ${
+                selectedType === type
+                  ? COMMENT_TYPE_META[type].badgeClass
+                  : "bg-gray-50 text-gray-400 hover:bg-gray-100"
+              }`}
+            >
+              {COMMENT_TYPE_META[type].label}로 작성
+            </button>
+          ))}
+        </div>
         <textarea
           value={newComment}
           onChange={(e) => setNewComment(e.target.value)}
-          placeholder={user ? "공고에 대해 궁금한 점이나 후기를 남겨주세요." : "로그인 후 댓글을 작성할 수 있습니다."}
+          placeholder={user ? selectedMeta.placeholder : "로그인 후 작성할 수 있습니다."}
           disabled={!user || loading}
           className="w-full p-5 bg-gray-50 border-none rounded-3xl text-sm font-bold text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-100 outline-none resize-none min-h-[120px]"
         />
@@ -157,10 +220,13 @@ export function CommentSection({ posterId }: CommentSectionProps) {
 
       {/* 댓글 리스트 */}
       <div className="space-y-6">
-        {comments.slice(0, displayCount).map((comment) => (
+        {filteredComments.slice(0, displayCount).map((comment) => (
           <div key={comment.id} className="group relative bg-white p-6 rounded-[2rem] border border-gray-50 hover:border-blue-50 transition-all">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
+                <span className={`px-2 py-1 text-[10px] font-black rounded-lg ${COMMENT_TYPE_META[comment.comment_type as CommentType].badgeClass}`}>
+                  {COMMENT_TYPE_META[comment.comment_type as CommentType].label}
+                </span>
                 <div className="w-8 h-8 bg-blue-50 rounded-full flex items-center justify-center text-blue-500 text-[10px] font-black uppercase">
                   {comment.profiles?.nickname?.charAt(0) || 'U'}
                 </div>
@@ -191,18 +257,18 @@ export function CommentSection({ posterId }: CommentSectionProps) {
           </div>
         ))}
 
-        {comments.length === 0 && (
+        {filteredComments.length === 0 && (
           <div className="py-20 text-center bg-gray-50/50 rounded-[3rem] border border-dashed border-gray-200">
-            <p className="text-sm text-gray-400 font-bold">첫 번째 질문이나 후기를 남겨보세요! 💬</p>
+            <p className="text-sm text-gray-400 font-bold">{selectedMeta.empty}</p>
           </div>
         )}
 
-        {comments.length > displayCount && (
+        {filteredComments.length > displayCount && (
           <button
             onClick={() => setDisplayCount(prev => prev + PAGE_SIZE)}
             className="w-full py-4 border border-gray-100 rounded-2xl text-sm font-black text-gray-400 hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
           >
-            <ChevronDown size={16} /> 댓글 더보기 ({comments.length - displayCount}개 남음)
+            <ChevronDown size={16} /> {selectedMeta.label} 더보기 ({filteredComments.length - displayCount}개 남음)
           </button>
         )}
       </div>
