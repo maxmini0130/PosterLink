@@ -140,7 +140,7 @@ function parseImageSize(buffer) {
 }
 
 async function probeImage(imageUrl) {
-  const response = await axios.get(imageUrl, {
+  const requestOptions = {
     responseType: "arraybuffer",
     timeout: 12000,
     maxContentLength: 5 * 1024 * 1024,
@@ -151,7 +151,19 @@ async function probeImage(imageUrl) {
       "Range": `bytes=0-${PROBE_BYTES - 1}`,
     },
     validateStatus: (status) => status >= 200 && status < 400,
-  });
+  };
+
+  let response;
+  try {
+    response = await axios.get(imageUrl, requestOptions);
+  } catch (error) {
+    if (error.response?.status !== 416) throw error;
+    const { Range, ...headersWithoutRange } = requestOptions.headers;
+    response = await axios.get(imageUrl, {
+      ...requestOptions,
+      headers: headersWithoutRange,
+    });
+  }
 
   const buffer = Buffer.from(response.data);
   return {
@@ -192,6 +204,11 @@ export async function scorePosterImageCandidate(imageUrl, context = {}) {
   if (POSITIVE_URL_PATTERNS.some((pattern) => pattern.test(urlText))) {
     score += 10;
     signals.push("poster-like URL");
+  }
+
+  if (context.preferredImageUrls?.includes(imageUrl)) {
+    score += 15;
+    signals.push("preferred detail image");
   }
 
   if (POSITIVE_TEXT_PATTERNS.some((pattern) => pattern.test(contextText))) {

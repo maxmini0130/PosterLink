@@ -33,6 +33,11 @@ function extractDateRange(text) {
   };
 }
 
+function addImage(images, baseUrl, src) {
+  const imageUrl = resolveUrl(baseUrl, src);
+  if (imageUrl && !images.includes(imageUrl)) images.push(imageUrl);
+}
+
 export default {
   name: "youth-seoul",
 
@@ -81,10 +86,17 @@ export default {
     const { end } = extractDateRange(overviewText);
 
     const images = [];
-    $(".feed-view .thum-img img, .feed-view img[src*='/atch/getImg.do']").each((_, img) => {
+    const detailImages = [];
+
+    $(".feed-view .detail img, .feed-view .editor-text img").each((_, img) => {
       const src = $(img).attr("src") || $(img).attr("data-src") || $(img).attr("data-original");
-      const imageUrl = resolveUrl(postUrl, src);
-      if (imageUrl && !images.includes(imageUrl)) images.push(imageUrl);
+      addImage(images, postUrl, src);
+      addImage(detailImages, postUrl, src);
+    });
+
+    $(".feed-view img[src*='/atch/getImg.do'], .feed-view .thum-img img").each((_, img) => {
+      const src = $(img).attr("src") || $(img).attr("data-src") || $(img).attr("data-original");
+      addImage(images, postUrl, src);
     });
 
     if (images.length === 0) {
@@ -106,6 +118,7 @@ export default {
       content: detailText || overviewText,
       site: "청년몽땅정보통",
       sourceUrl: postUrl,
+      preferredImageUrls: detailImages,
     });
 
     return {
