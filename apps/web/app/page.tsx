@@ -352,7 +352,7 @@ export default function Home() {
                                 title={poster.title}
                                 org={poster.source_org_name}
                                 fallbackClassName="p-2"
-                                imgClassName="h-full w-full object-cover"
+                                imgClassName="h-full w-full object-contain bg-white/10"
                                 iconSize={18}
                               />
                             </div>

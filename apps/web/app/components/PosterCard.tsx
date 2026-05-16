@@ -38,7 +38,7 @@ export function PosterCard({ poster }: PosterCardProps) {
           title={poster.title}
           org={poster.org}
           fallbackClassName="p-4"
-          imgClassName={`h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 ${
+          imgClassName={`h-full w-full object-contain bg-gray-50 transition-transform duration-500 group-hover:scale-105 ${
             closed ? "grayscale opacity-55" : ""
           }`}
         />
