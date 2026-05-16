@@ -18,8 +18,9 @@ export default function NewPosterPage() {
 
   // 폼 상태
   const [originalImage, setOriginalImage] = useState<string | null>(null);
-  const [croppedImageBlob, setCroppedImageBlob] = useState<Blob | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [croppedImageBlobs, setCroppedImageBlobs] = useState<Blob[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const imagePreviewsRef = useRef<string[]>([]);
   const [showCropper, setShowCropper] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   
@@ -46,22 +47,35 @@ export default function NewPosterPage() {
   }, []);
 
   useEffect(() => {
+    imagePreviewsRef.current = imagePreviews;
+  }, [imagePreviews]);
+
+  useEffect(() => {
     return () => {
-      if (imagePreview) URL.revokeObjectURL(imagePreview);
+      imagePreviewsRef.current.forEach((preview) => URL.revokeObjectURL(preview));
     };
-  }, [imagePreview]);
+  }, []);
 
   const goBackToList = () => {
     router.push("/operator/posters");
   };
 
   const clearSelectedImage = () => {
-    if (imagePreview) URL.revokeObjectURL(imagePreview);
-    setImagePreview(null);
-    setCroppedImageBlob(null);
+    imagePreviews.forEach((preview) => URL.revokeObjectURL(preview));
+    setImagePreviews([]);
+    setCroppedImageBlobs([]);
     setOriginalImage(null);
     setShowCropper(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const removeSelectedImage = (index: number) => {
+    setImagePreviews((previews) => {
+      const next = previews.filter((_, previewIndex) => previewIndex !== index);
+      URL.revokeObjectURL(previews[index]);
+      return next;
+    });
+    setCroppedImageBlobs((blobs) => blobs.filter((_, blobIndex) => blobIndex !== index));
   };
 
   const compressForCropper = (file: File): Promise<string> =>
@@ -90,6 +104,11 @@ export default function NewPosterPage() {
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (croppedImageBlobs.length >= 2) {
+      toast.error("포스터 이미지는 최대 2장까지 등록할 수 있습니다.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
     try {
       const compressed = await compressForCropper(file);
       setOriginalImage(compressed);
@@ -103,11 +122,11 @@ export default function NewPosterPage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const onCropComplete = (blob: Blob) => {
-    if (imagePreview) URL.revokeObjectURL(imagePreview);
-    setCroppedImageBlob(blob);
-    setImagePreview(URL.createObjectURL(blob));
+    setCroppedImageBlobs((blobs) => [...blobs, blob].slice(0, 2));
+    setImagePreviews((previews) => [...previews, URL.createObjectURL(blob)].slice(0, 2));
     setShowCropper(false);
-    runOcr(blob);
+    if (croppedImageBlobs.length === 0) runOcr(blob);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const resizeBlobForOcr = (blob: Blob): Promise<string> =>
@@ -166,25 +185,29 @@ export default function NewPosterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!croppedImageBlob) return void toast.error("포스터 이미지를 보정하여 등록해주세요.");
+    if (croppedImageBlobs.length === 0) return void toast.error("포스터 이미지를 보정하여 등록해주세요.");
     
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("인증 오류");
 
-      // 1. 이미지를 서버 API를 통해 업로드 (모바일 WebView 호환)
-      const uploadFormData = new FormData();
-      uploadFormData.append("image", croppedImageBlob, "poster.jpg");
-      const uploadRes = await fetch("/api/upload/poster", {
-        method: "POST",
-        body: uploadFormData,
-      });
-      if (!uploadRes.ok) {
-        const d = await uploadRes.json().catch(() => ({ error: "이미지 업로드 실패" }));
-        throw new Error(d.error ?? "이미지 업로드 실패");
+      const publicUrls: string[] = [];
+      for (const [index, blob] of croppedImageBlobs.entries()) {
+        const uploadFormData = new FormData();
+        uploadFormData.append("image", blob, `poster_${index + 1}.jpg`);
+        const uploadRes = await fetch("/api/upload/poster", {
+          method: "POST",
+          body: uploadFormData,
+        });
+        if (!uploadRes.ok) {
+          const d = await uploadRes.json().catch(() => ({ error: "이미지 업로드 실패" }));
+          throw new Error(d.error ?? "이미지 업로드 실패");
+        }
+        const { publicUrl } = await uploadRes.json();
+        if (publicUrl) publicUrls.push(publicUrl);
       }
-      const { publicUrl } = await uploadRes.json();
+      if (publicUrls.length === 0) throw new Error("업로드된 이미지 URL을 받지 못했습니다.");
 
       // 2. 포스터 정보 저장
       const { data: poster, error: posterError } = await supabase
@@ -219,8 +242,17 @@ export default function NewPosterPage() {
       }
 
       // 3. 이미지 URL을 posters에 직접 저장
-      const { error: thumbnailError } = await supabase.from("posters").update({ thumbnail_url: publicUrl }).eq("id", poster.id);
+      const { error: thumbnailError } = await supabase.from("posters").update({ thumbnail_url: publicUrls[0] }).eq("id", poster.id);
       if (thumbnailError) throw thumbnailError;
+
+      const { error: imageError } = await supabase.from("poster_images").insert(
+        publicUrls.map((publicUrl, index) => ({
+          poster_id: poster.id,
+          storage_path: publicUrl,
+          image_type: index === 0 ? "thumbnail" : "original",
+        }))
+      );
+      if (imageError) throw imageError;
 
       // 4. 링크 저장
       if (formData.officialLink) {
@@ -276,10 +308,28 @@ export default function NewPosterPage() {
           )}
           <input ref={fileInputRef} type="file" id="poster-upload" className="hidden" accept="image/*" onChange={handleImageChange} />
           <div className="flex flex-col items-center justify-center min-h-[350px]">
-            {imagePreview ? (
+            {imagePreviews.length > 0 ? (
               <div className="flex flex-col items-center gap-4">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={imagePreview} alt="Preview" className="max-h-[400px] rounded-[2rem] shadow-2xl border-4 border-white" />
+                <div className="grid w-full max-w-xl grid-cols-1 gap-4 sm:grid-cols-2">
+                  {imagePreviews.map((preview, index) => (
+                    <div key={preview} className="relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={preview} alt={`포스터 미리보기 ${index + 1}`} className="h-[320px] w-full rounded-[2rem] border-4 border-white object-contain shadow-2xl" />
+                      <button
+                        type="button"
+                        onClick={() => removeSelectedImage(index)}
+                        className="absolute right-3 top-3 rounded-xl bg-white/95 px-3 py-1.5 text-[11px] font-black text-gray-600 shadow-lg"
+                      >
+                        제거
+                      </button>
+                      {index === 0 && (
+                        <span className="absolute left-3 top-3 rounded-xl bg-blue-600 px-3 py-1.5 text-[11px] font-black text-white shadow-lg">
+                          대표
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
                 <div className="flex flex-wrap justify-center gap-3">
                   <button
                     type="button"
@@ -288,9 +338,11 @@ export default function NewPosterPage() {
                   >
                     사진 제거
                   </button>
-                  <label htmlFor="poster-upload" className="cursor-pointer flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-blue-50 text-blue-600 text-xs font-black hover:bg-blue-100 transition-colors">
-                    <Camera size={14} /> 사진 변경 / 다시 보정
-                  </label>
+                  {imagePreviews.length < 2 && (
+                    <label htmlFor="poster-upload" className="cursor-pointer flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-blue-50 text-blue-600 text-xs font-black hover:bg-blue-100 transition-colors">
+                      <Camera size={14} /> 사진 추가
+                    </label>
+                  )}
                 </div>
               </div>
             ) : (
@@ -299,7 +351,7 @@ export default function NewPosterPage() {
                   <Camera size={36} />
                 </div>
                 <p className="text-gray-900 font-black text-lg">포스터 사진 촬영 또는 업로드</p>
-                <p className="text-gray-400 text-sm mt-1 font-bold italic">업로드 후 자르기/회전 보정이 시작됩니다.</p>
+                <p className="text-gray-400 text-sm mt-1 font-bold italic">앞/뒤 이미지가 있으면 최대 2장까지 등록할 수 있습니다.</p>
               </label>
             )}
           </div>

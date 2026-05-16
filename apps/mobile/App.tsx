@@ -115,7 +115,7 @@ export default function App() {
   const [user, setUser] = useState<any>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [webAuthenticated, setWebAuthenticated] = useState(false);
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [capturedImages, setCapturedImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [expoPushToken, setExpoPushToken] = useState('');
   const [permission, requestPermission] = useCameraPermissions();
@@ -207,7 +207,7 @@ export default function App() {
   useEffect(() => {
     const backSub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (view === 'preview') {
-        setCapturedImage(null);
+        setCapturedImages([]);
         setView('chooser');
         return true;
       }
@@ -440,7 +440,7 @@ export default function App() {
     if (cameraRef.current) {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.7 });
       if (photo) {
-        setCapturedImage(photo.uri);
+        setCapturedImages((images) => [...images, photo.uri].slice(0, 2));
         setView('preview');
       }
     }
@@ -456,51 +456,70 @@ export default function App() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.8,
       allowsEditing: false,
+      allowsMultipleSelection: true,
+      selectionLimit: Math.max(1, 2 - capturedImages.length),
     });
-    if (!result.canceled && result.assets[0]) {
-      setCapturedImage(result.assets[0].uri);
+    if (!result.canceled && result.assets.length > 0) {
+      setCapturedImages((images) => [
+        ...images,
+        ...result.assets.map((asset) => asset.uri),
+      ].slice(0, 2));
       setView('preview');
     }
   };
 
   const uploadPoster = async () => {
-    if (!capturedImage || !user) return;
+    if (capturedImages.length === 0 || !user) return;
     setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error('로그인 세션을 확인하지 못했습니다.');
 
-      const uploadFormData = new FormData();
-      uploadFormData.append('image', {
-        uri: capturedImage,
-        name: `mobile_${Date.now()}.jpg`,
-        type: 'image/jpeg',
-      } as any);
+      const publicUrls: string[] = [];
+      for (const [index, imageUri] of capturedImages.entries()) {
+        const uploadFormData = new FormData();
+        uploadFormData.append('image', {
+          uri: imageUri,
+          name: `mobile_${Date.now()}_${index + 1}.jpg`,
+          type: 'image/jpeg',
+        } as any);
 
-      const uploadRes = await fetch(`${HOME_URL}/api/upload/poster`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: uploadFormData,
-      });
-      const uploadJson = await uploadRes.json().catch(() => null);
-      if (!uploadRes.ok) {
-        throw new Error(uploadJson?.error ?? `이미지 업로드 실패 (${uploadRes.status})`);
+        const uploadRes = await fetch(`${HOME_URL}/api/upload/poster`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: uploadFormData,
+        });
+        const uploadJson = await uploadRes.json().catch(() => null);
+        if (!uploadRes.ok) {
+          throw new Error(uploadJson?.error ?? `이미지 업로드 실패 (${uploadRes.status})`);
+        }
+        const publicUrl = uploadJson?.publicUrl;
+        if (!publicUrl) throw new Error('업로드된 이미지 URL을 받지 못했습니다.');
+        publicUrls.push(publicUrl);
       }
-      const publicUrl = uploadJson?.publicUrl;
-      if (!publicUrl) throw new Error('업로드된 이미지 URL을 받지 못했습니다.');
 
-      const { error: dbError } = await supabase.from('posters').insert({
+      const { data: poster, error: dbError } = await supabase.from('posters').insert({
         title: `현장 수집_${new Date().toLocaleDateString()}`,
         poster_status: 'draft',
         created_by: user.id,
-        thumbnail_url: publicUrl,
-      });
+        thumbnail_url: publicUrls[0],
+      }).select('id').single();
       if (dbError) throw dbError;
+
+      const { error: imageError } = await supabase.from('poster_images').insert(
+        publicUrls.map((publicUrl, index) => ({
+          poster_id: poster.id,
+          storage_path: publicUrl,
+          image_type: index === 0 ? 'thumbnail' : 'original',
+        }))
+      );
+      if (imageError) throw imageError;
+
       Alert.alert('완료', '포스터 사진이 업로드되었습니다.\n웹 대시보드에서 내용을 입력하고 검수를 요청해주세요.');
       setView('browse');
-      setCapturedImage(null);
+      setCapturedImages([]);
     } catch (err: any) {
       Alert.alert('오류', err?.message ?? '포스터 등록 중 오류가 발생했습니다.');
     } finally {
@@ -587,7 +606,7 @@ export default function App() {
         <StatusBar style="dark" />
         <TouchableOpacity
           onPress={() => {
-            setCapturedImage(null);
+            setCapturedImages([]);
             setView('chooser');
           }}
           style={styles.previewClose}
@@ -596,15 +615,37 @@ export default function App() {
         >
           <Text style={styles.previewCloseText}>닫기</Text>
         </TouchableOpacity>
-        <Image source={{ uri: capturedImage! }} style={styles.preview} />
+        <View style={styles.previewGrid}>
+          {capturedImages.map((imageUri, index) => (
+            <View key={`${imageUri}-${index}`} style={styles.previewItem}>
+              <Image source={{ uri: imageUri }} style={styles.preview} />
+              <Text style={styles.previewBadge}>{index === 0 ? '대표' : `${index + 1}장`}</Text>
+            </View>
+          ))}
+        </View>
         <View style={styles.previewRow}>
           <TouchableOpacity
-            onPress={() => setView('camera')}
+            onPress={() => {
+              if (capturedImages.length >= 2) {
+                Alert.alert('안내', '포스터 이미지는 최대 2장까지 등록할 수 있습니다.');
+                return;
+              }
+              setView('camera');
+            }}
             style={styles.secBtn}
             disabled={loading}
           >
-            <Text style={styles.secBtnText}>재촬영</Text>
+            <Text style={styles.secBtnText}>{capturedImages.length >= 2 ? '2장 선택됨' : '추가 촬영'}</Text>
           </TouchableOpacity>
+          {capturedImages.length < 2 && (
+            <TouchableOpacity
+              onPress={pickFromGallery}
+              style={styles.secBtn}
+              disabled={loading}
+            >
+              <Text style={styles.secBtnText}>사진 추가</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity onPress={uploadPoster} style={[styles.btn, { flex: 1 }]} disabled={loading}>
             {loading ? <ActivityIndicator color="white" /> : <Text style={styles.btnText}>등록</Text>}
           </TouchableOpacity>
@@ -725,7 +766,22 @@ const styles = StyleSheet.create({
   guideText: { color: 'rgba(255,255,255,0.85)', fontSize: 14, fontWeight: 'bold', marginTop: 16, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
 
   // Preview
-  preview: { width: '100%', height: '70%', borderRadius: 24, marginBottom: 24 },
+  previewGrid: { width: '100%', flexDirection: 'row', gap: 12, marginBottom: 24 },
+  previewItem: { flex: 1, height: 430, borderRadius: 24, overflow: 'hidden', backgroundColor: '#f3f4f6' },
+  preview: { width: '100%', height: '100%', resizeMode: 'contain' },
+  previewBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    overflow: 'hidden',
+    borderRadius: 10,
+    backgroundColor: '#1e3a8a',
+    color: '#fff',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    fontSize: 12,
+    fontWeight: '900',
+  },
   previewRow: { width: '100%', flexDirection: 'row', gap: 12 },
   previewClose: {
     position: 'absolute',

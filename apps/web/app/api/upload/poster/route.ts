@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
-  const fileName = `${Date.now()}_cropped.jpg`;
+  const fileName = `${Date.now()}_${crypto.randomUUID()}_cropped.jpg`;
   const filePath = `${user.id}/${fileName}`;
 
   const { error } = await admin.storage
