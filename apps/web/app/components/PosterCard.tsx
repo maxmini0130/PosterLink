@@ -24,6 +24,12 @@ export function PosterCard({ poster }: PosterCardProps) {
   const dDay = getDDay(poster.deadline);
   const soon = isDeadlineSoon(poster.deadline);
   const closed = dDay === "마감";
+  const statusLabel = closed ? "마감됨" : dDay === "D-Day" ? "오늘 마감" : poster.deadline ? "신청 가능" : "상시";
+  const statusClass = closed
+    ? "bg-slate-700/90 text-white"
+    : dDay === "D-Day" || soon
+      ? "bg-rose-500/90 text-white"
+      : "bg-emerald-600/90 text-white";
   const imageUrl = resolvePosterImageUrl(poster.image, poster.sourceUrl);
   const imageUrls = [...(poster.images ?? []), imageUrl]
     .map((url) => resolvePosterImageUrl(url, poster.sourceUrl))
@@ -54,12 +60,30 @@ export function PosterCard({ poster }: PosterCardProps) {
           </div>
         )}
 
-        <div className={`absolute top-3 left-3 px-2.5 py-1 rounded-lg shadow-sm backdrop-blur-md transition-colors ${
-          soon ? "bg-rose-500/90 text-white" :
-          dDay !== "마감" ? "bg-blue-600/90 dark:bg-blue-500/90 text-white"
-          : "bg-slate-700/90 dark:bg-slate-600/90 text-white"
-        }`}>
-          <span className="text-[10px] font-black">{dDay}</span>
+        <div className={`absolute left-3 top-3 rounded-lg px-2.5 py-1 shadow-sm backdrop-blur-md transition-colors ${statusClass}`}>
+          <span className="text-[10px] font-black">{statusLabel}</span>
+        </div>
+
+        {dDay !== "마감" && dDay !== "D-Day" && poster.deadline && (
+          <div className="absolute bottom-3 left-3 rounded-lg bg-white/90 px-2.5 py-1 text-[10px] font-black text-gray-700 shadow-sm backdrop-blur-md">
+            {dDay}
+          </div>
+        )}
+
+        {!closed && dDay === "D-Day" && (
+          <div className="absolute bottom-3 left-3 rounded-lg bg-white/90 px-2.5 py-1 text-[10px] font-black text-rose-600 shadow-sm backdrop-blur-md">
+            오늘까지
+          </div>
+        )}
+
+        {!closed && !poster.deadline && (
+          <div className="absolute bottom-3 left-3 rounded-lg bg-white/90 px-2.5 py-1 text-[10px] font-black text-emerald-700 shadow-sm backdrop-blur-md">
+            기간 제한 없음
+          </div>
+        )}
+
+        <div className="absolute bottom-3 right-3 rounded-lg bg-black/45 px-2.5 py-1 text-[10px] font-black text-white opacity-0 shadow-sm backdrop-blur-md transition-opacity group-hover:opacity-100">
+          자세히 보기
         </div>
       </div>
 

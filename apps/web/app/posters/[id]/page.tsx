@@ -12,7 +12,7 @@ import { fetchCategoryRegionNames, fetchPosterImages } from "../../lib/posterHel
 import { fetchPosterMetricCounts, logPosterView } from "../../lib/posterMetrics";
 import { resolvePosterImageUrl } from "../../../lib/posterImage";
 import { Footer } from "../../components/Footer";
-import { Eye, Heart, Link2, MousePointerClick, Share2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, Heart, Link2, MousePointerClick, Share2, X } from "lucide-react";
 
 export default function PosterDetailPage({ params }: { params: { id: string } }) {
   const [poster, setPoster] = useState<any>(null);
@@ -155,6 +155,17 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
     .map((url) => resolvePosterImageUrl(url, poster.source_key))
     .filter((url, index, arr): url is string => Boolean(url) && arr.indexOf(url) === index);
   const primaryLink = links.find((link) => link.is_primary) || links[0] || null;
+  const statusLabel = daysLeft === null ? "상시" : daysLeft < 0 ? "마감됨" : daysLeft === 0 ? "오늘 마감" : "신청 가능";
+  const statusClass = daysLeft === null
+    ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+    : daysLeft < 0
+      ? "bg-slate-100 text-slate-500 border-slate-200"
+      : daysLeft <= 3
+        ? "bg-rose-50 text-rose-600 border-rose-100"
+        : "bg-emerald-50 text-emerald-700 border-emerald-100";
+  const moveExpandedImage = (offset: number) => {
+    setExpandedImageIndex((index) => (index + offset + imageUrls.length) % imageUrls.length);
+  };
 
   return (
     <div className="min-h-screen bg-white pb-24 md:pb-10">
@@ -180,10 +191,13 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
         </div>
 
         <div className="mb-8">
-          <div className="flex items-center gap-2 mb-2">
-            {daysLeft !== null && (
-              <span className={`px-2 py-0.5 text-[10px] font-black rounded text-white ${daysLeft <= 3 ? "bg-rose-500" : "bg-blue-600"}`}>
-                {daysLeft > 0 ? `D-${daysLeft}` : daysLeft === 0 ? "D-Day" : "마감"}
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className={`rounded-full border px-3 py-1 text-xs font-black ${statusClass}`}>
+              {statusLabel}
+            </span>
+            {daysLeft !== null && daysLeft >= 0 && (
+              <span className={`rounded-full px-3 py-1 text-xs font-black text-white ${daysLeft <= 3 ? "bg-rose-500" : "bg-blue-600"}`}>
+                {daysLeft === 0 ? "D-Day" : `D-${daysLeft}`}
               </span>
             )}
             <span className="text-sm text-gray-500 font-bold">{poster.source_org_name}</span>
@@ -215,6 +229,23 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
               공식 링크 클릭 {linkClickCount.toLocaleString()}
             </span>
           </div>
+
+          <a
+            href={primaryLink?.url || "#"}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(event) => {
+              if (!primaryLink) {
+                event.preventDefault();
+                toast.error("등록된 공식 링크가 없습니다.");
+                return;
+              }
+              void logOfficialLinkClick(primaryLink);
+            }}
+            className="mt-5 flex h-14 w-full items-center justify-center rounded-2xl bg-blue-600 text-sm font-black text-white shadow-lg shadow-blue-100 transition-colors hover:bg-blue-700"
+          >
+            공식 페이지에서 신청/확인하기
+          </a>
         </div>
 
         <section className="p-6 bg-gray-50 rounded-3xl mb-8 border border-gray-100">
@@ -343,6 +374,35 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
           >
             <X size={22} />
           </button>
+          {imageUrls.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  moveExpandedImage(-1);
+                }}
+                className="absolute left-4 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20"
+                aria-label="이전 이미지"
+              >
+                <ChevronLeft size={24} />
+              </button>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  moveExpandedImage(1);
+                }}
+                className="absolute right-4 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20"
+                aria-label="다음 이미지"
+              >
+                <ChevronRight size={24} />
+              </button>
+              <div className="absolute top-5 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-black text-white backdrop-blur">
+                {expandedImageIndex + 1}/{imageUrls.length}
+              </div>
+            </>
+          )}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={imageUrls[expandedImageIndex] ?? imageUrls[0]}

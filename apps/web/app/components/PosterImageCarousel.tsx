@@ -14,6 +14,7 @@ interface PosterImageCarouselProps {
   iconSize?: number;
   showControls?: boolean;
   showIndicators?: boolean;
+  showCounter?: boolean;
   onImageClick?: (imageUrl: string, index: number) => void;
 }
 
@@ -27,6 +28,7 @@ export function PosterImageCarousel({
   iconSize = 24,
   showControls = false,
   showIndicators = true,
+  showCounter = true,
   onImageClick,
 }: PosterImageCarouselProps) {
   const imageUrls = useMemo(() => [...new Set(images.filter((url): url is string => Boolean(url)))], [images]);
@@ -83,6 +85,12 @@ export function PosterImageCarousel({
         imgClassName={imgClassName}
         iconSize={iconSize}
       />
+
+      {hasMultiple && showCounter && (
+        <div className="absolute right-3 top-3 rounded-full bg-black/45 px-2.5 py-1 text-[11px] font-black text-white shadow-sm backdrop-blur">
+          {index + 1}/{imageUrls.length}
+        </div>
+      )}
 
       {hasMultiple && showControls && (
         <>

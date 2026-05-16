@@ -149,6 +149,9 @@ export default function PosterRequestPage() {
             <label className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
               <FileText size={13} /> 내용 <span className="text-rose-400">*</span>
             </label>
+            <div className="mb-3 rounded-2xl bg-gray-50 p-3 text-xs font-bold leading-relaxed text-gray-500 dark:bg-slate-700 dark:text-gray-300">
+              예: 공고명, 주관기관, 신청 마감일, 신청 대상, 공식 홈페이지 주소를 아는 만큼 적어주세요.
+            </div>
             <textarea
               required
               value={description}

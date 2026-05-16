@@ -11,6 +11,7 @@ import { fetchPosterMetricCounts } from "../lib/posterMetrics";
 import { Search, X, History, TrendingUp, Filter, ArrowLeft, ChevronDown } from "lucide-react";
 
 const PAGE_SIZE = 12;
+const QUICK_SEARCH_TERMS = ["청년", "취업", "무료교육", "주거", "창업", "곧 마감"];
 
 export default function PosterListPage() {
   const [loading, setLoading] = useState(true);
@@ -327,6 +328,23 @@ export default function PosterListPage() {
             <span className="text-sm font-bold text-gray-400">
               {searchQuery || "어떤 공고를 찾으시나요?"}
             </span>
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            {QUICK_SEARCH_TERMS.map((term) => (
+              <button
+                key={term}
+                type="button"
+                onClick={() => handleSearchSubmit(undefined, term)}
+                className={`whitespace-nowrap rounded-2xl px-4 py-2 text-xs font-black transition-colors ${
+                  searchQuery === term
+                    ? "bg-blue-600 text-white shadow-lg shadow-blue-100"
+                    : "bg-gray-50 text-gray-500 hover:bg-blue-50 hover:text-blue-600"
+                }`}
+              >
+                {term}
+              </button>
+            ))}
           </div>
 
           {/* Active Filter Badges */}
