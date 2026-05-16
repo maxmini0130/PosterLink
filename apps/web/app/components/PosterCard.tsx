@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getDDay, isDeadlineSoon } from "@posterlink/lib";
 import { Eye, Heart, MousePointerClick } from "lucide-react";
 import { resolvePosterImageUrl } from "../../lib/posterImage";
-import { PosterImageFallback } from "./PosterImageFallback";
+import { PosterImageCarousel } from "./PosterImageCarousel";
 
 interface PosterCardProps {
   poster: {
@@ -12,6 +12,7 @@ interface PosterCardProps {
     deadline?: string;
     tags?: string[];
     image?: string;
+    images?: string[];
     sourceUrl?: string;
     viewCount?: number;
     linkClickCount?: number;
@@ -24,6 +25,9 @@ export function PosterCard({ poster }: PosterCardProps) {
   const soon = isDeadlineSoon(poster.deadline);
   const closed = dDay === "마감";
   const imageUrl = resolvePosterImageUrl(poster.image, poster.sourceUrl);
+  const imageUrls = [...(poster.images ?? []), imageUrl]
+    .map((url) => resolvePosterImageUrl(url, poster.sourceUrl))
+    .filter((url, index, arr): url is string => Boolean(url) && arr.indexOf(url) === index);
 
   return (
     <Link href={`/posters/${poster.id}`} className="group block">
@@ -32,9 +36,8 @@ export function PosterCard({ poster }: PosterCardProps) {
           ? "border-slate-300 bg-slate-200 dark:border-slate-700 dark:bg-slate-800"
           : "border-gray-100 bg-gray-100 dark:border-slate-700 dark:bg-slate-800"
       }`}>
-        <PosterImageFallback
-          src={imageUrl}
-          alt={poster.title}
+        <PosterImageCarousel
+          images={imageUrls}
           title={poster.title}
           org={poster.org}
           fallbackClassName="p-4"
@@ -50,12 +53,11 @@ export function PosterCard({ poster }: PosterCardProps) {
             </span>
           </div>
         )}
-        
-        {/* D-Day 배지 */}
+
         <div className={`absolute top-3 left-3 px-2.5 py-1 rounded-lg shadow-sm backdrop-blur-md transition-colors ${
-          soon ? 'bg-rose-500/90 text-white' :
-          dDay !== '마감' ? 'bg-blue-600/90 dark:bg-blue-500/90 text-white'
-          : 'bg-slate-700/90 dark:bg-slate-600/90 text-white'
+          soon ? "bg-rose-500/90 text-white" :
+          dDay !== "마감" ? "bg-blue-600/90 dark:bg-blue-500/90 text-white"
+          : "bg-slate-700/90 dark:bg-slate-600/90 text-white"
         }`}>
           <span className="text-[10px] font-black">{dDay}</span>
         </div>

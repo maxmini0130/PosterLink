@@ -78,6 +78,24 @@ export async function fetchCategoryRegionNames(posterIds: string[]): Promise<Rec
   return result;
 }
 
+export async function fetchPosterImages(posterIds: string[]): Promise<Record<string, string[]>> {
+  const ids = [...new Set(posterIds.filter(Boolean))];
+  if (ids.length === 0) return {};
+
+  const { data } = await supabase
+    .from("poster_images")
+    .select("poster_id, storage_path, created_at")
+    .in("poster_id", ids)
+    .order("created_at", { ascending: true });
+
+  const result: Record<string, string[]> = {};
+  for (const image of data ?? []) {
+    if (!image.poster_id || !image.storage_path) continue;
+    result[image.poster_id] = [...(result[image.poster_id] ?? []), image.storage_path];
+  }
+  return result;
+}
+
 export async function fetchProfileMap(userIds: string[]): Promise<Record<string, { nickname: string }>> {
   if (userIds.length === 0) return {};
   const { data } = await supabase

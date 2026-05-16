@@ -337,6 +337,43 @@ function normalizeImageUrl(imageUrl, sourceUrl) {
   }
 }
 
+function normalizePostImages(post, sourceUrl) {
+  return [...new Set((post.images ?? [])
+    .map((imageUrl) => normalizeImageUrl(imageUrl, sourceUrl))
+    .filter(Boolean))];
+}
+
+async function syncPosterImages(posterId, post, sourceUrl) {
+  const images = normalizePostImages(post, sourceUrl);
+  if (images.length === 0) return;
+
+  const { data: existingImages, error: existingError } = await supabase
+    .from("poster_images")
+    .select("storage_path")
+    .eq("poster_id", posterId);
+
+  if (existingError) {
+    console.warn(`\n  poster_images 조회 실패: ${post.title} — ${existingError.message}`);
+    return;
+  }
+
+  const existing = new Set((existingImages ?? []).map((image) => image.storage_path));
+  const missing = images.filter((imageUrl) => !existing.has(imageUrl));
+  if (missing.length === 0) return;
+
+  const { error } = await supabase.from("poster_images").insert(
+    missing.map((imageUrl, index) => ({
+      poster_id: posterId,
+      storage_path: imageUrl,
+      image_type: index === 0 && existing.size === 0 ? "thumbnail" : "original",
+    }))
+  );
+
+  if (error) {
+    console.warn(`\n  poster_images 저장 실패: ${post.title} — ${error.message}`);
+  }
+}
+
 async function cleanupImageLessCrawlerReviews() {
   const { count, error } = await supabase
     .from("posters")
@@ -390,7 +427,7 @@ async function uploadToSupabase(filePath) {
       application_end_at: post.deadline
         ? (() => { try { return new Date(post.deadline).toISOString(); } catch { return null; } })()
         : null,
-      thumbnail_url: normalizeImageUrl(post.images?.[0], sourceUrl),
+      thumbnail_url: normalizePostImages(post, sourceUrl)[0] ?? null,
     };
     if (isInvalidCrawlerTitle(posterRecord.title)) {
       fail++;
@@ -438,6 +475,7 @@ async function uploadToSupabase(filePath) {
       if (Object.keys(updates).length > 0) {
         await supabase.from("posters").update(updates).eq("id", existingPoster.id);
       }
+      await syncPosterImages(existingPoster.id, post, sourceUrl);
       await assignPosterCategories(existingPoster.id, post, categoryMap);
       process.stdout.write("-");
       continue;
@@ -457,6 +495,7 @@ async function uploadToSupabase(filePath) {
     }
 
     const posterId = poster.id;
+    await syncPosterImages(posterId, post, sourceUrl);
 
     // ── 2. poster_links 저장 (원본 URL) ─────────────────────
     const { error: linkErr } = await supabase.from("poster_links").insert({

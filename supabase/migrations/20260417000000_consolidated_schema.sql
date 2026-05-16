@@ -122,7 +122,7 @@ CREATE INDEX idx_posters_created_by ON posters(created_by);
 CREATE TABLE poster_images (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     poster_id UUID REFERENCES posters(id) ON DELETE CASCADE,
-    image_url TEXT NOT NULL,
+    storage_path TEXT NOT NULL,
     image_type TEXT DEFAULT 'original'
         CHECK (image_type IN ('original','processed','thumbnail')),
     width INT,

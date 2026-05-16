@@ -5,10 +5,10 @@ import { useState, useEffect } from "react";
 import { Header } from "../../components/Header";
 import { BottomNav } from "../../components/BottomNav";
 import { CommentSection } from "../../components/CommentSection";
-import { PosterImageFallback } from "../../components/PosterImageFallback";
+import { PosterImageCarousel } from "../../components/PosterImageCarousel";
 import { notFound } from "next/navigation";
 import { supabase } from "../../lib/supabase";
-import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
+import { fetchCategoryRegionNames, fetchPosterImages } from "../../lib/posterHelpers";
 import { fetchPosterMetricCounts, logPosterView } from "../../lib/posterMetrics";
 import { resolvePosterImageUrl } from "../../../lib/posterImage";
 import { Footer } from "../../components/Footer";
@@ -23,6 +23,7 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
   const [favoriteCount, setFavoriteCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [imageExpanded, setImageExpanded] = useState(false);
+  const [expandedImageIndex, setExpandedImageIndex] = useState(0);
 
   useEffect(() => {
     const fetchPosterDetail = async () => {
@@ -39,8 +40,11 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
           return;
         }
 
-        const metaMap = await fetchCategoryRegionNames([params.id]);
-        setPoster({ ...data, ...metaMap[params.id] });
+        const [metaMap, imageMap] = await Promise.all([
+          fetchCategoryRegionNames([params.id]),
+          fetchPosterImages([params.id]),
+        ]);
+        setPoster({ ...data, ...metaMap[params.id], images: imageMap[params.id] ?? [] });
 
         const metricCounts = await fetchPosterMetricCounts([params.id]);
         setViewCount(metricCounts.viewCounts[params.id] ?? 0);
@@ -144,28 +148,36 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
     : null;
 
   const imageUrl = resolvePosterImageUrl(poster.thumbnail_url, poster.source_key);
+  const imageUrls = [
+    ...(poster.images ?? []),
+    imageUrl,
+  ]
+    .map((url) => resolvePosterImageUrl(url, poster.source_key))
+    .filter((url, index, arr): url is string => Boolean(url) && arr.indexOf(url) === index);
   const primaryLink = links.find((link) => link.is_primary) || links[0] || null;
 
   return (
     <div className="min-h-screen bg-white pb-24 md:pb-10">
       <Header />
       <main className="container mx-auto max-w-2xl px-4 py-6">
-        <button
-          type="button"
-          onClick={() => imageUrl && setImageExpanded(true)}
+        <div
           className="aspect-[3/4] w-full rounded-2xl overflow-hidden border shadow-lg mb-6 bg-gray-100 flex items-center justify-center relative"
           aria-label="포스터 이미지 크게 보기"
         >
-          <PosterImageFallback
-            src={imageUrl}
-            alt={poster.title}
+          <PosterImageCarousel
+            images={imageUrls}
             title={poster.title}
             org={poster.source_org_name}
             fallbackClassName="p-8"
             imgClassName="h-full w-full object-contain bg-gray-50"
+            showControls
             iconSize={34}
+            onImageClick={(_, index) => {
+              setExpandedImageIndex(index);
+              setImageExpanded(true);
+            }}
           />
-        </button>
+        </div>
 
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-2">
@@ -315,7 +327,7 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
           </div>
         </div>
       </main>
-      {imageExpanded && imageUrl && (
+      {imageExpanded && imageUrls.length > 0 && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
           role="dialog"
@@ -333,11 +345,27 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
           </button>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={imageUrl}
+            src={imageUrls[expandedImageIndex] ?? imageUrls[0]}
             alt={poster.title}
             className="max-h-[88vh] max-w-full rounded-xl object-contain shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           />
+          {imageUrls.length > 1 && (
+            <div className="absolute bottom-5 left-1/2 flex -translate-x-1/2 gap-2 rounded-full bg-white/10 px-3 py-2 backdrop-blur">
+              {imageUrls.map((url, index) => (
+                <button
+                  key={`${url}-${index}`}
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setExpandedImageIndex(index);
+                  }}
+                  className={`h-2 rounded-full transition-all ${index === expandedImageIndex ? "w-6 bg-white" : "w-2 bg-white/40"}`}
+                  aria-label={`${index + 1}번째 이미지 보기`}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
       <Footer />

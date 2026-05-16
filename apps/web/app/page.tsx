@@ -6,8 +6,8 @@ import { Header } from "./components/Header";
 import { BottomNav } from "./components/BottomNav";
 import { Footer } from "./components/Footer";
 import { PosterCard } from "./components/PosterCard";
-import { PosterImageFallback } from "./components/PosterImageFallback";
-import { fetchCategoryRegionNames } from "./lib/posterHelpers";
+import { PosterImageCarousel } from "./components/PosterImageCarousel";
+import { fetchCategoryRegionNames, fetchPosterImages } from "./lib/posterHelpers";
 import { fetchPosterMetricCounts } from "./lib/posterMetrics";
 import { resolvePosterImageUrl } from "../lib/posterImage";
 import { motion, AnimatePresence } from "framer-motion";
@@ -29,13 +29,15 @@ export default function Home() {
       try {
         const attachPosterMeta = async (items: any[]) => {
           const posterIds = items.map((poster: any) => poster.id);
-          const [metaMap, metricCounts] = await Promise.all([
+          const [metaMap, metricCounts, imageMap] = await Promise.all([
             fetchCategoryRegionNames(posterIds),
             fetchPosterMetricCounts(posterIds),
+            fetchPosterImages(posterIds),
           ]);
           return items.map((poster: any) => ({
             ...poster,
             ...metaMap[poster.id],
+            images: imageMap[poster.id] ?? [],
             viewCount: metricCounts.viewCounts[poster.id] ?? 0,
             linkClickCount: metricCounts.linkClickCounts[poster.id] ?? 0,
             favoriteCount: metricCounts.favoriteCounts[poster.id] ?? 0,
@@ -110,7 +112,7 @@ export default function Home() {
           .lte("application_end_at", sevenDaysLater.toISOString())
           .order("application_end_at", { ascending: true })
           .limit(4);
-        if (urgentData && urgentData.length > 0) setUrgentPosters(urgentData);
+        if (urgentData && urgentData.length > 0) setUrgentPosters(await attachPosterMeta(urgentData));
 
         // 서비스 통계
         const [posterCount, favCount, notifCount] = await Promise.all([
@@ -295,6 +297,7 @@ export default function Home() {
                       org: poster.source_org_name,
                       deadline: poster.application_end_at,
                       image: poster.thumbnail_url,
+                      images: poster.images,
                       sourceUrl: poster.source_key,
                       viewCount: poster.viewCount,
                       linkClickCount: poster.linkClickCount,
@@ -346,9 +349,11 @@ export default function Home() {
                             className="flex gap-4 p-5 bg-white/10 backdrop-blur-md rounded-[2rem] border border-white/20 hover:bg-white/20 transition-colors"
                           >
                             <div className="w-16 h-20 bg-white/20 rounded-2xl flex-shrink-0 overflow-hidden relative">
-                              <PosterImageFallback
-                                src={resolvePosterImageUrl(poster.thumbnail_url, poster.source_key)}
-                                alt={poster.title}
+                              <PosterImageCarousel
+                                images={[
+                                  ...(poster.images ?? []),
+                                  resolvePosterImageUrl(poster.thumbnail_url, poster.source_key),
+                                ]}
                                 title={poster.title}
                                 org={poster.source_org_name}
                                 fallbackClassName="p-2"

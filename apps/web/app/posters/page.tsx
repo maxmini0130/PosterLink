@@ -6,7 +6,7 @@ import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
 import { Footer } from "../components/Footer";
 import { PosterCard } from "../components/PosterCard";
-import { fetchCategoryRegionNames } from "../lib/posterHelpers";
+import { fetchCategoryRegionNames, fetchPosterImages } from "../lib/posterHelpers";
 import { fetchPosterMetricCounts } from "../lib/posterMetrics";
 import { Search, X, History, TrendingUp, Filter, ArrowLeft, ChevronDown } from "lucide-react";
 
@@ -116,14 +116,16 @@ export default function PosterListPage() {
         : data;
 
       const basePosterIds = dateFilteredData.map((poster: any) => poster.id);
-      const [baseMetaMap, baseMetricCounts] = await Promise.all([
+      const [baseMetaMap, baseMetricCounts, baseImageMap] = await Promise.all([
         fetchCategoryRegionNames(basePosterIds),
         fetchPosterMetricCounts(basePosterIds),
+        fetchPosterImages(basePosterIds),
       ]);
 
       const enrichedData = dateFilteredData.map((poster: any) => ({
         ...poster,
         ...baseMetaMap[poster.id],
+        images: baseImageMap[poster.id] ?? [],
         viewCount: baseMetricCounts.viewCounts[poster.id] ?? 0,
         linkClickCount: baseMetricCounts.linkClickCounts[poster.id] ?? 0,
         favoriteCount: baseMetricCounts.favoriteCounts[poster.id] ?? 0,
@@ -403,6 +405,7 @@ export default function PosterListPage() {
                     org: poster.source_org_name,
                     deadline: poster.application_end_at,
                     image: poster.thumbnail_url,
+                    images: poster.images,
                     sourceUrl: poster.source_key,
                     viewCount: poster.viewCount,
                     linkClickCount: poster.linkClickCount,
