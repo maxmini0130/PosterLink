@@ -12,7 +12,7 @@ import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
 import { fetchPosterMetricCounts, logPosterView } from "../../lib/posterMetrics";
 import { resolvePosterImageUrl } from "../../../lib/posterImage";
 import { Footer } from "../../components/Footer";
-import { Eye, Heart, Link2, MousePointerClick, Share2 } from "lucide-react";
+import { Eye, Heart, Link2, MousePointerClick, Share2, X } from "lucide-react";
 
 export default function PosterDetailPage({ params }: { params: { id: string } }) {
   const [poster, setPoster] = useState<any>(null);
@@ -22,6 +22,7 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
   const [linkClickCount, setLinkClickCount] = useState(0);
   const [favoriteCount, setFavoriteCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [imageExpanded, setImageExpanded] = useState(false);
 
   useEffect(() => {
     const fetchPosterDetail = async () => {
@@ -149,17 +150,22 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
     <div className="min-h-screen bg-white pb-24 md:pb-10">
       <Header />
       <main className="container mx-auto max-w-2xl px-4 py-6">
-        <div className="aspect-[3/4] rounded-2xl overflow-hidden border shadow-lg mb-6 bg-gray-100 flex items-center justify-center relative">
+        <button
+          type="button"
+          onClick={() => imageUrl && setImageExpanded(true)}
+          className="aspect-[3/4] w-full rounded-2xl overflow-hidden border shadow-lg mb-6 bg-gray-100 flex items-center justify-center relative"
+          aria-label="포스터 이미지 크게 보기"
+        >
           <PosterImageFallback
             src={imageUrl}
             alt={poster.title}
             title={poster.title}
             org={poster.source_org_name}
             fallbackClassName="p-8"
-            imgClassName="h-full w-full object-cover"
+            imgClassName="h-full w-full object-contain bg-gray-50"
             iconSize={34}
           />
-        </div>
+        </button>
 
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-2">
@@ -309,6 +315,31 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
           </div>
         </div>
       </main>
+      {imageExpanded && imageUrl && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="포스터 이미지 크게 보기"
+          onClick={() => setImageExpanded(false)}
+        >
+          <button
+            type="button"
+            onClick={() => setImageExpanded(false)}
+            className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20"
+            aria-label="닫기"
+          >
+            <X size={22} />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={imageUrl}
+            alt={poster.title}
+            className="max-h-[88vh] max-w-full rounded-xl object-contain shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
+      )}
       <Footer />
       <BottomNav />
     </div>
