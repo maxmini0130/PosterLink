@@ -38,10 +38,12 @@ const SUMMARY_LABELS = [
   "주요내용",
   "지원내용",
   "교육내용",
+  "교육 내용",
   "사업내용",
   "프로그램",
   "참여인원",
   "모집인원",
+  "참가비용",
   "인원",
   "기간",
   "일시",
@@ -67,6 +69,31 @@ function normalizeNumberedLabel(value: string): string {
     .trim();
 }
 
+function normalizeSummaryLabel(value: string | undefined): string | undefined {
+  const label = value?.replace(/\s+/g, "").trim();
+  return label || undefined;
+}
+
+function normalizeSummaryText(value: string): string {
+  return value
+    .replace(/[📌]/g, "")
+    .replace(/([0-9])\uFE0F?\u20E3/g, "$1.")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
+function removeDanglingDuplicateLines(lines: SummaryLine[]): SummaryLine[] {
+  return lines.filter((line, index) => {
+    const current = line.text.replace(/\s+/g, " ").trim();
+    const next = lines[index + 1]?.text.replace(/\s+/g, " ").trim();
+    if (!next) return true;
+
+    const dangling = current.replace(/[(:（]\s*$/, "").trim();
+    const danglingWithoutHeading = dangling.replace(/^교육\s*내용\s+/, "").trim();
+    return !(current !== dangling && (next.startsWith(dangling) || next.startsWith(danglingWithoutHeading)));
+  });
+}
+
 function splitNumberedSections(value: string, fallbackLabel?: string): SummaryLine[] {
   const sectionPattern = /([①②③④⑤⑥⑦⑧⑨⑩])\s*([^①②③④⑤⑥⑦⑧⑨⑩]+)/g;
   const firstSectionIndex = value.search(/[①②③④⑤⑥⑦⑧⑨⑩]/);
@@ -84,7 +111,7 @@ function splitNumberedSections(value: string, fallbackLabel?: string): SummaryLi
     const titleMatch = section.match(/^(목적(?:\([^)]*\))?|신청대상|신청기간|진행일정|진행내용|진행장소|참여혜택|문의\s*연락처|문의처|문의|대상|내용|기간|일시|장소)\s*(.*)$/);
     const rawLabel = titleMatch?.[1]?.trim() ?? CIRCLED_SECTION_LABELS[marker] ?? marker;
     const label = normalizeNumberedLabel(rawLabel) || CIRCLED_SECTION_LABELS[marker] || marker;
-    const text = (titleMatch?.[2] || section).trim();
+    const text = normalizeSummaryText(titleMatch?.[2] || section);
 
     lines.push({
       label,
@@ -100,12 +127,13 @@ function formatSummaryLines(value: string | null | undefined): SummaryLine[] {
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;|&#160;/gi, " ")
     .replace(/\s*[·•]\s*/g, "\n")
+    .replace(/\s+(?=교육\s*내용\s*(?:[①②③④⑤⑥⑦⑧⑨⑩]|\d\uFE0F?\u20E3|\d[.)]))/g, "\n")
     .replace(/[ \t]+/g, " ")
     .trim();
 
   if (!text) return [];
   if (/[①②③④⑤⑥⑦⑧⑨⑩]/.test(text) && !new RegExp(`^(${SUMMARY_LABEL_PATTERN})\\s*:`).test(text)) {
-    return splitNumberedSections(text);
+    return removeDanglingDuplicateLines(splitNumberedSections(text));
   }
 
   const normalized = text
@@ -119,12 +147,18 @@ function formatSummaryLines(value: string | null | undefined): SummaryLine[] {
 
   const parsed = lines.map((line) => {
     const match = line.match(new RegExp(`^(${SUMMARY_LABEL_PATTERN})\\s*:\\s*(.+)$`));
-    if (!match) return { text: line };
-    return { label: match[1], text: match[2].trim() };
+    if (!match) {
+      const looseMatch = line.match(/^(교육\s*내용)\s+(.+)$/);
+      if (looseMatch) {
+        return { label: normalizeSummaryLabel(looseMatch[1]), text: normalizeSummaryText(looseMatch[2]) };
+      }
+      return { text: normalizeSummaryText(line) };
+    }
+    return { label: normalizeSummaryLabel(match[1]), text: normalizeSummaryText(match[2]) };
   }).flatMap((line) => splitNumberedSections(line.text, line.label));
 
   if (parsed.length > 1 || parsed.some((line) => line.label)) {
-    return parsed;
+    return removeDanglingDuplicateLines(parsed);
   }
 
   return text
