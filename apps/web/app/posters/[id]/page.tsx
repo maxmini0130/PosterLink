@@ -62,6 +62,12 @@ const SUMMARY_LABELS = [
   "신청방법",
   "비용",
   "혜택",
+  "신청대상",
+  "진행일정",
+  "진행내용",
+  "진행장소",
+  "참가비",
+  "신청문의",
 ];
 
 const SUMMARY_LABEL_PATTERN = SUMMARY_LABELS
@@ -90,6 +96,8 @@ function normalizeSummaryText(value: string): string {
     .replace(/\uFFFD/g, "")
     .replace(/[\uD800-\uDFFF]/g, "")
     .replace(/([0-9])\uFE0F?\u20E3/g, "$1.")
+    .replace(/\s+\*\s+/g, "\n* ")
+    .replace(/([.!?])(?=[가-힣])/g, "$1 ")
     .replace(/[ \t]+/g, " ")
     .trim();
 }
@@ -118,6 +126,15 @@ function splitNumberedItems(value: string): Array<{ number: string; body: string
       instructor: instructor?.trim(),
     };
   }).filter((item) => item.body);
+}
+
+function splitDashItems(value: string): string[] {
+  const items = value
+    .split(/\s+-\s+(?=\d{1,2}[/.월]|\d{4}|[가-힣A-Za-z])/)
+    .map((item) => item.replace(/^\-\s*/, "").trim())
+    .filter(Boolean);
+
+  return items.length > 1 ? items : [];
 }
 
 function removeDanglingDuplicateLines(lines: SummaryLine[]): SummaryLine[] {
@@ -166,6 +183,7 @@ function formatSummaryLines(value: string | null | undefined): SummaryLine[] {
     .replace(/&nbsp;|&#160;/gi, " ")
     .replace(/^상세정보\s+/, "")
     .replace(/\s+(교육\s*개요|신청\s*안내)\s+/g, "\n")
+    .replace(/\s*[🎵]\s*/g, "\n")
     .replace(/\s*[·•]\s*/g, "\n")
     .replace(/\s+(?=교육\s*내용\s*(?:[①②③④⑤⑥⑦⑧⑨⑩]|\d\uFE0F?\u20E3|\d[.)]))/g, "\n")
     .replace(/[ \t]+/g, " ")
@@ -177,8 +195,8 @@ function formatSummaryLines(value: string | null | undefined): SummaryLine[] {
   }
 
   const normalized = text
-    .replace(new RegExp(`\\s+(?=(${SUMMARY_LABEL_PATTERN})\\s*:)`, "g"), "\n")
-    .replace(new RegExp(`^(${SUMMARY_LABEL_PATTERN})\\s*:`, "g"), "$1:");
+    .replace(new RegExp(`\\s+(?=(${SUMMARY_LABEL_PATTERN})\\s*[:：-])`, "g"), "\n")
+    .replace(new RegExp(`^(${SUMMARY_LABEL_PATTERN})\\s*[:：-]`, "g"), "$1:");
 
   const lines = normalized
     .split(/\n+/)
@@ -186,7 +204,7 @@ function formatSummaryLines(value: string | null | undefined): SummaryLine[] {
     .filter(Boolean);
 
   const parsed = lines.map((line) => {
-    const match = line.match(new RegExp(`^(${SUMMARY_LABEL_PATTERN})\\s*:\\s*(.+)$`));
+    const match = line.match(new RegExp(`^(${SUMMARY_LABEL_PATTERN})\\s*[:：-]\\s*(.+)$`));
     if (!match) {
       const looseMatch = line.match(/^(교육\s*내용)\s+(.+)$/);
       if (looseMatch) {
@@ -227,6 +245,20 @@ function renderSummaryContent(line: SummaryLine) {
                 </p>
               )}
             </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const dashItems = splitDashItems(line.text);
+  if (dashItems.length > 0) {
+    return (
+      <div className="min-w-0 space-y-2">
+        {dashItems.map((item, index) => (
+          <div key={`${item}-${index}`} className="grid grid-cols-[0.75rem_minmax(0,1fr)] gap-2">
+            <span className="mt-2 h-1.5 w-1.5 rounded-full bg-gray-400" />
+            <p className="min-w-0 break-keep [overflow-wrap:anywhere]">{item}</p>
           </div>
         ))}
       </div>
