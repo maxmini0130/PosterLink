@@ -13,6 +13,32 @@ import { Search, X, History, TrendingUp, Filter, ArrowLeft, ChevronDown } from "
 const PAGE_SIZE = 12;
 const QUICK_SEARCH_TERMS = ["청년", "취업", "무료교육", "주거", "창업", "곧 마감"];
 
+function getRegionLabel(region: any) {
+  if (!region) return "";
+  if (region.level === "sigungu") return region.full_name || region.name;
+  return region.name;
+}
+
+function getRegionScopeIds(regionId: string | null, regionList: any[]) {
+  if (!regionId) return null;
+
+  const selected = regionList.find((region) => region.id === regionId);
+  if (!selected || selected.level === "nation") return null;
+
+  const ids = new Set<string>([regionId]);
+  for (const region of regionList) {
+    if (region.parent_id === regionId) ids.add(region.id);
+  }
+
+  let parentId = selected.parent_id;
+  while (parentId) {
+    ids.add(parentId);
+    parentId = regionList.find((region) => region.id === parentId)?.parent_id ?? null;
+  }
+
+  return ids;
+}
+
 export default function PosterListPage() {
   const [loading, setLoading] = useState(true);
   const [posters, setPosters] = useState<any[]>([]);
@@ -38,7 +64,12 @@ export default function PosterListPage() {
   useEffect(() => {
     const fetchBase = async () => {
       const { data: catData } = await supabase.from("categories").select("*").order("sort_order");
-      const { data: regData } = await supabase.from("regions").select("*").in("level", ["nation", "sido"]).order("level", { ascending: false });
+      const { data: regData } = await supabase
+        .from("regions")
+        .select("*")
+        .in("level", ["nation", "sido", "sigungu"])
+        .order("level", { ascending: false })
+        .order("full_name", { ascending: true });
       if (catData) setCategories(catData);
       if (regData) setRegions(regData);
       
@@ -85,7 +116,7 @@ export default function PosterListPage() {
         const { data: rpcData, error } = await supabase.rpc("search_posters_with_synonyms", {
           p_query: normalizedQuery,
           p_category_id: selectedCategoryId,
-          p_region_id: selectedRegionId,
+          p_region_id: null,
         });
 
         if (error) throw error;
@@ -132,11 +163,14 @@ export default function PosterListPage() {
         favoriteCount: baseMetricCounts.favoriteCounts[poster.id] ?? 0,
       }));
 
+      const selectedRegionScopeIds = getRegionScopeIds(selectedRegionId, regions);
+      const userRegionScopeIds = getRegionScopeIds(userPrimaryRegionId, regions);
+
       const filteredData = enrichedData.filter((poster: any) => (
         (!selectedCategoryId || poster.categoryIds?.includes(selectedCategoryId)) &&
-        (!selectedRegionId || poster.regionIds?.includes(selectedRegionId)) &&
+        (!selectedRegionScopeIds || poster.regionIds?.some((regionId: string) => selectedRegionScopeIds.has(regionId))) &&
         (!myMatchesOnly || (user && (
-          (userPrimaryRegionId && poster.regionIds?.includes(userPrimaryRegionId)) ||
+          (userRegionScopeIds && poster.regionIds?.some((regionId: string) => userRegionScopeIds.has(regionId))) ||
           poster.categoryIds?.some((categoryId: string) => userInterestCategoryIds.includes(categoryId))
         )))
       ));
@@ -362,7 +396,7 @@ export default function PosterListPage() {
               )}
               {selectedRegionId && (
                 <span className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 text-xs font-black rounded-lg border border-indigo-100">
-                  {regions.find(r => r.id === selectedRegionId)?.name} <button onClick={() => setSelectedRegionId(null)}><X size={12}/></button>
+                  {getRegionLabel(regions.find(r => r.id === selectedRegionId))} <button onClick={() => setSelectedRegionId(null)}><X size={12}/></button>
                 </span>
               )}
               {selectedCategoryId && (
@@ -384,7 +418,7 @@ export default function PosterListPage() {
             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
               <button onClick={() => setSelectedRegionId(null)} className={`px-5 py-2.5 rounded-2xl text-[13px] font-black whitespace-nowrap transition-all ${!selectedRegionId ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : 'bg-blue-50 text-blue-400 hover:bg-blue-100'}`}>전체 지역</button>
               {regions.map(region => (
-                <button key={region.id} onClick={() => setSelectedRegionId(region.id)} className={`px-5 py-2.5 rounded-2xl text-[13px] font-black whitespace-nowrap transition-all ${selectedRegionId === region.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : 'bg-blue-50 text-blue-400 hover:bg-blue-100'}`}>{region.name}</button>
+                <button key={region.id} onClick={() => setSelectedRegionId(region.id)} className={`px-5 py-2.5 rounded-2xl text-[13px] font-black whitespace-nowrap transition-all ${selectedRegionId === region.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : 'bg-blue-50 text-blue-400 hover:bg-blue-100'}`}>{getRegionLabel(region)}</button>
               ))}
             </div>
           </div>

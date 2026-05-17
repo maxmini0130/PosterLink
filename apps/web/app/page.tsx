@@ -66,7 +66,7 @@ export default function Home() {
         // 로그인 시: 프로필 + 맞춤 추천
         let postersFetched = false;
         if (user && hideClosedPosters) {
-          const { data: profile } = await supabase.from("profiles").select("*, regions(name)").eq("id", user.id).single();
+          const { data: profile } = await supabase.from("profiles").select("*, regions(name, full_name, level)").eq("id", user.id).single();
           setUserProfile(profile);
 
           const { data: recommendedData, error: rpcError } = await supabase.rpc('get_recommended_posters', {
@@ -185,7 +185,7 @@ export default function Home() {
               </div>
               <h2 className="text-xl sm:text-3xl font-black text-gray-900 dark:text-slate-50 leading-snug" style={{ wordBreak: 'keep-all' }}>
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
-                  {userProfile?.regions?.name || "전국"}{userProfile?.age_band === '20s' ? ' 20대' : ''}
+                  {(userProfile?.regions?.level === "sigungu" ? userProfile?.regions?.full_name || userProfile?.regions?.name : userProfile?.regions?.name) || "전국"}{userProfile?.age_band === '20s' ? ' 20대' : ''}
                 </span>를 위한 맞춤형 공고가 도착했어요 💡
               </h2>
             </div>

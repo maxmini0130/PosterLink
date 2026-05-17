@@ -9,6 +9,12 @@ import { ChevronLeft, Check, Loader2, MapPin, Calendar, Tag, User } from "lucide
 import { useRouter } from "next/navigation";
 import { Button } from "@posterlink/ui";
 
+function getRegionLabel(region: any) {
+  if (!region) return "";
+  if (region.level === "sigungu") return region.full_name || region.name;
+  return region.name;
+}
+
 export default function ProfileEditPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -49,7 +55,7 @@ export default function ProfileEditPage() {
       // Fetch Profile, Regions, Categories, and User Interests in parallel
       const [profileRes, regionRes, categoryRes, interestRes] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", user.id).single(),
-        supabase.from("regions").select("*").in("level", ["nation", "sido"]).order("level", { ascending: false }),
+        supabase.from("regions").select("*").in("level", ["nation", "sido", "sigungu"]).order("level", { ascending: false }).order("full_name", { ascending: true }),
         supabase.from("categories").select("*").order("sort_order"),
         supabase.from("user_interest_categories").select("category_id").eq("user_id", user.id)
       ]);
@@ -178,7 +184,7 @@ export default function ProfileEditPage() {
                 className="w-full p-5 bg-gray-50 border-none rounded-[1.5rem] font-bold text-gray-900 focus:ring-2 focus:ring-blue-100 outline-none appearance-none"
               >
                 <option value="">전국</option>
-                {regions.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                {regions.map(r => <option key={r.id} value={r.id}>{getRegionLabel(r)}</option>)}
               </select>
             </section>
 

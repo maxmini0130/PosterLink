@@ -11,6 +11,12 @@ import { ImageCropper } from "../../../../components/ImageCropper";
 import { PosterImageFallback } from "../../../../components/PosterImageFallback";
 import { resolvePosterImageUrl } from "../../../../../lib/posterImage";
 
+function getRegionLabel(region: any) {
+  if (!region) return "";
+  if (region.level === "sigungu") return region.full_name || region.name;
+  return region.name;
+}
+
 export default function EditPosterPage() {
   const router = useRouter();
   const params = useParams();
@@ -43,7 +49,7 @@ export default function EditPosterPage() {
     const fetchData = async () => {
       const [{ data: cats }, { data: regs }, { data: poster }] = await Promise.all([
         supabase.from("categories").select("*").order("sort_order"),
-        supabase.from("regions").select("*").in("level", ["nation", "sido"]).order("level", { ascending: false }),
+        supabase.from("regions").select("*").in("level", ["nation", "sido", "sigungu"]).order("level", { ascending: false }).order("full_name", { ascending: true }),
         supabase.from("posters").select("*").eq("id", id).single(),
       ]);
 
@@ -248,7 +254,7 @@ export default function EditPosterPage() {
             <label className="text-xs font-black text-gray-400 uppercase mb-2 block px-1">REGION</label>
             <select value={formData.regionId} onChange={(e) => setFormData({ ...formData, regionId: e.target.value })} className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-100 appearance-none text-gray-900">
               <option value="">전국</option>
-              {regions.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+              {regions.map(r => <option key={r.id} value={r.id}>{getRegionLabel(r)}</option>)}
             </select>
           </div>
           <div>

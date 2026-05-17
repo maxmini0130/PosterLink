@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 // 로그인 필요 경로
-const AUTH_REQUIRED = ['/mypage', '/favorites', '/notifications', '/onboarding'];
+const AUTH_REQUIRED = ['/mypage', '/favorites', '/notifications', '/onboarding', '/posters/request'];
 // 관리자 전용 경로
 const ADMIN_REQUIRED = ['/admin'];
 // 운영자 이상 전용 경로

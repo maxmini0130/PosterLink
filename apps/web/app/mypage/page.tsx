@@ -30,7 +30,7 @@ export default function MyPage() {
 
       const { data } = await supabase
         .from("profiles")
-        .select("*, regions(name)")
+        .select("*, regions(name, full_name, level)")
         .eq("id", user.id)
         .single();
       
@@ -93,7 +93,7 @@ export default function MyPage() {
           <h2 className="text-2xl font-black text-gray-900 mb-1">{profile?.nickname || '닉네임 없음'}</h2>
           <div className="flex gap-2 mb-4 flex-wrap justify-center">
             <span className="text-[11px] font-bold text-gray-400 bg-gray-50 px-2.5 py-1 rounded-lg flex items-center gap-1">
-              <MapPin size={12} /> {profile?.regions?.name || '지역 미설정'}
+              <MapPin size={12} /> {(profile?.regions?.level === "sigungu" ? profile?.regions?.full_name || profile?.regions?.name : profile?.regions?.name) || '지역 미설정'}
             </span>
             <span className="text-[11px] font-bold text-gray-400 bg-gray-50 px-2.5 py-1 rounded-lg flex items-center gap-1">
               <Calendar size={12} /> {profile?.age_band?.replace('s', '대') || '연령 미설정'}

@@ -32,11 +32,11 @@ export async function fetchCategoryRegionNames(posterIds: string[]): Promise<Rec
 
   const [cats, regs] = await Promise.all([
     categoryIds.length ? supabase.from("categories").select("id, name").in("id", categoryIds) : { data: [] },
-    regionIds.length ? supabase.from("regions").select("id, name").in("id", regionIds) : { data: [] },
+    regionIds.length ? supabase.from("regions").select("id, name, full_name, level").in("id", regionIds) : { data: [] },
   ]);
 
   const catMap = Object.fromEntries((cats.data ?? []).map((c: any) => [c.id, c.name]));
-  const regMap = Object.fromEntries((regs.data ?? []).map((r: any) => [r.id, r.name]));
+  const regMap = Object.fromEntries((regs.data ?? []).map((r: any) => [r.id, r.level === "sigungu" ? r.full_name || r.name : r.name]));
   const firstCategoryByPoster = new Map<string, string>();
   const firstRegionByPoster = new Map<string, string>();
   const categoryIdsByPoster = new Map<string, string[]>();

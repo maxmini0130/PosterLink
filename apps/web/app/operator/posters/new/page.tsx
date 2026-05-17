@@ -8,6 +8,12 @@ import { Button } from "@posterlink/ui";
 import { Camera, ChevronLeft, Loader2 } from "lucide-react";
 import { ImageCropper } from "../../../components/ImageCropper";
 
+function getRegionLabel(region: any) {
+  if (!region) return "";
+  if (region.level === "sigungu") return region.full_name || region.name;
+  return region.name;
+}
+
 export default function NewPosterPage() {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -38,7 +44,7 @@ export default function NewPosterPage() {
   useEffect(() => {
     const fetchBaseData = async () => {
       const { data: cats } = await supabase.from("categories").select("*").order("sort_order");
-      const { data: regs } = await supabase.from("regions").select("*").in("level", ["nation", "sido"]).order("level", { ascending: false });
+      const { data: regs } = await supabase.from("regions").select("*").in("level", ["nation", "sido", "sigungu"]).order("level", { ascending: false }).order("full_name", { ascending: true });
       if (cats) setCategories(cats);
       if (regs) setRegions(regs);
       setInitialLoading(false);
@@ -371,7 +377,7 @@ export default function NewPosterPage() {
             <label className="text-xs font-black text-gray-400 uppercase mb-2 block px-1">REGION</label>
             <select value={formData.regionId} onChange={(e) => setFormData({...formData, regionId: e.target.value})} className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-100 appearance-none text-gray-900">
               <option value="">전국</option>
-              {regions.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+              {regions.map(r => <option key={r.id} value={r.id}>{getRegionLabel(r)}</option>)}
             </select>
           </div>
           <div>

@@ -13,6 +13,7 @@ import "dotenv/config";
 import fs from "fs/promises";
 import { createClient } from "@supabase/supabase-js";
 import WebSocket from "ws";
+import { inferRegionCodes } from "./region-rules.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL?.trim();
 const SUPABASE_KEY = process.env.SUPABASE_KEY?.trim();
@@ -63,6 +64,18 @@ async function loadCategoryMap() {
   for (const cat of data) {
     if (cat.code) map[cat.code] = cat.id;
     if (cat.name) map[cat.name] = cat.id;
+  }
+  return map;
+}
+
+async function loadRegionMap() {
+  const { data, error } = await supabase.from("regions").select("id, code, name, full_name");
+  if (error) throw new Error("regions 로드 실패: " + error.message);
+  const map = {};
+  for (const region of data) {
+    if (region.code) map[region.code] = region.id;
+    if (region.name) map[region.name] = region.id;
+    if (region.full_name) map[region.full_name] = region.id;
   }
   return map;
 }
@@ -199,6 +212,18 @@ async function assignPosterCategories(posterId, post, categoryMap) {
       poster_id: posterId,
       category_id: categoryId,
     }, { onConflict: "poster_id,category_id", ignoreDuplicates: true });
+  }
+}
+
+async function assignPosterRegions(posterId, post, regionMap) {
+  const regionCodes = inferRegionCodes(post);
+  for (const regionCode of regionCodes) {
+    const regionId = regionMap[regionCode];
+    if (!regionId) continue;
+    await supabase.from("poster_regions").upsert({
+      poster_id: posterId,
+      region_id: regionId,
+    }, { onConflict: "poster_id,region_id", ignoreDuplicates: true });
   }
 }
 
@@ -403,8 +428,9 @@ async function uploadToSupabase(filePath) {
     console.log(`이미지 없는 기존 크롤러 검수대기 ${cleanedCount}건 정리`);
   }
 
-  // 카테고리 맵 로드
+  // 카테고리/지역 맵 로드
   const categoryMap = await loadCategoryMap();
+  const regionMap = await loadRegionMap();
 
   let success = 0;
   let skip = 0;
@@ -477,6 +503,7 @@ async function uploadToSupabase(filePath) {
       }
       await syncPosterImages(existingPoster.id, post, sourceUrl);
       await assignPosterCategories(existingPoster.id, post, categoryMap);
+      await assignPosterRegions(existingPoster.id, post, regionMap);
       process.stdout.write("-");
       continue;
     }
@@ -511,6 +538,7 @@ async function uploadToSupabase(filePath) {
 
     // ── 3. poster_categories 저장 ───────────────────────────
     await assignPosterCategories(posterId, post, categoryMap);
+    await assignPosterRegions(posterId, post, regionMap);
 
     success++;
     process.stdout.write("✓");

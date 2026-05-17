@@ -11,6 +11,12 @@ import toast from "react-hot-toast";
 
 const TOTAL_STEPS = 6;
 
+function getRegionLabel(region: any) {
+  if (!region) return "";
+  if (region.level === "sigungu") return region.full_name || region.name;
+  return region.name;
+}
+
 export default function OnboardingPage() {
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -48,9 +54,10 @@ export default function OnboardingPage() {
       setLoading(true);
       const { data: regionData } = await supabase
         .from("regions")
-        .select("id, name")
-        .in("level", ["nation", "sido"])
-        .order("level", { ascending: false });
+        .select("id, name, full_name, level")
+        .in("level", ["nation", "sido", "sigungu"])
+        .order("level", { ascending: false })
+        .order("full_name", { ascending: true });
 
       const { data: categoryData } = await supabase
         .from("categories")
@@ -240,7 +247,7 @@ export default function OnboardingPage() {
                   className={`group p-6 rounded-[2rem] border-2 transition-all flex flex-col items-center gap-3 ${selectedRegionId === r.id ? 'border-blue-600 bg-blue-50/50 shadow-xl shadow-blue-50' : 'border-gray-50 bg-gray-50 hover:border-gray-100 hover:bg-white'}`}
                 >
                   <MapPin size={24} className={selectedRegionId === r.id ? 'text-blue-600' : 'text-gray-300 group-hover:text-gray-400'} />
-                  <span className={`text-[13px] font-black ${selectedRegionId === r.id ? 'text-blue-600' : 'text-gray-500'}`}>{r.name}</span>
+                  <span className={`text-[13px] font-black ${selectedRegionId === r.id ? 'text-blue-600' : 'text-gray-500'}`}>{getRegionLabel(r)}</span>
                 </button>
               ))}
             </motion.div>

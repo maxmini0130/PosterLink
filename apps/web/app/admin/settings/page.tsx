@@ -12,6 +12,12 @@ const ROLES = [
   { value: 'super_admin', label: '최고 관리자' },
 ];
 
+function getRegionLabel(region: any) {
+  if (!region) return "";
+  if (region.level === "sigungu") return region.full_name || region.name;
+  return region.name;
+}
+
 export default function AdminSettingsPage() {
   const [activeTab, setActiveTab] = useState<'categories' | 'regions' | 'users'>('categories');
   const [loading, setLoading] = useState(true);
@@ -31,7 +37,12 @@ export default function AdminSettingsPage() {
       const { data } = await supabase.from("categories").select("*").order("sort_order");
       if (data) setCategories(data);
     } else if (activeTab === 'regions') {
-      const { data } = await supabase.from("regions").select("*").in("level", ["nation", "sido"]).order("level", { ascending: false });
+      const { data } = await supabase
+        .from("regions")
+        .select("*")
+        .in("level", ["nation", "sido", "sigungu"])
+        .order("level", { ascending: false })
+        .order("full_name", { ascending: true });
       if (data) setRegions(data);
     } else {
       const { data } = await supabase.from("profiles").select("id, nickname, role, created_at").order("created_at", { ascending: false });
@@ -172,8 +183,8 @@ export default function AdminSettingsPage() {
                     {item.code.split('_').pop()?.slice(0, 3)}
                   </div>
                   <div>
-                    <p className="text-sm font-black text-gray-900">{item.name}</p>
-                    <p className="text-[10px] font-bold text-gray-300 uppercase tracking-tighter">{item.code}</p>
+                    <p className="text-sm font-black text-gray-900">{activeTab === "regions" ? getRegionLabel(item) : item.name}</p>
+                    <p className="text-[10px] font-bold text-gray-300 uppercase tracking-tighter">{item.code}{activeTab === "regions" ? ` · ${item.level}` : ""}</p>
                   </div>
                 </div>
                 <button
