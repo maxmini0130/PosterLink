@@ -8,14 +8,9 @@ import { Button } from "@posterlink/ui";
 import { motion, AnimatePresence } from "framer-motion";
 import { MapPin, Star, ChevronRight, Check, Shield, User } from "lucide-react";
 import toast from "react-hot-toast";
+import { getCityRegions, getDistrictRegions, getRegionLabel, getSelectedCityId, getSelectedDistrictId } from "../../lib/regionHelpers";
 
 const TOTAL_STEPS = 6;
-
-function getRegionLabel(region: any) {
-  if (!region) return "";
-  if (region.level === "sigungu") return region.full_name || region.name;
-  return region.name;
-}
 
 export default function OnboardingPage() {
   const [step, setStep] = useState(0);
@@ -113,6 +108,11 @@ export default function OnboardingPage() {
     (step === 3 && !selectedAgeBand) ||
     (step === 4 && !selectedGender) ||
     (step === 5 && selectedCategoryIds.length === 0);
+
+  const cityRegions = getCityRegions(regions);
+  const selectedCityId = getSelectedCityId(selectedRegionId, regions);
+  const districtRegions = getDistrictRegions(regions, selectedCityId || null);
+  const selectedDistrictId = getSelectedDistrictId(selectedRegionId, regions);
 
   const stepTitles = [
     <>서비스 이용을<br />시작하기 전에 👋</>,
@@ -239,17 +239,29 @@ export default function OnboardingPage() {
 
           {/* Step 2: 지역 선택 */}
           {step === 2 && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-2 gap-3">
-              {regions.map((r) => (
-                <button
-                  key={r.id}
-                  onClick={() => setSelectedRegionId(r.id)}
-                  className={`group p-6 rounded-[2rem] border-2 transition-all flex flex-col items-center gap-3 ${selectedRegionId === r.id ? 'border-blue-600 bg-blue-50/50 shadow-xl shadow-blue-50' : 'border-gray-50 bg-gray-50 hover:border-gray-100 hover:bg-white'}`}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                {cityRegions.map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => setSelectedRegionId(r.id)}
+                    className={`group p-6 rounded-[2rem] border-2 transition-all flex flex-col items-center gap-3 ${selectedCityId === r.id ? 'border-blue-600 bg-blue-50/50 shadow-xl shadow-blue-50' : 'border-gray-50 bg-gray-50 hover:border-gray-100 hover:bg-white'}`}
+                  >
+                    <MapPin size={24} className={selectedCityId === r.id ? 'text-blue-600' : 'text-gray-300 group-hover:text-gray-400'} />
+                    <span className={`text-[13px] font-black ${selectedCityId === r.id ? 'text-blue-600' : 'text-gray-500'}`}>{getRegionLabel(r)}</span>
+                  </button>
+                ))}
+              </div>
+              {districtRegions.length > 0 && (
+                <select
+                  value={selectedDistrictId}
+                  onChange={(e) => setSelectedRegionId(e.target.value || selectedCityId)}
+                  className="w-full p-5 bg-gray-50 border-2 border-gray-100 rounded-[1.5rem] font-black text-gray-900 focus:outline-none focus:border-blue-300 appearance-none"
                 >
-                  <MapPin size={24} className={selectedRegionId === r.id ? 'text-blue-600' : 'text-gray-300 group-hover:text-gray-400'} />
-                  <span className={`text-[13px] font-black ${selectedRegionId === r.id ? 'text-blue-600' : 'text-gray-500'}`}>{getRegionLabel(r)}</span>
-                </button>
-              ))}
+                  <option value="">{getRegionLabel(regions.find((r) => r.id === selectedCityId))} 전체</option>
+                  {districtRegions.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </select>
+              )}
             </motion.div>
           )}
 

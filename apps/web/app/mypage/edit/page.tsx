@@ -8,12 +8,7 @@ import { BottomNav } from "../../components/BottomNav";
 import { ChevronLeft, Check, Loader2, MapPin, Calendar, Tag, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@posterlink/ui";
-
-function getRegionLabel(region: any) {
-  if (!region) return "";
-  if (region.level === "sigungu") return region.full_name || region.name;
-  return region.name;
-}
+import { getCityRegions, getDistrictRegions, getRegionLabel, getSelectedCityId, getSelectedDistrictId } from "../../lib/regionHelpers";
 
 export default function ProfileEditPage() {
   const [loading, setLoading] = useState(true);
@@ -135,6 +130,10 @@ export default function ProfileEditPage() {
     }));
   };
 
+  const selectedCityId = getSelectedCityId(formData.primaryRegionId, regions);
+  const selectedDistrictId = getSelectedDistrictId(formData.primaryRegionId, regions);
+  const districtRegions = getDistrictRegions(regions, selectedCityId || null);
+
   if (loading) return <div className="p-10 text-center animate-pulse">정보 불러오는 중...</div>;
 
   return (
@@ -179,13 +178,23 @@ export default function ProfileEditPage() {
                 <MapPin size={14} /> REGION
               </label>
               <select 
-                value={formData.primaryRegionId}
+                value={selectedCityId}
                 onChange={(e) => setFormData({...formData, primaryRegionId: e.target.value})}
                 className="w-full p-5 bg-gray-50 border-none rounded-[1.5rem] font-bold text-gray-900 focus:ring-2 focus:ring-blue-100 outline-none appearance-none"
               >
                 <option value="">전국</option>
-                {regions.map(r => <option key={r.id} value={r.id}>{getRegionLabel(r)}</option>)}
+                {getCityRegions(regions).map(r => <option key={r.id} value={r.id}>{getRegionLabel(r)}</option>)}
               </select>
+              {districtRegions.length > 0 && (
+                <select
+                  value={selectedDistrictId}
+                  onChange={(e) => setFormData({...formData, primaryRegionId: e.target.value || selectedCityId})}
+                  className="mt-3 w-full p-5 bg-gray-50 border-none rounded-[1.5rem] font-bold text-gray-900 focus:ring-2 focus:ring-blue-100 outline-none appearance-none"
+                >
+                  <option value="">{getRegionLabel(regions.find((r) => r.id === selectedCityId))} 전체</option>
+                  {districtRegions.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </select>
+              )}
             </section>
 
             <section>

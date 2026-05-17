@@ -8,36 +8,11 @@ import { Footer } from "../components/Footer";
 import { PosterCard } from "../components/PosterCard";
 import { fetchCategoryRegionNames, fetchPosterImages } from "../lib/posterHelpers";
 import { fetchPosterMetricCounts } from "../lib/posterMetrics";
+import { getCityRegions, getDistrictRegions, getRegionLabel, getRegionScopeIds, getSelectedCityId } from "../lib/regionHelpers";
 import { Search, X, History, TrendingUp, Filter, ArrowLeft, ChevronDown } from "lucide-react";
 
 const PAGE_SIZE = 12;
 const QUICK_SEARCH_TERMS = ["청년", "취업", "무료교육", "주거", "창업", "곧 마감"];
-
-function getRegionLabel(region: any) {
-  if (!region) return "";
-  if (region.level === "sigungu") return region.full_name || region.name;
-  return region.name;
-}
-
-function getRegionScopeIds(regionId: string | null, regionList: any[]) {
-  if (!regionId) return null;
-
-  const selected = regionList.find((region) => region.id === regionId);
-  if (!selected || selected.level === "nation") return null;
-
-  const ids = new Set<string>([regionId]);
-  for (const region of regionList) {
-    if (region.parent_id === regionId) ids.add(region.id);
-  }
-
-  let parentId = selected.parent_id;
-  while (parentId) {
-    ids.add(parentId);
-    parentId = regionList.find((region) => region.id === parentId)?.parent_id ?? null;
-  }
-
-  return ids;
-}
 
 export default function PosterListPage() {
   const [loading, setLoading] = useState(true);
@@ -254,6 +229,10 @@ export default function PosterListPage() {
     localStorage.setItem("recent_searches", JSON.stringify(updated));
   };
 
+  const cityRegions = getCityRegions(regions);
+  const selectedCityId = getSelectedCityId(selectedRegionId, regions);
+  const districtRegions = getDistrictRegions(regions, selectedCityId || null);
+
   return (
     <div className="min-h-screen bg-white pb-24">
       <Header />
@@ -417,10 +396,20 @@ export default function PosterListPage() {
             </div>
             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
               <button onClick={() => setSelectedRegionId(null)} className={`px-5 py-2.5 rounded-2xl text-[13px] font-black whitespace-nowrap transition-all ${!selectedRegionId ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : 'bg-blue-50 text-blue-400 hover:bg-blue-100'}`}>전체 지역</button>
-              {regions.map(region => (
-                <button key={region.id} onClick={() => setSelectedRegionId(region.id)} className={`px-5 py-2.5 rounded-2xl text-[13px] font-black whitespace-nowrap transition-all ${selectedRegionId === region.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : 'bg-blue-50 text-blue-400 hover:bg-blue-100'}`}>{getRegionLabel(region)}</button>
+              {cityRegions.map(region => (
+                <button key={region.id} onClick={() => setSelectedRegionId(region.id)} className={`px-5 py-2.5 rounded-2xl text-[13px] font-black whitespace-nowrap transition-all ${selectedCityId === region.id && selectedRegionId === region.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : selectedCityId === region.id ? 'bg-blue-100 text-blue-700' : 'bg-blue-50 text-blue-400 hover:bg-blue-100'}`}>{getRegionLabel(region)}</button>
               ))}
             </div>
+            {districtRegions.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                <button onClick={() => setSelectedRegionId(selectedCityId)} className={`px-4 py-2 rounded-2xl text-xs font-black whitespace-nowrap transition-all ${selectedRegionId === selectedCityId ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-indigo-50 text-indigo-400 hover:bg-indigo-100'}`}>
+                  {getRegionLabel(regions.find((region) => region.id === selectedCityId))} 전체
+                </button>
+                {districtRegions.map(region => (
+                  <button key={region.id} onClick={() => setSelectedRegionId(region.id)} className={`px-4 py-2 rounded-2xl text-xs font-black whitespace-nowrap transition-all ${selectedRegionId === region.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-indigo-50 text-indigo-400 hover:bg-indigo-100'}`}>{region.name}</button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Sort & Result Count */}

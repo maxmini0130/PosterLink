@@ -10,12 +10,7 @@ import { Button } from "@posterlink/ui";
 import { ImageCropper } from "../../../../components/ImageCropper";
 import { PosterImageFallback } from "../../../../components/PosterImageFallback";
 import { resolvePosterImageUrl } from "../../../../../lib/posterImage";
-
-function getRegionLabel(region: any) {
-  if (!region) return "";
-  if (region.level === "sigungu") return region.full_name || region.name;
-  return region.name;
-}
+import { getCityRegions, getDistrictRegions, getRegionLabel, getSelectedCityId, getSelectedDistrictId } from "../../../../lib/regionHelpers";
 
 export default function EditPosterPage() {
   const router = useRouter();
@@ -178,6 +173,9 @@ export default function EditPosterPage() {
   if (initialLoading) return <div className="p-20 text-center font-bold text-blue-600">데이터 로드 중...</div>;
 
   const previewUrl = newImageBlob ? URL.createObjectURL(newImageBlob) : resolvePosterImageUrl(formData.thumbnailUrl, formData.sourceKey);
+  const selectedCityId = getSelectedCityId(formData.regionId, regions);
+  const selectedDistrictId = getSelectedDistrictId(formData.regionId, regions);
+  const districtRegions = getDistrictRegions(regions, selectedCityId || null);
 
   return (
     <div className="max-w-3xl mx-auto pb-20">
@@ -252,10 +250,16 @@ export default function EditPosterPage() {
           </div>
           <div>
             <label className="text-xs font-black text-gray-400 uppercase mb-2 block px-1">REGION</label>
-            <select value={formData.regionId} onChange={(e) => setFormData({ ...formData, regionId: e.target.value })} className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-100 appearance-none text-gray-900">
+            <select value={selectedCityId} onChange={(e) => setFormData({ ...formData, regionId: e.target.value })} className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-100 appearance-none text-gray-900">
               <option value="">전국</option>
-              {regions.map(r => <option key={r.id} value={r.id}>{getRegionLabel(r)}</option>)}
+              {getCityRegions(regions).map(r => <option key={r.id} value={r.id}>{getRegionLabel(r)}</option>)}
             </select>
+            {districtRegions.length > 0 && (
+              <select value={selectedDistrictId} onChange={(e) => setFormData({ ...formData, regionId: e.target.value || selectedCityId })} className="mt-3 w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-100 appearance-none text-gray-900">
+                <option value="">{getRegionLabel(regions.find((r) => r.id === selectedCityId))} 전체</option>
+                {districtRegions.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+            )}
           </div>
           <div>
             <label className="text-xs font-black text-gray-400 uppercase mb-2 block px-1">CATEGORY</label>
