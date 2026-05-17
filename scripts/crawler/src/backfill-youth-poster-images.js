@@ -41,9 +41,13 @@ function normalizeImageUrl(imageUrl, sourceUrl) {
 }
 
 function normalizeImages(images, sourceUrl) {
-  return [...new Set((images ?? [])
+  const normalized = [...new Set((images ?? [])
     .map((imageUrl) => normalizeImageUrl(imageUrl, sourceUrl))
     .filter(Boolean))];
+  const hasOriginalLikeImage = normalized.some((imageUrl) => !/\/atch\/getImg\.do/i.test(imageUrl));
+  return hasOriginalLikeImage
+    ? normalized.filter((imageUrl) => !/\/atch\/getImg\.do/i.test(imageUrl))
+    : normalized;
 }
 
 async function fetchExistingImages(posterId) {

@@ -40,6 +40,15 @@ function clampScore(score) {
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
+function isLikelyThumbnailProxy(imageUrl) {
+  return /\/atch\/getImg\.do/i.test(imageUrl);
+}
+
+function removeThumbnailProxiesWhenOriginalsExist(images) {
+  const hasOriginalLikeImage = images.some((imageUrl) => !isLikelyThumbnailProxy(imageUrl));
+  return hasOriginalLikeImage ? images.filter((imageUrl) => !isLikelyThumbnailProxy(imageUrl)) : images;
+}
+
 function getUrlPath(imageUrl) {
   try {
     const url = new URL(imageUrl);
@@ -329,10 +338,10 @@ export async function filterAndOrderPosterImages(images, context = {}) {
     .filter((candidate) => candidate.rule.passes)
     .map((candidate) => candidate.imageUrl);
 
-  const orderedImages = [
+  const orderedImages = removeThumbnailProxiesWhenOriginalsExist([
     selection.selectedImageUrl,
     ...passingImages.filter((imageUrl) => imageUrl !== selection.selectedImageUrl),
-  ];
+  ]);
 
   return {
     images: orderedImages,

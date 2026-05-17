@@ -42,6 +42,10 @@ function normalizeImageIdentity(imageUrl: string) {
   }
 }
 
+function isLikelyThumbnailProxy(imageUrl: string) {
+  return /\/atch\/getImg\.do/i.test(imageUrl);
+}
+
 export function resolvePosterImageGallery(
   images: (string | null | undefined)[],
   thumbnailUrl?: string | null,
@@ -53,9 +57,13 @@ export function resolvePosterImageGallery(
   const gallerySource = resolvedImages.length > 0
     ? resolvedImages
     : [resolvePosterImageUrl(thumbnailUrl, sourceUrl)].filter((url): url is string => Boolean(url));
+  const hasOriginalLikeImage = gallerySource.some((url) => !isLikelyThumbnailProxy(url));
+  const filteredGallerySource = hasOriginalLikeImage
+    ? gallerySource.filter((url) => !isLikelyThumbnailProxy(url))
+    : gallerySource;
 
   const seen = new Set<string>();
-  return gallerySource.filter((url) => {
+  return filteredGallerySource.filter((url) => {
     const identity = normalizeImageIdentity(url);
     if (seen.has(identity)) return false;
     seen.add(identity);
