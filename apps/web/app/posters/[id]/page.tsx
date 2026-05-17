@@ -39,6 +39,12 @@ const SUMMARY_LABELS = [
   "지원내용",
   "교육내용",
   "교육 내용",
+  "교육일시",
+  "교육 일시",
+  "교육장소",
+  "교육 장소",
+  "교육대상",
+  "교육 대상",
   "사업내용",
   "프로그램",
   "참여인원",
@@ -46,6 +52,8 @@ const SUMMARY_LABELS = [
   "참가비용",
   "인원",
   "기간",
+  "신청기간",
+  "신청 기간",
   "일시",
   "장소",
   "문의",
@@ -76,7 +84,11 @@ function normalizeSummaryLabel(value: string | undefined): string | undefined {
 
 function normalizeSummaryText(value: string): string {
   return value
-    .replace(/[📌]/g, "")
+    .replace(/\s*첨부파일\s+.*$/g, "")
+    .replace(/\s*찾아가기\s+.*$/g, "")
+    .replace(/[📌🎁☕🚀]/g, "")
+    .replace(/\uFFFD/g, "")
+    .replace(/[\uD800-\uDFFF]/g, "")
     .replace(/([0-9])\uFE0F?\u20E3/g, "$1.")
     .replace(/[ \t]+/g, " ")
     .trim();
@@ -126,6 +138,8 @@ function formatSummaryLines(value: string | null | undefined): SummaryLine[] {
   const text = String(value ?? "")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;|&#160;/gi, " ")
+    .replace(/^상세정보\s+/, "")
+    .replace(/\s+(교육\s*개요|신청\s*안내)\s+/g, "\n")
     .replace(/\s*[·•]\s*/g, "\n")
     .replace(/\s+(?=교육\s*내용\s*(?:[①②③④⑤⑥⑦⑧⑨⑩]|\d\uFE0F?\u20E3|\d[.)]))/g, "\n")
     .replace(/[ \t]+/g, " ")
