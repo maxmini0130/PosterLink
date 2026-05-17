@@ -14,6 +14,126 @@ import { resolvePosterImageUrl } from "../../../lib/posterImage";
 import { Footer } from "../../components/Footer";
 import { ChevronLeft, ChevronRight, Eye, Heart, Link2, MousePointerClick, Share2, X } from "lucide-react";
 
+type SummaryLine = {
+  label?: string;
+  text: string;
+};
+
+const CIRCLED_SECTION_LABELS: Record<string, string> = {
+  "①": "목적",
+  "②": "신청대상",
+  "③": "신청기간",
+  "④": "진행일정",
+  "⑤": "진행내용",
+  "⑥": "진행장소",
+  "⑦": "참여혜택",
+  "⑧": "문의",
+  "⑨": "기타",
+  "⑩": "기타",
+};
+
+const SUMMARY_LABELS = [
+  "대상",
+  "내용",
+  "주요내용",
+  "지원내용",
+  "교육내용",
+  "사업내용",
+  "프로그램",
+  "참여인원",
+  "모집인원",
+  "인원",
+  "기간",
+  "일시",
+  "장소",
+  "문의",
+  "문의처",
+  "신청",
+  "신청방법",
+  "비용",
+  "혜택",
+];
+
+const SUMMARY_LABEL_PATTERN = SUMMARY_LABELS
+  .sort((a, b) => b.length - a.length)
+  .map((label) => label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+  .join("|");
+
+function normalizeNumberedLabel(value: string): string {
+  return value
+    .replace(/\([^)]*\)/g, "")
+    .replace(/연락처/g, "")
+    .replace(/\s+/g, "")
+    .trim();
+}
+
+function splitNumberedSections(value: string, fallbackLabel?: string): SummaryLine[] {
+  const sectionPattern = /([①②③④⑤⑥⑦⑧⑨⑩])\s*([^①②③④⑤⑥⑦⑧⑨⑩]+)/g;
+  const firstSectionIndex = value.search(/[①②③④⑤⑥⑦⑧⑨⑩]/);
+  if (firstSectionIndex < 0) return [{ label: fallbackLabel, text: value }];
+
+  const lines: SummaryLine[] = [];
+  const intro = value.slice(0, firstSectionIndex).trim();
+  if (intro) lines.push({ label: fallbackLabel, text: intro });
+
+  for (const match of value.matchAll(sectionPattern)) {
+    const marker = match[1];
+    const section = match[2].replace(/\s+/g, " ").trim();
+    if (!section) continue;
+
+    const titleMatch = section.match(/^(목적(?:\([^)]*\))?|신청대상|신청기간|진행일정|진행내용|진행장소|참여혜택|문의\s*연락처|문의처|문의|대상|내용|기간|일시|장소)\s*(.*)$/);
+    const rawLabel = titleMatch?.[1]?.trim() ?? CIRCLED_SECTION_LABELS[marker] ?? marker;
+    const label = normalizeNumberedLabel(rawLabel) || CIRCLED_SECTION_LABELS[marker] || marker;
+    const text = (titleMatch?.[2] || section).trim();
+
+    lines.push({
+      label,
+      text: text || section,
+    });
+  }
+
+  return lines;
+}
+
+function formatSummaryLines(value: string | null | undefined): SummaryLine[] {
+  const text = String(value ?? "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;|&#160;/gi, " ")
+    .replace(/\s*[·•]\s*/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+
+  if (!text) return [];
+  if (/[①②③④⑤⑥⑦⑧⑨⑩]/.test(text) && !new RegExp(`^(${SUMMARY_LABEL_PATTERN})\\s*:`).test(text)) {
+    return splitNumberedSections(text);
+  }
+
+  const normalized = text
+    .replace(new RegExp(`\\s+(?=(${SUMMARY_LABEL_PATTERN})\\s*:)`, "g"), "\n")
+    .replace(new RegExp(`^(${SUMMARY_LABEL_PATTERN})\\s*:`, "g"), "$1:");
+
+  const lines = normalized
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const parsed = lines.map((line) => {
+    const match = line.match(new RegExp(`^(${SUMMARY_LABEL_PATTERN})\\s*:\\s*(.+)$`));
+    if (!match) return { text: line };
+    return { label: match[1], text: match[2].trim() };
+  }).flatMap((line) => splitNumberedSections(line.text, line.label));
+
+  if (parsed.length > 1 || parsed.some((line) => line.label)) {
+    return parsed;
+  }
+
+  return text
+    .split(/(?<=[.!?。]|[다요함됨음임])\s+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => ({ text: line }));
+}
+
 export default function PosterDetailPage({ params }: { params: { id: string } }) {
   const [poster, setPoster] = useState<any>(null);
   const [links, setLinks] = useState<any[]>([]);
@@ -155,6 +275,7 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
     .map((url) => resolvePosterImageUrl(url, poster.source_key))
     .filter((url, index, arr): url is string => Boolean(url) && arr.indexOf(url) === index);
   const primaryLink = links.find((link) => link.is_primary) || links[0] || null;
+  const summaryLines = formatSummaryLines(poster.summary_long || poster.summary_short);
   const statusLabel = daysLeft === null ? "상시" : daysLeft < 0 ? "마감됨" : daysLeft === 0 ? "오늘 마감" : "신청 가능";
   const statusClass = daysLeft === null
     ? "bg-emerald-50 text-emerald-700 border-emerald-100"
@@ -263,12 +384,24 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
               <span className="text-gray-400 w-16 flex-shrink-0">대상지역</span>
               <span className="text-gray-900 font-bold">{poster.regionName || "전국"}</span>
             </li>
-            {poster.summary_short && (
-              <li className="flex gap-4">
-                <span className="text-gray-400 w-16 flex-shrink-0">주요내용</span>
-                <span className="text-gray-900 font-bold leading-relaxed">{poster.summary_short}</span>
+            {summaryLines.map((line, index) => (
+              <li key={`${line.label ?? "line"}-${index}`} className="flex gap-4">
+                <span className="text-gray-400 w-16 flex-shrink-0">
+                  {index === 0 ? "주요내용" : ""}
+                </span>
+                <div className="grid min-w-0 flex-1 grid-cols-[4rem_minmax(0,1fr)] gap-2 text-gray-900 font-bold leading-relaxed sm:grid-cols-[4.5rem_minmax(0,1fr)]">
+                  {line.label && (
+                    <span className="mt-0.5 inline-flex h-6 w-fit items-center rounded-md bg-blue-50 px-2 text-[11px] font-black text-blue-600 ring-1 ring-blue-100">
+                      {line.label}
+                    </span>
+                  )}
+                  {!line.label && <span aria-hidden="true" />}
+                  <p className="min-w-0 break-keep [overflow-wrap:anywhere]">
+                    {line.text}
+                  </p>
+                </div>
               </li>
-            )}
+            ))}
           </ul>
         </section>
 

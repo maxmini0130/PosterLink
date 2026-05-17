@@ -447,6 +447,7 @@ async function uploadToSupabase(filePath) {
       title: (post.title || "제목 없음").substring(0, 200),
       source_org_name: post.site || null,
       summary_short: normalizeSummary(post),
+      summary_long: cleanSummaryText(post.content) || null,
       poster_status: "review",         // 관리자 검수 대기
       source_key: sourceKey,           // 중복 방지 키
       created_by: CRAWLER_USER_ID,     // 크롤러 봇 계정 (null 가능)
@@ -465,7 +466,7 @@ async function uploadToSupabase(filePath) {
     const sourceKeyCandidates = [...new Set([sourceKey, sourceUrl].filter(Boolean))];
     const { data: existingPoster, error: existingErr } = await supabase
       .from("posters")
-      .select("id, poster_status, title, summary_short, thumbnail_url, source_key")
+      .select("id, poster_status, title, summary_short, summary_long, thumbnail_url, source_key")
       .in("source_key", sourceKeyCandidates)
       .limit(1)
       .maybeSingle();
@@ -491,6 +492,11 @@ async function uploadToSupabase(filePath) {
         updates.summary_short = posterRecord.summary_short;
       } else if (existingPoster.summary_short && looksMojibake(existingPoster.summary_short)) {
         updates.summary_short = null;
+      }
+      if (posterRecord.summary_long && (!existingPoster.summary_long || looksMojibake(existingPoster.summary_long))) {
+        updates.summary_long = posterRecord.summary_long;
+      } else if (existingPoster.summary_long && looksMojibake(existingPoster.summary_long)) {
+        updates.summary_long = null;
       }
       if (posterRecord.thumbnail_url && (!existingPoster.thumbnail_url || !/^https?:\/\//i.test(existingPoster.thumbnail_url))) {
         updates.thumbnail_url = posterRecord.thumbnail_url;
