@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getDDay, isDeadlineSoon } from "@posterlink/lib";
 import { Eye, Heart, MousePointerClick } from "lucide-react";
-import { resolvePosterImageUrl } from "../../lib/posterImage";
+import { resolvePosterImageGallery } from "../../lib/posterImage";
 import { PosterImageCarousel } from "./PosterImageCarousel";
 
 interface PosterCardProps {
@@ -30,10 +30,7 @@ export function PosterCard({ poster }: PosterCardProps) {
     : dDay === "D-Day" || soon
       ? "bg-rose-500/90 text-white"
       : "bg-emerald-600/90 text-white";
-  const imageUrl = resolvePosterImageUrl(poster.image, poster.sourceUrl);
-  const imageUrls = [...(poster.images ?? []), imageUrl]
-    .map((url) => resolvePosterImageUrl(url, poster.sourceUrl))
-    .filter((url, index, arr): url is string => Boolean(url) && arr.indexOf(url) === index);
+  const imageUrls = resolvePosterImageGallery(poster.images ?? [], poster.image, poster.sourceUrl);
 
   return (
     <Link href={`/posters/${poster.id}`} className="group block">

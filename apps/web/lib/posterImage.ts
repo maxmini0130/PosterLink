@@ -15,3 +15,50 @@ export function resolvePosterImageUrl(imageUrl?: string | null, sourceUrl?: stri
 
   return value;
 }
+
+function normalizeImageIdentity(imageUrl: string) {
+  try {
+    const url = new URL(imageUrl);
+    url.hash = "";
+
+    for (const param of [
+      "width",
+      "height",
+      "w",
+      "h",
+      "q",
+      "quality",
+      "resize",
+      "thumb",
+      "thumbnail",
+      "cache",
+    ]) {
+      url.searchParams.delete(param);
+    }
+
+    return `${url.origin}${url.pathname}${url.search}`.toLowerCase();
+  } catch {
+    return imageUrl.trim().toLowerCase();
+  }
+}
+
+export function resolvePosterImageGallery(
+  images: (string | null | undefined)[],
+  thumbnailUrl?: string | null,
+  sourceUrl?: string | null,
+) {
+  const resolvedImages = images
+    .map((url) => resolvePosterImageUrl(url, sourceUrl))
+    .filter((url): url is string => Boolean(url));
+  const gallerySource = resolvedImages.length > 0
+    ? resolvedImages
+    : [resolvePosterImageUrl(thumbnailUrl, sourceUrl)].filter((url): url is string => Boolean(url));
+
+  const seen = new Set<string>();
+  return gallerySource.filter((url) => {
+    const identity = normalizeImageIdentity(url);
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
+}

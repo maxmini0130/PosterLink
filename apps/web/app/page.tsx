@@ -9,7 +9,7 @@ import { PosterCard } from "./components/PosterCard";
 import { PosterImageCarousel } from "./components/PosterImageCarousel";
 import { fetchCategoryRegionNames, fetchPosterImages } from "./lib/posterHelpers";
 import { fetchPosterMetricCounts } from "./lib/posterMetrics";
-import { resolvePosterImageUrl } from "../lib/posterImage";
+import { resolvePosterImageGallery } from "../lib/posterImage";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, ArrowRight, Zap, Bell, Heart, Search, PlusCircle } from "lucide-react";
 import Link from "next/link";
@@ -350,10 +350,7 @@ export default function Home() {
                           >
                             <div className="w-16 h-20 bg-white/20 rounded-2xl flex-shrink-0 overflow-hidden relative">
                               <PosterImageCarousel
-                                images={[
-                                  ...(poster.images ?? []),
-                                  resolvePosterImageUrl(poster.thumbnail_url, poster.source_key),
-                                ]}
+                                images={resolvePosterImageGallery(poster.images ?? [], poster.thumbnail_url, poster.source_key)}
                                 title={poster.title}
                                 org={poster.source_org_name}
                                 fallbackClassName="p-2"

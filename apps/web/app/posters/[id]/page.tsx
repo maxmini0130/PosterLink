@@ -10,7 +10,7 @@ import { notFound } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { fetchCategoryRegionNames, fetchPosterImages } from "../../lib/posterHelpers";
 import { fetchPosterMetricCounts, logPosterView } from "../../lib/posterMetrics";
-import { resolvePosterImageUrl } from "../../../lib/posterImage";
+import { resolvePosterImageGallery } from "../../../lib/posterImage";
 import { Footer } from "../../components/Footer";
 import { ChevronLeft, ChevronRight, Eye, Heart, Link2, MousePointerClick, Share2, X } from "lucide-react";
 
@@ -408,13 +408,7 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
     ? Math.ceil((new Date(poster.application_end_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
     : null;
 
-  const imageUrl = resolvePosterImageUrl(poster.thumbnail_url, poster.source_key);
-  const imageUrls = [
-    ...(poster.images ?? []),
-    imageUrl,
-  ]
-    .map((url) => resolvePosterImageUrl(url, poster.source_key))
-    .filter((url, index, arr): url is string => Boolean(url) && arr.indexOf(url) === index);
+  const imageUrls = resolvePosterImageGallery(poster.images ?? [], poster.thumbnail_url, poster.source_key);
   const primaryLink = links.find((link) => link.is_primary) || links[0] || null;
   const summaryLines = formatSummaryLines(poster.summary_long || poster.summary_short);
   const statusLabel = daysLeft === null ? "상시" : daysLeft < 0 ? "마감됨" : daysLeft === 0 ? "오늘 마감" : "신청 가능";
