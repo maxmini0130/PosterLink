@@ -94,6 +94,32 @@ function normalizeSummaryText(value: string): string {
     .trim();
 }
 
+function splitDisplayParagraphs(value: string): string[] {
+  return value
+    .split(/\n+/)
+    .flatMap((paragraph) => paragraph.split(/(?<=[.!?。]|[다요함됨음임])\s+(?=[가-힣A-Za-z0-9])/))
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+}
+
+function splitNumberedItems(value: string): Array<{ number: string; body: string; instructor?: string }> {
+  const matches = [...value.matchAll(/(?:^|\s)(\d{1,2})[.)]\s+/g)];
+  if (matches.length < 2) return [];
+
+  return matches.map((match, index) => {
+    const start = (match.index ?? 0) + match[0].length;
+    const end = matches[index + 1]?.index ?? value.length;
+    const itemText = value.slice(start, end).trim();
+    const [body, instructor] = itemText.split(/\s+강사:\s+/, 2);
+
+    return {
+      number: match[1],
+      body: body.trim(),
+      instructor: instructor?.trim(),
+    };
+  }).filter((item) => item.body);
+}
+
 function removeDanglingDuplicateLines(lines: SummaryLine[]): SummaryLine[] {
   return lines.filter((line, index) => {
     const current = line.text.replace(/\s+/g, " ").trim();
@@ -180,6 +206,41 @@ function formatSummaryLines(value: string | null | undefined): SummaryLine[] {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => ({ text: line }));
+}
+
+function renderSummaryContent(line: SummaryLine) {
+  const numberedItems = splitNumberedItems(line.text);
+
+  if (numberedItems.length > 0) {
+    return (
+      <div className="min-w-0 space-y-3">
+        {numberedItems.map((item) => (
+          <div key={`${item.number}-${item.body}`} className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-2">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-900 text-[10px] font-black text-white">
+              {item.number}
+            </span>
+            <div className="min-w-0 space-y-1 break-keep [overflow-wrap:anywhere]">
+              <p>{item.body}</p>
+              {item.instructor && (
+                <p className="text-xs font-bold text-gray-500">
+                  강사: {item.instructor}
+                </p>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const paragraphs = splitDisplayParagraphs(line.text);
+  return (
+    <div className="min-w-0 space-y-1.5 break-keep [overflow-wrap:anywhere]">
+      {paragraphs.map((paragraph, index) => (
+        <p key={`${paragraph}-${index}`}>{paragraph}</p>
+      ))}
+    </div>
+  );
 }
 
 export default function PosterDetailPage({ params }: { params: { id: string } }) {
@@ -444,9 +505,7 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
                     </span>
                   )}
                   {!line.label && <span aria-hidden="true" />}
-                  <p className="min-w-0 break-keep [overflow-wrap:anywhere]">
-                    {line.text}
-                  </p>
+                  {renderSummaryContent(line)}
                 </div>
               </li>
             ))}
