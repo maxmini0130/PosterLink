@@ -141,7 +141,7 @@ export default function MyPage() {
               <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
                 <MessageSquare size={22} />
               </div>
-              <span className="font-black text-gray-700">내가 쓴 댓글 관리</span>
+              <span className="font-black text-gray-700">내 질문/후기 관리</span>
             </div>
             <ChevronRight className="text-gray-200 group-hover:text-blue-600 transition-colors" />
           </Link>
