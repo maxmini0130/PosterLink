@@ -287,61 +287,74 @@ export default function PosterDetailPage({ params }: { params: { id: string } })
   const [expandedImageIndex, setExpandedImageIndex] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchPosterDetail = async () => {
       setLoading(true);
       try {
-        const { data, error } = await supabase
-          .from("posters")
-          .select("*")
-          .eq("id", params.id)
-          .single();
+        const [posterRes, metaMap, imageMap, linkRes] = await Promise.all([
+          supabase
+            .from("posters")
+            .select("*")
+            .eq("id", params.id)
+            .single(),
+          fetchCategoryRegionNames([params.id]),
+          fetchPosterImages([params.id]),
+          supabase
+            .from("poster_links")
+            .select("*")
+            .eq("poster_id", params.id),
+        ]);
+
+        const { data, error } = posterRes;
 
         if (error || !data) {
-          setPoster(null);
+          if (!cancelled) setPoster(null);
           return;
         }
 
-        const [metaMap, imageMap] = await Promise.all([
-          fetchCategoryRegionNames([params.id]),
-          fetchPosterImages([params.id]),
-        ]);
+        if (cancelled) return;
+
         setPoster({ ...data, ...metaMap[params.id], images: imageMap[params.id] ?? [] });
+        setLinks(linkRes.data ?? []);
+        setLoading(false);
 
-        const metricCounts = await fetchPosterMetricCounts([params.id]);
-        setViewCount(metricCounts.viewCounts[params.id] ?? 0);
-        setLinkClickCount(metricCounts.linkClickCounts[params.id] ?? 0);
-        setFavoriteCount(metricCounts.favoriteCounts[params.id] ?? 0);
+        void fetchPosterMetricCounts([params.id]).then((metricCounts) => {
+          if (cancelled) return;
+          setViewCount(metricCounts.viewCounts[params.id] ?? 0);
+          setLinkClickCount(metricCounts.linkClickCounts[params.id] ?? 0);
+          setFavoriteCount(metricCounts.favoriteCounts[params.id] ?? 0);
+        }).finally(() => {
+          void logPosterView(params.id).then((logged) => {
+            if (!cancelled && logged) {
+              setViewCount((count) => count + 1);
+            }
+          });
+        });
 
-        const logged = await logPosterView(params.id);
-        if (logged) {
-          setViewCount((count) => count + 1);
-        }
-
-        const { data: linkData } = await supabase
-          .from("poster_links")
-          .select("*")
-          .eq("poster_id", params.id);
-
-        if (linkData) setLinks(linkData);
-
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
+        supabase.auth.getUser().then(async ({ data: { user } }) => {
+          if (cancelled || !user) return;
           const { data: favData } = await supabase
             .from("favorites")
             .select("poster_id")
             .eq("user_id", user.id)
             .eq("poster_id", params.id)
             .maybeSingle();
-          setIsFavorited(!!favData);
-        }
+          if (!cancelled) setIsFavorited(!!favData);
+        });
       } catch (err) {
         console.error("Error fetching detail:", err);
+        if (!cancelled) setLoading(false);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchPosterDetail();
+
+    return () => {
+      cancelled = true;
+    };
   }, [params.id]);
 
   const toggleFavorite = async () => {
