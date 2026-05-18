@@ -8,6 +8,7 @@ import toast from "react-hot-toast";
 
 type PendingAction = { reportId: string; commentId: string; action: 'hide' | 'dismiss' };
 type ReportFilter = "all" | "question" | "review";
+type ManagementMode = "reports" | "questions" | "reviews";
 
 const COMMENT_META: Record<"question" | "review", { label: string; badgeClass: string }> = {
   question: { label: "질문", badgeClass: "bg-blue-50 text-blue-600 border-blue-100" },
@@ -16,10 +17,13 @@ const COMMENT_META: Record<"question" | "review", { label: string; badgeClass: s
 
 export default function AdminReportsPage() {
   const [reports, setReports] = useState<any[]>([]);
+  const [managedComments, setManagedComments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [commentsLoading, setCommentsLoading] = useState(true);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [actioning, setActioning] = useState(false);
   const [filter, setFilter] = useState<ReportFilter>("all");
+  const [mode, setMode] = useState<ManagementMode>("reports");
 
   const fetchReports = async () => {
     setLoading(true);
@@ -57,6 +61,41 @@ export default function AdminReportsPage() {
     setLoading(false);
   };
 
+  const fetchManagedComments = async () => {
+    setCommentsLoading(true);
+    const { data, error } = await supabase
+      .from("comments")
+      .select("id, poster_id, body, status, user_id, comment_type, created_at")
+      .in("comment_type", ["question", "review"])
+      .in("status", ["normal", "hidden"])
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    if (error || !data) {
+      setManagedComments([]);
+      setCommentsLoading(false);
+      return;
+    }
+
+    const posterIds = Array.from(new Set(data.map((comment: any) => comment.poster_id).filter(Boolean)));
+    const userIds = Array.from(new Set(data.map((comment: any) => comment.user_id).filter(Boolean)));
+    const [{ data: postersData }, profileMap] = await Promise.all([
+      posterIds.length
+        ? supabase.from("posters").select("id, title").in("id", posterIds)
+        : Promise.resolve({ data: [] as any[] }),
+      fetchProfileMap(userIds),
+    ]);
+    const posterMap = Object.fromEntries((postersData ?? []).map((poster: any) => [poster.id, poster]));
+
+    setManagedComments(data.map((comment: any) => ({
+      ...comment,
+      comment_type: comment.comment_type === "review" ? "review" : "question",
+      authorNickname: profileMap[comment.user_id]?.nickname ?? "익명",
+      posterTitle: posterMap[comment.poster_id]?.title ?? "공고 정보 없음",
+    })));
+    setCommentsLoading(false);
+  };
+
   const normalizedReports = reports.map((report) => ({
     ...report,
     comment: {
@@ -70,7 +109,16 @@ export default function AdminReportsPage() {
     ? normalizedReports
     : normalizedReports.filter((report) => report.comment?.comment_type === filter);
 
-  useEffect(() => { fetchReports(); }, []);
+  useEffect(() => {
+    fetchReports();
+    fetchManagedComments();
+  }, []);
+
+  const questionManagementCount = managedComments.filter((comment) => comment.comment_type === "question").length;
+  const reviewManagementCount = managedComments.filter((comment) => comment.comment_type === "review").length;
+  const visibleManagedComments = managedComments.filter((comment) => (
+    mode === "questions" ? comment.comment_type === "question" : comment.comment_type === "review"
+  ));
 
   const handleAction = async ({ reportId, commentId, action }: PendingAction) => {
     setActioning(true);
@@ -113,13 +161,60 @@ export default function AdminReportsPage() {
     }
   };
 
+  const handleCommentStatus = async (commentId: string, status: "normal" | "hidden") => {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase
+      .from("comments")
+      .update({ status })
+      .eq("id", commentId);
+
+    if (!error) {
+      await supabase.from("admin_actions").insert({
+        actor_user_id: user?.id ?? null,
+        target_type: "comment",
+        target_id: commentId,
+        action_type: status === "hidden" ? "hide" : "restore",
+        metadata_json: { status },
+      });
+    }
+
+    if (error) toast.error(error.message);
+    else {
+      toast.success(status === "hidden" ? "질문/후기를 숨김 처리했습니다." : "질문/후기를 다시 표시했습니다.");
+      fetchManagedComments();
+      fetchReports();
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto pb-20">
       <div className="mb-10">
         <h1 className="text-4xl font-black text-gray-900 dark:text-white italic tracking-tight">Report Center 🚨</h1>
-        <p className="text-gray-400 dark:text-slate-500 font-bold mt-2">사용자로부터 접수된 부적절한 질문/후기 신고를 검토합니다.</p>
+        <p className="text-gray-400 dark:text-slate-500 font-bold mt-2">질문/후기를 확인하고, 신고된 항목을 검토합니다.</p>
       </div>
 
+      <div className="mb-6 grid grid-cols-3 gap-2 rounded-2xl bg-white p-1.5 shadow-sm dark:bg-slate-900">
+        {[
+          { key: "reports", label: `신고 대기 ${normalizedReports.length}` },
+          { key: "questions", label: `전체 질문 ${questionManagementCount}` },
+          { key: "reviews", label: `전체 후기 ${reviewManagementCount}` },
+        ].map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => setMode(item.key as ManagementMode)}
+            className={`rounded-xl px-3 py-3 text-sm font-black transition-all ${
+              mode === item.key
+                ? "bg-gray-900 text-white shadow-sm"
+                : "text-gray-400 hover:bg-gray-50 hover:text-gray-700 dark:hover:bg-slate-800"
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {mode === "reports" && (
       <div className="mb-6 grid grid-cols-3 gap-2 rounded-2xl bg-white p-1.5 shadow-sm dark:bg-slate-900">
         {[
           { key: "all", label: `전체 ${normalizedReports.length}` },
@@ -140,14 +235,15 @@ export default function AdminReportsPage() {
           </button>
         ))}
       </div>
+      )}
 
-      {loading ? (
+      {mode === "reports" && loading ? (
         <div className="space-y-6">
           {[1, 2].map(i => (
             <div key={i} className="h-48 bg-white dark:bg-slate-900 rounded-[2.5rem] animate-pulse border border-gray-100 dark:border-slate-800" />
           ))}
         </div>
-      ) : filteredReports.length > 0 ? (
+      ) : mode === "reports" && filteredReports.length > 0 ? (
         <div className="grid grid-cols-1 gap-6">
           {filteredReports.map((report) => (
             <div key={report.id} className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-slate-800 flex flex-col md:flex-row justify-between gap-8 transition-all hover:shadow-md">
@@ -205,11 +301,66 @@ export default function AdminReportsPage() {
             </div>
           ))}
         </div>
-      ) : (
+      ) : mode === "reports" ? (
         <div className="py-40 text-center bg-white dark:bg-slate-900 rounded-[3rem] border border-dashed border-gray-200 dark:border-slate-800">
           <CheckCircle2 className="mx-auto text-green-100 mb-6" size={64} />
           <p className="text-gray-400 font-black text-lg">처리 대기 중인 {filter === "review" ? "후기" : filter === "question" ? "질문" : "신고 내역"}이 없습니다.</p>
           <p className="text-gray-300 text-sm mt-1">커뮤니티가 잘 관리되고 있습니다.</p>
+        </div>
+      ) : commentsLoading ? (
+        <div className="space-y-6">
+          {[1, 2].map(i => (
+            <div key={i} className="h-40 bg-white dark:bg-slate-900 rounded-[2.5rem] animate-pulse border border-gray-100 dark:border-slate-800" />
+          ))}
+        </div>
+      ) : visibleManagedComments.length > 0 ? (
+        <div className="grid grid-cols-1 gap-5">
+          {visibleManagedComments.map((comment) => (
+            <div key={comment.id} className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] shadow-sm border border-gray-100 dark:border-slate-800">
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <span className={`rounded-lg border px-2 py-1 text-[11px] font-black ${COMMENT_META[comment.comment_type as "question" | "review"].badgeClass}`}>
+                  {COMMENT_META[comment.comment_type as "question" | "review"].label}
+                </span>
+                <span className={`rounded-lg px-2 py-1 text-[11px] font-black ${comment.status === "hidden" ? "bg-rose-50 text-rose-600" : "bg-gray-100 text-gray-500"}`}>
+                  {comment.status === "hidden" ? "숨김" : "표시중"}
+                </span>
+                <span className="text-xs font-bold text-gray-400">@{comment.authorNickname}</span>
+                <span className="text-xs font-bold text-gray-300">{new Date(comment.created_at).toLocaleString()}</span>
+              </div>
+              <p className="mb-3 text-xs font-black text-gray-400 line-clamp-1">{comment.posterTitle}</p>
+              <p className="mb-5 text-sm font-bold leading-relaxed text-gray-700 dark:text-slate-200">{comment.body}</p>
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href={`/posters/${comment.poster_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-2xl border border-gray-200 px-4 py-2 text-xs font-black text-gray-500 hover:bg-gray-50"
+                >
+                  공고 보기
+                </a>
+                {comment.status === "hidden" ? (
+                  <button
+                    onClick={() => handleCommentStatus(comment.id, "normal")}
+                    className="rounded-2xl bg-emerald-50 px-4 py-2 text-xs font-black text-emerald-600 hover:bg-emerald-100"
+                  >
+                    다시 표시
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleCommentStatus(comment.id, "hidden")}
+                    className="rounded-2xl bg-gray-900 px-4 py-2 text-xs font-black text-white hover:bg-black"
+                  >
+                    숨김 처리
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="py-40 text-center bg-white dark:bg-slate-900 rounded-[3rem] border border-dashed border-gray-200 dark:border-slate-800">
+          <CheckCircle2 className="mx-auto text-green-100 mb-6" size={64} />
+          <p className="text-gray-400 font-black text-lg">등록된 {mode === "questions" ? "질문" : "후기"}가 없습니다.</p>
         </div>
       )}
 
