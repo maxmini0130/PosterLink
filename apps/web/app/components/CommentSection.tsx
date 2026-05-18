@@ -10,18 +10,20 @@ import { MessageSquare, Send, AlertTriangle, Trash2, ChevronDown } from "lucide-
 const PAGE_SIZE = 5;
 type CommentType = "question" | "review";
 
-const COMMENT_TYPE_META: Record<CommentType, { label: string; placeholder: string; empty: string; badgeClass: string }> = {
+const COMMENT_TYPE_META: Record<CommentType, { label: string; placeholder: string; empty: string; badgeClass: string; activeTabClass: string }> = {
   question: {
     label: "질문",
     placeholder: "공고에 대해 궁금한 점을 질문으로 남겨주세요.",
     empty: "첫 번째 질문을 남겨보세요.",
     badgeClass: "bg-blue-50 text-blue-600",
+    activeTabClass: "bg-blue-50 text-blue-600 ring-1 ring-blue-100 shadow-sm",
   },
   review: {
     label: "후기",
     placeholder: "신청 경험, 참여 후기, 도움이 된 점을 후기로 남겨주세요.",
     empty: "첫 번째 후기를 남겨보세요.",
     badgeClass: "bg-emerald-50 text-emerald-600",
+    activeTabClass: "bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100 shadow-sm",
   },
 };
 
@@ -162,7 +164,7 @@ export function CommentSection({ posterId }: CommentSectionProps) {
             onClick={() => setSelectedType(type)}
             className={`rounded-xl px-4 py-3 text-sm font-black transition-all ${
               selectedType === type
-                ? "bg-white text-blue-600 shadow-sm"
+                ? COMMENT_TYPE_META[type].activeTabClass
                 : "text-gray-400 hover:text-gray-700"
             }`}
           >
@@ -187,22 +189,6 @@ export function CommentSection({ posterId }: CommentSectionProps) {
 
       {/* 댓글 작성 폼 */}
       <form onSubmit={handleSubmit} className="mb-10 relative">
-        <div className="mb-3 flex flex-wrap gap-2">
-          {(["question", "review"] as CommentType[]).map((type) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => setSelectedType(type)}
-              className={`rounded-2xl px-4 py-2 text-xs font-black transition-colors ${
-                selectedType === type
-                  ? COMMENT_TYPE_META[type].badgeClass
-                  : "bg-gray-50 text-gray-400 hover:bg-gray-100"
-              }`}
-            >
-              {COMMENT_TYPE_META[type].label}로 작성
-            </button>
-          ))}
-        </div>
         <textarea
           value={newComment}
           onChange={(e) => setNewComment(e.target.value)}
