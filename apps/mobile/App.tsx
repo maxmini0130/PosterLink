@@ -426,7 +426,24 @@ export default function App() {
           setUser(null);
           // 웹앱도 로그아웃 (로그아웃 페이지로 이동)
           webViewRef.current?.injectJavaScript(`
-            fetch('/api/auth/sign-out', { method: 'POST' }).finally(() => {
+            (function() {
+              var KEY = 'sb-${SB_PROJECT}-auth-token';
+              try {
+                localStorage.removeItem(KEY);
+                document.cookie
+                  .split(';')
+                  .map(function(part) { return part.trim(); })
+                  .filter(Boolean)
+                  .forEach(function(part) {
+                    var separatorIndex = part.indexOf('=');
+                    var name = separatorIndex === -1 ? part : part.slice(0, separatorIndex);
+                    if (name === KEY || name.indexOf(KEY + '.') === 0) {
+                      document.cookie = name + '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; samesite=lax';
+                    }
+                  });
+              } catch (e) {}
+            })();
+            fetch('/api/auth/sign-out', { method: 'POST' }).finally(function() {
               window.location.href = '/';
             });
             true;

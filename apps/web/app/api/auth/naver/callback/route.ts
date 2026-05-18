@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { createServerClient } from '@supabase/ssr';
 
 const _rawUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://posterlink.co.kr';
 const BASE_URL = _rawUrl.startsWith('http') ? _rawUrl : `https://${_rawUrl}`;
@@ -139,10 +140,66 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${BASE_URL}/login?error=signin_failed&msg=${encodeURIComponent(signInError?.message ?? 'no_session')}`);
   }
 
-  const callbackUrl = new URL(`${BASE_URL}/auth/callback`);
-  callbackUrl.searchParams.set('naver_at', signInData.session.access_token);
-  callbackUrl.searchParams.set('naver_rt', signInData.session.refresh_token);
-  const response = NextResponse.redirect(callbackUrl.toString());
+  const pendingCookies = new Map<string, { value: string; options: Record<string, unknown> }>();
+  const supabaseSession = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)!,
+    {
+      cookies: {
+        getAll() {
+          const merged = new Map(request.cookies.getAll().map((cookie) => [cookie.name, cookie.value]));
+          pendingCookies.forEach(({ value }, name) => merged.set(name, value));
+          return Array.from(merged.entries()).map(([name, value]) => ({ name, value }));
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            pendingCookies.set(name, { value, options });
+          });
+        },
+      },
+    }
+  );
+
+  const { error: sessionError } = await supabaseSession.auth.setSession({
+    access_token: signInData.session.access_token,
+    refresh_token: signInData.session.refresh_token,
+  });
+
+  if (sessionError) {
+    return NextResponse.redirect(
+      `${BASE_URL}/login?error=set_session_failed&msg=${encodeURIComponent(sessionError.message)}`
+    );
+  }
+
+  const userId = signInData.session.user.id;
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('id, primary_region_id')
+    .eq('id', userId)
+    .single();
+
+  let nextUrl = `${BASE_URL}/`;
+  if (!profile || !profile.primary_region_id) {
+    const { error: upsertError } = await supabaseAdmin.from('profiles').upsert(
+      {
+        id: userId,
+        nickname: naverUser.email.split('@')[0] ?? 'user',
+        role: 'user',
+      },
+      { onConflict: 'id' }
+    );
+    if (upsertError) {
+      return NextResponse.redirect(
+        `${BASE_URL}/login?error=auth_callback_failed&msg=${encodeURIComponent(upsertError.message)}`
+      );
+    }
+    nextUrl = `${BASE_URL}/onboarding`;
+  }
+
+  const response = NextResponse.redirect(nextUrl);
+  pendingCookies.forEach(({ value, options }, name) => {
+    response.cookies.set(name, value, options);
+  });
   response.cookies.delete('naver_oauth_state');
   return response;
 }
