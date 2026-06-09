@@ -10,6 +10,7 @@
 //   CRAWLER_USER_ID   — 크롤러 봇 계정 UUID (profiles 테이블에 미리 등록)
 
 import "dotenv/config";
+import crypto from "node:crypto";
 import fs from "fs/promises";
 import { createClient } from "@supabase/supabase-js";
 import WebSocket from "ws";
@@ -55,6 +56,8 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
     transport: WebSocket,
   },
 });
+
+const POSTER_IMAGE_BUCKET = process.env.POSTER_IMAGE_BUCKET?.trim() || "poster-originals";
 
 // 카테고리 코드 → DB UUID 매핑 (시작 시 한 번 로드)
 async function loadCategoryMap() {
@@ -368,29 +371,94 @@ function normalizePostImages(post, sourceUrl) {
     .filter(Boolean))];
 }
 
+function getImageExtension(imageUrl, contentType) {
+  const contentTypeExtension = {
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+  }[contentType?.split(";")[0]?.toLowerCase()];
+  if (contentTypeExtension) return contentTypeExtension;
+
+  try {
+    const pathname = new URL(imageUrl).pathname;
+    const match = pathname.match(/\.([a-z0-9]{2,5})$/i);
+    if (match) return match[1].toLowerCase();
+  } catch {
+    // Keep default extension below.
+  }
+
+  return "jpg";
+}
+
+async function importImageToStorage(imageUrl, sourceKey, index) {
+  if (!/^https?:\/\//i.test(imageUrl)) return imageUrl;
+  if (imageUrl.includes("/storage/v1/object/public/")) return imageUrl;
+
+  const response = await fetch(imageUrl, {
+    headers: {
+      "User-Agent": "PosterLink-Crawler/1.0 image import",
+      "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+      "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.3",
+    },
+  });
+
+  if (!response.ok) throw new Error(`image download failed (${response.status})`);
+
+  const contentType = response.headers.get("content-type") ?? "image/jpeg";
+  if (!contentType.toLowerCase().startsWith("image/")) {
+    throw new Error(`not an image content type: ${contentType}`);
+  }
+
+  const imageBytes = new Uint8Array(await response.arrayBuffer());
+  const hash = crypto.createHash("sha256").update(`${sourceKey}:${imageUrl}:${index}`).digest("hex").slice(0, 24);
+  const ext = getImageExtension(imageUrl, contentType);
+  const storagePath = `crawler/${hash}.${ext}`;
+
+  const { error } = await supabase.storage
+    .from(POSTER_IMAGE_BUCKET)
+    .upload(storagePath, imageBytes, { contentType, upsert: true });
+  if (error) throw error;
+
+  return supabase.storage.from(POSTER_IMAGE_BUCKET).getPublicUrl(storagePath).data.publicUrl;
+}
+
+async function importPostImagesToStorage(post, sourceUrl, sourceKey) {
+  const imageUrls = normalizePostImages(post, sourceUrl);
+  const imported = [];
+
+  for (const [index, imageUrl] of imageUrls.entries()) {
+    try {
+      imported.push(await importImageToStorage(imageUrl, sourceKey, index));
+    } catch (error) {
+      console.warn(`\n  이미지 스토리지 가져오기 실패: ${imageUrl} — ${error.message}`);
+      imported.push(imageUrl);
+    }
+  }
+
+  return [...new Set(imported)];
+}
+
 async function syncPosterImages(posterId, post, sourceUrl) {
   const images = normalizePostImages(post, sourceUrl);
   if (images.length === 0) return;
 
-  const { data: existingImages, error: existingError } = await supabase
+  const { error: deleteError } = await supabase
     .from("poster_images")
-    .select("storage_path")
+    .delete()
     .eq("poster_id", posterId);
 
-  if (existingError) {
-    console.warn(`\n  poster_images 조회 실패: ${post.title} — ${existingError.message}`);
+  if (deleteError) {
+    console.warn(`\n  poster_images 초기화 실패: ${post.title} — ${deleteError.message}`);
     return;
   }
 
-  const existing = new Set((existingImages ?? []).map((image) => image.storage_path));
-  const missing = images.filter((imageUrl) => !existing.has(imageUrl));
-  if (missing.length === 0) return;
-
   const { error } = await supabase.from("poster_images").insert(
-    missing.map((imageUrl, index) => ({
+    images.map((imageUrl, index) => ({
       poster_id: posterId,
       storage_path: imageUrl,
-      image_type: index === 0 && existing.size === 0 ? "thumbnail" : "original",
+      image_type: index === 0 ? "thumbnail" : "original",
     }))
   );
 
@@ -441,20 +509,22 @@ async function uploadToSupabase(filePath) {
     const sourceUrl = post.sourceUrl || post.url;
     const sourceKey = normalizeSourceKey(sourceUrl);
     if (!sourceKey) { fail++; continue; }
+    const storedImages = await importPostImagesToStorage(post, sourceUrl, sourceKey);
+    const postWithStoredImages = { ...post, images: storedImages };
 
     // ── 1. posters 테이블 upsert ─────────────────────────────
     const posterRecord = {
       title: (post.title || "제목 없음").substring(0, 200),
       source_org_name: post.site || null,
-      summary_short: normalizeSummary(post),
-      summary_long: cleanSummaryText(post.content) || null,
+      summary_short: normalizeSummary(postWithStoredImages),
+      summary_long: cleanSummaryText(postWithStoredImages.content) || null,
       poster_status: "review",         // 관리자 검수 대기
       source_key: sourceKey,           // 중복 방지 키
       created_by: CRAWLER_USER_ID,     // 크롤러 봇 계정 (null 가능)
       application_end_at: post.deadline
         ? (() => { try { return new Date(post.deadline).toISOString(); } catch { return null; } })()
         : null,
-      thumbnail_url: normalizePostImages(post, sourceUrl)[0] ?? null,
+      thumbnail_url: storedImages[0] ?? null,
     };
     if (isInvalidCrawlerTitle(posterRecord.title)) {
       fail++;
@@ -498,7 +568,7 @@ async function uploadToSupabase(filePath) {
       } else if (existingPoster.summary_long && looksMojibake(existingPoster.summary_long)) {
         updates.summary_long = null;
       }
-      if (posterRecord.thumbnail_url && (!existingPoster.thumbnail_url || !/^https?:\/\//i.test(existingPoster.thumbnail_url))) {
+      if (posterRecord.thumbnail_url && existingPoster.thumbnail_url !== posterRecord.thumbnail_url) {
         updates.thumbnail_url = posterRecord.thumbnail_url;
       }
       if (existingPoster.source_key !== sourceKey) {
@@ -507,7 +577,7 @@ async function uploadToSupabase(filePath) {
       if (Object.keys(updates).length > 0) {
         await supabase.from("posters").update(updates).eq("id", existingPoster.id);
       }
-      await syncPosterImages(existingPoster.id, post, sourceUrl);
+      await syncPosterImages(existingPoster.id, postWithStoredImages, sourceUrl);
       await assignPosterCategories(existingPoster.id, post, categoryMap);
       await assignPosterRegions(existingPoster.id, post, regionMap);
       process.stdout.write("-");
@@ -528,7 +598,7 @@ async function uploadToSupabase(filePath) {
     }
 
     const posterId = poster.id;
-    await syncPosterImages(posterId, post, sourceUrl);
+    await syncPosterImages(posterId, postWithStoredImages, sourceUrl);
 
     // ── 2. poster_links 저장 (원본 URL) ─────────────────────
     const { error: linkErr } = await supabase.from("poster_links").insert({

@@ -14,10 +14,10 @@ const DEFAULT_SELECTORS = {
   listDate: ".td_date, .date, .bo_date",
 
   // 상세 페이지
-  detailTitle: "#bo_v_title, .bo_v_tit, .view_title, h3.title, .board_view_title, .subject",
-  detailContent: "#bo_v_con, .bo_v_con, .view_content, .board_view_content, .content",
-  detailDate: "#bo_v_info .date, .bo_v_info, .view_info, .board_view_info",
-  detailImages: "#bo_v_con img, .bo_v_con img, .view_content img, .board_view_content img",
+  detailTitle: "#bo_v_title, .bo_v_tit, .view_title, h3.title, .board_view_title, .subject, .board-detail-tbl thead th",
+  detailContent: "#bo_v_con, .bo_v_con, .view_content, .board_view_content, .detail-content, .content",
+  detailDate: "#bo_v_info .date, .bo_v_info, .view_info, .board_view_info, .board-detail-tbl thead th",
+  detailImages: "#bo_v_con img, .bo_v_con img, .view_content img, .board_view_content img, .detail-content img",
   detailAttachments: ".bo_v_file a, .view_file a, .file_list a, .board_view_file a",
 };
 
@@ -41,12 +41,40 @@ function addImage(images, baseUrl, src) {
   if (!images.includes(resolved)) images.push(resolved);
 }
 
+function collectImages($, baseUrl, root) {
+  const images = [];
+  $(root).find("img").each((_, img) => {
+    addImage(images, baseUrl, $(img).attr("src") || $(img).attr("data-src") || $(img).attr("data-original"));
+  });
+  return images;
+}
+
 function cleanTitleCandidate(value, site) {
-  const title = String(value ?? "").trim().replace(/\s+/g, " ");
+  let title = String(value ?? "").trim().replace(/\s+/g, " ");
   if (!title) return "";
+  title = title
+    .replace(/^제목\s*:\s*/i, "")
+    .replace(/\s+\d{4}[-./]\d{1,2}[-./]\d{1,2}\s*$/, "")
+    .trim();
   if (title === site?.name) return "";
   if (/상세보기|공지사항\s*\|/.test(title)) return "";
   return title;
+}
+
+function extractReadableText($, element) {
+  const $copy = $(element).clone();
+  $copy.find("br").replaceWith("\n");
+  $copy.find("p, div, li, tr").each((_, child) => {
+    $(child).append("\n");
+  });
+  return $copy
+    .text()
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 export default {
@@ -73,7 +101,7 @@ export default {
         const title = $a.text().trim();
         const date = $tr.find("td").last().text().trim();
         if (href && title && !title.includes("공지") === false) {
-          links.push({ title, url: resolveUrl(boardUrl, href), date });
+          links.push({ title, url: resolveUrl(boardUrl, href), date, images: collectImages($, boardUrl, $tr) });
         }
       });
 
@@ -84,7 +112,7 @@ export default {
           const href = $a.attr("href");
           const title = $a.text().trim();
           if (href && title && title.length > 2) {
-            links.push({ title, url: resolveUrl(boardUrl, href), date: "" });
+            links.push({ title, url: resolveUrl(boardUrl, href), date: "", images: collectImages($, boardUrl, $a.closest("li, div, article, tr")) });
           }
         });
       }
@@ -96,7 +124,7 @@ export default {
           const href = $a.attr("href");
           const title = $a.text().trim();
           if (href && title && title.length > 2 && !title.match(/^\d+$/)) {
-            links.push({ title, url: resolveUrl(boardUrl, href), date: "" });
+            links.push({ title, url: resolveUrl(boardUrl, href), date: "", images: collectImages($, boardUrl, $a.closest("li, div, article, tr")) });
           }
         });
       }
@@ -137,7 +165,8 @@ export default {
     // 본문
     let content = "";
     for (const s of sel.detailContent.split(", ")) {
-      content = $(s).first().text().trim();
+      const contentElement = $(s).first();
+      content = contentElement.length > 0 ? extractReadableText($, contentElement) : "";
       if (content) break;
     }
 
@@ -204,7 +233,7 @@ export default {
 
     return {
       title: title || undefined,
-      content: content ? content.substring(0, 500) : undefined,
+      content: content || undefined,
       date,
       deadline,
       images: posterImages.images,

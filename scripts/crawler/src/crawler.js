@@ -104,6 +104,16 @@ function hasPosterImage(post) {
   return Array.isArray(post.images) && post.images.length > 0;
 }
 
+function pickImagesByPriority(detailImages, listImages) {
+  if (Array.isArray(detailImages) && detailImages.length > 0) return detailImages;
+  if (Array.isArray(listImages) && listImages.length > 0) return listImages;
+  return [];
+}
+
+function shouldMarkImagelessSeen() {
+  return process.env.CRAWLER_MARK_IMAGELESS_SEEN === "1";
+}
+
 function dropUndefinedValues(object) {
   return Object.fromEntries(
     Object.entries(object).filter(([, value]) => value !== undefined)
@@ -153,9 +163,14 @@ export async function crawlSite(site, adapter, options = {}) {
 
           try {
             const detail = await adapter.parseDetail(post.url, site);
+            const images = pickImagesByPriority(detail.images, post.images);
+            const usesDetailImages = Array.isArray(detail.images) && detail.images.length > 0;
             const fullPost = {
               ...post,
               ...dropUndefinedValues(detail),
+              images,
+              posterImageRule: usesDetailImages ? detail.posterImageRule : null,
+              posterImageCandidates: usesDetailImages ? detail.posterImageCandidates : null,
               board: board.name,
               category: board.category,
               site: site.name,
@@ -163,7 +178,7 @@ export async function crawlSite(site, adapter, options = {}) {
               crawledAt: dayjs().toISOString(),
             };
             if (!hasPosterImage(fullPost)) {
-              seen.add(post.url);
+              if (shouldMarkImagelessSeen()) seen.add(post.url);
               logger.info(`  Skip (no poster image): ${post.title}`);
               continue;
             }
@@ -184,7 +199,7 @@ export async function crawlSite(site, adapter, options = {}) {
                 });
 
             if (!imageSelection.selectedImageUrl) {
-              seen.add(post.url);
+              if (shouldMarkImagelessSeen()) seen.add(post.url);
               const bestRejected = imageSelection.candidates[0]?.rule;
               logger.info(`  Skip (image rules): ${post.title} — ${bestRejected?.reason ?? "no usable poster image"}`);
               continue;
@@ -206,7 +221,7 @@ export async function crawlSite(site, adapter, options = {}) {
             };
 
             if (!imageClassification.isPoster) {
-              seen.add(post.url);
+              if (shouldMarkImagelessSeen()) seen.add(post.url);
               logger.info(`  Skip (not poster image): ${post.title} — ${imageClassification.reason}`);
               continue;
             }

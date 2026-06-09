@@ -3,6 +3,9 @@ import { fetchPage } from "../crawler.js";
 import { filterAndOrderPosterImages } from "../poster-image-rules.js";
 
 const BASE_URL = "https://youth.seoul.go.kr";
+const IMAGE_ONLY_CONTENT =
+  "\uC0C1\uC138 \uB0B4\uC6A9\uC740 \uC774\uBBF8\uC9C0\uB85C \uC81C\uACF5\uB429\uB2C8\uB2E4. " +
+  "\uC774\uBBF8\uC9C0 \uAC24\uB7EC\uB9AC\uC5D0\uC11C \uC804\uCCB4 \uC548\uB0B4\uB97C \uD655\uC778\uD558\uC138\uC694.";
 
 function resolveUrl(base, relative) {
   try {
@@ -14,11 +17,16 @@ function resolveUrl(base, relative) {
 
 function cleanText(value) {
   if (!value) return "";
-  let text = value.replace(/\s+/g, " ").trim();
-  for (let i = 0; i < 2; i++) {
+  let text = String(value).replace(/\s+/g, " ").trim();
+  for (let i = 0; i < 2; i += 1) {
     text = cheerio.load(`<span>${text}</span>`)("span").text().replace(/\s+/g, " ").trim();
   }
   return text.replace(/\.{2,}\d+$/, "").trim();
+}
+
+function isMeaningfulContent(value) {
+  const text = cleanText(value);
+  return Boolean(text) && !["상세정보", "상세 정보"].includes(text);
 }
 
 function extractInfoId(onclick) {
@@ -34,6 +42,7 @@ function extractDateRange(text) {
 }
 
 function addImage(images, baseUrl, src) {
+  if (!src) return;
   const imageUrl = resolveUrl(baseUrl, src);
   if (imageUrl && !images.includes(imageUrl)) images.push(imageUrl);
 }
@@ -44,7 +53,7 @@ export default {
   async parseList(boardUrl, _site, maxPages = 5) {
     const posts = [];
 
-    for (let page = 1; page <= maxPages; page++) {
+    for (let page = 1; page <= maxPages; page += 1) {
       const url = new URL(boardUrl);
       url.searchParams.set("pageIndex", String(page));
       url.searchParams.set("recordCountPerPage", "8");
@@ -113,19 +122,32 @@ export default {
       if (href && name) attachments.push({ name, url: resolveUrl(postUrl, href) });
     });
 
+    const content = isMeaningfulContent(detailText)
+      ? detailText
+      : isMeaningfulContent(overviewText)
+        ? overviewText
+        : detailImages.length > 0
+          ? IMAGE_ONLY_CONTENT
+          : "";
+
     const posterImages = await filterAndOrderPosterImages(images, {
       title,
-      content: detailText || overviewText,
-      site: "청년몽땅정보통",
+      content,
+      site: "\uCCAD\uB144\uBABD\uB545\uC815\uBCF4\uD1B5",
       sourceUrl: postUrl,
       preferredImageUrls: detailImages,
     });
+    const orderedImages = posterImages.images.length > 0
+      ? posterImages.images
+      : detailImages.length > 0
+        ? detailImages
+        : [];
 
     return {
       title: title || undefined,
-      content: detailText || overviewText || undefined,
+      content: content || undefined,
       deadline: end,
-      images: posterImages.images,
+      images: orderedImages,
       posterImageRule: posterImages.posterImageRule,
       posterImageCandidates: posterImages.posterImageCandidates,
       attachments,

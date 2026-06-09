@@ -298,12 +298,13 @@ export const sites = [
   {
     id: "mapo-sports",
     name: "마포구민체육센터",
-    domain: "http://www.maposc.or.kr",
-    adapter: "generic-board",
+    domain: "https://yeyak.maposc.or.kr",
+    adapter: "maposc-yeyak",
+    maxPages: 2,
     boards: [
       {
         name: "공지사항",
-        url: "http://www.maposc.or.kr/subpage/index/22",
+        url: "https://yeyak.maposc.or.kr/news/board/llist/notice",
         category: "체육",
       },
     ],

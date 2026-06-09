@@ -7,7 +7,9 @@
     "crawl": "node src/index.js",
     "crawl:dry": "node src/index.js --dry-run",
     "upload": "node src/upload-to-supabase.js",
-    "list": "node src/index.js --list"
+    "list": "node src/index.js --list",
+    "repair:images": "node src/repair-missing-poster-images.js",
+    "refresh:site": "node src/refresh-site-posters.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.2",

@@ -84,12 +84,19 @@ export async function fetchPosterImages(posterIds: string[]): Promise<Record<str
 
   const { data } = await supabase
     .from("poster_images")
-    .select("poster_id, storage_path, created_at")
+    .select("poster_id, storage_path, image_type, created_at")
     .in("poster_id", ids)
     .order("created_at", { ascending: true });
 
   const result: Record<string, string[]> = {};
-  for (const image of data ?? []) {
+  const images = [...(data ?? [])].sort((a: any, b: any) => {
+    if (a.poster_id !== b.poster_id) return String(a.poster_id).localeCompare(String(b.poster_id));
+    if (a.image_type === "thumbnail" && b.image_type !== "thumbnail") return -1;
+    if (a.image_type !== "thumbnail" && b.image_type === "thumbnail") return 1;
+    return String(a.created_at ?? "").localeCompare(String(b.created_at ?? ""));
+  });
+
+  for (const image of images) {
     if (!image.poster_id || !image.storage_path) continue;
     result[image.poster_id] = [...(result[image.poster_id] ?? []), image.storage_path];
   }
