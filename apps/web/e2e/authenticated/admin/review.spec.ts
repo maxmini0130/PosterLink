@@ -1,4 +1,12 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+
+async function gotoAdminPosters(page: Page) {
+  await page.goto("/admin/posters", { waitUntil: "domcontentloaded" });
+  const ready = page.getByTestId("admin-posters-ready");
+  await expect(ready).toBeVisible();
+  await expect(ready).not.toContainText("불러오는 중", { timeout: 15000 });
+  expect(page.url()).not.toContain("/login");
+}
 
 test.beforeEach(async ({ page }) => {
   if (!process.env.E2E_ADMIN_EMAIL) {
@@ -33,15 +41,12 @@ test.describe("관리자 대시보드", () => {
 
 test.describe("관리자 포스터 검수 목록", () => {
   test("/admin/posters 접근 가능", async ({ page }) => {
-    await page.goto("/admin/posters");
-    await page.waitForLoadState("networkidle");
-    expect(page.url()).not.toContain("/login");
+    await gotoAdminPosters(page);
     await expect(page.locator("body")).toBeVisible();
   });
 
   test("상태 필터 탭 표시 (검수 대기/게시 중/반려됨)", async ({ page }) => {
-    await page.goto("/admin/posters");
-    await page.waitForLoadState("networkidle");
+    await gotoAdminPosters(page);
     const reviewTab = page.locator("text=/검수 대기|review/i").first();
     if (await reviewTab.count() > 0) {
       await expect(reviewTab).toBeVisible();
@@ -49,13 +54,12 @@ test.describe("관리자 포스터 검수 목록", () => {
   });
 
   test("검수 대기 포스터 존재 시 미리보기 버튼 표시", async ({ page }) => {
-    await page.goto("/admin/posters");
-    await page.waitForLoadState("networkidle");
+    await gotoAdminPosters(page);
 
     // 검수 대기 탭 클릭
     const reviewTab = page.locator("button:has-text('검수 대기'), button:has-text('대기')").first();
     if (await reviewTab.count() > 0) await reviewTab.click();
-    await page.waitForLoadState("networkidle");
+    await expect(page.getByTestId("admin-posters-ready")).not.toContainText("불러오는 중", { timeout: 15000 });
 
     const previewBtn = page.locator("button:has-text('미리보기'), button[aria-label*='미리보기']").first();
     if (await previewBtn.count() > 0) {
@@ -64,18 +68,17 @@ test.describe("관리자 포스터 검수 목록", () => {
   });
 
   test("검수 포스터 선택 후 일괄 승인 버튼 활성화", async ({ page }) => {
-    await page.goto("/admin/posters");
-    await page.waitForLoadState("networkidle");
+    await gotoAdminPosters(page);
 
     // 검수 대기 탭
     const reviewTab = page.locator("button:has-text('검수 대기'), button:has-text('대기')").first();
     if (await reviewTab.count() > 0) await reviewTab.click();
-    await page.waitForLoadState("networkidle");
+    await expect(page.getByTestId("admin-posters-ready")).not.toContainText("불러오는 중", { timeout: 15000 });
 
-    // 첫 번째 체크박스 선택
-    const checkbox = page.locator("input[type='checkbox']").first();
-    if (await checkbox.count() === 0) { test.skip(); return; }
-    await checkbox.click();
+    // 첫 번째 선택 버튼 선택
+    const selectButton = page.getByRole("button", { name: "선택" }).first();
+    if (await selectButton.count() === 0) { test.skip(); return; }
+    await selectButton.click();
 
     // 일괄 승인 버튼 활성화 확인
     const bulkApprove = page.locator("button:has-text('승인'), button:has-text('일괄 승인')").first();
@@ -121,12 +124,11 @@ test.describe("관리자 등록 요청 검수", () => {
 
 test.describe("관리자 - 반려 포스터 삭제", () => {
   test("반려됨 필터에서 삭제 버튼 표시", async ({ page }) => {
-    await page.goto("/admin/posters");
-    await page.waitForLoadState("networkidle");
+    await gotoAdminPosters(page);
 
     const rejectedTab = page.locator("button:has-text('반려됨'), button:has-text('rejected')").first();
     if (await rejectedTab.count() > 0) await rejectedTab.click();
-    await page.waitForLoadState("networkidle");
+    await expect(page.getByTestId("admin-posters-ready")).not.toContainText("불러오는 중", { timeout: 15000 });
 
     const deleteBtn = page.locator("button:has-text('삭제')").first();
     if (await deleteBtn.count() > 0) {

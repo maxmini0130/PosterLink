@@ -137,6 +137,7 @@ export default function AdminUsersPage() {
               {/* 아바타 */}
               <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center shrink-0 overflow-hidden">
                 {u.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={u.avatar_url} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <User size={18} className="text-indigo-400" />

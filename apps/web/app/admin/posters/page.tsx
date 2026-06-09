@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import {
@@ -21,6 +21,7 @@ import { resolvePosterImageUrl } from "../../../lib/posterImage";
 import { PosterImageFallback } from "../../components/PosterImageFallback";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const PAGE_SIZE = 24;
 
 type PosterStatus = "review" | "published" | "rejected" | "draft";
 
@@ -28,6 +29,8 @@ export default function AdminPostersPage() {
   const [posters, setPosters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentFilter, setCurrentFilter] = useState<PosterStatus>("review");
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
   const [rejectModal, setRejectModal] = useState<{ id: string; title: string } | null>(null);
   const [bulkRejectOpen, setBulkRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
@@ -37,21 +40,27 @@ export default function AdminPostersPage() {
   const [previewPoster, setPreviewPoster] = useState<any | null>(null);
   const [imageLightbox, setImageLightbox] = useState<{ src: string; title: string; org?: string | null } | null>(null);
 
-  const fetchPosters = async (status: PosterStatus) => {
+  const fetchPosters = useCallback(async (status: PosterStatus, pageIndex: number) => {
     setLoading(true);
 
-    const { data, error } = await supabase
+    const from = pageIndex * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    const { data, error, count } = await supabase
       .from("posters")
-      .select("*")
+      .select("*", { count: "exact" })
       .eq("poster_status", status)
-      .order("created_at", { ascending: status === "review" });
+      .order("created_at", { ascending: status === "review" })
+      .range(from, to);
 
     if (error) {
       console.error(error);
+      setPosters([]);
+      setTotalCount(0);
       setLoading(false);
       return;
     }
 
+    setTotalCount(count ?? 0);
     if (data) {
       const metaMap = await fetchCategoryRegionNames(data.map((poster: any) => poster.id));
       setPosters(data.map((poster: any) => ({ ...poster, ...metaMap[poster.id] })));
@@ -59,11 +68,11 @@ export default function AdminPostersPage() {
 
     setSelectedIds([]);
     setLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
-    fetchPosters(currentFilter);
-  }, [currentFilter]);
+    void fetchPosters(currentFilter, page);
+  }, [currentFilter, fetchPosters, page]);
 
   const handleReject = async () => {
     if (!rejectModal) return;
@@ -87,7 +96,7 @@ export default function AdminPostersPage() {
       toast.success("반려 처리했습니다.");
       setRejectModal(null);
       setRejectReason("");
-      fetchPosters(currentFilter);
+      void fetchPosters(currentFilter, page);
     }
     setRejecting(false);
   };
@@ -168,13 +177,16 @@ export default function AdminPostersPage() {
       toast(pushSummary, { icon: "📣" });
     }
 
-    fetchPosters(currentFilter);
+    void fetchPosters(currentFilter, page);
   };
 
   const selectablePosters = posters.filter((poster) => poster.poster_status !== "published");
   const selectableIds = selectablePosters.map((poster) => poster.id);
   const selectedCount = selectedIds.length;
   const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selectedIds.includes(id));
+  const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const pageStart = totalCount === 0 ? 0 : page * PAGE_SIZE + 1;
+  const pageEnd = Math.min(totalCount, (page + 1) * PAGE_SIZE);
 
   const toggleSelectAll = () => {
     setSelectedIds(allSelected ? [] : selectableIds);
@@ -216,7 +228,7 @@ export default function AdminPostersPage() {
     toast.success(`${selectedCount}건을 승인했습니다.`);
     setSelectedIds([]);
     setBulkProcessing(false);
-    fetchPosters(currentFilter);
+    void fetchPosters(currentFilter, page);
   };
 
   const handleBulkReject = async () => {
@@ -253,7 +265,7 @@ export default function AdminPostersPage() {
     setRejectReason("");
     setSelectedIds([]);
     setBulkProcessing(false);
-    fetchPosters(currentFilter);
+    void fetchPosters(currentFilter, page);
   };
 
   const handleDeleteRejected = async (poster: any) => {
@@ -293,7 +305,7 @@ export default function AdminPostersPage() {
 
     toast.success("반려 포스터를 완전 삭제했습니다.");
     setPreviewPoster((current: any | null) => current?.id === poster.id ? null : current);
-    fetchPosters(currentFilter);
+    void fetchPosters(currentFilter, page);
   };
 
   const handleBulkDeleteRejected = async () => {
@@ -336,7 +348,7 @@ export default function AdminPostersPage() {
     toast.success(`반려 포스터 ${rejectedPosters.length}건을 완전 삭제했습니다.`);
     setSelectedIds([]);
     setBulkProcessing(false);
-    fetchPosters(currentFilter);
+    void fetchPosters(currentFilter, page);
   };
 
   const tabs: { label: string; value: PosterStatus }[] = [
@@ -364,7 +376,10 @@ export default function AdminPostersPage() {
         {tabs.map((tab) => (
           <button
             key={tab.value}
-            onClick={() => setCurrentFilter(tab.value)}
+            onClick={() => {
+              setPage(0);
+              setCurrentFilter(tab.value);
+            }}
             className={`rounded-2xl px-6 py-3 text-sm font-black transition-all ${
               currentFilter === tab.value
                 ? "bg-white text-indigo-600 shadow-sm dark:bg-slate-800 dark:text-indigo-400"
@@ -374,6 +389,42 @@ export default function AdminPostersPage() {
             {tab.label}
           </button>
         ))}
+      </div>
+
+      <div
+        data-testid="admin-posters-ready"
+        className="mb-4 flex flex-col gap-2 text-xs font-bold text-gray-400 dark:text-slate-500 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <span>
+          {loading
+            ? "목록을 불러오는 중입니다."
+            : totalCount > 0
+              ? `${totalCount}건 중 ${pageStart}-${pageEnd} 표시`
+              : "표시할 포스터가 없습니다."}
+        </span>
+        {pageCount > 1 && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((value) => Math.max(0, value - 1))}
+              disabled={loading || page === 0}
+              className="rounded-xl border border-gray-200 px-3 py-2 text-gray-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-900"
+            >
+              이전
+            </button>
+            <span className="px-2 text-gray-500 dark:text-slate-400">
+              {page + 1}/{pageCount}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}
+              disabled={loading || page >= pageCount - 1}
+              className="rounded-xl border border-gray-200 px-3 py-2 text-gray-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-900"
+            >
+              다음
+            </button>
+          </div>
+        )}
       </div>
 
       {posters.length > 0 && (
