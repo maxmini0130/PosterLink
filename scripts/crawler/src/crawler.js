@@ -8,6 +8,7 @@ import PQueue from "p-queue";
 import fs from "fs/promises";
 import path from "path";
 import { classifyPosterImage } from "./poster-image-classifier.js";
+import { verifyPosterMatchesNotice } from "./poster-content-verifier.js";
 import { getPostExclusionReason } from "./post-candidate-filter.js";
 import { selectBestPosterImage } from "./poster-image-rules.js";
 
@@ -120,6 +121,104 @@ function dropUndefinedValues(object) {
   );
 }
 
+const MAX_VERIFIED_IMAGE_CANDIDATES = Number(process.env.POSTER_IMAGE_VERIFY_TOP_N ?? "4");
+
+function orderImagesWithSelected(images, selectedImageUrl) {
+  return [...new Set([
+    selectedImageUrl,
+    ...(images ?? []).filter((imageUrl) => imageUrl !== selectedImageUrl),
+  ].filter(Boolean))];
+}
+
+function getVerificationCandidates(imageSelection) {
+  const candidatesByUrl = new Map();
+
+  if (imageSelection?.selectedImageUrl) {
+    candidatesByUrl.set(imageSelection.selectedImageUrl, {
+      imageUrl: imageSelection.selectedImageUrl,
+      rule: imageSelection.selectedRule,
+    });
+  }
+
+  for (const candidate of imageSelection?.candidates ?? []) {
+    if (!candidate.imageUrl) continue;
+    if (!candidate.rule?.passes && candidatesByUrl.size > 0) continue;
+    candidatesByUrl.set(candidate.imageUrl, candidate);
+  }
+
+  return [...candidatesByUrl.values()]
+    .sort((a, b) => (b.rule?.score ?? 0) - (a.rule?.score ?? 0))
+    .slice(0, MAX_VERIFIED_IMAGE_CANDIDATES);
+}
+
+async function selectVerifiedPosterImage(fullPost, imageSelection) {
+  const candidateChecks = [];
+  const baseContext = {
+    title: fullPost.title,
+    date: fullPost.date,
+    deadline: fullPost.deadline,
+    site: fullPost.site,
+    board: fullPost.board,
+    category: fullPost.category,
+    content: fullPost.content,
+    sourceUrl: fullPost.sourceUrl || fullPost.url,
+  };
+
+  for (const candidate of getVerificationCandidates(imageSelection)) {
+    const imageClassification = await classifyPosterImage(candidate.imageUrl, {
+      ...baseContext,
+      rule: candidate.rule,
+    });
+
+    let contentVerification = null;
+    if (imageClassification.isPoster) {
+      contentVerification = await verifyPosterMatchesNotice(candidate.imageUrl, {
+        ...baseContext,
+        rule: candidate.rule,
+        imageClassification,
+      });
+    } else {
+      contentVerification = {
+        isSameNotice: false,
+        confidence: 0,
+        decision: "skipped_not_poster",
+        matchedFields: [],
+        mismatchedFields: ["image"],
+        posterTextSummary: "",
+        reason: imageClassification.reason,
+        checkedAt: new Date().toISOString(),
+        model: "none",
+      };
+    }
+
+    const check = {
+      imageUrl: candidate.imageUrl,
+      rule: candidate.rule,
+      model: imageClassification,
+      content: contentVerification,
+    };
+    candidateChecks.push(check);
+
+    if (imageClassification.isPoster && contentVerification.isSameNotice) {
+      return {
+        selectedImageUrl: candidate.imageUrl,
+        selectedRule: candidate.rule,
+        imageClassification,
+        contentVerification,
+        candidateChecks,
+      };
+    }
+  }
+
+  return {
+    selectedImageUrl: null,
+    selectedRule: null,
+    imageClassification: null,
+    contentVerification: null,
+    candidateChecks,
+  };
+}
+
 // ── 메인 크롤 엔진 ───────────────────────────────
 export async function crawlSite(site, adapter, options = {}) {
   const { maxPages = 3, dryRun = false } = options;
@@ -205,30 +304,34 @@ export async function crawlSite(site, adapter, options = {}) {
               continue;
             }
 
-            const imageClassification = await classifyPosterImage(imageSelection.selectedImageUrl, {
-              title: fullPost.title,
-              site: fullPost.site,
-              board: fullPost.board,
-              category: fullPost.category,
-              content: fullPost.content,
-              sourceUrl: fullPost.sourceUrl || fullPost.url,
-              rule: imageSelection.selectedRule,
-            });
+            const verifiedImage = await selectVerifiedPosterImage(fullPost, imageSelection);
 
             const posterImageCheck = {
-              rule: imageSelection.selectedRule,
-              model: imageClassification,
+              rule: verifiedImage.selectedRule ?? imageSelection.selectedRule,
+              model: verifiedImage.imageClassification,
+              content: verifiedImage.contentVerification,
+              candidates: verifiedImage.candidateChecks,
             };
 
-            if (!imageClassification.isPoster) {
+            if (!verifiedImage.selectedImageUrl) {
               if (shouldMarkImagelessSeen()) seen.add(post.url);
-              logger.info(`  Skip (not poster image): ${post.title} — ${imageClassification.reason}`);
+              const bestRejected = verifiedImage.candidateChecks[0];
+              const reason = bestRejected?.content?.reason ?? bestRejected?.model?.reason ?? "no poster image matched original notice";
+              logger.info(`  Skip (poster/content mismatch): ${post.title} - ${reason}`);
               continue;
             }
 
-            allPosts.push({ ...fullPost, imageClassification, posterImageCheck });
+            const verifiedPost = {
+              ...fullPost,
+              images: orderImagesWithSelected(fullPost.images, verifiedImage.selectedImageUrl),
+              imageClassification: verifiedImage.imageClassification,
+              posterContentVerification: verifiedImage.contentVerification,
+              posterImageCheck,
+            };
+
+            allPosts.push(verifiedPost);
             seen.add(post.url);
-            logger.info(`  ✓ ${post.title} [rule ${imageSelection.selectedRule.score}]${imageClassification.model !== "none" ? ` [poster ${Math.round(imageClassification.confidence * 100)}%]` : ""}`);
+            logger.info(`  OK ${post.title} [rule ${verifiedImage.selectedRule?.score ?? 0}]${verifiedImage.imageClassification?.model !== "none" ? ` [poster ${Math.round(verifiedImage.imageClassification.confidence * 100)}%]` : ""}${verifiedImage.contentVerification?.model !== "none" ? ` [match ${Math.round(verifiedImage.contentVerification.confidence * 100)}%]` : ""}`);
           } catch (err) {
             logger.error(`  ✗ Detail parse failed: ${post.url} — ${err.message}`);
           }

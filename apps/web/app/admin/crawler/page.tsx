@@ -10,8 +10,10 @@ import {
   Database,
   ExternalLink,
   ImageOff,
+  PlayCircle,
   RefreshCw,
   SearchCheck,
+  Terminal,
   XCircle,
 } from "lucide-react";
 import { resolvePosterImageUrl } from "../../../lib/posterImage";
@@ -134,6 +136,9 @@ export default function AdminCrawlerPage() {
   const [summary, setSummary] = useState<CrawlerSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [runLoading, setRunLoading] = useState(false);
+  const [runSite, setRunSite] = useState("");
+  const [runLog, setRunLog] = useState<string | null>(null);
 
   const fetchSummary = async () => {
     setLoading(true);
@@ -153,6 +158,36 @@ export default function AdminCrawlerPage() {
   useEffect(() => {
     fetchSummary();
   }, []);
+
+  const runCrawler = async () => {
+    if (runLoading) return;
+    setRunLoading(true);
+    setError(null);
+    setRunLog(null);
+
+    try {
+      const res = await fetch("/api/admin/crawler/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ site: runSite.trim() || null }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(payload?.error ?? "Crawler run failed.");
+
+      setRunLog([
+        payload.uploaded ? "Upload completed." : "Upload skipped.",
+        payload.resultFile ? `Result: ${payload.resultFile}` : null,
+        "",
+        payload.logs,
+      ].filter(Boolean).join("\n"));
+      await fetchSummary();
+    } catch (err: any) {
+      setError(err.message ?? "Crawler run failed.");
+      setRunLog(err.message ?? "Crawler run failed.");
+    } finally {
+      setRunLoading(false);
+    }
+  };
 
   const cards = useMemo(() => {
     const stats = summary?.stats;
@@ -181,6 +216,25 @@ export default function AdminCrawlerPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <div className="flex min-w-[220px] items-center gap-2 rounded-2xl bg-white px-4 py-2 shadow-sm ring-1 ring-gray-100 dark:bg-slate-900 dark:ring-slate-800">
+            <Bot size={15} className="text-indigo-500" />
+            <input
+              value={runSite}
+              onChange={(event) => setRunSite(event.target.value)}
+              placeholder="site id, blank = all"
+              disabled={runLoading}
+              className="min-w-0 flex-1 bg-transparent text-xs font-bold text-gray-700 outline-none placeholder:text-gray-300 disabled:opacity-50 dark:text-slate-200"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={runCrawler}
+            disabled={runLoading || loading}
+            className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {runLoading ? <RefreshCw size={16} className="animate-spin" /> : <PlayCircle size={16} />}
+            {runLoading ? "Running..." : "Run crawler"}
+          </button>
           <Link
             href="/admin/posters"
             className="rounded-2xl bg-gray-900 px-5 py-3 text-sm font-black text-white transition-colors hover:bg-black"
@@ -204,6 +258,27 @@ export default function AdminCrawlerPage() {
           <XCircle size={18} />
           {error}
         </div>
+      )}
+
+      {runLog && (
+        <section className="mb-6 rounded-2xl border border-gray-100 bg-slate-950 p-4 text-slate-100 shadow-sm">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-400">
+              <Terminal size={15} />
+              Crawler Output
+            </div>
+            <button
+              type="button"
+              onClick={() => setRunLog(null)}
+              className="rounded-lg px-2 py-1 text-[11px] font-black text-slate-400 hover:bg-white/10 hover:text-white"
+            >
+              Clear
+            </button>
+          </div>
+          <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words text-xs leading-relaxed text-slate-200">
+            {runLog}
+          </pre>
+        </section>
       )}
 
       <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-6">
