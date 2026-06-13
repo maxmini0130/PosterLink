@@ -30,6 +30,11 @@ const TITLE_EXCLUDE_RULES = [
     reason: "result announcement",
   },
   {
+    name: "korean-result-or-selected-list",
+    pattern: /합격자\s*발표|최종\s*합격자?|서류\s*합격자?|1차\s*합격자?|2차\s*합격자?|선정\s*결과|추첨\s*결과|결과\s*발표|대상자\s*발표|명단\s*발표/i,
+    reason: "result announcement",
+  },
+  {
     name: "closure-or-operation-notice",
     pattern: /휴관\s*안내|휴무\s*안내|운영\s*안내|일정\s*안내|개관\s*안내/i,
     reason: "facility operation notice",

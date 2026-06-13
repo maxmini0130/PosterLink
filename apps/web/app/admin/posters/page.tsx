@@ -11,6 +11,7 @@ import {
   FileCheck,
   FileText,
   PencilLine,
+  Search,
   Square,
   Trash2,
   X,
@@ -18,12 +19,30 @@ import {
 import { supabase } from "../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
 import { resolvePosterImageUrl } from "../../../lib/posterImage";
+import { getRegionLabel, getRegionScopeIds } from "../../../lib/regionHelpers";
 import { PosterImageFallback } from "../../components/PosterImageFallback";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const PAGE_SIZE = 24;
 
 type PosterStatus = "review" | "published" | "rejected" | "draft";
+type PosterSearchFilters = {
+  text: string;
+  org: string;
+  categoryId: string;
+  regionId: string;
+};
+
+const EMPTY_FILTERS: PosterSearchFilters = {
+  text: "",
+  org: "",
+  categoryId: "",
+  regionId: "",
+};
+
+function normalizeSearchValue(value: string) {
+  return value.trim().replace(/[,()]/g, " ").replace(/\s+/g, " ");
+}
 
 export default function AdminPostersPage() {
   const [posters, setPosters] = useState<any[]>([]);
@@ -39,18 +58,78 @@ export default function AdminPostersPage() {
   const [bulkProcessing, setBulkProcessing] = useState(false);
   const [previewPoster, setPreviewPoster] = useState<any | null>(null);
   const [imageLightbox, setImageLightbox] = useState<{ src: string; title: string; org?: string | null } | null>(null);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [regions, setRegions] = useState<any[]>([]);
+  const [draftFilters, setDraftFilters] = useState<PosterSearchFilters>(EMPTY_FILTERS);
+  const [appliedFilters, setAppliedFilters] = useState<PosterSearchFilters>(EMPTY_FILTERS);
 
-  const fetchPosters = useCallback(async (status: PosterStatus, pageIndex: number) => {
+  const fetchPosters = useCallback(async (status: PosterStatus, pageIndex: number, filters: PosterSearchFilters) => {
     setLoading(true);
+
+    const categoryId = filters.categoryId || null;
+    const regionScopeIds = getRegionScopeIds(filters.regionId || null, regions);
+    let scopedPosterIds: string[] | null = null;
+
+    try {
+      if (categoryId) {
+        const { data, error } = await supabase
+          .from("poster_categories")
+          .select("poster_id")
+          .eq("category_id", categoryId);
+        if (error) throw error;
+        scopedPosterIds = (data ?? []).map((row: any) => row.poster_id).filter(Boolean);
+      }
+
+      if (regionScopeIds) {
+        const { data, error } = await supabase
+          .from("poster_regions")
+          .select("poster_id")
+          .in("region_id", [...regionScopeIds]);
+        if (error) throw error;
+        const regionPosterIds = new Set((data ?? []).map((row: any) => row.poster_id).filter(Boolean));
+        scopedPosterIds = scopedPosterIds
+          ? scopedPosterIds.filter((id) => regionPosterIds.has(id))
+          : [...regionPosterIds];
+      }
+    } catch (filterError) {
+      console.error(filterError);
+      setPosters([]);
+      setTotalCount(0);
+      setSelectedIds([]);
+      setLoading(false);
+      return;
+    }
+
+    if (scopedPosterIds && scopedPosterIds.length === 0) {
+      setPosters([]);
+      setTotalCount(0);
+      setSelectedIds([]);
+      setLoading(false);
+      return;
+    }
 
     const from = pageIndex * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
-    const { data, error, count } = await supabase
+    let query = supabase
       .from("posters")
       .select("*", { count: "exact" })
       .eq("poster_status", status)
-      .order("created_at", { ascending: status === "review" })
-      .range(from, to);
+      .order("created_at", { ascending: status === "review" });
+
+    const text = normalizeSearchValue(filters.text);
+    const org = normalizeSearchValue(filters.org);
+
+    if (text) {
+      query = query.or(`title.ilike.%${text}%,summary_short.ilike.%${text}%,summary_long.ilike.%${text}%`);
+    }
+    if (org) {
+      query = query.ilike("source_org_name", `%${org}%`);
+    }
+    if (scopedPosterIds) {
+      query = query.in("id", scopedPosterIds);
+    }
+
+    const { data, error, count } = await query.range(from, to);
 
     if (error) {
       console.error(error);
@@ -68,11 +147,30 @@ export default function AdminPostersPage() {
 
     setSelectedIds([]);
     setLoading(false);
-  }, []);
+  }, [regions]);
 
   useEffect(() => {
-    void fetchPosters(currentFilter, page);
-  }, [currentFilter, fetchPosters, page]);
+    void fetchPosters(currentFilter, page, appliedFilters);
+  }, [appliedFilters, currentFilter, fetchPosters, page]);
+
+  useEffect(() => {
+    const fetchOptions = async () => {
+      const [categoryRes, regionRes] = await Promise.all([
+        supabase.from("categories").select("id, name, sort_order").order("sort_order"),
+        supabase
+          .from("regions")
+          .select("id, name, full_name, level, parent_id")
+          .in("level", ["nation", "sido", "sigungu"])
+          .order("level", { ascending: false })
+          .order("full_name", { ascending: true }),
+      ]);
+
+      setCategories(categoryRes.data ?? []);
+      setRegions(regionRes.data ?? []);
+    };
+
+    void fetchOptions();
+  }, []);
 
   const handleReject = async () => {
     if (!rejectModal) return;
@@ -96,7 +194,7 @@ export default function AdminPostersPage() {
       toast.success("반려 처리했습니다.");
       setRejectModal(null);
       setRejectReason("");
-      void fetchPosters(currentFilter, page);
+      void fetchPosters(currentFilter, page, appliedFilters);
     }
     setRejecting(false);
   };
@@ -177,7 +275,7 @@ export default function AdminPostersPage() {
       toast(pushSummary, { icon: "📣" });
     }
 
-    void fetchPosters(currentFilter, page);
+    void fetchPosters(currentFilter, page, appliedFilters);
   };
 
   const selectablePosters = posters.filter((poster) => poster.poster_status !== "published");
@@ -187,6 +285,18 @@ export default function AdminPostersPage() {
   const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const pageStart = totalCount === 0 ? 0 : page * PAGE_SIZE + 1;
   const pageEnd = Math.min(totalCount, (page + 1) * PAGE_SIZE);
+  const activeFilterCount = Object.values(appliedFilters).filter((value) => value.trim()).length;
+
+  const applySearchFilters = () => {
+    setPage(0);
+    setAppliedFilters(draftFilters);
+  };
+
+  const resetSearchFilters = () => {
+    setDraftFilters(EMPTY_FILTERS);
+    setAppliedFilters(EMPTY_FILTERS);
+    setPage(0);
+  };
 
   const toggleSelectAll = () => {
     setSelectedIds(allSelected ? [] : selectableIds);
@@ -228,7 +338,7 @@ export default function AdminPostersPage() {
     toast.success(`${selectedCount}건을 승인했습니다.`);
     setSelectedIds([]);
     setBulkProcessing(false);
-    void fetchPosters(currentFilter, page);
+    void fetchPosters(currentFilter, page, appliedFilters);
   };
 
   const handleBulkReject = async () => {
@@ -265,7 +375,7 @@ export default function AdminPostersPage() {
     setRejectReason("");
     setSelectedIds([]);
     setBulkProcessing(false);
-    void fetchPosters(currentFilter, page);
+    void fetchPosters(currentFilter, page, appliedFilters);
   };
 
   const handleDeleteRejected = async (poster: any) => {
@@ -305,7 +415,7 @@ export default function AdminPostersPage() {
 
     toast.success("반려 포스터를 완전 삭제했습니다.");
     setPreviewPoster((current: any | null) => current?.id === poster.id ? null : current);
-    void fetchPosters(currentFilter, page);
+    void fetchPosters(currentFilter, page, appliedFilters);
   };
 
   const handleBulkDeleteRejected = async () => {
@@ -348,7 +458,7 @@ export default function AdminPostersPage() {
     toast.success(`반려 포스터 ${rejectedPosters.length}건을 완전 삭제했습니다.`);
     setSelectedIds([]);
     setBulkProcessing(false);
-    void fetchPosters(currentFilter, page);
+    void fetchPosters(currentFilter, page, appliedFilters);
   };
 
   const tabs: { label: string; value: PosterStatus }[] = [
@@ -390,6 +500,98 @@ export default function AdminPostersPage() {
           </button>
         ))}
       </div>
+
+      <section className="mb-6 rounded-[2rem] border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-sm font-black text-gray-900 dark:text-white">조회 조건</h2>
+            <p className="mt-1 text-xs font-bold text-gray-400 dark:text-slate-500">
+              제목, 요약, 기관, 카테고리, 지역으로 검수 대상을 좁혀봅니다.
+            </p>
+          </div>
+          {activeFilterCount > 0 && (
+            <span className="w-fit rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-black text-indigo-600 dark:bg-indigo-900/20">
+              {activeFilterCount}개 조건 적용 중
+            </span>
+          )}
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <label className="block">
+            <span className="mb-1.5 block text-[11px] font-black text-gray-400">텍스트 검색</span>
+            <input
+              value={draftFilters.text}
+              onChange={(event) => setDraftFilters((filters) => ({ ...filters, text: event.target.value }))}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") applySearchFilters();
+              }}
+              placeholder="제목 또는 내용"
+              className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-900 outline-none transition-all placeholder:text-gray-300 focus:border-indigo-200 focus:ring-4 focus:ring-indigo-50 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:focus:ring-indigo-950"
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-[11px] font-black text-gray-400">기관 검색</span>
+            <input
+              value={draftFilters.org}
+              onChange={(event) => setDraftFilters((filters) => ({ ...filters, org: event.target.value }))}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") applySearchFilters();
+              }}
+              placeholder="기관명"
+              className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-900 outline-none transition-all placeholder:text-gray-300 focus:border-indigo-200 focus:ring-4 focus:ring-indigo-50 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:focus:ring-indigo-950"
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-[11px] font-black text-gray-400">카테고리</span>
+            <select
+              value={draftFilters.categoryId}
+              onChange={(event) => setDraftFilters((filters) => ({ ...filters, categoryId: event.target.value }))}
+              className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-900 outline-none transition-all focus:border-indigo-200 focus:ring-4 focus:ring-indigo-50 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:focus:ring-indigo-950"
+            >
+              <option value="">전체 카테고리</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>{category.name}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-[11px] font-black text-gray-400">지역</span>
+            <select
+              value={draftFilters.regionId}
+              onChange={(event) => setDraftFilters((filters) => ({ ...filters, regionId: event.target.value }))}
+              className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-900 outline-none transition-all focus:border-indigo-200 focus:ring-4 focus:ring-indigo-50 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:focus:ring-indigo-950"
+            >
+              <option value="">전체 지역</option>
+              {regions.map((region) => (
+                <option key={region.id} value={region.id}>{getRegionLabel(region)}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={applySearchFilters}
+            disabled={loading}
+            className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Search size={16} />
+            조회
+          </button>
+          <button
+            type="button"
+            onClick={resetSearchFilters}
+            disabled={loading && activeFilterCount === 0}
+            className="rounded-2xl border border-gray-100 bg-white px-5 py-3 text-sm font-black text-gray-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900"
+          >
+            초기화
+          </button>
+        </div>
+      </section>
 
       <div
         data-testid="admin-posters-ready"
