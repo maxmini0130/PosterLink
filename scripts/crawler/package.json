@@ -8,6 +8,9 @@
     "crawl:dry": "node src/index.js --dry-run",
     "upload": "node src/upload-to-supabase.js",
     "list": "node src/index.js --list",
+    "ai:export": "node src/export-poster-ai-dataset.js",
+    "ai:train": "node ml/run-python.js train_poster_classifier.py",
+    "ai:predict": "node ml/run-python.js predict_poster.py",
     "repair:images": "node src/repair-missing-poster-images.js",
     "refresh:site": "node src/refresh-site-posters.js"
   },

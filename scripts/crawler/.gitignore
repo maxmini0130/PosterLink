@@ -1,5 +1,17 @@
 node_modules/
+.venv/
 .env
+__pycache__/
+*.pyc
 data/results/
+data/ai-poster-dataset/*
+!data/ai-poster-dataset/poster/
+data/ai-poster-dataset/poster/*
+!data/ai-poster-dataset/poster/.gitkeep
+!data/ai-poster-dataset/not_poster/
+data/ai-poster-dataset/not_poster/*
+!data/ai-poster-dataset/not_poster/.gitkeep
+data/ai-models/*
+!data/ai-models/.gitkeep
 data/seen_urls.json
 data/crawler.log

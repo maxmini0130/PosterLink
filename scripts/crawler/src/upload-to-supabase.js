@@ -15,6 +15,7 @@ import fs from "fs/promises";
 import { createClient } from "@supabase/supabase-js";
 import WebSocket from "ws";
 import { inferRegionCodes } from "./region-rules.js";
+import { getPostExclusionReason } from "./post-candidate-filter.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL?.trim();
 const SUPABASE_KEY = process.env.SUPABASE_KEY?.trim();
@@ -483,6 +484,39 @@ async function cleanupImageLessCrawlerReviews() {
   return count ?? 0;
 }
 
+async function cleanupExcludedCrawlerReviews() {
+  const { data, error } = await supabase
+    .from("posters")
+    .select("id, title")
+    .not("source_key", "is", null)
+    .eq("poster_status", "review")
+    .limit(1000);
+
+  if (error) {
+    console.warn(`Excluded crawler review cleanup failed: ${error.message}`);
+    return 0;
+  }
+
+  const excludedIds = (data ?? [])
+    .filter((row) => getPostExclusionReason(row))
+    .map((row) => row.id);
+
+  if (excludedIds.length === 0) return 0;
+
+  const { count, error: deleteError } = await supabase
+    .from("posters")
+    .delete({ count: "exact" })
+    .in("id", excludedIds)
+    .eq("poster_status", "review");
+
+  if (deleteError) {
+    console.warn(`Excluded crawler review delete failed: ${deleteError.message}`);
+    return 0;
+  }
+
+  return count ?? excludedIds.length;
+}
+
 async function uploadToSupabase(filePath) {
   const raw = await fs.readFile(filePath, "utf-8");
   const posts = JSON.parse(raw);
@@ -492,8 +526,12 @@ async function uploadToSupabase(filePath) {
   console.log(`\n📤 ${imagePosts.length}건을 Supabase에 업로드합니다. (이미지 없음 제외: ${skippedNoImage}건)\n`);
 
   const cleanedCount = await cleanupImageLessCrawlerReviews();
+  const cleanedExcludedCount = await cleanupExcludedCrawlerReviews();
   if (cleanedCount > 0) {
     console.log(`이미지 없는 기존 크롤러 검수대기 ${cleanedCount}건 정리`);
+  }
+  if (cleanedExcludedCount > 0) {
+    console.log(`제외 규칙에 걸린 기존 크롤러 검수대기 ${cleanedExcludedCount}건 정리`);
   }
 
   // 카테고리/지역 맵 로드
@@ -509,6 +547,15 @@ async function uploadToSupabase(filePath) {
     const sourceUrl = post.sourceUrl || post.url;
     const sourceKey = normalizeSourceKey(sourceUrl);
     if (!sourceKey) { fail++; continue; }
+
+    const postExclusion = getPostExclusionReason(post);
+    if (postExclusion) {
+      skip++;
+      process.stdout.write("x");
+      console.log(`\n  제외 규칙(${postExclusion.rule})으로 업로드 건너뜀: ${post.title} - ${postExclusion.reason}`);
+      continue;
+    }
+
     const storedImages = await importPostImagesToStorage(post, sourceUrl, sourceKey);
     const postWithStoredImages = { ...post, images: storedImages };
 

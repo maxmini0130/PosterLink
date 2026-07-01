@@ -55,6 +55,16 @@ const TITLE_EXCLUDE_RULES = [
     reason: "job document notice",
   },
   {
+    name: "public-workfare-recruitment-document",
+    pattern: /지역공동체\s*일자리\s*사업\s*참여자\s*모집|지역공동체일자리사업\s*참여자\s*모집/i,
+    reason: "administrative workfare recruitment document, not a poster notice",
+  },
+  {
+    name: "facility-use-guide",
+    pattern: /(종합체육관|체육관|배드민턴|수영장|헬스장|체육센터|시설|대관).*(이용\s*안내|운영\s*안내|휴관\s*안내|대관\s*안내)|(?:이용\s*안내|운영\s*안내|휴관\s*안내|대관\s*안내).*(종합체육관|체육관|배드민턴|수영장|헬스장|체육센터|시설|대관)/i,
+    reason: "facility operation or use guide, not a poster notice",
+  },
+  {
     name: "low-poster-specific-known-terms",
     pattern: /외국인관광\s*도시민박업|안심장비\s*지원사업|반려식물\s*클리닉|구석구석\s*동네문화예술교육|인공달팽이관/i,
     reason: "known low-poster notice format",

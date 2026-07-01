@@ -1,20 +1,49 @@
 import axios from "axios";
+import { execFile } from "node:child_process";
 import crypto from "crypto";
+import { existsSync } from "node:fs";
 import fs from "fs/promises";
+import os from "node:os";
 import path from "path";
+import { fileURLToPath } from "node:url";
 
 const CACHE_PATH = "data/poster_image_classifications.json";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY?.trim();
 const CLASSIFIER_MODE = (process.env.POSTER_IMAGE_CLASSIFIER ?? "auto").trim().toLowerCase();
 const MODEL = process.env.OPENAI_POSTER_IMAGE_MODEL?.trim() || "gpt-5-mini";
 const MIN_CONFIDENCE = Number(process.env.POSTER_IMAGE_MIN_CONFIDENCE ?? "0.65");
+const ALLOW_UNVERIFIED = process.env.POSTER_IMAGE_ALLOW_UNVERIFIED === "1";
+const LOCAL_MODEL_PATH = process.env.POSTER_LOCAL_MODEL_PATH?.trim();
+const LOCAL_MODEL_THRESHOLD = Number(process.env.POSTER_LOCAL_MODEL_THRESHOLD ?? MIN_CONFIDENCE);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const LOCAL_PREDICT_SCRIPT = path.resolve(__dirname, "../ml/predict_poster.py");
+const PYTHON_BIN = process.env.POSTER_AI_PYTHON?.trim() || findPythonBin();
+
+function findPythonBin() {
+  const candidates = [
+    path.resolve(__dirname, "../.venv/Scripts/python.exe"),
+    path.resolve(__dirname, "../.venv/bin/python"),
+  ];
+  return candidates.find((candidate) => existsSync(candidate)) || "python";
+}
 
 function isAiModeEnabled() {
   return CLASSIFIER_MODE !== "off" && Boolean(OPENAI_API_KEY);
 }
 
+function isLocalModeEnabled() {
+  return Boolean(LOCAL_MODEL_PATH) && CLASSIFIER_MODE !== "off";
+}
+
 function cacheKey(imageUrl) {
-  return crypto.createHash("sha256").update(imageUrl).digest("hex");
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify({
+      imageUrl,
+      localModel: LOCAL_MODEL_PATH || null,
+      model: isLocalModeEnabled() ? "local" : MODEL,
+    }))
+    .digest("hex");
 }
 
 async function loadCache() {
@@ -45,6 +74,45 @@ async function imageUrlToDataUrl(imageUrl) {
   return `data:${contentType};base64,${Buffer.from(response.data).toString("base64")}`;
 }
 
+function execFileJson(command, args) {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, { timeout: 120000, windowsHide: true }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(`${error.message}${stderr ? `\n${stderr}` : ""}`));
+        return;
+      }
+      try {
+        resolve(JSON.parse(stdout));
+      } catch (parseError) {
+        reject(new Error(`Invalid local classifier JSON: ${parseError.message}\n${stdout}`));
+      }
+    });
+  });
+}
+
+async function imageUrlToTempFile(imageUrl) {
+  const response = await axios.get(imageUrl, {
+    responseType: "arraybuffer",
+    timeout: 15000,
+    maxContentLength: 10 * 1024 * 1024,
+    headers: {
+      "User-Agent": "PosterLink-Crawler/1.0 (posterlink.kr; local poster classifier)",
+      "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+      "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.3",
+    },
+  });
+
+  const ext = response.headers["content-type"]?.includes("png") ? "png"
+    : response.headers["content-type"]?.includes("webp") ? "webp"
+      : response.headers["content-type"]?.includes("gif") ? "gif"
+        : "jpg";
+  const tempDir = path.join(os.tmpdir(), "posterlink-ai");
+  await fs.mkdir(tempDir, { recursive: true });
+  const tempPath = path.join(tempDir, `${crypto.randomUUID()}.${ext}`);
+  await fs.writeFile(tempPath, response.data);
+  return tempPath;
+}
+
 function parseJson(text) {
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error(`No JSON object in model response: ${text}`);
@@ -63,6 +131,40 @@ function normalizeResult(result, fallbackReason = "") {
   };
 }
 
+async function classifyWithLocalModel(imageUrl) {
+  const tempPath = await imageUrlToTempFile(imageUrl);
+  try {
+    const prediction = await execFileJson(PYTHON_BIN, [
+      LOCAL_PREDICT_SCRIPT,
+      "--model",
+      LOCAL_MODEL_PATH,
+      "--image",
+      tempPath,
+      "--threshold",
+      String(LOCAL_MODEL_THRESHOLD),
+    ]);
+
+    return {
+      isPoster: Boolean(prediction.isPoster),
+      confidence: Math.max(0, Math.min(1, Number(prediction.confidence ?? 0))),
+      reason: `Local PosterLink model predicted ${prediction.label}`,
+      visualType: prediction.label || "unknown",
+      checkedAt: new Date().toISOString(),
+      model: `local:${path.basename(LOCAL_MODEL_PATH)}`,
+      scores: prediction.scores,
+    };
+  } finally {
+    await fs.unlink(tempPath).catch(() => {});
+  }
+}
+
+function isUsableCachedResult(result) {
+  if (!result) return false;
+  if (ALLOW_UNVERIFIED) return true;
+  if (result.model === "none") return false;
+  return !/^Classifier failed; allowed by default:/i.test(String(result.reason ?? ""));
+}
+
 export async function classifyPosterImage(imageUrl, context = {}) {
   if (!imageUrl) {
     return {
@@ -75,11 +177,13 @@ export async function classifyPosterImage(imageUrl, context = {}) {
     };
   }
 
-  if (!isAiModeEnabled()) {
+  if (!isLocalModeEnabled() && !isAiModeEnabled()) {
     return {
-      isPoster: true,
-      confidence: 1,
-      reason: OPENAI_API_KEY ? "Poster image classifier disabled" : "OPENAI_API_KEY not configured; allowed by default",
+      isPoster: ALLOW_UNVERIFIED,
+      confidence: ALLOW_UNVERIFIED ? 1 : 0,
+      reason: OPENAI_API_KEY
+        ? "Poster image classifier disabled"
+        : "OPENAI_API_KEY not configured; rejected by default",
       visualType: "unknown",
       checkedAt: new Date().toISOString(),
       model: "none",
@@ -88,14 +192,22 @@ export async function classifyPosterImage(imageUrl, context = {}) {
 
   const cache = await loadCache();
   const key = cacheKey(imageUrl);
-  if (cache[key]) return cache[key];
+  if (isUsableCachedResult(cache[key])) return cache[key];
 
   try {
+    if (isLocalModeEnabled()) {
+      const result = await classifyWithLocalModel(imageUrl);
+      cache[key] = result;
+      await saveCache(cache);
+      return result;
+    }
+
     const dataUrl = await imageUrlToDataUrl(imageUrl);
     const prompt = [
       "You are PosterLink's strict image classifier.",
       "Decide whether the image is a public-service poster, flyer, notice, recruitment graphic, event/program card, or announcement image.",
       "Return isPoster=false for logos, icons, website UI screenshots, unrelated photos, maps, profile images, decorative banners, file icons, or generic layout assets.",
+      "Return isPoster=false for plain facility-use notices, court schedules, reservation/use guides, operating-hour notices, fee tables, or text-only administrative pages even if they include an image.",
       "A real poster usually contains substantial readable Korean/English announcement text, dates, organization names, QR/contact info, application/recruitment/event details, or a designed flyer layout.",
       `Known title: ${context.title ?? ""}`,
       `Known organization/site: ${context.site ?? context.sourceOrgName ?? ""}`,
@@ -151,9 +263,9 @@ export async function classifyPosterImage(imageUrl, context = {}) {
     return result;
   } catch (error) {
     const result = {
-      isPoster: true,
-      confidence: 0.5,
-      reason: `Classifier failed; allowed by default: ${error.message}`,
+      isPoster: ALLOW_UNVERIFIED,
+      confidence: ALLOW_UNVERIFIED ? 0.5 : 0,
+      reason: `Classifier failed; ${ALLOW_UNVERIFIED ? "allowed" : "rejected"} by default: ${error.message}`,
       visualType: "unknown",
       checkedAt: new Date().toISOString(),
       model: MODEL,

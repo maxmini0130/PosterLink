@@ -10,6 +10,7 @@ const MODEL = process.env.OPENAI_POSTER_CONTENT_MODEL?.trim() || "gpt-5-mini";
 const MIN_CONFIDENCE = Number(process.env.POSTER_CONTENT_MIN_CONFIDENCE ?? "0.6");
 const MAX_CONTEXT_CHARS = Number(process.env.POSTER_CONTENT_CONTEXT_CHARS ?? "4500");
 const ALLOW_ON_ERROR = process.env.POSTER_CONTENT_ALLOW_ON_ERROR === "1";
+const ALLOW_UNVERIFIED = process.env.POSTER_CONTENT_ALLOW_UNVERIFIED === "1";
 
 function isAiModeEnabled() {
   return VERIFIER_MODE !== "off" && Boolean(OPENAI_API_KEY);
@@ -102,6 +103,14 @@ function buildNoticeContext(context = {}) {
   ].join("\n");
 }
 
+function isUsableCachedResult(result) {
+  if (!result) return false;
+  if (ALLOW_UNVERIFIED || ALLOW_ON_ERROR) return true;
+  if (result.model === "none") return false;
+  if (result.decision === "verification_failed_allowed") return false;
+  return !/allowed by default/i.test(String(result.reason ?? ""));
+}
+
 export async function verifyPosterMatchesNotice(imageUrl, context = {}) {
   if (!imageUrl) {
     return {
@@ -119,13 +128,15 @@ export async function verifyPosterMatchesNotice(imageUrl, context = {}) {
 
   if (!isAiModeEnabled()) {
     return {
-      isSameNotice: true,
-      confidence: 1,
+      isSameNotice: ALLOW_UNVERIFIED,
+      confidence: ALLOW_UNVERIFIED ? 1 : 0,
       decision: "not_checked",
       matchedFields: [],
-      mismatchedFields: [],
+      mismatchedFields: ALLOW_UNVERIFIED ? [] : ["verification"],
       posterTextSummary: "",
-      reason: OPENAI_API_KEY ? "Poster content verifier disabled" : "OPENAI_API_KEY not configured; allowed by default",
+      reason: OPENAI_API_KEY
+        ? "Poster content verifier disabled"
+        : "OPENAI_API_KEY not configured; rejected by default",
       checkedAt: new Date().toISOString(),
       model: "none",
     };
@@ -133,7 +144,7 @@ export async function verifyPosterMatchesNotice(imageUrl, context = {}) {
 
   const cache = await loadCache();
   const key = cacheKey(imageUrl, context);
-  if (cache[key]) return cache[key];
+  if (isUsableCachedResult(cache[key])) return cache[key];
 
   try {
     const dataUrl = await imageUrlToDataUrl(imageUrl);
@@ -142,6 +153,7 @@ export async function verifyPosterMatchesNotice(imageUrl, context = {}) {
       "Compare the poster image with the original notice text and decide whether they describe the same public notice, event, recruitment, program, or announcement.",
       "Use visible text in the poster image, especially title, date/period/deadline, place, organization, target audience, and program/recruitment details.",
       "Return isSameNotice=false when the image is a generic site thumbnail, unrelated banner, logo, different event, or when key fields conflict.",
+      "Return isSameNotice=false for facility-use guides, sports court schedules, reservation instructions, operating-hour notices, fee tables, or text-only administrative notices when the source is not a real poster/flyer announcement.",
       "Return isSameNotice=true only when enough visible poster content matches the original notice. If the poster has little readable text but strongly matches title/organization/context, use lower confidence.",
       "Original notice context:",
       buildNoticeContext(context),
