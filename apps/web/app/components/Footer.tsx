@@ -8,7 +8,7 @@ export function Footer() {
           <div>
             <p className="text-sm font-black text-gray-900">PosterLink</p>
             <p className="text-xs font-bold text-gray-400 mt-1 leading-relaxed">
-              청년·소상공인·문화 공고를 한눈에<br className="md:hidden" /> 모아보는 공공 정보 플랫폼
+              흩어진 공공기관 지원사업·교육·행사·모집 공고를<br className="md:hidden" /> 지역과 관심분야별로 찾아보는 서비스
             </p>
           </div>
 

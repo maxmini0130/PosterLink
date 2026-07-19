@@ -298,8 +298,13 @@ export default function PosterListPage() {
 
         {/* Main List UI */}
         <div className="flex flex-col gap-6">
-          <div className="flex items-center justify-between gap-4">
-             <h1 className="text-2xl font-black text-gray-900">Explore 🔍</h1>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+             <div>
+               <h1 className="text-2xl font-black text-gray-900">공공 공고 찾기</h1>
+               <p className="mt-1 max-w-2xl text-sm font-bold leading-6 text-gray-500">
+                 정부·지자체·공공기관의 지원사업, 교육, 행사, 채용·모집 공고와 공식 신청 링크를 찾아보세요.
+               </p>
+             </div>
              <div className="flex flex-wrap items-center justify-end gap-2">
              <button
                type="button"

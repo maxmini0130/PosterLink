@@ -9,7 +9,7 @@ import { getAppOrigin } from "../lib/siteUrl";
 
 const appOrigin = getAppOrigin();
 const siteDescription =
-  "포스터링크는 청년 지원, 소상공인 지원, 문화 행사, 교육 모집 등 공공기관 공고와 공식 신청 링크를 모아보는 포스터 검색 서비스입니다.";
+  "정부·지자체·공공기관의 청년지원, 소상공인 지원사업, 교육, 문화행사, 채용·모집 공고를 지역과 관심분야별로 찾아보세요.";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -20,15 +20,19 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   applicationName: "PosterLink",
   title: {
-    default: "PosterLink - 포스터링크",
+    default: "포스터링크 | 공공기관 지원사업·교육·행사·모집 공고",
     template: "%s | PosterLink",
   },
   description: siteDescription,
   keywords: [
     "포스터링크",
     "PosterLink",
-    "공공 포스터",
     "공공기관 공고",
+    "지원사업",
+    "교육 공고",
+    "행사 공고",
+    "모집 공고",
+    "채용 공고",
     "청년 지원",
     "소상공인 지원",
     "문화 행사",
@@ -47,13 +51,13 @@ export const metadata: Metadata = {
     locale: "ko_KR",
     siteName: "PosterLink",
     url: appOrigin,
-    title: "PosterLink - 포스터링크 공공 포스터 검색",
+    title: "포스터링크 | 공공기관 지원사업·교육·행사·모집 공고",
     description: siteDescription,
-    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "PosterLink 포스터링크 공공 포스터 검색" }],
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "포스터링크 공공기관 공고 탐색" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "PosterLink - 포스터링크",
+    title: "포스터링크 | 공공기관 공고 탐색",
     description: siteDescription,
     images: ["/opengraph-image"],
   },

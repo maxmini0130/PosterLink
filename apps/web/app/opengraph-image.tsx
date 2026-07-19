@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "PosterLink — 공공 포스터 링크 플랫폼";
+export const alt = "포스터링크 — 공공기관 지원사업·교육·행사·모집 공고";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -80,7 +80,7 @@ export default function OG() {
             lineHeight: 1.5,
           }}
         >
-          청년 · 소상공인 · 문화 공고를 한눈에
+          공공기관 지원사업·교육·행사·모집 공고를 한곳에서
         </div>
 
         {/* 태그 */}
@@ -91,7 +91,7 @@ export default function OG() {
             marginTop: "40px",
           }}
         >
-          {["공공기관", "마포구", "공고·채용·문화"].map((tag) => (
+          {["지원사업", "교육·행사", "채용·모집"].map((tag) => (
             <div
               key={tag}
               style={{
@@ -117,7 +117,7 @@ export default function OG() {
             fontSize: "18px",
           }}
         >
-          posterlink.co.kr
+          www.posterlink.kr
         </div>
       </div>
     ),
