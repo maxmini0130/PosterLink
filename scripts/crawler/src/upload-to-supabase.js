@@ -9,13 +9,23 @@
 //   SUPABASE_KEY      — Supabase service_role 키 (RLS 우회)
 //   CRAWLER_USER_ID   — 크롤러 봇 계정 UUID (profiles 테이블에 미리 등록)
 
-import "dotenv/config";
+import "./load-env.js";
 import crypto from "node:crypto";
 import fs from "fs/promises";
 import { createClient } from "@supabase/supabase-js";
 import WebSocket from "ws";
 import { inferRegionCodes } from "./region-rules.js";
 import { getPostExclusionReason } from "./post-candidate-filter.js";
+import { evaluatePosterQuality, summarizeQualityIssues } from "./poster-quality-gate.js";
+import {
+  deletePostersWithStorage,
+  replacePosterImagesWithStorageCleanup,
+} from "./storage-cleanup.js";
+import {
+  createCollectionSourceStats,
+  flushCollectionSourceStats,
+  loadCollectionSources,
+} from "./collection-source-tracker.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL?.trim();
 const SUPABASE_KEY = process.env.SUPABASE_KEY?.trim();
@@ -293,8 +303,16 @@ function isInvalidCrawlerTitle(value) {
   const title = String(value ?? "").replace(/\s+/g, " ").trim();
   return (
     !title ||
-    /^(작성자|관리자|번호|제목|공지사항|조회수|첨부파일|maposc)$/i.test(title) ||
-    /^작성자\s*:/i.test(title)
+    /^(\uC791\uC131\uC790|\uAD00\uB9AC\uC790|\uBC88\uD638|\uC81C\uBAA9|\uACF5\uC9C0\uC0AC\uD56D|\uC870\uD68C\uC218|\uCCA8\uBD80\uD30C\uC77C|maposc)$/i.test(title) ||
+    /^\uC791\uC131\uC790\s*:/i.test(title) ||
+    title === "\uC2DC\uC2A4\uD15C \uC624\uB958 \uC785\uB2C8\uB2E4." ||
+    title === "@\uCCAD\uB144\uBABD\uB545\uC815\uBCF4\uD1B5" ||
+    title === "\uB3D9\uC544\uC77C\uBCF4" ||
+    title === "(\uC8FC)\uC5D0\uB4C0\uC70C" ||
+    title === "\uC5D0\uC774\uBE14\uB7F0" ||
+    title === "\uC5D0\uC774\uBE14\uB7F0 \uC548\uB0B4" ||
+    /^\uC11C\uC6B8\uD2B9\uBCC4\uC2DC\s+\S+\uAD6C$/.test(title) ||
+    /\uCCAD\uB144\uC815\uCC45\s*>\s*\uCCAD\uB144\uC815\uCC45\uAC80\uC0C9\s*>\s*\uCCAD\uB144\uC9C0\uC6D0\uC815\uBCF4/.test(title)
   );
 }
 
@@ -372,6 +390,41 @@ function normalizePostImages(post, sourceUrl) {
     .filter(Boolean))];
 }
 
+function createQualityReportEntry(post, sourceUrl, quality) {
+  return {
+    title: post.title ?? null,
+    site: post.site ?? null,
+    board: post.board ?? null,
+    category: post.category ?? null,
+    source_url: sourceUrl ?? null,
+    decision: quality.decision,
+    issue_score: quality.issue_score,
+    issues: quality.issues,
+    images: post.images ?? [],
+  };
+}
+
+async function writeUploadQualityReport(inputFilePath, qualityReport) {
+  const rejected = qualityReport.rejected ?? [];
+  const review = qualityReport.review ?? [];
+  if (rejected.length === 0 && review.length === 0) return null;
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const reportPath = `data/results/upload-quality-${timestamp}.json`;
+  await fs.mkdir("data/results", { recursive: true });
+  await fs.writeFile(reportPath, JSON.stringify({
+    generated_at: new Date().toISOString(),
+    input_file: inputFilePath,
+    summary: {
+      rejected_count: rejected.length,
+      review_warning_count: review.length,
+    },
+    rejected,
+    review,
+  }, null, 2), "utf-8");
+  return reportPath;
+}
+
 function getImageExtension(imageUrl, contentType) {
   const contentTypeExtension = {
     "image/jpeg": "jpg",
@@ -445,33 +498,19 @@ async function syncPosterImages(posterId, post, sourceUrl) {
   const images = normalizePostImages(post, sourceUrl);
   if (images.length === 0) return;
 
-  const { error: deleteError } = await supabase
-    .from("poster_images")
-    .delete()
-    .eq("poster_id", posterId);
-
-  if (deleteError) {
-    console.warn(`\n  poster_images 초기화 실패: ${post.title} — ${deleteError.message}`);
-    return;
-  }
-
-  const { error } = await supabase.from("poster_images").insert(
-    images.map((imageUrl, index) => ({
-      poster_id: posterId,
-      storage_path: imageUrl,
-      image_type: index === 0 ? "thumbnail" : "original",
-    }))
-  );
-
-  if (error) {
+  try {
+    await replacePosterImagesWithStorageCleanup(supabase, posterId, images, {
+      bucket: POSTER_IMAGE_BUCKET,
+    });
+  } catch (error) {
     console.warn(`\n  poster_images 저장 실패: ${post.title} — ${error.message}`);
   }
 }
 
 async function cleanupImageLessCrawlerReviews() {
-  const { count, error } = await supabase
+  const { data, error } = await supabase
     .from("posters")
-    .delete({ count: "exact" })
+    .select("id")
     .not("source_key", "is", null)
     .eq("poster_status", "review")
     .is("thumbnail_url", null);
@@ -481,7 +520,12 @@ async function cleanupImageLessCrawlerReviews() {
     return 0;
   }
 
-  return count ?? 0;
+  const ids = (data ?? []).map((row) => row.id);
+  const { deletedRows } = await deletePostersWithStorage(supabase, ids, {
+    bucket: POSTER_IMAGE_BUCKET,
+    status: "review",
+  });
+  return deletedRows;
 }
 
 async function cleanupExcludedCrawlerReviews() {
@@ -503,18 +547,16 @@ async function cleanupExcludedCrawlerReviews() {
 
   if (excludedIds.length === 0) return 0;
 
-  const { count, error: deleteError } = await supabase
-    .from("posters")
-    .delete({ count: "exact" })
-    .in("id", excludedIds)
-    .eq("poster_status", "review");
-
-  if (deleteError) {
-    console.warn(`Excluded crawler review delete failed: ${deleteError.message}`);
+  try {
+    const { deletedRows } = await deletePostersWithStorage(supabase, excludedIds, {
+      bucket: POSTER_IMAGE_BUCKET,
+      status: "review",
+    });
+    return deletedRows;
+  } catch (error) {
+    console.warn(`Excluded crawler review delete failed: ${error.message}`);
     return 0;
   }
-
-  return count ?? excludedIds.length;
 }
 
 async function uploadToSupabase(filePath) {
@@ -522,6 +564,15 @@ async function uploadToSupabase(filePath) {
   const posts = JSON.parse(raw);
   const imagePosts = posts.filter(hasPosterImage);
   const skippedNoImage = posts.length - imagePosts.length;
+  const collectionSources = await loadCollectionSources(supabase);
+  const collectionStats = createCollectionSourceStats(collectionSources);
+
+  for (const post of posts) {
+    collectionStats.recordChecked(post);
+    if (!hasPosterImage(post)) {
+      collectionStats.recordRejected(post, "no_poster_image");
+    }
+  }
 
   console.log(`\n📤 ${imagePosts.length}건을 Supabase에 업로드합니다. (이미지 없음 제외: ${skippedNoImage}건)\n`);
 
@@ -542,18 +593,43 @@ async function uploadToSupabase(filePath) {
   let skip = 0;
   let fail = 0;
   const skippedSourceKeys = [];
+  const qualityRejected = [];
+  const qualityReview = [];
 
   for (const post of imagePosts) {
     const sourceUrl = post.sourceUrl || post.url;
     const sourceKey = normalizeSourceKey(sourceUrl);
-    if (!sourceKey) { fail++; continue; }
+    if (!sourceKey) {
+      fail++;
+      collectionStats.recordFailed(post, "missing_source_key");
+      continue;
+    }
 
     const postExclusion = getPostExclusionReason(post);
     if (postExclusion) {
       skip++;
+      collectionStats.recordRejected(post, `post_filter:${postExclusion.rule}`);
       process.stdout.write("x");
       console.log(`\n  제외 규칙(${postExclusion.rule})으로 업로드 건너뜀: ${post.title} - ${postExclusion.reason}`);
       continue;
+    }
+
+    const sourceImages = normalizePostImages(post, sourceUrl);
+    const quality = evaluatePosterQuality({ ...post, images: sourceImages }, {
+      sourceKey,
+      images: sourceImages,
+      links: [sourceUrl].filter(Boolean),
+    });
+    if (quality.decision === "reject") {
+      skip++;
+      collectionStats.recordRejected(post, `quality:${summarizeQualityIssues(quality)}`);
+      qualityRejected.push(createQualityReportEntry({ ...post, images: sourceImages }, sourceUrl, quality));
+      process.stdout.write("q");
+      console.warn(`\n  Quality gate rejected: ${post.title} - ${summarizeQualityIssues(quality)}`);
+      continue;
+    }
+    if (quality.issues.length > 0) {
+      qualityReview.push(createQualityReportEntry({ ...post, images: sourceImages }, sourceUrl, quality));
     }
 
     const storedImages = await importPostImagesToStorage(post, sourceUrl, sourceKey);
@@ -575,6 +651,7 @@ async function uploadToSupabase(filePath) {
     };
     if (isInvalidCrawlerTitle(posterRecord.title)) {
       fail++;
+      collectionStats.recordRejected(post, "invalid_title");
       process.stdout.write("!");
       console.warn(`\n  잘못된 제목으로 판단되어 저장 건너뜀: ${posterRecord.title} — ${sourceUrl}`);
       continue;
@@ -590,6 +667,7 @@ async function uploadToSupabase(filePath) {
 
     if (existingErr) {
       fail++;
+      collectionStats.recordFailed(post, `existing_lookup:${existingErr.message}`);
       process.stdout.write("✗");
       console.error(`\n  기존 포스터 확인 실패: ${post.title} — ${existingErr.message}`);
       continue;
@@ -597,11 +675,12 @@ async function uploadToSupabase(filePath) {
 
     if (existingPoster?.id) {
       skip++;
+      collectionStats.recordDuplicate(post);
       skippedSourceKeys.push(sourceKey);
       const updates = {};
       if (
         posterRecord.title !== "제목 없음" &&
-        (!existingPoster.title || existingPoster.title === "제목 없음" || looksMojibake(existingPoster.title))
+        (!existingPoster.title || existingPoster.title === "제목 없음" || looksMojibake(existingPoster.title) || isInvalidCrawlerTitle(existingPoster.title))
       ) {
         updates.title = posterRecord.title;
       }
@@ -639,6 +718,7 @@ async function uploadToSupabase(filePath) {
 
     if (posterErr || !poster?.id) {
       fail++;
+      collectionStats.recordFailed(post, `poster_insert:${posterErr?.message ?? "insert returned no row"}`);
       process.stdout.write("✗");
       console.error(`\n  포스터 저장 실패: ${post.title} — ${posterErr?.message ?? "insert returned no row"}`);
       continue;
@@ -664,13 +744,26 @@ async function uploadToSupabase(filePath) {
     await assignPosterRegions(posterId, post, regionMap);
 
     success++;
+    collectionStats.recordCreated(post);
     process.stdout.write("✓");
   }
+
+  await flushCollectionSourceStats(supabase, collectionStats);
 
   console.log(`\n\n━━━ 업로드 완료 ━━━`);
   console.log(`  성공: ${success}건`);
   console.log(`  중복(스킵): ${skip}건`);
   console.log(`  실패: ${fail}건`);
+  console.log(`  품질검증 자동차단: ${qualityRejected.length}건`);
+  console.log(`  품질검증 확인필요: ${qualityReview.length}건`);
+
+  const qualityReportPath = await writeUploadQualityReport(filePath, {
+    rejected: qualityRejected,
+    review: qualityReview,
+  });
+  if (qualityReportPath) {
+    console.log(`  품질검증 리포트: ${qualityReportPath}`);
+  }
 
   if (skippedSourceKeys.length > 0) {
     const { data: existingRows, error: existingError } = await supabase

@@ -11,7 +11,25 @@
 import { sites } from "./sites.js";
 import { getAdapter } from "./adapters/index.js";
 import { crawlSite, logger } from "./crawler.js";
+import "./load-env.js";
+import {
+  createCollectionSourceStats,
+  createOptionalCollectionSourceClient,
+  flushCollectionSourceStats,
+  loadCollectionSources,
+} from "./collection-source-tracker.js";
 import fs from "fs/promises";
+
+function getLatestPostDate(posts) {
+  let latest = null;
+  for (const post of posts) {
+    const date = new Date(post.date || post.deadline || post.crawledAt);
+    if (!Number.isNaN(date.getTime()) && (!latest || date > latest)) {
+      latest = date;
+    }
+  }
+  return latest?.toISOString() ?? null;
+}
 
 async function main() {
   const args = process.argv.slice(2);
@@ -60,6 +78,11 @@ async function main() {
   const allResults = [];
   let successCount = 0;
   let failCount = 0;
+  const collectionSourceClient = dryRun ? null : createOptionalCollectionSourceClient(logger);
+  const collectionSources = collectionSourceClient
+    ? await loadCollectionSources(collectionSourceClient, logger)
+    : [];
+  const crawlSourceStats = createCollectionSourceStats(collectionSources);
 
   for (const site of targetSites) {
     try {
@@ -69,15 +92,26 @@ async function main() {
         dryRun,
       });
       allResults.push(...posts);
+      crawlSourceStats.recordSiteRun(site, {
+        checked: posts.length,
+        valid: posts.length,
+        latestPostFoundAt: getLatestPostDate(posts),
+      });
       successCount++;
     } catch (err) {
       logger.error(`Site failed: ${site.name} — ${err.message}`);
+      crawlSourceStats.recordSiteRun(site, {
+        failed: 1,
+        error: err.message,
+      });
       failCount++;
     }
 
     // 사이트 간 3초 대기
     await new Promise((r) => setTimeout(r, 3000));
   }
+
+  await flushCollectionSourceStats(collectionSourceClient, crawlSourceStats, { logger });
 
   // ── 결과 요약 ────────────────────────────────
   console.log("\n" + "═".repeat(50));
