@@ -252,7 +252,7 @@ export default function Home() {
                 {regionLabel} 기준 탐색
               </span>
             </div>
-            <h1 className="max-w-3xl text-3xl font-black leading-tight tracking-normal text-slate-950 sm:text-5xl">
+            <h1 className="max-w-none whitespace-nowrap text-[clamp(1rem,4.2vw,3rem)] font-black leading-tight tracking-normal text-slate-950">
               나에게 맞는 공공 공고, 흩어져 찾지 마세요
             </h1>
             <p className="mt-4 max-w-3xl text-sm font-medium leading-7 text-slate-600 sm:text-base">
