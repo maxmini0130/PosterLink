@@ -17,6 +17,7 @@ import {
   createOptionalCollectionSourceClient,
   flushCollectionSourceStats,
   loadCollectionSources,
+  resolveSitesForCollectionSource,
 } from "./collection-source-tracker.js";
 import fs from "fs/promises";
 
@@ -37,6 +38,8 @@ async function main() {
   const listOnly = args.includes("--list");
   const siteIdx = args.indexOf("--site");
   const targetSite = siteIdx >= 0 ? args[siteIdx + 1] : null;
+  const sourceIdx = args.indexOf("--source");
+  const targetSource = sourceIdx >= 0 ? args[sourceIdx + 1] : null;
 
   // ── 사이트 목록 출력 ─────────────────────────
   if (listOnly) {
@@ -64,11 +67,30 @@ async function main() {
 
   if (dryRun) logger.info("🔍 DRY-RUN 모드 — 목록만 수집, 상세 페이지 미접근");
 
-  const targetSites = targetSite
-    ? sites.filter((s) => s.id === targetSite || s.id.startsWith(targetSite))
-    : sites;
+  const collectionSourceClient = createOptionalCollectionSourceClient(logger);
+  const collectionSources = collectionSourceClient
+    ? await loadCollectionSources(collectionSourceClient, logger)
+    : [];
+
+  let targetSites = sites;
+  if (targetSource) {
+    const source = collectionSources.find((row) => row.id === targetSource || row.source_slug === targetSource);
+    if (!source) {
+      logger.error(`collection source "${targetSource}" could not be found. Check /admin/collection-sources first.`);
+      process.exit(1);
+    }
+
+    targetSites = resolveSitesForCollectionSource(source, sites);
+    logger.info(`collection source selected: ${source.name} (${source.source_slug}) -> ${targetSites.length} site(s)`);
+  } else if (targetSite) {
+    targetSites = sites.filter((s) => s.id === targetSite || s.id.startsWith(targetSite));
+  }
 
   if (targetSites.length === 0) {
+    if (targetSource) {
+      logger.error(`No crawler site matched collection source "${targetSource}". Add config_json.site_ids for sources with custom adapter ids.`);
+      process.exit(1);
+    }
     logger.error(`사이트 "${targetSite}"를 찾을 수 없습니다. --list로 확인하세요.`);
     process.exit(1);
   }
@@ -78,10 +100,6 @@ async function main() {
   const allResults = [];
   let successCount = 0;
   let failCount = 0;
-  const collectionSourceClient = dryRun ? null : createOptionalCollectionSourceClient(logger);
-  const collectionSources = collectionSourceClient
-    ? await loadCollectionSources(collectionSourceClient, logger)
-    : [];
   const crawlSourceStats = createCollectionSourceStats(collectionSources);
 
   for (const site of targetSites) {
@@ -111,7 +129,9 @@ async function main() {
     await new Promise((r) => setTimeout(r, 3000));
   }
 
-  await flushCollectionSourceStats(collectionSourceClient, crawlSourceStats, { logger });
+  if (!dryRun) {
+    await flushCollectionSourceStats(collectionSourceClient, crawlSourceStats, { logger });
+  }
 
   // ── 결과 요약 ────────────────────────────────
   console.log("\n" + "═".repeat(50));

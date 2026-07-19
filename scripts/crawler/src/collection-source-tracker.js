@@ -5,9 +5,13 @@ const SOURCE_SELECT = [
   "id",
   "source_slug",
   "name",
+  "source_type",
   "homepage_url",
   "list_url",
   "status",
+  "priority",
+  "collection_method",
+  "collection_interval_minutes",
   "consecutive_error_count",
   "config_json",
 ].join(",");
@@ -91,6 +95,51 @@ function getConfiguredSiteIds(source) {
   const raw = source?.config_json?.site_ids;
   if (!Array.isArray(raw)) return [];
   return raw.map((value) => String(value).trim()).filter(Boolean);
+}
+
+function getSiteUrls(site) {
+  return [
+    site?.domain,
+    ...(site?.boards ?? []).map((board) => board?.url),
+  ].filter(Boolean);
+}
+
+function sameHost(urlA, urlB) {
+  const hostA = getHost(urlA);
+  const hostB = getHost(urlB);
+  return Boolean(hostA && hostB && hostA === hostB);
+}
+
+function pathOverlaps(urlA, urlB) {
+  const pathA = getPath(urlA);
+  const pathB = getPath(urlB);
+  if (!pathA || !pathB) return false;
+  return pathA.startsWith(pathB) || pathB.startsWith(pathA);
+}
+
+export function sourceMatchesSite(source, site) {
+  if (!source || !site) return false;
+
+  const configuredSiteIds = getConfiguredSiteIds(source);
+  if (source.source_slug === site.id || configuredSiteIds.includes(site.id)) return true;
+  if (source.name && source.name === site.name) return true;
+
+  const sourceUrls = [source.list_url, source.homepage_url].filter(Boolean);
+  const siteUrls = getSiteUrls(site);
+
+  for (const sourceUrl of sourceUrls) {
+    for (const siteUrl of siteUrls) {
+      if (!sameHost(sourceUrl, siteUrl)) continue;
+      if (pathOverlaps(sourceUrl, siteUrl)) return true;
+    }
+  }
+
+  return false;
+}
+
+export function resolveSitesForCollectionSource(source, sites = []) {
+  if (!source) return [];
+  return sites.filter((site) => sourceMatchesSite(source, site));
 }
 
 function scoreSource(source, context) {

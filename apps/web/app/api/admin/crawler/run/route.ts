@@ -133,11 +133,15 @@ async function findLatestResultFile(crawlerDir: string, startedAt: number) {
     .sort((a, b) => b.mtimeMs - a.mtimeMs)[0]?.fullPath ?? null;
 }
 
-async function runCrawler(site?: string | null) {
+async function runCrawler(options: { site?: string | null; source?: string | null } = {}) {
   const startedAt = Date.now();
   const crawlerDir = await findCrawlerDir();
   const crawlArgs = ["src/index.js"];
-  if (site) crawlArgs.push("--site", site);
+  if (options.source) {
+    crawlArgs.push("--source", options.source);
+  } else if (options.site) {
+    crawlArgs.push("--site", options.site);
+  }
 
   let logs = await runCommand("node", crawlArgs, { cwd: crawlerDir });
   const resultFile = await findLatestResultFile(crawlerDir, startedAt);
@@ -180,8 +184,9 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({}));
   const site = typeof body.site === "string" && body.site.trim() ? body.site.trim() : null;
+  const source = typeof body.source === "string" && body.source.trim() ? body.source.trim() : null;
 
-  activeRun = runCrawler(site);
+  activeRun = runCrawler({ site, source });
   try {
     const result = await activeRun;
     return NextResponse.json(result);

@@ -10,6 +10,7 @@ import {
   Database,
   ExternalLink,
   Loader2,
+  PlayCircle,
   Plus,
   RefreshCcw,
   Search,
@@ -71,6 +72,13 @@ type ApiPayload = {
   sources: CollectionSource[];
   summary: SourceSummary;
   message?: string;
+};
+
+type RunResult = {
+  sourceName: string;
+  logs: string;
+  resultFile?: string | null;
+  uploaded?: boolean;
 };
 
 const TYPE_OPTIONS = [
@@ -204,6 +212,8 @@ export default function AdminCollectionSourcesPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [runningSourceId, setRunningSourceId] = useState<string | null>(null);
+  const [runResult, setRunResult] = useState<RunResult | null>(null);
 
   const loadSources = async () => {
     setLoading(true);
@@ -276,6 +286,34 @@ export default function AdminCollectionSourcesPage() {
     }
   };
 
+  const runSource = async (source: CollectionSource) => {
+    setRunningSourceId(source.id);
+    setRunResult(null);
+
+    try {
+      const res = await fetch("/api/admin/crawler/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: source.source_slug }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(payload?.error ?? "수집 실행에 실패했습니다.");
+
+      setRunResult({
+        sourceName: source.name,
+        logs: payload?.logs ?? "",
+        resultFile: payload?.resultFile ?? null,
+        uploaded: payload?.uploaded ?? false,
+      });
+      toast.success(`${source.name} 수집을 완료했습니다.`);
+      await loadSources();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "수집 실행에 실패했습니다.");
+    } finally {
+      setRunningSourceId(null);
+    }
+  };
+
   const deleteSource = async (source: CollectionSource) => {
     if (!confirm(`${source.name} 수집 기관을 삭제할까요?`)) return;
     try {
@@ -319,6 +357,26 @@ export default function AdminCollectionSourcesPage() {
 
       {error && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm font-bold text-rose-700">{error}</div>
+      )}
+
+      {runResult && (
+        <section className="rounded-lg border border-emerald-200 bg-emerald-50 p-5 shadow-sm dark:border-emerald-500/20 dark:bg-emerald-500/10">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-200">Last Collection Run</p>
+              <h2 className="mt-1 text-lg font-black text-gray-950 dark:text-white">{runResult.sourceName}</h2>
+              <p className="mt-1 text-xs font-bold text-emerald-700 dark:text-emerald-200">
+                {runResult.uploaded ? "수집 결과를 Supabase에 업로드했습니다." : "수집 결과 파일이 없어 업로드를 건너뛰었습니다."}
+                {runResult.resultFile ? ` · ${runResult.resultFile}` : ""}
+              </p>
+            </div>
+          </div>
+          {runResult.logs && (
+            <pre className="mt-4 max-h-72 overflow-auto rounded-lg bg-gray-950 p-4 text-xs font-bold leading-6 text-gray-100">
+              {runResult.logs.slice(-8000)}
+            </pre>
+          )}
+        </section>
       )}
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -516,13 +574,24 @@ export default function AdminCollectionSourcesPage() {
                       </div>
                     </td>
                     <td className="py-3 pr-4">
-                      <button
-                        type="button"
-                        onClick={() => void deleteSource(source)}
-                        className="rounded-lg p-2 text-gray-300 hover:bg-rose-50 hover:text-rose-600"
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void runSource(source)}
+                          disabled={Boolean(runningSourceId)}
+                          title="기관 수집 실행"
+                          className="rounded-lg p-2 text-indigo-500 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-indigo-500/10"
+                        >
+                          {runningSourceId === source.id ? <Loader2 size={15} className="animate-spin" /> : <PlayCircle size={15} />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void deleteSource(source)}
+                          className="rounded-lg p-2 text-gray-300 hover:bg-rose-50 hover:text-rose-600"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
