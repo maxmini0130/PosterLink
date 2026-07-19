@@ -255,7 +255,7 @@ export default function Home() {
             <h1 className="max-w-none whitespace-nowrap text-[clamp(1rem,4.2vw,3rem)] font-black leading-tight tracking-normal text-slate-950">
               나에게 맞는 공공 공고, 흩어져 찾지 마세요
             </h1>
-            <p className="mt-4 max-w-3xl text-sm font-medium leading-7 text-slate-600 sm:text-base">
+            <p className="mt-4 max-w-none whitespace-nowrap text-[clamp(0.42rem,1.72vw,1rem)] font-medium leading-normal text-slate-600">
               정부·지자체·공공기관의 지원사업, 교육, 행사, 채용·모집 정보를 지역과 관심분야에 맞춰 한곳에서 찾아보세요.
             </p>
           </div>
