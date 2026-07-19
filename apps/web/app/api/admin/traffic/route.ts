@@ -5,9 +5,15 @@ import { createSupabaseServerClient } from "../../../../lib/supabase-server";
 const ADMIN_ROLES = new Set(["admin", "super_admin"]);
 const DEFAULT_DAYS = 30;
 const MAX_ROWS = 10000;
+const VISIT_SELECT_COLUMNS =
+  "created_at, user_id, ip_hash, visitor_key, session_key, path, query_string, referrer_url, referrer_host, utm_source, utm_medium, utm_campaign, user_agent";
+const LEGACY_VISIT_SELECT_COLUMNS =
+  "created_at, user_id, visitor_key, session_key, path, query_string, referrer_url, referrer_host, utm_source, utm_medium, utm_campaign, user_agent";
 
 type VisitRow = {
   created_at: string;
+  user_id: string | null;
+  ip_hash: string | null;
   visitor_key: string | null;
   session_key: string | null;
   path: string | null;
@@ -97,11 +103,11 @@ function getSourceLabel(row: VisitRow, ownHosts: Set<string>) {
 }
 
 function getSessionId(row: VisitRow, index: number) {
-  return row.session_key || row.visitor_key || `anonymous-${row.created_at}-${index}`;
+  return row.session_key || getVisitorId(row, index);
 }
 
 function getVisitorId(row: VisitRow, index: number) {
-  return row.visitor_key || getSessionId(row, index);
+  return row.user_id || row.ip_hash || row.visitor_key || `anonymous-${row.created_at}-${index}`;
 }
 
 function getPath(row: VisitRow) {
@@ -125,8 +131,33 @@ function isMissingAnalyticsError(error: { code?: string; message?: string } | nu
     error.code === "42883" ||
     error.code === "PGRST202" ||
     message.includes("site_visit_logs") ||
-    message.includes("get_site_visit_overview")
+    message.includes("get_site_visit_overview") ||
+    message.includes("get_site_visit_identity_overview")
   );
+}
+
+function isMissingIdentityColumnError(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return error.code === "42703" || error.code === "PGRST204" || message.includes("ip_hash");
+}
+
+function normalizeVisitRows(rows: Partial<VisitRow>[] | null | undefined): VisitRow[] {
+  return (rows ?? []).map((row) => ({
+    created_at: row.created_at ?? new Date(0).toISOString(),
+    user_id: row.user_id ?? null,
+    ip_hash: row.ip_hash ?? null,
+    visitor_key: row.visitor_key ?? null,
+    session_key: row.session_key ?? null,
+    path: row.path ?? null,
+    query_string: row.query_string ?? null,
+    referrer_url: row.referrer_url ?? null,
+    referrer_host: row.referrer_host ?? null,
+    utm_source: row.utm_source ?? null,
+    utm_medium: row.utm_medium ?? null,
+    utm_campaign: row.utm_campaign ?? null,
+    user_agent: row.user_agent ?? null,
+  }));
 }
 
 function buildFallbackOverview(allRows: VisitRow[], periodRows: VisitRow[]) {
@@ -183,21 +214,28 @@ export async function GET(request: NextRequest) {
   const admin = createAdminClient();
 
   const overviewRes = await admin
-    .rpc("get_site_visit_overview", { p_days: days })
+    .rpc("get_site_visit_identity_overview", { p_days: days })
     .single<OverviewRow>();
 
   if (overviewRes.error && !isMissingAnalyticsError(overviewRes.error)) {
     return NextResponse.json({ error: overviewRes.error.message }, { status: 500 });
   }
 
-  const visitsRes = await admin
+  let visitsRes: any = await admin
     .from("site_visit_logs")
-    .select(
-      "created_at, visitor_key, session_key, path, query_string, referrer_url, referrer_host, utm_source, utm_medium, utm_campaign, user_agent"
-    )
+    .select(VISIT_SELECT_COLUMNS)
     .gte("created_at", since)
     .order("created_at", { ascending: false })
     .limit(MAX_ROWS);
+
+  if (isMissingIdentityColumnError(visitsRes.error)) {
+    visitsRes = await admin
+      .from("site_visit_logs")
+      .select(LEGACY_VISIT_SELECT_COLUMNS)
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(MAX_ROWS);
+  }
 
   if (isMissingAnalyticsError(visitsRes.error)) {
     return NextResponse.json({
@@ -211,7 +249,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: visitsRes.error.message }, { status: 500 });
   }
 
-  const rows = (visitsRes.data ?? []) as VisitRow[];
+  const rows = normalizeVisitRows(visitsRes.data as Partial<VisitRow>[] | null);
   const ownHosts = getOwnHosts();
   const sessions = new Map<string, VisitRow>();
   const sessionPageviews = new Map<string, number>();
@@ -246,7 +284,7 @@ export async function GET(request: NextRequest) {
   });
 
   sessions.forEach((row, sessionId) => {
-    const visitorId = row.visitor_key || sessionId;
+    const visitorId = getVisitorId(row, 0);
     const source = getSourceLabel(row, ownHosts);
     const sourceBucket =
       sourceMap.get(source) ?? {
@@ -314,6 +352,8 @@ export async function GET(request: NextRequest) {
     utm_medium: row.utm_medium,
     utm_campaign: row.utm_campaign,
     user_agent: row.user_agent,
+    user_id: row.user_id,
+    ip_hash: row.ip_hash,
     visitor_key: row.visitor_key,
     session_key: getSessionId(row, index),
   }));
@@ -322,15 +362,21 @@ export async function GET(request: NextRequest) {
   let overviewExact = Boolean(overview);
 
   if (!overview) {
-    const allVisitsRes = await admin
+    let allVisitsRes: any = await admin
       .from("site_visit_logs")
-      .select(
-        "created_at, visitor_key, session_key, path, query_string, referrer_url, referrer_host, utm_source, utm_medium, utm_campaign, user_agent"
-      )
+      .select(VISIT_SELECT_COLUMNS)
       .order("created_at", { ascending: false })
       .limit(MAX_ROWS);
 
-    overview = buildFallbackOverview(((allVisitsRes.data ?? rows) as VisitRow[]), rows);
+    if (isMissingIdentityColumnError(allVisitsRes.error)) {
+      allVisitsRes = await admin
+        .from("site_visit_logs")
+        .select(LEGACY_VISIT_SELECT_COLUMNS)
+        .order("created_at", { ascending: false })
+        .limit(MAX_ROWS);
+    }
+
+    overview = buildFallbackOverview(normalizeVisitRows(allVisitsRes.data as Partial<VisitRow>[] | null), rows);
     overviewExact = false;
   }
 

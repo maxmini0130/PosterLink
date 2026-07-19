@@ -59,6 +59,8 @@ type RecentVisit = {
   utm_medium: string | null;
   utm_campaign: string | null;
   user_agent?: string | null;
+  user_id?: string | null;
+  ip_hash?: string | null;
   visitor_key?: string | null;
   session_key?: string | null;
 };
@@ -109,6 +111,12 @@ function shortKey(value?: string | null) {
   if (!value) return "-";
   if (value.length <= 12) return value;
   return `${value.slice(0, 6)}...${value.slice(-4)}`;
+}
+
+function identityLabel(row: RecentVisit) {
+  if (row.user_id) return `user:${shortKey(row.user_id)}`;
+  if (row.ip_hash) return `ip:${shortKey(row.ip_hash)}`;
+  return shortKey(row.visitor_key);
 }
 
 function sourceTone(source: string) {
@@ -471,7 +479,7 @@ export default function AdminTrafficPage() {
                           {[row.utm_source, row.utm_medium, row.utm_campaign].filter(Boolean).join(" / ") || "-"}
                         </td>
                         <td className="whitespace-nowrap py-3 pr-4 text-xs font-bold text-gray-500">
-                          {shortKey(row.visitor_key)}
+                          {identityLabel(row)}
                         </td>
                         <td className="whitespace-nowrap py-3 pr-4 text-xs font-bold text-gray-500">
                           {shortKey(row.session_key)}

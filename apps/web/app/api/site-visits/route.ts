@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
+import crypto from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "../../../lib/supabase-server";
+
+export const runtime = "nodejs";
 
 type SiteVisitPayload = {
   visitor_key?: string | null;
@@ -62,6 +65,35 @@ function isMissingTableError(error: { code?: string; message?: string } | null) 
   return error?.code === "42P01" || error?.message?.includes("site_visit_logs");
 }
 
+function isMissingColumnError(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return error.code === "42703" || error.code === "PGRST204" || message.includes("ip_hash");
+}
+
+function getClientIp(request: Request) {
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  const candidate =
+    request.headers.get("cf-connecting-ip") ||
+    request.headers.get("true-client-ip") ||
+    request.headers.get("x-real-ip") ||
+    forwardedFor?.split(",")[0] ||
+    null;
+
+  return candidate?.trim().toLowerCase() || null;
+}
+
+function hashIp(ip: string | null) {
+  if (!ip) return null;
+  const salt =
+    process.env.SITE_VISIT_IP_HASH_SALT ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXTAUTH_SECRET ||
+    "posterlink-site-visit";
+
+  return crypto.createHmac("sha256", salt).update(ip).digest("hex");
+}
+
 export async function POST(request: Request) {
   let payload: SiteVisitPayload;
 
@@ -100,8 +132,9 @@ export async function POST(request: Request) {
   }
 
   const supabaseAdmin = createSupabaseAdmin();
-  const { error } = await supabaseAdmin.from("site_visit_logs").insert({
+  const visitRecord = {
     user_id: userId,
+    ip_hash: hashIp(getClientIp(request)),
     visitor_key: visitorKey,
     session_key: sessionKey,
     path,
@@ -112,7 +145,27 @@ export async function POST(request: Request) {
     utm_medium: truncate(searchParams.get("utm_medium"), 120),
     utm_campaign: truncate(searchParams.get("utm_campaign"), 200),
     user_agent: truncate(payload.user_agent, 512),
-  });
+  };
+
+  let { error } = await supabaseAdmin.from("site_visit_logs").insert(visitRecord);
+
+  if (isMissingColumnError(error)) {
+    const legacyVisitRecord: Omit<typeof visitRecord, "ip_hash"> = {
+      user_id: visitRecord.user_id,
+      visitor_key: visitRecord.visitor_key,
+      session_key: visitRecord.session_key,
+      path: visitRecord.path,
+      query_string: visitRecord.query_string,
+      referrer_url: visitRecord.referrer_url,
+      referrer_host: visitRecord.referrer_host,
+      utm_source: visitRecord.utm_source,
+      utm_medium: visitRecord.utm_medium,
+      utm_campaign: visitRecord.utm_campaign,
+      user_agent: visitRecord.user_agent,
+    };
+    const retry = await supabaseAdmin.from("site_visit_logs").insert(legacyVisitRecord);
+    error = retry.error;
+  }
 
   if (isMissingTableError(error)) {
     return NextResponse.json({ success: false, configured: false });
