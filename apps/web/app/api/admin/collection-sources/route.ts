@@ -76,6 +76,46 @@ const WRITABLE_FIELDS = new Set([
   "notes",
 ]);
 
+const HOUR_MS = 60 * 60 * 1000;
+
+function parseTime(value: unknown) {
+  if (!value) return null;
+  const timestamp = new Date(String(value)).getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function getSourceHealthFlags(row: any) {
+  const now = Date.now();
+  const intervalMinutes = Number(row.collection_interval_minutes ?? 1440);
+  const intervalMs = Math.max(intervalMinutes, 60) * 60 * 1000;
+  const lastCollectedAt = parseTime(row.last_collected_at);
+  const lastSuccessAt = parseTime(row.last_success_at);
+  const checkedCount = Number(row.last_run_checked_count ?? 0);
+  const validRate = Number(row.valid_post_rate ?? 0);
+  const missingRate = Number(row.required_field_missing_rate ?? 0);
+  const isAutomatedActive = row.status === "active" && row.collection_method !== "manual";
+
+  const due = isAutomatedActive && (!lastCollectedAt || now - lastCollectedAt >= intervalMs);
+  const stale = isAutomatedActive && (!lastSuccessAt || now - lastSuccessAt >= Math.max(intervalMs * 2, 48 * HOUR_MS));
+  const errored = row.status === "error"
+    || row.status === "blocked"
+    || Number(row.consecutive_error_count ?? 0) > 0
+    || row.last_run_status === "error"
+    || row.last_run_status === "partial";
+  const lowQuality = checkedCount >= 5 && validRate < 40;
+  const missingRequired = checkedCount >= 5 && missingRate >= 30;
+  const needsAttention = errored || stale || lowQuality || missingRequired;
+
+  return {
+    due,
+    stale,
+    errored,
+    lowQuality,
+    missingRequired,
+    needsAttention,
+  };
+}
+
 function adminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -128,6 +168,10 @@ function summarize(rows: any[]) {
   let activeCount = 0;
   let errorCount = 0;
   let totalExpectedPosts = 0;
+  let dueCount = 0;
+  let staleCount = 0;
+  let lowQualityCount = 0;
+  let needsAttentionCount = 0;
 
   for (const row of rows) {
     statusCounts[row.status] = (statusCounts[row.status] ?? 0) + 1;
@@ -136,6 +180,12 @@ function summarize(rows: any[]) {
     if (row.status === "error" || row.status === "blocked") errorCount += 1;
     if (row.collection_method !== "manual") automatedCount += 1;
     totalExpectedPosts += Number(row.monthly_expected_posts ?? 0);
+
+    const flags = getSourceHealthFlags(row);
+    if (flags.due) dueCount += 1;
+    if (flags.stale) staleCount += 1;
+    if (flags.lowQuality) lowQualityCount += 1;
+    if (flags.needsAttention) needsAttentionCount += 1;
   }
 
   const validRates = rows
@@ -151,6 +201,10 @@ function summarize(rows: any[]) {
     automated: automatedCount,
     errors: errorCount,
     planned: statusCounts.planned ?? 0,
+    due: dueCount,
+    stale: staleCount,
+    low_quality: lowQualityCount,
+    needs_attention: needsAttentionCount,
     monthly_expected_posts: totalExpectedPosts,
     average_valid_post_rate: Math.round(averageValidRate * 10) / 10,
     status_counts: statusCounts,

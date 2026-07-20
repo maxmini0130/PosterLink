@@ -61,6 +61,10 @@ type SourceSummary = {
   automated: number;
   errors: number;
   planned: number;
+  due: number;
+  stale: number;
+  low_quality: number;
+  needs_attention: number;
   monthly_expected_posts: number;
   average_valid_post_rate: number;
   status_counts: Record<string, number>;
@@ -163,6 +167,103 @@ function statusTone(status: string) {
   return "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-200";
 }
 
+type SourceHealthLevel = "attention" | "watch" | "healthy" | "planned";
+
+type SourceHealth = {
+  level: SourceHealthLevel;
+  label: string;
+  tone: string;
+  reasons: string[];
+  weight: number;
+};
+
+const HEALTH_FILTER_OPTIONS = [
+  ["all", "전체 건강도"],
+  ["attention", "점검 필요"],
+  ["watch", "주의"],
+  ["healthy", "정상"],
+  ["planned", "예정/수동"],
+] as const;
+
+function parseTime(value: string | null) {
+  if (!value) return null;
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function elapsedHours(value: string | null) {
+  const timestamp = parseTime(value);
+  if (!timestamp) return null;
+  return Math.max(0, Math.round((Date.now() - timestamp) / (60 * 60 * 1000)));
+}
+
+function formatElapsedHours(hours: number | null) {
+  if (hours === null) return "기록 없음";
+  if (hours < 24) return `${hours}시간 전`;
+  return `${Math.round(hours / 24)}일 전`;
+}
+
+function getSourceHealth(source: CollectionSource): SourceHealth {
+  if (source.status === "planned" || source.collection_method === "manual") {
+    return {
+      level: "planned",
+      label: source.status === "planned" ? "예정" : "수동",
+      tone: "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-200",
+      reasons: [source.status === "planned" ? "아직 자동수집 전" : "수동 관리 기관"],
+      weight: 10,
+    };
+  }
+
+  const reasons: string[] = [];
+  const checkedCount = Number(source.last_run_checked_count ?? 0);
+  const validRate = Number(source.valid_post_rate ?? 0);
+  const missingRate = Number(source.required_field_missing_rate ?? 0);
+  const hoursSinceSuccess = elapsedHours(source.last_success_at);
+  const hoursSinceCollected = elapsedHours(source.last_collected_at);
+  const intervalHours = Math.max(1, Math.round(source.collection_interval_minutes / 60));
+  const isDue = source.status === "active" && (
+    hoursSinceCollected === null || hoursSinceCollected >= intervalHours
+  );
+  const isStale = source.status === "active" && (
+    hoursSinceSuccess === null || hoursSinceSuccess >= Math.max(intervalHours * 2, 48)
+  );
+
+  if (source.status === "error" || source.status === "blocked") reasons.push(statusLabel(source.status));
+  if (source.consecutive_error_count > 0) reasons.push(`${source.consecutive_error_count}회 연속 오류`);
+  if (source.last_run_status === "error" || source.last_run_status === "partial") reasons.push(`최근 실행 ${source.last_run_status}`);
+  if (isStale) reasons.push(`마지막 성공 ${formatElapsedHours(hoursSinceSuccess)}`);
+  if (checkedCount >= 5 && validRate < 40) reasons.push(`유효율 ${Math.round(validRate)}%`);
+  if (checkedCount >= 5 && missingRate >= 30) reasons.push(`필수정보 누락 ${Math.round(missingRate)}%`);
+
+  if (reasons.length > 0) {
+    return {
+      level: "attention",
+      label: "점검 필요",
+      tone: "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-200",
+      reasons,
+      weight: 100 + reasons.length,
+    };
+  }
+
+  if (isDue || source.status === "paused") {
+    return {
+      level: "watch",
+      label: isDue ? "수집 예정" : "중지",
+      tone: "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200",
+      reasons: [isDue ? `수집 주기 ${intervalHours}시간 경과` : "운영자가 중지함"],
+      weight: 50,
+    };
+  }
+
+  return {
+    level: "healthy",
+    label: "정상",
+    tone: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200",
+    reasons: ["최근 수집 정상"],
+    weight: 0,
+  };
+}
+
 function typeLabel(value: string) {
   return TYPE_OPTIONS.find(([key]) => key === value)?.[1] ?? value;
 }
@@ -210,6 +311,7 @@ export default function AdminCollectionSourcesPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [healthFilter, setHealthFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [runningSourceId, setRunningSourceId] = useState<string | null>(null);
@@ -240,7 +342,18 @@ export default function AdminCollectionSourcesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
 
-  const filteredSources = useMemo(() => sources, [sources]);
+  const filteredSources = useMemo(() => {
+    return [...sources]
+      .filter((source) => {
+        if (healthFilter === "all") return true;
+        return getSourceHealth(source).level === healthFilter;
+      })
+      .sort((a, b) => {
+        const healthDiff = getSourceHealth(b).weight - getSourceHealth(a).weight;
+        if (healthDiff !== 0) return healthDiff;
+        return b.priority - a.priority;
+      });
+  }, [healthFilter, sources]);
 
   const createSource = async () => {
     if (!form.source_slug.trim() || !form.name.trim() || !form.list_url.trim()) {
@@ -379,11 +492,12 @@ export default function AdminCollectionSourcesPage() {
         </section>
       )}
 
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <MetricCard icon={Building2} label="관리 기관" value={summary?.total ?? 0} sub="등록된 기관/게시판" />
         <MetricCard icon={CheckCircle2} label="자동수집" value={summary?.automated ?? 0} sub="수동 제외 수집원" />
         <MetricCard icon={Database} label="월 예상 공고" value={summary?.monthly_expected_posts ?? 0} sub="계획 수립용 가정" />
         <MetricCard icon={AlertTriangle} label="오류 기관" value={summary?.errors ?? 0} sub="점검 필요 상태" />
+        <MetricCard icon={Search} label="점검 필요" value={summary?.needs_attention ?? 0} sub="오류·장기 미수집·저품질" />
         <MetricCard icon={Clock} label="예정 기관" value={summary?.planned ?? 0} sub="아직 연결 전" />
       </section>
 
@@ -476,6 +590,13 @@ export default function AdminCollectionSourcesPage() {
               <option value="all">전체 상태</option>
               {STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
+            <select
+              value={healthFilter}
+              onChange={(event) => setHealthFilter(event.target.value)}
+              className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm font-black outline-none dark:border-slate-800 dark:bg-slate-950"
+            >
+              {HEALTH_FILTER_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
             <button
               type="button"
               onClick={loadSources}
@@ -492,13 +613,14 @@ export default function AdminCollectionSourcesPage() {
           </div>
         ) : filteredSources.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1180px] text-left text-sm">
+            <table className="w-full min-w-[1280px] text-left text-sm">
               <thead>
                 <tr className="border-b border-gray-100 text-xs font-black uppercase tracking-widest text-gray-400 dark:border-slate-800">
                   <th className="py-3 pr-4">기관</th>
                   <th className="py-3 pr-4">분류</th>
                   <th className="py-3 pr-4">방식</th>
                   <th className="py-3 pr-4">상태</th>
+                  <th className="py-3 pr-4">점검</th>
                   <th className="py-3 pr-4">우선</th>
                   <th className="py-3 pr-4">최근 성공</th>
                   <th className="py-3 pr-4">신규/유효</th>
@@ -508,7 +630,9 @@ export default function AdminCollectionSourcesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
-                {filteredSources.map((source) => (
+                {filteredSources.map((source) => {
+                  const health = getSourceHealth(source);
+                  return (
                   <tr key={source.id} className="align-top">
                     <td className="max-w-[260px] py-3 pr-4">
                       <p className="font-black text-gray-950 dark:text-white">{source.name}</p>
@@ -532,6 +656,18 @@ export default function AdminCollectionSourcesPage() {
                       >
                         {STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                       </select>
+                    </td>
+                    <td className="max-w-[220px] py-3 pr-4">
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ${health.tone}`}>
+                        {health.label}
+                      </span>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {health.reasons.slice(0, 3).map((reason) => (
+                          <span key={reason} className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-black text-gray-500 dark:bg-slate-800 dark:text-slate-300">
+                            {reason}
+                          </span>
+                        ))}
+                      </div>
                     </td>
                     <td className="py-3 pr-4">
                       <input
@@ -594,7 +730,8 @@ export default function AdminCollectionSourcesPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
