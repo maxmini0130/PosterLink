@@ -25,16 +25,22 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
     if (!poster) return {};
 
-    const title = poster.title;
-    const description = poster.summary_short || `${poster.source_org_name} 공고 - PosterLink에서 확인하세요.`;
+    const title = poster.source_org_name ? `${poster.title} - ${poster.source_org_name}` : poster.title;
+    const description =
+      poster.summary_short ||
+      `${poster.source_org_name ?? "공공기관"} 공고의 신청 기간, 대상, 요약과 공식 링크를 PosterLink에서 확인하세요.`;
     const image = resolvePosterImageUrl(poster.thumbnail_url, poster.source_key);
 
     return {
       title,
       description,
+      alternates: {
+        canonical: `/posters/${params.id}`,
+      },
       openGraph: {
         title,
         description,
+        url: `/posters/${params.id}`,
         ...(image ? { images: [{ url: image, width: 800, height: 1067, alt: title }] } : {}),
       },
       twitter: {

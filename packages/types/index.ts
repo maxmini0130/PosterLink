@@ -28,6 +28,15 @@ export interface Poster {
   created_by?: string;
   published_at?: string;
   created_at?: string;
+  field_verification?: {
+    deadlineMatches?: boolean;
+    correctedDeadline?: string | null;
+    orgNameMatches?: boolean;
+    correctedOrgName?: string | null;
+    confidence?: number;
+    decision?: string;
+    reason?: string;
+  } | null;
 }
 
 export interface PosterCardData {

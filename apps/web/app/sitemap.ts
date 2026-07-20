@@ -1,10 +1,10 @@
 import { MetadataRoute } from "next";
 import { createServerClient } from "@supabase/ssr";
+import { getAppOrigin } from "../lib/siteUrl";
 
 export const dynamic = "force-dynamic";
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://posterlink.co.kr";
-const appOrigin = appUrl.startsWith("http") ? appUrl : `https://${appUrl}`;
+const appOrigin = getAppOrigin();
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const supabase = createServerClient(

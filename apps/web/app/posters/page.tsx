@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
@@ -8,20 +9,29 @@ import { Footer } from "../components/Footer";
 import { PosterCard } from "../components/PosterCard";
 import { fetchCategoryRegionNames, fetchPosterImages } from "../lib/posterHelpers";
 import { fetchPosterMetricCounts } from "../lib/posterMetrics";
-import { getCityRegions, getDistrictRegions, getRegionLabel, getRegionScopeIds, getSelectedCityId } from "../lib/regionHelpers";
+import { findRegionByName, getCityRegions, getDistrictRegions, getRegionLabel, getRegionScopeIds, getSelectedCityId } from "../lib/regionHelpers";
 import { Search, X, History, TrendingUp, Filter, ArrowLeft, ChevronDown } from "lucide-react";
 
 const PAGE_SIZE = 12;
 const QUICK_SEARCH_TERMS = ["청년", "취업", "무료교육", "주거", "창업", "곧 마감"];
 
 export default function PosterListPage() {
+  return (
+    <Suspense fallback={null}>
+      <PosterListPageContent />
+    </Suspense>
+  );
+}
+
+function PosterListPageContent() {
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [posters, setPosters] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [regions, setRegions] = useState<any[]>([]);
 
   // Search & Filter States
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q") ?? "");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [popularKeywords, setPopularKeywords] = useState<string[]>([]);
@@ -66,6 +76,16 @@ export default function PosterListPage() {
     };
     fetchBase();
   }, []);
+
+  // 1b. URL의 region 파라미터(?region=마포구)를 지역 목록 로드 후 selectedRegionId로 해석
+  useEffect(() => {
+    if (regions.length === 0) return;
+    const regionParam = searchParams.get("region");
+    if (!regionParam) return;
+    const match = findRegionByName(regions, regionParam);
+    if (match) setSelectedRegionId(match.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [regions, searchParams]);
 
   // 2. Fetch Posters with Filters
   const fetchPosters = async (queryStr = searchQuery) => {

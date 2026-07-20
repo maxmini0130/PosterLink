@@ -1,7 +1,7 @@
 import { MetadataRoute } from "next";
+import { getAppOrigin } from "../lib/siteUrl";
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://posterlink.co.kr";
-const appOrigin = appUrl.startsWith("http") ? appUrl : `https://${appUrl}`;
+const appOrigin = getAppOrigin();
 
 export default function robots(): MetadataRoute.Robots {
   return {

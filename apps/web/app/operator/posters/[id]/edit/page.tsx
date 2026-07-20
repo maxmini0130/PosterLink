@@ -165,9 +165,13 @@ export default function EditPosterPage() {
 
   const handleDelete = async () => {
     if (!confirm("포스터를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) return;
-    const { error } = await supabase.from("posters").delete().eq("id", id);
-    if (error) toast.error(error.message);
-    else router.push(returnPath);
+    const response = await fetch(`/api/posters/${id}`, { method: "DELETE" });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      toast.error(result.error ?? "Failed to delete poster.");
+      return;
+    }
+    router.push(returnPath);
   };
 
   if (initialLoading) return <div className="p-20 text-center font-bold text-blue-600">데이터 로드 중...</div>;

@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
+import { getAppOrigin } from '../../../../lib/siteUrl';
 
 export const dynamic = 'force-dynamic';
 
-const _rawUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://posterlink.co.kr';
-const BASE_URL = _rawUrl.startsWith('http') ? _rawUrl : `https://${_rawUrl}`;
+const BASE_URL = getAppOrigin();
 
 export async function GET() {
   const clientId = process.env.NAVER_CLIENT_ID;

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
+import { getAppOrigin } from '../../../../../lib/siteUrl';
 
-const _rawUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://posterlink.co.kr';
-const BASE_URL = _rawUrl.startsWith('http') ? _rawUrl : `https://${_rawUrl}`;
+const BASE_URL = getAppOrigin();
 
 async function derivePassword(naverId: string): Promise<string> {
   const secret = process.env.NAVER_CLIENT_SECRET ?? '';

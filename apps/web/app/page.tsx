@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
@@ -33,21 +33,15 @@ const feedTabs = [
   { key: "popular", label: "많이 본 공고" },
 ] as const;
 
-const categoryKeywords: Record<(typeof categories)[number], string[]> = {
-  전체: [],
-  청년: ["청년", "청소년"],
-  소상공인: ["소상공인", "자영업", "상인", "전통시장"],
-  창업: ["창업", "스타트업", "기업", "벤처"],
-  교육: ["교육", "강의", "강좌", "훈련", "커리어"],
-  "문화·행사": ["문화", "행사", "예술", "축제", "전시", "공연"],
-  복지: ["복지", "지원금", "상담", "돌봄", "건강"],
-  채용: ["채용", "취업", "일자리", "모집"],
-  주거: ["주거", "월세", "전세", "임대", "주택"],
-};
-
 const regionShortcuts = ["마포구", "은평구", "서대문구", "영등포구", "강서구"];
 const organizationHighlights = ["마포구청", "마포문화재단", "서울청년센터", "서울경제진흥원", "소상공인시장진흥공단"];
 const serviceCategories = ["청년", "소상공인", "창업", "교육", "문화·행사", "복지", "채용", "주거"];
+
+// "문화·행사"의 가운데점(·)은 실제 공고 텍스트에 그대로 나타나지 않아 검색어로 보내면 0건이 나온다.
+// 라벨은 그대로 두고 실제 검색에 보내는 값만 "행사"로 대체한다.
+function categorySearchTerm(category: string) {
+  return category === "문화·행사" ? "행사" : category;
+}
 
 type HomeSummary = {
   todayNew: number;
@@ -70,7 +64,6 @@ export default function Home() {
   const [urgentPosters, setUrgentPosters] = useState<any[]>([]);
   const [homeSummary, setHomeSummary] = useState<HomeSummary>(emptyHomeSummary);
   const [hideClosedPosters, setHideClosedPosters] = useState(true);
-  const [activeCategory, setActiveCategory] = useState<(typeof categories)[number]>("전체");
   const [activeFeed, setActiveFeed] = useState<(typeof feedTabs)[number]["key"]>("urgent");
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -112,7 +105,7 @@ export default function Home() {
             .single();
           setUserProfile(profile);
 
-          const { data: recommendedData, error: rpcError } = await supabase.rpc("get_recommended_posters", {
+          const { data: recommendedData, error: rpcError } = await supabase.rpc("get_recommended_posters_v2", {
             p_user_id: user.id,
             p_limit: 12,
           });
@@ -186,22 +179,14 @@ export default function Home() {
     return new Date(poster.application_end_at).getTime() < Date.now();
   };
 
-  const matchesCategory = useCallback((poster: any) => {
-    if (activeCategory === "전체") return true;
-    const text = [poster.title, poster.source_org_name, poster.summary_short, poster.categoryName, poster.regionName]
-      .filter(Boolean)
-      .join(" ");
-    return categoryKeywords[activeCategory].some((keyword) => text.includes(keyword));
-  }, [activeCategory]);
-
   const availablePosters = useMemo(() => {
-    return posters.filter((poster) => !hideClosedPosters || !isClosed(poster)).filter(matchesCategory);
-  }, [hideClosedPosters, matchesCategory, posters]);
+    return posters.filter((poster) => !hideClosedPosters || !isClosed(poster));
+  }, [hideClosedPosters, posters]);
 
   const feedPosters = useMemo(() => {
     if (activeFeed === "urgent") {
-      const urgent = urgentPosters.filter(matchesCategory);
-      return (urgent.length > 0 ? urgent : availablePosters)
+      const urgent = urgentPosters.length > 0 ? urgentPosters : availablePosters;
+      return urgent
         .filter((poster) => !poster.application_end_at || new Date(poster.application_end_at).getTime() >= Date.now())
         .sort((a, b) => {
           const aTime = a.application_end_at ? new Date(a.application_end_at).getTime() : Number.MAX_SAFE_INTEGER;
@@ -216,7 +201,7 @@ export default function Home() {
     }
 
     return availablePosters.slice(0, 8);
-  }, [activeFeed, availablePosters, matchesCategory, urgentPosters]);
+  }, [activeFeed, availablePosters, urgentPosters]);
 
   const regionLabel =
     userProfile?.regions?.level === "sigungu"
@@ -283,7 +268,7 @@ export default function Home() {
             {serviceCategories.map((category) => (
               <Link
                 key={category}
-                href={`/posters?q=${encodeURIComponent(category)}`}
+                href={`/posters?q=${encodeURIComponent(categorySearchTerm(category))}`}
                 className="rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-black text-slate-700 transition-colors hover:border-blue-500 hover:text-blue-700"
               >
                 {category}
@@ -341,18 +326,13 @@ export default function Home() {
 
           <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
             {categories.map((category) => (
-              <button
+              <Link
                 key={category}
-                type="button"
-                onClick={() => setActiveCategory(category)}
-                className={`shrink-0 border px-3 py-2 text-xs font-black transition-colors ${
-                  activeCategory === category
-                    ? "border-blue-700 bg-blue-700 text-white"
-                    : "border-slate-300 bg-white text-slate-600 hover:border-slate-500"
-                }`}
+                href={category === "전체" ? "/posters" : `/posters?q=${encodeURIComponent(categorySearchTerm(category))}`}
+                className="shrink-0 border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-600 transition-colors hover:border-blue-500 hover:text-blue-700"
               >
                 {category}
-              </button>
+              </Link>
             ))}
           </div>
 
@@ -439,7 +419,7 @@ export default function Home() {
         <section className="mt-12">
           <SectionTitle eyebrow="Local Search" title="내 지역 공고를 찾아보세요" />
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-            <Link href="/posters?q=서울특별시" className="flex items-center justify-between border border-slate-300 bg-white px-4 py-4 text-sm font-black text-slate-900 transition-colors hover:border-blue-500 hover:text-blue-700 lg:col-span-2">
+            <Link href="/posters?region=서울특별시" className="flex items-center justify-between border border-slate-300 bg-white px-4 py-4 text-sm font-black text-slate-900 transition-colors hover:border-blue-500 hover:text-blue-700 lg:col-span-2">
               <span className="inline-flex items-center gap-2">
                 <MapPin size={17} />
                 서울특별시
@@ -449,7 +429,7 @@ export default function Home() {
             {regionShortcuts.map((region) => (
               <Link
                 key={region}
-                href={`/posters?q=${encodeURIComponent(region)}`}
+                href={`/posters?region=${encodeURIComponent(region)}`}
                 className="border border-slate-300 bg-white px-4 py-4 text-sm font-black text-slate-700 transition-colors hover:border-blue-500 hover:text-blue-700"
               >
                 {region}
@@ -462,7 +442,7 @@ export default function Home() {
           <SectionTitle eyebrow="Categories" title="관심분야별 공고" />
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {serviceCategories.map((category) => (
-              <ServiceLink key={category} href={`/posters?q=${encodeURIComponent(category)}`} icon={<Sparkles size={17} />} title={category} />
+              <ServiceLink key={category} href={`/posters?q=${encodeURIComponent(categorySearchTerm(category))}`} icon={<Sparkles size={17} />} title={category} />
             ))}
           </div>
         </section>

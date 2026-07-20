@@ -26,6 +26,15 @@ export function getSelectedDistrictId(regionId: string | null, regions: any[]) {
   return region?.level === "sigungu" ? region.id : "";
 }
 
+export function findRegionByName(regionList: any[], name: string | null) {
+  if (!name) return null;
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  return (
+    regionList.find((region) => region.name === trimmed || region.full_name === trimmed) ?? null
+  );
+}
+
 export function getRegionScopeIds(regionId: string | null, regionList: any[]) {
   if (!regionId) return null;
 

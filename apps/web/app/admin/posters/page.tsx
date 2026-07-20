@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import {
+  AlertTriangle,
   Check,
   CheckSquare,
   ExternalLink,
@@ -42,6 +43,13 @@ const EMPTY_FILTERS: PosterSearchFilters = {
 
 function normalizeSearchValue(value: string) {
   return value.trim().replace(/[,()]/g, " ").replace(/\s+/g, " ");
+}
+
+function hasFieldVerificationWarning(poster: any) {
+  const verification = poster?.field_verification;
+  if (!verification) return false;
+  if (verification.deadlineMatches === false || verification.orgNameMatches === false) return true;
+  return typeof verification.confidence === "number" && verification.confidence < 0.6 && verification.decision !== "not_checked";
 }
 
 export default function AdminPostersPage() {
@@ -389,14 +397,11 @@ export default function AdminPostersPage() {
     }
 
     const { data: { user } } = await supabase.auth.getUser();
-    const { error } = await supabase
-      .from("posters")
-      .delete()
-      .eq("id", poster.id)
-      .eq("poster_status", "rejected");
+    const response = await fetch(`/api/posters/${poster.id}?status=rejected`, { method: "DELETE" });
+    const result = await response.json().catch(() => ({}));
 
-    if (error) {
-      toast.error(error.message);
+    if (!response.ok) {
+      toast.error(result.error ?? "Failed to delete poster.");
       return;
     }
 
@@ -429,14 +434,17 @@ export default function AdminPostersPage() {
     setBulkProcessing(true);
     const { data: { user } } = await supabase.auth.getUser();
     const ids = rejectedPosters.map((poster) => poster.id);
-    const { error } = await supabase
-      .from("posters")
-      .delete()
-      .in("id", ids)
-      .eq("poster_status", "rejected");
+    const deleteResults = await Promise.all(
+      ids.map(async (id) => {
+        const response = await fetch(`/api/posters/${id}?status=rejected`, { method: "DELETE" });
+        const result = await response.json().catch(() => ({}));
+        return { id, ok: response.ok, error: result.error as string | undefined };
+      })
+    );
+    const failedDelete = deleteResults.find((result) => !result.ok);
 
-    if (error) {
-      toast.error(error.message);
+    if (failedDelete) {
+      toast.error(failedDelete.error ?? "Failed to delete poster.");
       setBulkProcessing(false);
       return;
     }
@@ -769,6 +777,14 @@ export default function AdminPostersPage() {
                   <span className="rounded-full border border-gray-100 bg-gray-50 px-3 py-1 text-[11px] font-black text-gray-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
                     마감: {poster.application_end_at ? new Date(poster.application_end_at).toLocaleDateString() : "상시"}
                   </span>
+                  {hasFieldVerificationWarning(poster) && (
+                    <span
+                      title={poster.field_verification?.reason || "AI가 마감일/기관명 불일치 가능성을 감지했습니다. 승인 전 원문을 확인하세요."}
+                      className="flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-black text-amber-600 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400"
+                    >
+                      <AlertTriangle size={12} /> AI 검증 필요
+                    </span>
+                  )}
                 </div>
               </div>
 
