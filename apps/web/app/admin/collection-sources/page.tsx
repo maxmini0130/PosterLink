@@ -87,6 +87,7 @@ type CollectionSourceRun = {
   failed_count: number;
   valid_post_rate: number;
   error_message: string | null;
+  metadata_json: Record<string, any> | null;
   started_at: string | null;
   finished_at: string | null;
   duration_ms: number | null;
@@ -236,6 +237,45 @@ function formatDuration(ms: number | null) {
   const seconds = Math.round(ms / 1000);
   if (seconds < 60) return `${seconds}초`;
   return `${Math.round(seconds / 60)}분`;
+}
+
+function getRunDiagnostic(run: CollectionSourceRun) {
+  const metadata = run.metadata_json;
+  if (!metadata || typeof metadata !== "object") return "";
+
+  const sites = Array.isArray(metadata.sites) ? metadata.sites : [];
+  const summaries = sites
+    .map((site: any) => site?.summary)
+    .filter((summary: any) => summary && typeof summary === "object");
+
+  const totals = summaries.reduce((acc: Record<string, number>, summary: Record<string, any>) => {
+    for (const [key, value] of Object.entries(summary)) {
+      const numberValue = Number(value ?? 0);
+      if (Number.isFinite(numberValue)) acc[key] = (acc[key] ?? 0) + numberValue;
+    }
+    return acc;
+  }, {});
+
+  const parts: string[] = [];
+  const found = totals.found ?? totals.checked ?? 0;
+  if (found > 0) parts.push(`발견 ${formatNumber(found)}건`);
+  if ((totals.collected ?? 0) > 0) parts.push(`수집후보 ${formatNumber(totals.collected)}건`);
+  if ((totals.post_filtered ?? 0) > 0) parts.push(`제목제외 ${formatNumber(totals.post_filtered)}건`);
+  if ((totals.no_poster_image ?? 0) > 0) parts.push(`이미지없음 ${formatNumber(totals.no_poster_image)}건`);
+  if ((totals.image_rule_rejected ?? 0) > 0) parts.push(`이미지규칙제외 ${formatNumber(totals.image_rule_rejected)}건`);
+  if ((totals.verification_rejected ?? 0) > 0) parts.push(`AI검증제외 ${formatNumber(totals.verification_rejected)}건`);
+  if ((totals.skipped_seen ?? 0) > 0) parts.push(`이미확인 ${formatNumber(totals.skipped_seen)}건`);
+  if ((totals.detail_failed ?? 0) + (totals.board_failed ?? 0) > 0) {
+    parts.push(`파싱실패 ${formatNumber((totals.detail_failed ?? 0) + (totals.board_failed ?? 0))}건`);
+  }
+
+  const reasons = Object.entries(metadata.skip_reasons ?? {})
+    .sort(([, a], [, b]) => Number(b ?? 0) - Number(a ?? 0))
+    .slice(0, 2)
+    .map(([key, value]) => `${key} ${formatNumber(Number(value ?? 0))}`);
+  if (reasons.length > 0) parts.push(`주요 사유: ${reasons.join(", ")}`);
+
+  return parts.join(" · ");
 }
 
 function parseTime(value: string | null) {
@@ -647,7 +687,13 @@ export default function AdminCollectionSourcesPage() {
                     <td className="whitespace-nowrap py-3 pr-4 text-xs font-bold text-gray-500">{formatDuration(run.duration_ms)}</td>
                     <td className="whitespace-nowrap py-3 pr-4 text-xs font-bold text-gray-500">{formatDate(run.created_at)}</td>
                     <td className="max-w-[260px] py-3 pr-4 text-xs font-bold text-gray-400">
-                      {run.error_message ? <p className="line-clamp-2 text-rose-500">{run.error_message}</p> : "-"}
+                      {run.error_message ? (
+                        <p className="line-clamp-2 text-rose-500">{run.error_message}</p>
+                      ) : getRunDiagnostic(run) ? (
+                        <p className="line-clamp-3">{getRunDiagnostic(run)}</p>
+                      ) : (
+                        "-"
+                      )}
                     </td>
                   </tr>
                 ))}

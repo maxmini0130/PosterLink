@@ -32,6 +32,32 @@ function getLatestPostDate(posts) {
   return latest?.toISOString() ?? null;
 }
 
+function buildCrawlRunMetadata(site, stats = {}) {
+  return {
+    sites: [{
+      site_id: site.id,
+      site_name: site.name,
+      summary: {
+        found: Number(stats.found ?? 0),
+        checked: Number(stats.checked ?? 0),
+        collected: Number(stats.collected ?? 0),
+        post_filtered: Number(stats.postFiltered ?? 0),
+        detail_filtered: Number(stats.detailFiltered ?? 0),
+        no_poster_image: Number(stats.noPosterImage ?? 0),
+        image_rule_rejected: Number(stats.imageRuleRejected ?? 0),
+        verification_rejected: Number(stats.verificationRejected ?? 0),
+        skipped_seen: Number(stats.skippedSeen ?? 0),
+        detail_failed: Number(stats.detailFailed ?? 0),
+        board_failed: Number(stats.boardFailed ?? 0),
+      },
+      skip_reasons: stats.skipReasons ?? {},
+      skip_samples: stats.skipSamples ?? [],
+    }],
+    skip_reasons: stats.skipReasons ?? {},
+    skip_samples: stats.skipSamples ?? [],
+  };
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const dryRun = args.includes("--dry-run");
@@ -114,11 +140,16 @@ async function main() {
         maxPages: 2,
         dryRun,
       });
+      const siteStats = posts.crawlerStats ?? {};
       allResults.push(...posts);
       crawlSourceStats.recordSiteRun(site, {
-        checked: posts.length,
-        valid: posts.length,
-        latestPostFoundAt: getLatestPostDate(posts),
+        checked: siteStats.checked ?? posts.length,
+        valid: siteStats.valid ?? posts.length,
+        duplicate: siteStats.duplicate ?? 0,
+        rejected: siteStats.rejected ?? 0,
+        failed: siteStats.failed ?? 0,
+        latestPostFoundAt: siteStats.latestPostFoundAt ?? getLatestPostDate(posts),
+        metadata: buildCrawlRunMetadata(site, siteStats),
       });
       successCount++;
     } catch (err) {

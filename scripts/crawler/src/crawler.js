@@ -121,6 +121,65 @@ function dropUndefinedValues(object) {
   );
 }
 
+function createCrawlStats() {
+  return {
+    found: 0,
+    checked: 0,
+    collected: 0,
+    postFiltered: 0,
+    detailFiltered: 0,
+    noPosterImage: 0,
+    imageRuleRejected: 0,
+    verificationRejected: 0,
+    skippedSeen: 0,
+    detailFailed: 0,
+    boardFailed: 0,
+    skipReasons: {},
+    skipSamples: [],
+    latestPostFoundAt: null,
+  };
+}
+
+function updateLatestPostFoundAt(stats, post) {
+  const date = new Date(post?.date || post?.deadline || post?.crawledAt);
+  if (Number.isNaN(date.getTime())) return;
+  const iso = date.toISOString();
+  if (!stats.latestPostFoundAt || iso > stats.latestPostFoundAt) {
+    stats.latestPostFoundAt = iso;
+  }
+}
+
+function rememberSkip(stats, bucket, post, reason) {
+  stats.skipReasons[bucket] = (stats.skipReasons[bucket] ?? 0) + 1;
+  if (stats.skipSamples.length >= 20) return;
+  stats.skipSamples.push({
+    bucket,
+    title: String(post?.title ?? "").slice(0, 160),
+    url: post?.url ?? post?.sourceUrl ?? null,
+    reason: String(reason ?? "").slice(0, 300),
+  });
+}
+
+function attachCrawlStats(posts, stats) {
+  const rejected = stats.postFiltered
+    + stats.detailFiltered
+    + stats.noPosterImage
+    + stats.imageRuleRejected
+    + stats.verificationRejected;
+  const failed = stats.detailFailed + stats.boardFailed;
+
+  Object.defineProperty(posts, "crawlerStats", {
+    enumerable: false,
+    value: {
+      ...stats,
+      valid: stats.collected,
+      rejected,
+      duplicate: stats.skippedSeen,
+      failed,
+    },
+  });
+}
+
 const MAX_VERIFIED_IMAGE_CANDIDATES = Number(process.env.POSTER_IMAGE_VERIFY_TOP_N ?? "4");
 
 function orderImagesWithSelected(images, selectedImageUrl) {
@@ -225,6 +284,7 @@ export async function crawlSite(site, adapter, options = {}) {
   const siteMaxPages = site.maxPages ?? maxPages;
   const seen = await loadSeen();
   const allPosts = [];
+  const stats = createCrawlStats();
   const queue = new PQueue({ concurrency: 1, interval: 2000, intervalCap: 1 }); // 2초 간격
 
   logger.info(`━━━ Crawling: ${site.name} (${site.id}) ━━━`);
@@ -236,17 +296,25 @@ export async function crawlSite(site, adapter, options = {}) {
       try {
         // 1) 목록 페이지에서 게시물 링크 추출
         const posts = await adapter.parseList(board.url, site, siteMaxPages);
+        stats.found += posts.length;
+        stats.checked += posts.length;
         logger.info(`  Found ${posts.length} posts on list page`);
 
         // 2) 각 게시물 상세 페이지 파싱
         for (const post of posts) {
+          updateLatestPostFoundAt(stats, post);
+
           if (!dryRun && seen.has(post.url)) {
+            stats.skippedSeen += 1;
+            rememberSkip(stats, "seen", post, "already crawled in seen_urls");
             logger.info(`  Skip (seen): ${post.title}`);
             continue;
           }
 
           const postExclusion = getPostExclusionReason(post);
           if (postExclusion) {
+            stats.postFiltered += 1;
+            rememberSkip(stats, `post_filter:${postExclusion.rule}`, post, postExclusion.reason);
             if (!dryRun) seen.add(post.url);
             logger.info(`  Skip (post filter: ${postExclusion.rule}): ${post.title} — ${postExclusion.reason}`);
             continue;
@@ -255,6 +323,7 @@ export async function crawlSite(site, adapter, options = {}) {
           if (dryRun) {
             logger.info(`  [DRY-RUN] Would fetch: ${post.title} — ${post.url}`);
             allPosts.push({ ...post, board: board.name, category: board.category, site: site.name, siteId: site.id });
+            stats.collected += 1;
             continue;
           }
 
@@ -278,12 +347,16 @@ export async function crawlSite(site, adapter, options = {}) {
             };
             const detailExclusion = getPostExclusionReason(fullPost);
             if (detailExclusion) {
+              stats.detailFiltered += 1;
+              rememberSkip(stats, `detail_filter:${detailExclusion.rule}`, fullPost, detailExclusion.reason);
               seen.add(post.url);
               logger.info(`  Skip (detail filter: ${detailExclusion.rule}): ${post.title} - ${detailExclusion.reason}`);
               continue;
             }
 
             if (!hasPosterImage(fullPost)) {
+              stats.noPosterImage += 1;
+              rememberSkip(stats, "no_poster_image", fullPost, "no usable poster image found on detail page");
               if (shouldMarkImagelessSeen()) seen.add(post.url);
               logger.info(`  Skip (no poster image): ${post.title}`);
               continue;
@@ -305,8 +378,10 @@ export async function crawlSite(site, adapter, options = {}) {
                 });
 
             if (!imageSelection.selectedImageUrl) {
+              stats.imageRuleRejected += 1;
               if (shouldMarkImagelessSeen()) seen.add(post.url);
               const bestRejected = imageSelection.candidates[0]?.rule;
+              rememberSkip(stats, "image_rules", fullPost, bestRejected?.reason ?? "no usable poster image");
               logger.info(`  Skip (image rules): ${post.title} — ${bestRejected?.reason ?? "no usable poster image"}`);
               continue;
             }
@@ -321,9 +396,11 @@ export async function crawlSite(site, adapter, options = {}) {
             };
 
             if (!verifiedImage.selectedImageUrl) {
+              stats.verificationRejected += 1;
               if (shouldMarkImagelessSeen()) seen.add(post.url);
               const bestRejected = verifiedImage.candidateChecks[0];
               const reason = bestRejected?.content?.reason ?? bestRejected?.model?.reason ?? "no poster image matched original notice";
+              rememberSkip(stats, "poster_content_mismatch", fullPost, reason);
               logger.info(`  Skip (poster/content mismatch): ${post.title} - ${reason}`);
               continue;
             }
@@ -337,13 +414,18 @@ export async function crawlSite(site, adapter, options = {}) {
             };
 
             allPosts.push(verifiedPost);
+            stats.collected += 1;
             seen.add(post.url);
             logger.info(`  OK ${post.title} [rule ${verifiedImage.selectedRule?.score ?? 0}]${verifiedImage.imageClassification?.model !== "none" ? ` [poster ${Math.round(verifiedImage.imageClassification.confidence * 100)}%]` : ""}${verifiedImage.contentVerification?.model !== "none" ? ` [match ${Math.round(verifiedImage.contentVerification.confidence * 100)}%]` : ""}`);
           } catch (err) {
+            stats.detailFailed += 1;
+            rememberSkip(stats, "detail_failed", post, err.message);
             logger.error(`  ✗ Detail parse failed: ${post.url} — ${err.message}`);
           }
         }
       } catch (err) {
+        stats.boardFailed += 1;
+        rememberSkip(stats, "board_failed", { title: board.name, url: board.url }, err.message);
         logger.error(`  Board crawl failed: ${board.name} — ${err.message}`);
       }
     });
@@ -358,5 +440,6 @@ export async function crawlSite(site, adapter, options = {}) {
   }
 
   logger.info(`━━━ Done: ${site.name} — ${allPosts.length} posts collected ━━━\n`);
+  attachCrawlStats(allPosts, stats);
   return allPosts;
 }

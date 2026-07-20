@@ -238,6 +238,7 @@ async function loadRecentRuns(admin: ReturnType<typeof adminClient>, sourceIds: 
       "failed_count",
       "valid_post_rate",
       "error_message",
+      "metadata_json",
       "started_at",
       "finished_at",
       "duration_ms",

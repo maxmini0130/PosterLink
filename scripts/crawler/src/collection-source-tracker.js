@@ -265,6 +265,7 @@ function createEmptyStats(source) {
     missingRequired: 0,
     latestPostFoundAt: null,
     errors: [],
+    metadata: {},
   };
 }
 
@@ -287,6 +288,37 @@ function latestDate(...values) {
 function hasRequiredFields(post) {
   const sourceUrl = post?.sourceUrl || post?.url;
   return Boolean(post?.title && sourceUrl);
+}
+
+function mergeCountObjects(current = {}, next = {}) {
+  const merged = { ...current };
+  for (const [key, value] of Object.entries(next ?? {})) {
+    const count = Number(value ?? 0);
+    if (Number.isFinite(count)) merged[key] = Number(merged[key] ?? 0) + count;
+  }
+  return merged;
+}
+
+function mergeMetadata(current = {}, next = {}) {
+  if (!next || typeof next !== "object" || Array.isArray(next)) return current;
+
+  const merged = { ...current, ...next };
+  if (current.skip_reasons || next.skip_reasons) {
+    merged.skip_reasons = mergeCountObjects(current.skip_reasons, next.skip_reasons);
+  }
+  if (current.sites || next.sites) {
+    merged.sites = [
+      ...(Array.isArray(current.sites) ? current.sites : []),
+      ...(Array.isArray(next.sites) ? next.sites : []),
+    ].slice(-30);
+  }
+  if (current.skip_samples || next.skip_samples) {
+    merged.skip_samples = [
+      ...(Array.isArray(current.skip_samples) ? current.skip_samples : []),
+      ...(Array.isArray(next.skip_samples) ? next.skip_samples : []),
+    ].slice(0, 30);
+  }
+  return merged;
 }
 
 export function createCollectionSourceStats(sources = []) {
@@ -327,10 +359,13 @@ export function createCollectionSourceStats(sources = []) {
     if (!stats) return;
 
     stats.checked += Number(values.checked ?? 0);
+    stats.created += Number(values.created ?? 0);
     stats.valid += Number(values.valid ?? 0);
+    stats.duplicate += Number(values.duplicate ?? 0);
     stats.rejected += Number(values.rejected ?? 0);
     stats.failed += Number(values.failed ?? 0);
     if (values.error) stats.errors.push(String(values.error));
+    stats.metadata = mergeMetadata(stats.metadata, values.metadata);
 
     const latest = latestDate(values.latestPostFoundAt);
     if (latest && (!stats.latestPostFoundAt || latest > stats.latestPostFoundAt)) {
@@ -424,7 +459,7 @@ async function insertCollectionSourceRun(supabase, source, stats, patch, runStat
       started_at: startedAt,
       finished_at: finishedAt,
       duration_ms: Number.isFinite(durationMs) ? durationMs : null,
-      metadata_json: options.metadata ?? {},
+      metadata_json: mergeMetadata(options.metadata ?? {}, stats.metadata),
     });
 
   if (!error) return true;
