@@ -35,9 +35,24 @@ const TITLE_EXCLUDE_RULES = [
     reason: "sports facility hours or holiday operation notice, not a poster notice",
   },
   {
+    name: "sports-program-timetable",
+    pattern: /(?:프로그램|생활\s*체육|생활체육|스포츠|아카데미맥|수영장|헬스장|배드민턴|체육관|체력\s*인증\s*센터).*(?:시간표|운영\s*안내|운영안내|이용\s*안내|이용안내|모집\s*일정|고객\s*모집\s*일정|개소\s*및\s*이용)|(?:시간표|운영\s*안내|운영안내|이용\s*안내|이용안내|모집\s*일정|고객\s*모집\s*일정|개소\s*및\s*이용).*(?:프로그램|생활\s*체육|생활체육|스포츠|아카데미맥|수영장|헬스장|배드민턴|체육관|체력\s*인증\s*센터)/i,
+    reason: "sports center timetable or operation guide, not an individual poster",
+  },
+  {
+    name: "facility-administrative-notice",
+    pattern: /(?:사진\s*및\s*동영상\s*촬영\s*안내|배드민턴\s*타임별\s*이용\s*(?:코드|코트)\s*안내|체육관\s*대관\s*당첨자\s*안내|주차장\s*일부\s*제한\s*안내|시설\s*장비\s*및\s*물품\s*현황\s*공시|장비\s*및\s*보호구\s*현황\s*공시|시설\s*이용료\s*소득공제\s*안내|회원\s*이용약관|홈페이지\s*이용약관|다중\s*로그인\s*차단\s*안내|직원\s*사칭\s*주의\s*안내)/i,
+    reason: "facility or organization administrative notice, not a poster notice",
+  },
+  {
     name: "holiday-operation-notice",
     pattern: /(?:부분\s*운영일|법정\s*공휴일|공휴일).*(?:이용\s*안내|이용안내|운영\s*안내|운영안내)|(?:이용\s*안내|이용안내|운영\s*안내|운영안내).*(?:부분\s*운영일|법정\s*공휴일|공휴일)/i,
     reason: "holiday or partial-operation notice, not a poster notice",
+  },
+  {
+    name: "holiday-designation-or-partial-operation",
+    pattern: /(?:부분\s*운영일|법정\s*공휴일|공휴일).*(?:지정\s*알림|알림|공지|이용\s*시간|운영\s*안내|이용\s*안내)|(?:지정\s*알림|알림|공지|이용\s*시간|운영\s*안내|이용\s*안내).*(?:부분\s*운영일|법정\s*공휴일|공휴일)|부분\s*운영일/i,
+    reason: "holiday or partial-operation administrative notice, not a poster notice",
   },
   {
     name: "election-facility-notice",
@@ -81,7 +96,7 @@ const TITLE_EXCLUDE_RULES = [
   },
   {
     name: "result-or-selected-list",
-    pattern: /결과\s*안내|선정\s*결과|추첨\s*결과|합격자|서류심사|최종\s*합격|발표/i,
+    pattern: /결과\s*안내|선정\s*결과|추첨\s*결과|합격자|당첨자|서류심사|최종\s*합격|발표|선발.*공개|공개.*선발/i,
     reason: "result announcement",
   },
   {

@@ -240,14 +240,14 @@ export async function crawlSite(site, adapter, options = {}) {
 
         // 2) 각 게시물 상세 페이지 파싱
         for (const post of posts) {
-          if (seen.has(post.url)) {
+          if (!dryRun && seen.has(post.url)) {
             logger.info(`  Skip (seen): ${post.title}`);
             continue;
           }
 
           const postExclusion = getPostExclusionReason(post);
           if (postExclusion) {
-            seen.add(post.url);
+            if (!dryRun) seen.add(post.url);
             logger.info(`  Skip (post filter: ${postExclusion.rule}): ${post.title} — ${postExclusion.reason}`);
             continue;
           }
@@ -349,7 +349,9 @@ export async function crawlSite(site, adapter, options = {}) {
     });
   }
 
-  await saveSeen(seen);
+  if (!dryRun) {
+    await saveSeen(seen);
+  }
 
   if (allPosts.length > 0) {
     await saveResults(site.id, allPosts);
