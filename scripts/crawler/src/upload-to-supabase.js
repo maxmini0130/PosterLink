@@ -18,6 +18,11 @@ import { inferRegionCodes } from "./region-rules.js";
 import { getPostExclusionReason } from "./post-candidate-filter.js";
 import { evaluatePosterQuality, summarizeQualityIssues } from "./poster-quality-gate.js";
 import { verifyPosterFields, applyFieldVerification } from "./poster-field-verifier.js";
+import {
+  chooseDeadlineForStorage,
+  evaluatePosterDateQuality,
+  mergeDateQualityIntoFieldVerification,
+} from "./poster-date-quality.js";
 import { embedPosterText, embeddingToPgVector } from "./poster-embedder.js";
 import {
   deletePostersWithStorage,
@@ -621,6 +626,7 @@ async function uploadToSupabase(filePath) {
       sourceKey,
       images: sourceImages,
       links: [sourceUrl].filter(Boolean),
+      extractedDeadline: post.deadline ?? null,
     });
     if (quality.decision === "reject") {
       skip++;
@@ -634,7 +640,7 @@ async function uploadToSupabase(filePath) {
       qualityReview.push(createQualityReportEntry({ ...post, images: sourceImages }, sourceUrl, quality));
     }
 
-    const fieldVerification = await verifyPosterFields({
+    const fieldVerificationResult = await verifyPosterFields({
       title: post.title,
       content: post.content,
       site: post.site,
@@ -642,7 +648,14 @@ async function uploadToSupabase(filePath) {
       extractedDeadline: post.deadline ?? null,
       extractedOrgName: post.site ?? null,
     });
-    const { deadline: verifiedDeadline, orgName: verifiedOrgName } = applyFieldVerification(post, fieldVerification);
+    const { deadline: verifiedDeadline, orgName: verifiedOrgName } = applyFieldVerification(post, fieldVerificationResult);
+    const finalDateQuality = evaluatePosterDateQuality(post, {
+      extractedDeadline: verifiedDeadline ?? post.deadline ?? null,
+    });
+    const finalDeadline = chooseDeadlineForStorage(verifiedDeadline ?? post.deadline ?? null, finalDateQuality);
+    const fieldVerification = mergeDateQualityIntoFieldVerification(fieldVerificationResult, finalDateQuality, {
+      storedDeadline: finalDeadline,
+    });
 
     const storedImages = await importPostImagesToStorage(post, sourceUrl, sourceKey);
     const postWithStoredImages = { ...post, images: storedImages };
@@ -660,8 +673,8 @@ async function uploadToSupabase(filePath) {
       poster_status: "review",         // 관리자 검수 대기
       source_key: sourceKey,           // 중복 방지 키
       created_by: CRAWLER_USER_ID,     // 크롤러 봇 계정 (null 가능)
-      application_end_at: verifiedDeadline
-        ? (() => { try { return new Date(verifiedDeadline).toISOString(); } catch { return null; } })()
+      application_end_at: finalDeadline
+        ? (() => { try { return new Date(finalDeadline).toISOString(); } catch { return null; } })()
         : null,
       thumbnail_url: storedImages[0] ?? null,
       field_verification: fieldVerification,
@@ -724,7 +737,11 @@ async function uploadToSupabase(filePath) {
       if (!existingPoster.application_end_at && posterRecord.application_end_at) {
         updates.application_end_at = posterRecord.application_end_at;
       }
-      if (!existingPoster.field_verification) {
+      const nextHasDateIssues = Array.isArray(posterRecord.field_verification?.dateIssues)
+        && posterRecord.field_verification.dateIssues.length > 0;
+      const existingHasDateIssues = Array.isArray(existingPoster.field_verification?.dateIssues)
+        && existingPoster.field_verification.dateIssues.length > 0;
+      if (!existingPoster.field_verification || (nextHasDateIssues && !existingHasDateIssues)) {
         updates.field_verification = posterRecord.field_verification;
       }
       if (Object.keys(updates).length > 0) {

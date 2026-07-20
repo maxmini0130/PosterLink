@@ -48,8 +48,30 @@ function normalizeSearchValue(value: string) {
 function hasFieldVerificationWarning(poster: any) {
   const verification = poster?.field_verification;
   if (!verification) return false;
+  if (Array.isArray(verification.dateIssues) && verification.dateIssues.length > 0) return true;
   if (verification.deadlineMatches === false || verification.orgNameMatches === false) return true;
   return typeof verification.confidence === "number" && verification.confidence < 0.6 && verification.decision !== "not_checked";
+}
+
+function getDateVerificationIssues(poster: any) {
+  const issues = poster?.field_verification?.dateIssues;
+  return Array.isArray(issues) ? issues : [];
+}
+
+function getFieldVerificationWarningLabel(poster: any) {
+  return getDateVerificationIssues(poster).length > 0 ? "날짜 검증 필요" : "AI 검증 필요";
+}
+
+function getFieldVerificationWarningReason(poster: any) {
+  const dateIssues = getDateVerificationIssues(poster);
+  if (dateIssues.length > 0) {
+    return dateIssues
+      .slice(0, 3)
+      .map((issue: any) => `${issue.code}: ${issue.reason}`)
+      .join("\n");
+  }
+
+  return poster.field_verification?.reason || "AI가 마감일/기관명 불일치 가능성을 감지했습니다. 승인 전 원문을 확인하세요.";
 }
 
 export default function AdminPostersPage() {
@@ -779,10 +801,10 @@ export default function AdminPostersPage() {
                   </span>
                   {hasFieldVerificationWarning(poster) && (
                     <span
-                      title={poster.field_verification?.reason || "AI가 마감일/기관명 불일치 가능성을 감지했습니다. 승인 전 원문을 확인하세요."}
+                      title={getFieldVerificationWarningReason(poster)}
                       className="flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-black text-amber-600 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400"
                     >
-                      <AlertTriangle size={12} /> AI 검증 필요
+                      <AlertTriangle size={12} /> {getFieldVerificationWarningLabel(poster)}
                     </span>
                   )}
                 </div>
@@ -1013,6 +1035,21 @@ export default function AdminPostersPage() {
                     <p className="mb-1 text-xs font-black text-gray-400">등록일</p>
                     <p className="font-bold text-gray-900 dark:text-white">{new Date(previewPoster.created_at).toLocaleString()}</p>
                   </div>
+                  {getDateVerificationIssues(previewPoster).length > 0 && (
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/40">
+                      <p className="mb-2 flex items-center gap-1.5 text-xs font-black text-amber-700 dark:text-amber-300">
+                        <AlertTriangle size={13} /> 날짜 검증 필요
+                      </p>
+                      <div className="space-y-2">
+                        {getDateVerificationIssues(previewPoster).slice(0, 4).map((issue: any, index: number) => (
+                          <div key={`${issue.code ?? "date"}-${index}`} className="text-xs font-bold leading-5 text-amber-800 dark:text-amber-200">
+                            <p>{issue.reason}</p>
+                            {issue.evidence && <p className="mt-0.5 text-amber-700/70 dark:text-amber-300/70">{issue.evidence}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {previewPoster.summary_short && (
                     <div className="rounded-2xl border border-gray-100 p-4 dark:border-slate-800">
                       <p className="mb-2 text-xs font-black text-gray-400">요약</p>

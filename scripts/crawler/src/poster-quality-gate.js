@@ -1,3 +1,5 @@
+import { evaluatePosterDateQuality } from "./poster-date-quality.js";
+
 const BAD_IMAGE_PATTERNS = [
   /(?:^|[/$_.-])wa[_-]?mark(?:[/$_.-]|$)/i,
   /web[_-]?accessibility|accessibility[_-]?mark|wa[_-]?cert|wa[_-]?logo/i,
@@ -211,6 +213,9 @@ export function evaluatePosterQuality(input = {}, options = {}) {
     ...(Array.isArray(input.poster_links) ? input.poster_links.map(getLinkUrl) : []),
   ].map(normalizeUrl));
   const allText = getTextBundle(input, images, links);
+  const dateQuality = evaluatePosterDateQuality(input, {
+    extractedDeadline: options.extractedDeadline ?? input.deadline ?? input.application_end_at ?? null,
+  });
 
   if (!title) addIssue(issues, "missing-title", "high", "missing title", "", "reject");
   if (!org) addIssue(issues, "missing-org", "medium", "missing organization/source name");
@@ -258,6 +263,10 @@ export function evaluatePosterQuality(input = {}, options = {}) {
     addIssue(issues, "low-content-match-confidence", "medium", "AI notice-match confidence is low", String(contentVerification.confidence));
   }
 
+  for (const issue of dateQuality.issues) {
+    addIssue(issues, issue.code, issue.severity, issue.reason, issue.evidence, issue.decision);
+  }
+
   const duplicateMaps = options.duplicateMaps;
   if (sourceKey && duplicateMaps?.source?.get(sourceKey) > 1) {
     addIssue(issues, "duplicate-source", "medium", "same source URL appears multiple times", sourceKey);
@@ -287,6 +296,7 @@ export function evaluatePosterQuality(input = {}, options = {}) {
     org,
     source_key: sourceKey,
     thumbnail_url: thumbnail,
+    date_quality: dateQuality,
   };
 }
 
