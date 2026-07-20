@@ -69,6 +69,8 @@ jobs:
           CRAWLER_SOURCE: ${{ github.event.inputs.source || '' }}
           CRAWLER_SITE: ${{ github.event.inputs.site || '' }}
           CRAWLER_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           POSTER_IMAGE_CLASSIFIER: auto
           OPENAI_POSTER_IMAGE_MODEL: gpt-5-mini
