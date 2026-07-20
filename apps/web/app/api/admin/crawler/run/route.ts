@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -20,6 +21,18 @@ type RunResult = {
   resultFile?: string | null;
   uploaded?: boolean;
 };
+
+type CrawlerRunner =
+  | {
+      mode: "bundle";
+      bundleDir: string;
+      indexPath: string;
+      uploadPath: string;
+    }
+  | {
+      mode: "source";
+      crawlerDir: string;
+    };
 
 function createAdminClient() {
   return createClient(
@@ -70,6 +83,46 @@ async function findCrawlerDir() {
   throw new Error("scripts/crawler directory was not found from the web app working directory.");
 }
 
+async function findCrawlerBundle() {
+  let current = process.cwd();
+
+  for (let i = 0; i < 8; i += 1) {
+    const candidates = [
+      path.join(current, ".generated", "crawler"),
+      path.join(current, "apps", "web", ".generated", "crawler"),
+    ];
+
+    for (const bundleDir of candidates) {
+      const indexPath = path.join(bundleDir, "index.cjs");
+      const uploadPath = path.join(bundleDir, "upload-to-supabase.cjs");
+      if (await pathExists(indexPath) && await pathExists(uploadPath)) {
+        return {
+          mode: "bundle" as const,
+          bundleDir,
+          indexPath,
+          uploadPath,
+        };
+      }
+    }
+
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+
+  return null;
+}
+
+async function resolveCrawlerRunner(): Promise<CrawlerRunner> {
+  const bundle = await findCrawlerBundle();
+  if (bundle) return bundle;
+
+  return {
+    mode: "source",
+    crawlerDir: await findCrawlerDir(),
+  };
+}
+
 function appendLog(current: string, chunk: Buffer | string) {
   const next = current + chunk.toString();
   return next.length > MAX_LOG_CHARS ? next.slice(next.length - MAX_LOG_CHARS) : next;
@@ -115,8 +168,8 @@ function runCommand(command: string, args: string[], options: { cwd: string; env
   });
 }
 
-async function findLatestResultFile(crawlerDir: string, startedAt: number) {
-  const resultsDir = path.join(crawlerDir, "data", "results");
+async function findLatestResultFile(workDir: string, startedAt: number) {
+  const resultsDir = path.join(workDir, "data", "results");
   const entries = await fs.readdir(resultsDir).catch(() => []);
   const files = await Promise.all(
     entries
@@ -135,16 +188,23 @@ async function findLatestResultFile(crawlerDir: string, startedAt: number) {
 
 async function runCrawler(options: { site?: string | null; source?: string | null } = {}) {
   const startedAt = Date.now();
-  const crawlerDir = await findCrawlerDir();
-  const crawlArgs = ["src/index.js"];
+  const runner = await resolveCrawlerRunner();
+  const workDir = runner.mode === "bundle"
+    ? await fs.mkdtemp(path.join(os.tmpdir(), "posterlink-crawler-"))
+    : runner.crawlerDir;
+
+  const crawlArgs = runner.mode === "bundle" ? [runner.indexPath] : ["src/index.js"];
   if (options.source) {
     crawlArgs.push("--source", options.source);
   } else if (options.site) {
     crawlArgs.push("--site", options.site);
   }
 
-  let logs = await runCommand("node", crawlArgs, { cwd: crawlerDir });
-  const resultFile = await findLatestResultFile(crawlerDir, startedAt);
+  let logs = runner.mode === "bundle"
+    ? `Using bundled crawler: ${path.relative(process.cwd(), runner.bundleDir)}\nWorking directory: ${workDir}\n`
+    : `Using source crawler: ${runner.crawlerDir}\n`;
+  logs = appendLog(logs, await runCommand(process.execPath, crawlArgs, { cwd: workDir }));
+  const resultFile = await findLatestResultFile(workDir, startedAt);
 
   if (!resultFile) {
     return {
@@ -155,8 +215,11 @@ async function runCrawler(options: { site?: string | null; source?: string | nul
     };
   }
 
-  logs = appendLog(logs, `\nUploading result file: ${path.relative(crawlerDir, resultFile)}\n`);
-  logs = appendLog(logs, await runCommand("node", ["src/upload-to-supabase.js", resultFile], { cwd: crawlerDir }));
+  logs = appendLog(logs, `\nUploading result file: ${path.relative(workDir, resultFile)}\n`);
+  const uploadArgs = runner.mode === "bundle"
+    ? [runner.uploadPath, resultFile]
+    : ["src/upload-to-supabase.js", resultFile];
+  logs = appendLog(logs, await runCommand(process.execPath, uploadArgs, { cwd: workDir }));
 
   return {
     ok: true,

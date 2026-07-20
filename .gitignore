@@ -4,6 +4,7 @@ node_modules
 
 # Next.js
 .next/
+apps/web/.generated/
 out/
 build/
 *.tsbuildinfo

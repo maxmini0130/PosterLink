@@ -1,9 +1,17 @@
 import { withSentryConfig } from "@sentry/nextjs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ["@posterlink/ui", "@posterlink/types", "@posterlink/lib"],
   experimental: {
+    outputFileTracingRoot: path.join(__dirname, "../.."),
+    outputFileTracingIncludes: {
+      "/api/admin/crawler/run": ["./.generated/crawler/**/*"],
+    },
     serverActions: {
       bodySizeLimit: "10mb",
     },

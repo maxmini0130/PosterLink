@@ -5,7 +5,6 @@ import { existsSync } from "node:fs";
 import fs from "fs/promises";
 import os from "node:os";
 import path from "path";
-import { fileURLToPath } from "node:url";
 
 const CACHE_PATH = "data/poster_image_classifications.json";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY?.trim();
@@ -15,7 +14,8 @@ const MIN_CONFIDENCE = Number(process.env.POSTER_IMAGE_MIN_CONFIDENCE ?? "0.65")
 const ALLOW_UNVERIFIED = process.env.POSTER_IMAGE_ALLOW_UNVERIFIED === "1";
 const LOCAL_MODEL_PATH = process.env.POSTER_LOCAL_MODEL_PATH?.trim();
 const LOCAL_MODEL_THRESHOLD = Number(process.env.POSTER_LOCAL_MODEL_THRESHOLD ?? MIN_CONFIDENCE);
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __dirname = process.env.POSTER_CRAWLER_SRC_DIR?.trim()
+  || path.dirname(path.resolve(process.argv[1] || path.join(process.cwd(), "src", "index.js")));
 const LOCAL_PREDICT_SCRIPT = path.resolve(__dirname, "../ml/predict_poster.py");
 const PYTHON_BIN = process.env.POSTER_AI_PYTHON?.trim() || findPythonBin();
 
