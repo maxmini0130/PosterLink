@@ -61,79 +61,13 @@ jobs:
             exit 1
           fi
 
-          node --input-type=module <<'NODE'
-          import fs from "node:fs/promises";
-
-          const key = process.env.OPENAI_API_KEY;
-          const tinyPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lW7vFgAAAABJRU5ErkJggg==";
-          const fallbackModels = (process.env.OPENAI_MODEL_FALLBACKS || "gpt-5-mini,gpt-4.1-mini,gpt-4o-mini")
-            .split(",")
-            .map((value) => value.trim())
-            .filter(Boolean);
-
-          function modelCandidates(primary) {
-            return [...new Set([primary, ...fallbackModels].filter(Boolean))];
-          }
-
-          async function canUseVisionModel(model) {
-            const response = await fetch("https://api.openai.com/v1/responses", {
-              method: "POST",
-              headers: {
-                "Authorization": `Bearer ${key}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                model,
-                input: [{
-                  role: "user",
-                  content: [
-                    { type: "input_text", text: "Reply with OK." },
-                    { type: "input_image", image_url: tinyPng, detail: "low" },
-                  ],
-                }],
-                max_output_tokens: 16,
-              }),
-            });
-
-            if (!response.ok) {
-              const text = await response.text();
-              return { ok: false, detail: `${response.status} ${text.slice(0, 500)}` };
-            }
-
-            return { ok: true };
-          }
-
-          async function chooseModel(label, primary) {
-            const failures = [];
-            for (const model of modelCandidates(primary)) {
-              const result = await canUseVisionModel(model);
-              if (result.ok) {
-                console.log(`OpenAI ${label} model preflight ok: ${model}`);
-                return model;
-              }
-              failures.push(`${model}: ${result.detail}`);
-            }
-
-            console.log(`::error::OpenAI ${label} model preflight failed. Tried: ${failures.join(" | ")}`);
-            process.exit(1);
-          }
-
-          const imageModel = await chooseModel("image", process.env.OPENAI_POSTER_IMAGE_MODEL);
-          const contentModel = await chooseModel("content", process.env.OPENAI_POSTER_CONTENT_MODEL || imageModel);
-
-          await fs.appendFile(process.env.GITHUB_ENV, [
-            `OPENAI_POSTER_IMAGE_MODEL=${imageModel}`,
-            `OPENAI_POSTER_CONTENT_MODEL=${contentModel}`,
-            "",
-          ].join("\n"));
-          NODE
+          echo "Crawler secrets are configured."
+          echo "OpenAI model: ${OPENAI_POSTER_IMAGE_MODEL:-gpt-4o-mini}"
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_POSTER_IMAGE_MODEL: ${{ secrets.OPENAI_POSTER_IMAGE_MODEL }}
-          OPENAI_POSTER_CONTENT_MODEL: ${{ secrets.OPENAI_POSTER_CONTENT_MODEL }}
-          OPENAI_MODEL_FALLBACKS: ${{ vars.OPENAI_MODEL_FALLBACKS }}
+          OPENAI_POSTER_IMAGE_MODEL: ${{ secrets.OPENAI_POSTER_IMAGE_MODEL || 'gpt-4o-mini' }}
 
       - name: Run crawler
         run: |
@@ -159,6 +93,8 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           POSTER_IMAGE_CLASSIFIER: auto
+          OPENAI_POSTER_IMAGE_MODEL: ${{ secrets.OPENAI_POSTER_IMAGE_MODEL || 'gpt-4o-mini' }}
+          OPENAI_POSTER_CONTENT_MODEL: ${{ secrets.OPENAI_POSTER_CONTENT_MODEL || 'gpt-4o-mini' }}
           POSTER_IMAGE_MIN_CONFIDENCE: "0.65"
           POSTER_IMAGE_RULE_MIN_SCORE: "45"
 
