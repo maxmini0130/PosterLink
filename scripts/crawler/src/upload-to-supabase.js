@@ -33,6 +33,11 @@ import {
   flushCollectionSourceStats,
   loadCollectionSources,
 } from "./collection-source-tracker.js";
+import {
+  duplicateIssueFromMatch,
+  findBestPosterDuplicate,
+  normalizeSourceUrl,
+} from "./poster-duplicate-detector.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL?.trim();
 const SUPABASE_KEY = process.env.SUPABASE_KEY?.trim();
@@ -76,6 +81,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
 });
 
 const POSTER_IMAGE_BUCKET = process.env.POSTER_IMAGE_BUCKET?.trim() || "poster-originals";
+const POSTER_DUPLICATE_LOOKUP_LIMIT = Number(process.env.POSTER_DUPLICATE_LOOKUP_LIMIT ?? "5000");
 
 // 카테고리 코드 → DB UUID 매핑 (시작 시 한 번 로드)
 async function loadCategoryMap() {
@@ -514,6 +520,175 @@ async function syncPosterImages(posterId, post, sourceUrl) {
   }
 }
 
+function chunkArray(items, size = 100) {
+  const chunks = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function groupByPosterId(rows = []) {
+  const map = new Map();
+  for (const row of rows) {
+    const list = map.get(row.poster_id) ?? [];
+    list.push(row);
+    map.set(row.poster_id, list);
+  }
+  return map;
+}
+
+async function fetchByPosterIds(table, columns, posterIds, batchSize = 100) {
+  const rows = [];
+  for (const batchIds of chunkArray(posterIds, batchSize)) {
+    const { data, error } = await supabase
+      .from(table)
+      .select(columns)
+      .in("poster_id", batchIds);
+
+    if (error) throw error;
+    rows.push(...(data ?? []));
+  }
+  return rows;
+}
+
+async function loadDuplicateCandidates() {
+  const limit = Number.isFinite(POSTER_DUPLICATE_LOOKUP_LIMIT)
+    ? Math.max(0, POSTER_DUPLICATE_LOOKUP_LIMIT)
+    : 5000;
+  if (limit === 0) return [];
+
+  const rows = [];
+  const pageSize = 1000;
+
+  for (let offset = 0; offset < limit; offset += pageSize) {
+    const to = Math.min(offset + pageSize - 1, limit - 1);
+    const { data, error } = await supabase
+      .from("posters")
+      .select("id,title,source_org_name,poster_status,created_at,application_end_at,thumbnail_url,source_key,summary_short,summary_long,field_verification")
+      .in("poster_status", ["review", "published"])
+      .order("created_at", { ascending: false })
+      .range(offset, to);
+
+    if (error) {
+      console.warn(`Duplicate candidate load failed: ${error.message}`);
+      return [];
+    }
+
+    rows.push(...(data ?? []));
+    if (!data || data.length < pageSize) break;
+  }
+
+  const posterIds = rows.map((row) => row.id).filter(Boolean);
+  if (posterIds.length === 0) return rows;
+
+  try {
+    const [imageRows, linkRows] = await Promise.all([
+      fetchByPosterIds("poster_images", "poster_id,storage_path,width,height", posterIds),
+      fetchByPosterIds("poster_links", "poster_id,url,title,link_type,is_primary", posterIds),
+    ]);
+    const imagesByPosterId = groupByPosterId(imageRows);
+    const linksByPosterId = groupByPosterId(linkRows);
+    return rows.map((row) => ({
+      ...row,
+      poster_images: imagesByPosterId.get(row.id) ?? [],
+      poster_links: linksByPosterId.get(row.id) ?? [],
+    }));
+  } catch (error) {
+    console.warn(`Duplicate relation load failed: ${error.message}`);
+    return rows;
+  }
+}
+
+async function addSupplementalSourceLink(posterId, sourceUrl) {
+  if (!posterId || !sourceUrl) return false;
+
+  const normalizedSource = normalizeSourceUrl(sourceUrl);
+  const { data: existingLinks, error: selectError } = await supabase
+    .from("poster_links")
+    .select("id,url,is_primary")
+    .eq("poster_id", posterId);
+
+  if (selectError) {
+    console.warn(`Supplemental source lookup failed: ${selectError.message}`);
+    return false;
+  }
+
+  const links = existingLinks ?? [];
+  const alreadyLinked = links.some((link) => normalizeSourceUrl(link.url) === normalizedSource);
+  if (alreadyLinked) return false;
+
+  const { error: insertError } = await supabase.from("poster_links").insert({
+    poster_id: posterId,
+    link_type: "official_notice",
+    url: sourceUrl,
+    title: "\uACF5\uC2DD \uACF5\uACE0 \uC6D0\uBB38",
+    is_primary: !links.some((link) => link.is_primary),
+  });
+
+  if (insertError) {
+    console.warn(`Supplemental source insert failed: ${insertError.message}`);
+    return false;
+  }
+
+  return true;
+}
+
+function mergeDuplicateIssueIntoFieldVerification(verification = {}, issue) {
+  if (!issue) return verification;
+
+  const duplicateIssues = Array.isArray(verification.duplicateIssues)
+    ? [...verification.duplicateIssues]
+    : [];
+  const alreadyPresent = duplicateIssues.some((existingIssue) => (
+    existingIssue.duplicatePosterId === issue.duplicatePosterId
+    && existingIssue.code === issue.code
+  ));
+  if (!alreadyPresent) duplicateIssues.push(issue);
+
+  const duplicateReason = duplicateIssues
+    .slice(0, 3)
+    .map((entry) => `${entry.code}: ${entry.reason}`)
+    .join("; ");
+  const confidence = typeof verification.confidence === "number"
+    ? Math.min(verification.confidence, 0.45)
+    : 0.45;
+
+  return {
+    ...verification,
+    confidence,
+    decision: "needs_review",
+    reason: [verification.reason, duplicateReason].filter(Boolean).join(" | ").slice(0, 800),
+    duplicateIssues,
+  };
+}
+
+function addDuplicateCandidate(candidates, posterId, posterRecord, post, sourceUrl, storedImages) {
+  if (!posterId) return;
+  candidates.unshift({
+    id: posterId,
+    title: posterRecord.title,
+    source_org_name: posterRecord.source_org_name,
+    poster_status: posterRecord.poster_status,
+    application_end_at: posterRecord.application_end_at,
+    thumbnail_url: posterRecord.thumbnail_url,
+    source_key: posterRecord.source_key,
+    summary_short: posterRecord.summary_short,
+    summary_long: posterRecord.summary_long,
+    images: storedImages,
+    poster_images: storedImages.map((storagePath) => ({ storage_path: storagePath })),
+    poster_links: sourceUrl
+      ? [{
+          url: sourceUrl,
+          title: "\uACF5\uC2DD \uACF5\uACE0 \uC6D0\uBB38",
+          link_type: "official_notice",
+          is_primary: true,
+        }]
+      : [],
+    deadline: post.deadline ?? null,
+  });
+}
+
 async function cleanupImageLessCrawlerReviews() {
   const { data, error } = await supabase
     .from("posters")
@@ -595,6 +770,7 @@ async function uploadToSupabase(filePath) {
   // 카테고리/지역 맵 로드
   const categoryMap = await loadCategoryMap();
   const regionMap = await loadRegionMap();
+  const duplicateCandidates = await loadDuplicateCandidates();
 
   let success = 0;
   let skip = 0;
@@ -628,6 +804,31 @@ async function uploadToSupabase(filePath) {
       links: [sourceUrl].filter(Boolean),
       extractedDeadline: post.deadline ?? null,
     });
+    const duplicateMatch = findBestPosterDuplicate({
+      ...post,
+      source_key: sourceKey,
+      sourceUrl,
+      url: sourceUrl,
+      images: sourceImages,
+      application_end_at: post.deadline ?? null,
+    }, duplicateCandidates);
+    const duplicateIssue = duplicateIssueFromMatch(duplicateMatch);
+    if (duplicateMatch.decision === "merge" && duplicateMatch.row?.id) {
+      skip++;
+      collectionStats.recordDuplicate(post);
+      skippedSourceKeys.push(sourceKey);
+      await addSupplementalSourceLink(duplicateMatch.row.id, sourceUrl);
+      await assignPosterCategories(duplicateMatch.row.id, post, categoryMap);
+      await assignPosterRegions(duplicateMatch.row.id, post, regionMap);
+      process.stdout.write("=");
+      console.log(`\n  Duplicate merged into existing poster ${duplicateMatch.row.id}: ${post.title} (${duplicateMatch.score})`);
+      continue;
+    }
+    if (duplicateMatch.decision === "review" && duplicateIssue) {
+      quality.issues.push(duplicateIssue);
+      quality.decision = "review";
+      quality.issue_score += duplicateIssue.severity === "high" ? 5 : 3;
+    }
     if (quality.decision === "reject") {
       skip++;
       collectionStats.recordRejected(post, `quality:${summarizeQualityIssues(quality)}`);
@@ -653,9 +854,12 @@ async function uploadToSupabase(filePath) {
       extractedDeadline: verifiedDeadline ?? post.deadline ?? null,
     });
     const finalDeadline = chooseDeadlineForStorage(verifiedDeadline ?? post.deadline ?? null, finalDateQuality);
-    const fieldVerification = mergeDateQualityIntoFieldVerification(fieldVerificationResult, finalDateQuality, {
+    let fieldVerification = mergeDateQualityIntoFieldVerification(fieldVerificationResult, finalDateQuality, {
       storedDeadline: finalDeadline,
     });
+    if (duplicateMatch.decision === "review" && duplicateIssue) {
+      fieldVerification = mergeDuplicateIssueIntoFieldVerification(fieldVerification, duplicateIssue);
+    }
 
     const storedImages = await importPostImagesToStorage(post, sourceUrl, sourceKey);
     const postWithStoredImages = { ...post, images: storedImages };
@@ -708,6 +912,7 @@ async function uploadToSupabase(filePath) {
       skip++;
       collectionStats.recordDuplicate(post);
       skippedSourceKeys.push(sourceKey);
+      await addSupplementalSourceLink(existingPoster.id, sourceUrl);
       const updates = {};
       if (
         posterRecord.title !== "제목 없음" &&
@@ -786,6 +991,7 @@ async function uploadToSupabase(filePath) {
     // ── 3. poster_categories 저장 ───────────────────────────
     await assignPosterCategories(posterId, post, categoryMap);
     await assignPosterRegions(posterId, post, regionMap);
+    addDuplicateCandidate(duplicateCandidates, posterId, posterRecord, post, sourceUrl, storedImages);
 
     success++;
     collectionStats.recordCreated(post);

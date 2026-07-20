@@ -1,4 +1,10 @@
 import { evaluatePosterDateQuality } from "./poster-date-quality.js";
+import {
+  normalizeDateKey,
+  normalizeImageIdentity,
+  normalizePosterOrg,
+  normalizePosterTitle,
+} from "./poster-duplicate-detector.js";
 
 const BAD_IMAGE_PATTERNS = [
   /(?:^|[/$_.-])wa[_-]?mark(?:[/$_.-]|$)/i,
@@ -181,18 +187,35 @@ function getTextBundle(input, images, links) {
 export function buildPosterDuplicateMaps(rows = []) {
   const source = new Map();
   const titleOrg = new Map();
+  const titleOrgDeadline = new Map();
+  const image = new Map();
 
   for (const row of rows) {
     const sourceKey = normalizeUrl(row.source_key ?? row.sourceUrl ?? row.url);
     if (sourceKey) source.set(sourceKey, (source.get(sourceKey) ?? 0) + 1);
 
-    const title = compact(row.title);
-    const org = compact(row.source_org_name ?? row.org ?? row.site);
+    const org = normalizePosterOrg(row.source_org_name ?? row.org ?? row.site);
+    const title = normalizePosterTitle(row.title, org);
+    const deadline = normalizeDateKey(row.application_end_at ?? row.deadline);
     const titleOrgKey = `${title} / ${org}`;
     if (title && org) titleOrg.set(titleOrgKey, (titleOrg.get(titleOrgKey) ?? 0) + 1);
+
+    const titleOrgDeadlineKey = `${titleOrgKey} / ${deadline}`;
+    if (title && org && deadline) {
+      titleOrgDeadline.set(titleOrgDeadlineKey, (titleOrgDeadline.get(titleOrgDeadlineKey) ?? 0) + 1);
+    }
+
+    const imageUrls = [
+      row.thumbnail_url,
+      ...(Array.isArray(row.images) ? row.images : []),
+      ...(Array.isArray(row.poster_images) ? row.poster_images.map(getImageUrl) : []),
+    ].map(normalizeImageIdentity).filter(Boolean);
+    for (const imageUrl of new Set(imageUrls)) {
+      image.set(imageUrl, (image.get(imageUrl) ?? 0) + 1);
+    }
   }
 
-  return { source, titleOrg };
+  return { source, titleOrg, titleOrgDeadline, image };
 }
 
 export function evaluatePosterQuality(input = {}, options = {}) {
@@ -272,9 +295,24 @@ export function evaluatePosterQuality(input = {}, options = {}) {
     addIssue(issues, "duplicate-source", "medium", "same source URL appears multiple times", sourceKey);
   }
 
-  const titleOrgKey = `${title} / ${org}`;
-  if (title && org && duplicateMaps?.titleOrg?.get(titleOrgKey) > 1) {
+  const duplicateTitle = normalizePosterTitle(title, org);
+  const duplicateOrg = normalizePosterOrg(org);
+  const deadlineKey = normalizeDateKey(options.extractedDeadline ?? input.deadline ?? input.application_end_at ?? null);
+  const titleOrgKey = `${duplicateTitle} / ${duplicateOrg}`;
+  if (duplicateTitle && duplicateOrg && duplicateMaps?.titleOrg?.get(titleOrgKey) > 1) {
     addIssue(issues, "duplicate-title-org", "medium", "same title/organization appears multiple times", titleOrgKey);
+  }
+
+  const titleOrgDeadlineKey = `${titleOrgKey} / ${deadlineKey}`;
+  if (duplicateTitle && duplicateOrg && deadlineKey && duplicateMaps?.titleOrgDeadline?.get(titleOrgDeadlineKey) > 1) {
+    addIssue(issues, "duplicate-title-org-deadline", "high", "same title/organization/deadline appears multiple times", titleOrgDeadlineKey);
+  }
+
+  const duplicateImage = images
+    .map(normalizeImageIdentity)
+    .find((imageUrl) => imageUrl && duplicateMaps?.image?.get(imageUrl) > 1);
+  if (duplicateImage) {
+    addIssue(issues, "duplicate-image", "high", "same poster image appears multiple times", duplicateImage);
   }
 
   const issueScore = issues.reduce((sum, issue) => {

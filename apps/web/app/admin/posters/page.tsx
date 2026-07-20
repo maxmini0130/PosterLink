@@ -49,6 +49,7 @@ function hasFieldVerificationWarning(poster: any) {
   const verification = poster?.field_verification;
   if (!verification) return false;
   if (Array.isArray(verification.dateIssues) && verification.dateIssues.length > 0) return true;
+  if (Array.isArray(verification.duplicateIssues) && verification.duplicateIssues.length > 0) return true;
   if (verification.deadlineMatches === false || verification.orgNameMatches === false) return true;
   return typeof verification.confidence === "number" && verification.confidence < 0.6 && verification.decision !== "not_checked";
 }
@@ -58,8 +59,15 @@ function getDateVerificationIssues(poster: any) {
   return Array.isArray(issues) ? issues : [];
 }
 
+function getDuplicateVerificationIssues(poster: any) {
+  const issues = poster?.field_verification?.duplicateIssues;
+  return Array.isArray(issues) ? issues : [];
+}
+
 function getFieldVerificationWarningLabel(poster: any) {
-  return getDateVerificationIssues(poster).length > 0 ? "날짜 검증 필요" : "AI 검증 필요";
+  if (getDateVerificationIssues(poster).length > 0) return "\uB0A0\uC9DC \uAC80\uC99D \uD544\uC694";
+  if (getDuplicateVerificationIssues(poster).length > 0) return "\uC911\uBCF5 \uAC80\uC99D \uD544\uC694";
+  return "AI 검증 필요";
 }
 
 function getFieldVerificationWarningReason(poster: any) {
@@ -68,6 +76,14 @@ function getFieldVerificationWarningReason(poster: any) {
     return dateIssues
       .slice(0, 3)
       .map((issue: any) => `${issue.code}: ${issue.reason}`)
+      .join("\n");
+  }
+
+  const duplicateIssues = getDuplicateVerificationIssues(poster);
+  if (duplicateIssues.length > 0) {
+    return duplicateIssues
+      .slice(0, 3)
+      .map((issue: any) => `${issue.code}: ${issue.reason}${issue.evidence ? ` (${issue.evidence})` : ""}`)
       .join("\n");
   }
 
@@ -1045,6 +1061,31 @@ export default function AdminPostersPage() {
                           <div key={`${issue.code ?? "date"}-${index}`} className="text-xs font-bold leading-5 text-amber-800 dark:text-amber-200">
                             <p>{issue.reason}</p>
                             {issue.evidence && <p className="mt-0.5 text-amber-700/70 dark:text-amber-300/70">{issue.evidence}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {getDuplicateVerificationIssues(previewPoster).length > 0 && (
+                    <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-900 dark:bg-rose-950/40">
+                      <p className="mb-2 flex items-center gap-1.5 text-xs font-black text-rose-700 dark:text-rose-300">
+                        <AlertTriangle size={13} /> {"\uC911\uBCF5 \uAC80\uC99D \uD544\uC694"}
+                      </p>
+                      <div className="space-y-2">
+                        {getDuplicateVerificationIssues(previewPoster).slice(0, 4).map((issue: any, index: number) => (
+                          <div key={`${issue.code ?? "duplicate"}-${index}`} className="text-xs font-bold leading-5 text-rose-800 dark:text-rose-200">
+                            <p>{issue.reason}</p>
+                            {issue.evidence && <p className="mt-0.5 text-rose-700/70 dark:text-rose-300/70">{issue.evidence}</p>}
+                            {issue.duplicatePosterId && (
+                              <Link
+                                href={`/posters/${issue.duplicatePosterId}`}
+                                target="_blank"
+                                className="mt-1 inline-flex items-center gap-1 text-rose-700 underline-offset-2 hover:underline dark:text-rose-200"
+                              >
+                                <ExternalLink size={12} />
+                                {"\uAE30\uC874 \uACF5\uACE0 \uBCF4\uAE30"}
+                              </Link>
+                            )}
                           </div>
                         ))}
                       </div>
