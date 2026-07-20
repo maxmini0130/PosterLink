@@ -4,6 +4,31 @@ on:
   schedule:
     - cron: "0 1 * * *"   # Every day 01:00 UTC = 10:00 KST
   workflow_dispatch:
+    inputs:
+      source:
+        description: "Collection source slug to crawl. Leave empty for all sources."
+        required: false
+        type: string
+      site:
+        description: "Static crawler site id to crawl when no collection source slug is provided."
+        required: false
+        type: string
+      dry_run:
+        description: "Run without fetching detail pages or uploading results."
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      upload:
+        description: "Upload the newest result JSON to Supabase."
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
 
 jobs:
   crawl-and-upload:
@@ -25,9 +50,25 @@ jobs:
         run: npm ci
 
       - name: Run crawler
-        run: node src/index.js
+        run: |
+          ARGS=()
+          if [ -n "$CRAWLER_SOURCE" ]; then
+            ARGS+=(--source "$CRAWLER_SOURCE")
+          elif [ -n "$CRAWLER_SITE" ]; then
+            ARGS+=(--site "$CRAWLER_SITE")
+          fi
+
+          if [ "$CRAWLER_DRY_RUN" = "true" ]; then
+            ARGS+=(--dry-run)
+          fi
+
+          echo "Running crawler with args: ${ARGS[*]:-(all)}"
+          node src/index.js "${ARGS[@]}"
         env:
           NODE_TLS_REJECT_UNAUTHORIZED: "0"
+          CRAWLER_SOURCE: ${{ github.event.inputs.source || '' }}
+          CRAWLER_SITE: ${{ github.event.inputs.site || '' }}
+          CRAWLER_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           POSTER_IMAGE_CLASSIFIER: auto
           OPENAI_POSTER_IMAGE_MODEL: gpt-5-mini
@@ -36,16 +77,22 @@ jobs:
 
       - name: Upload to Supabase
         run: |
-          TODAY=$(date +%Y-%m-%d)
-          FILE="data/results/all_${TODAY}.json"
+          if [ "$CRAWLER_DRY_RUN" = "true" ] || [ "$CRAWLER_UPLOAD" != "true" ]; then
+            echo "Upload skipped. dry_run=$CRAWLER_DRY_RUN upload=$CRAWLER_UPLOAD"
+            exit 0
+          fi
+
+          FILE=$(ls -t data/results/*.json 2>/dev/null | head -n 1 || true)
           if [ -f "$FILE" ]; then
             echo "Uploading $FILE"
             node src/upload-to-supabase.js "$FILE"
           else
-            echo "No result file: $FILE"
+            echo "No result JSON was created"
             ls data/results/ || true
           fi
         env:
+          CRAWLER_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          CRAWLER_UPLOAD: ${{ github.event.inputs.upload || 'true' }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           CRAWLER_USER_ID: ${{ secrets.CRAWLER_USER_ID }}

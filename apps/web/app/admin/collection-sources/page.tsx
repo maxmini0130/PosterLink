@@ -106,6 +106,7 @@ type RunResult = {
   logs: string;
   resultFile?: string | null;
   uploaded?: boolean;
+  workflowUrl?: string | null;
 };
 
 const TYPE_OPTIONS = [
@@ -485,21 +486,27 @@ export default function AdminCollectionSourcesPage() {
     setRunResult(null);
 
     try {
-      const res = await fetch("/api/admin/crawler/run", {
+      const res = await fetch("/api/admin/crawler/dispatch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: source.source_slug }),
+        body: JSON.stringify({ source: source.source_slug, upload: true }),
       });
       const payload = await res.json().catch(() => null);
       if (!res.ok) throw new Error(payload?.error ?? "수집 실행에 실패했습니다.");
 
       setRunResult({
         sourceName: source.name,
-        logs: payload?.logs ?? "",
-        resultFile: payload?.resultFile ?? null,
-        uploaded: payload?.uploaded ?? false,
+        logs: [
+          "GitHub Actions 백그라운드 수집을 시작했습니다.",
+          `Source: ${source.source_slug}`,
+          payload?.workflowUrl ? `Workflow: ${payload.workflowUrl}` : null,
+          "워크플로가 끝난 뒤 이 페이지를 새로고침하면 수집 이력에서 결과를 확인할 수 있습니다.",
+        ].filter(Boolean).join("\n"),
+        resultFile: null,
+        uploaded: false,
+        workflowUrl: payload?.workflowUrl ?? null,
       });
-      toast.success(`${source.name} 수집을 완료했습니다.`);
+      toast.success(`${source.name} 백그라운드 수집을 시작했습니다.`);
       await loadSources();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "수집 실행에 실패했습니다.");
@@ -560,9 +567,20 @@ export default function AdminCollectionSourcesPage() {
               <p className="text-xs font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-200">Last Collection Run</p>
               <h2 className="mt-1 text-lg font-black text-gray-950 dark:text-white">{runResult.sourceName}</h2>
               <p className="mt-1 text-xs font-bold text-emerald-700 dark:text-emerald-200">
-                {runResult.uploaded ? "수집 결과를 Supabase에 업로드했습니다." : "수집 결과 파일이 없어 업로드를 건너뛰었습니다."}
+                {runResult.workflowUrl ? "GitHub Actions에서 백그라운드 수집을 시작했습니다." : runResult.uploaded ? "수집 결과를 Supabase에 업로드했습니다." : "수집 결과 파일이 없어 업로드를 건너뛰었습니다."}
                 {runResult.resultFile ? ` · ${runResult.resultFile}` : ""}
               </p>
+              {runResult.workflowUrl && (
+                <a
+                  href={runResult.workflowUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-flex items-center gap-1 rounded-lg bg-white px-3 py-2 text-xs font-black text-emerald-700 shadow-sm ring-1 ring-emerald-200 transition-colors hover:bg-emerald-100 dark:bg-slate-950 dark:text-emerald-200 dark:ring-emerald-500/20"
+                >
+                  <ExternalLink size={13} />
+                  GitHub Actions
+                </a>
+              )}
             </div>
           </div>
           {runResult.logs && (
@@ -872,7 +890,7 @@ export default function AdminCollectionSourcesPage() {
                           type="button"
                           onClick={() => void runSource(source)}
                           disabled={Boolean(runningSourceId)}
-                          title="기관 수집 실행"
+                          title="GitHub Actions 백그라운드 수집 실행"
                           className="rounded-lg p-2 text-indigo-500 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-indigo-500/10"
                         >
                           {runningSourceId === source.id ? <Loader2 size={15} className="animate-spin" /> : <PlayCircle size={15} />}
