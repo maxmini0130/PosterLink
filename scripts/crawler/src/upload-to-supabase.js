@@ -998,7 +998,7 @@ async function uploadToSupabase(filePath) {
     process.stdout.write("✓");
   }
 
-  await flushCollectionSourceStats(supabase, collectionStats);
+  await flushCollectionSourceStats(supabase, collectionStats, { phase: "upload" });
 
   console.log(`\n\n━━━ 업로드 완료 ━━━`);
   console.log(`  성공: ${success}건`);

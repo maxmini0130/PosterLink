@@ -135,7 +135,7 @@ async function main() {
   }
 
   if (!dryRun) {
-    await flushCollectionSourceStats(collectionSourceClient, crawlSourceStats, { logger });
+    await flushCollectionSourceStats(collectionSourceClient, crawlSourceStats, { logger, phase: "crawl" });
   }
 
   // ── 결과 요약 ────────────────────────────────

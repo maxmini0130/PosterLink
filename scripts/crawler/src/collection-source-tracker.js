@@ -17,6 +17,7 @@ const SOURCE_SELECT = [
 ].join(",");
 
 const PROTECTED_STATUSES = new Set(["paused", "retired"]);
+let didWarnMissingRunHistory = false;
 
 function getCredentials() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -49,6 +50,10 @@ export function createOptionalCollectionSourceClient(logger = console) {
 
 function isMissingTableError(error) {
   return error?.code === "42P01" || String(error?.message ?? "").includes("collection_sources");
+}
+
+function isMissingRunHistoryError(error) {
+  return error?.code === "42P01" || String(error?.message ?? "").includes("collection_source_runs");
 }
 
 export async function loadCollectionSources(supabase, logger = console) {
@@ -250,6 +255,7 @@ export function findCollectionSource(sources, context = {}) {
 function createEmptyStats(source) {
   return {
     source,
+    startedAt: new Date().toISOString(),
     checked: 0,
     created: 0,
     valid: 0,
@@ -391,6 +397,49 @@ function shouldPromoteToActive(source) {
   return !PROTECTED_STATUSES.has(source.status);
 }
 
+async function insertCollectionSourceRun(supabase, source, stats, patch, runStatus, options = {}) {
+  const finishedAt = options.finishedAt ?? new Date().toISOString();
+  const startedAt = stats.startedAt ?? finishedAt;
+  const durationMs = Math.max(0, new Date(finishedAt).getTime() - new Date(startedAt).getTime());
+
+  const { error } = await supabase
+    .from("collection_source_runs")
+    .insert({
+      source_id: source.id,
+      source_slug: source.source_slug,
+      source_name: source.name,
+      run_phase: options.phase ?? "collection",
+      run_status: runStatus,
+      checked_count: stats.checked,
+      new_count: stats.created,
+      valid_count: stats.valid,
+      duplicate_count: stats.duplicate,
+      rejected_count: stats.rejected,
+      failed_count: stats.failed,
+      missing_required_count: stats.missingRequired,
+      valid_post_rate: patch.valid_post_rate,
+      required_field_missing_rate: patch.required_field_missing_rate,
+      latest_post_found_at: patch.latest_post_found_at ?? null,
+      error_message: patch.last_error_message ?? null,
+      started_at: startedAt,
+      finished_at: finishedAt,
+      duration_ms: Number.isFinite(durationMs) ? durationMs : null,
+      metadata_json: options.metadata ?? {},
+    });
+
+  if (!error) return true;
+  if (isMissingRunHistoryError(error)) {
+    if (!didWarnMissingRunHistory) {
+      didWarnMissingRunHistory = true;
+      options.logger?.warn?.("[collection-sources] collection_source_runs table is not available yet.");
+    }
+    return false;
+  }
+
+  options.logger?.warn?.(`[collection-sources] Failed to insert run history for ${source.source_slug}: ${error.message}`);
+  return false;
+}
+
 export async function flushCollectionSourceStats(supabase, tracker, options = {}) {
   const logger = options.logger ?? console;
   if (!supabase || !tracker) return { updated: 0, failed: 0 };
@@ -398,6 +447,7 @@ export async function flushCollectionSourceStats(supabase, tracker, options = {}
   const now = new Date().toISOString();
   let updated = 0;
   let failed = 0;
+  let historyInserted = 0;
 
   for (const stats of tracker.values()) {
     const runStatus = getRunStatus(stats);
@@ -441,14 +491,21 @@ export async function flushCollectionSourceStats(supabase, tracker, options = {}
       logger.warn?.(`[collection-sources] Failed to update ${source.source_slug}: ${error.message}`);
     } else {
       updated += 1;
+      if (await insertCollectionSourceRun(supabase, source, stats, patch, runStatus, {
+        ...options,
+        logger,
+        finishedAt: now,
+      })) {
+        historyInserted += 1;
+      }
     }
   }
 
   if (updated > 0 || failed > 0) {
-    const message = `[collection-sources] Updated ${updated} source run summaries${failed ? `, ${failed} failed` : ""}.`;
+    const message = `[collection-sources] Updated ${updated} source run summaries${historyInserted ? `, ${historyInserted} histories` : ""}${failed ? `, ${failed} failed` : ""}.`;
     if (logger.info) logger.info(message);
     else logger.log?.(message);
   }
 
-  return { updated, failed };
+  return { updated, failed, historyInserted };
 }

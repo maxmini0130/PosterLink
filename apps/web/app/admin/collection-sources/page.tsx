@@ -72,9 +72,31 @@ type SourceSummary = {
   type_counts: Record<string, number>;
 };
 
+type CollectionSourceRun = {
+  id: string;
+  source_id: string | null;
+  source_slug: string;
+  source_name: string | null;
+  run_phase: string;
+  run_status: string;
+  checked_count: number;
+  new_count: number;
+  valid_count: number;
+  duplicate_count: number;
+  rejected_count: number;
+  failed_count: number;
+  valid_post_rate: number;
+  error_message: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  duration_ms: number | null;
+  created_at: string;
+};
+
 type ApiPayload = {
   configured: boolean;
   sources: CollectionSource[];
+  recent_runs?: CollectionSourceRun[];
   summary: SourceSummary;
   message?: string;
 };
@@ -186,6 +208,34 @@ const HEALTH_FILTER_OPTIONS = [
   ["healthy", "정상"],
   ["planned", "예정/수동"],
 ] as const;
+
+function runStatusTone(status: string) {
+  if (status === "success") return "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200";
+  if (status === "empty") return "bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-slate-200";
+  if (status === "partial") return "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200";
+  return "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-200";
+}
+
+function runPhaseLabel(value: string) {
+  if (value === "crawl") return "수집";
+  if (value === "upload") return "업로드";
+  return "전체";
+}
+
+function runStatusLabel(value: string) {
+  if (value === "success") return "성공";
+  if (value === "partial") return "부분 오류";
+  if (value === "error") return "오류";
+  if (value === "empty") return "비어 있음";
+  return value;
+}
+
+function formatDuration(ms: number | null) {
+  if (!ms) return "-";
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 60) return `${seconds}초`;
+  return `${Math.round(seconds / 60)}분`;
+}
 
 function parseTime(value: string | null) {
   if (!value) return null;
@@ -321,6 +371,7 @@ function MetricCard({
 
 export default function AdminCollectionSourcesPage() {
   const [sources, setSources] = useState<CollectionSource[]>([]);
+  const [recentRuns, setRecentRuns] = useState<CollectionSourceRun[]>([]);
   const [summary, setSummary] = useState<SourceSummary | null>(null);
   const [configured, setConfigured] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -345,6 +396,7 @@ export default function AdminCollectionSourcesPage() {
       if (!res.ok) throw new Error(payload.error ?? "수집 기관을 불러오지 못했습니다.");
       setConfigured(payload.configured);
       setSources(payload.sources ?? []);
+      setRecentRuns(payload.recent_runs ?? []);
       setSummary(payload.summary ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "수집 기관을 불러오지 못했습니다.");
@@ -528,6 +580,67 @@ export default function AdminCollectionSourcesPage() {
         <MetricCard icon={AlertTriangle} label="오류 기관" value={summary?.errors ?? 0} sub="점검 필요 상태" />
         <MetricCard icon={Search} label="점검 필요" value={summary?.needs_attention ?? 0} sub="오류·장기 미수집·저품질" />
         <MetricCard icon={Clock} label="예정 기관" value={summary?.planned ?? 0} sub="아직 연결 전" />
+      </section>
+
+      <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Clock size={18} className="text-indigo-500" />
+            <h2 className="text-lg font-black text-gray-950 dark:text-white">최근 수집 이력</h2>
+          </div>
+          <span className="text-xs font-black text-gray-400">최근 30건</span>
+        </div>
+
+        {recentRuns.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[920px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 text-xs font-black uppercase tracking-widest text-gray-400 dark:border-slate-800">
+                  <th className="py-3 pr-4">기관</th>
+                  <th className="py-3 pr-4">단계</th>
+                  <th className="py-3 pr-4">상태</th>
+                  <th className="py-3 pr-4">결과</th>
+                  <th className="py-3 pr-4">소요</th>
+                  <th className="py-3 pr-4">실행 시각</th>
+                  <th className="py-3 pr-4">오류</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
+                {recentRuns.slice(0, 12).map((run) => (
+                  <tr key={run.id} className="align-top">
+                    <td className="max-w-[220px] py-3 pr-4">
+                      <p className="truncate font-black text-gray-950 dark:text-white">{run.source_name || run.source_slug}</p>
+                      <p className="mt-1 truncate text-xs font-bold text-gray-400">{run.source_slug}</p>
+                    </td>
+                    <td className="py-3 pr-4">
+                      <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-black text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-200">
+                        {runPhaseLabel(run.run_phase)}
+                      </span>
+                    </td>
+                    <td className="py-3 pr-4">
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-black ${runStatusTone(run.run_status)}`}>
+                        {runStatusLabel(run.run_status)}
+                      </span>
+                    </td>
+                    <td className="py-3 pr-4 text-xs font-bold text-gray-500">
+                      <p>확인 {formatNumber(run.checked_count)} · 신규 {formatNumber(run.new_count)} · 유효 {formatNumber(run.valid_count)}</p>
+                      <p className="mt-1 text-gray-400">중복 {formatNumber(run.duplicate_count)} · 제외 {formatNumber(run.rejected_count)} · 실패 {formatNumber(run.failed_count)}</p>
+                    </td>
+                    <td className="whitespace-nowrap py-3 pr-4 text-xs font-bold text-gray-500">{formatDuration(run.duration_ms)}</td>
+                    <td className="whitespace-nowrap py-3 pr-4 text-xs font-bold text-gray-500">{formatDate(run.created_at)}</td>
+                    <td className="max-w-[260px] py-3 pr-4 text-xs font-bold text-gray-400">
+                      {run.error_message ? <p className="line-clamp-2 text-rose-500">{run.error_message}</p> : "-"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-dashed border-gray-200 py-10 text-center text-sm font-bold text-gray-400 dark:border-slate-800">
+            아직 저장된 수집 실행 이력이 없습니다.
+          </div>
+        )}
       </section>
 
       <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">

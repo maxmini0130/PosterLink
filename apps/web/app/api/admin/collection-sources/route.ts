@@ -147,6 +147,11 @@ function isMissingTableError(error: { code?: string; message?: string } | null) 
   return error.code === "42P01" || (error.message ?? "").includes("collection_sources");
 }
 
+function isMissingRunHistoryError(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return error.code === "42P01" || (error.message ?? "").includes("collection_source_runs");
+}
+
 function compactString(value: unknown, maxLength = 2048) {
   if (typeof value !== "string") return value;
   const trimmed = value.replace(/\s+/g, " ").trim();
@@ -213,6 +218,40 @@ function summarize(rows: any[]) {
   };
 }
 
+async function loadRecentRuns(admin: ReturnType<typeof adminClient>, sourceIds: string[]) {
+  if (sourceIds.length === 0) return [];
+
+  const { data, error } = await admin
+    .from("collection_source_runs")
+    .select([
+      "id",
+      "source_id",
+      "source_slug",
+      "source_name",
+      "run_phase",
+      "run_status",
+      "checked_count",
+      "new_count",
+      "valid_count",
+      "duplicate_count",
+      "rejected_count",
+      "failed_count",
+      "valid_post_rate",
+      "error_message",
+      "started_at",
+      "finished_at",
+      "duration_ms",
+      "created_at",
+    ].join(","))
+    .in("source_id", sourceIds)
+    .order("created_at", { ascending: false })
+    .limit(30);
+
+  if (isMissingRunHistoryError(error)) return [];
+  if (error) throw error;
+  return data ?? [];
+}
+
 export async function GET(request: NextRequest) {
   if (!(await requireAdmin())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -247,9 +286,17 @@ export async function GET(request: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const sources = data ?? [];
+  let recentRuns: any[] = [];
+  try {
+    recentRuns = await loadRecentRuns(admin, sources.map((source: any) => source.id).filter(Boolean));
+  } catch (runError: any) {
+    return NextResponse.json({ error: runError.message }, { status: 500 });
+  }
+
   return NextResponse.json({
     configured: true,
     sources,
+    recent_runs: recentRuns,
     summary: summarize(sources),
   });
 }
