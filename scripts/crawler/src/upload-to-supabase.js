@@ -17,6 +17,8 @@ import WebSocket from "ws";
 import { inferRegionCodes } from "./region-rules.js";
 import { getPostExclusionReason } from "./post-candidate-filter.js";
 import { evaluatePosterQuality, summarizeQualityIssues } from "./poster-quality-gate.js";
+import { verifyPosterFields, applyFieldVerification } from "./poster-field-verifier.js";
+import { embedPosterText, embeddingToPgVector } from "./poster-embedder.js";
 import {
   deletePostersWithStorage,
   replacePosterImagesWithStorageCleanup,
@@ -632,22 +634,38 @@ async function uploadToSupabase(filePath) {
       qualityReview.push(createQualityReportEntry({ ...post, images: sourceImages }, sourceUrl, quality));
     }
 
+    const fieldVerification = await verifyPosterFields({
+      title: post.title,
+      content: post.content,
+      site: post.site,
+      sourceUrl,
+      extractedDeadline: post.deadline ?? null,
+      extractedOrgName: post.site ?? null,
+    });
+    const { deadline: verifiedDeadline, orgName: verifiedOrgName } = applyFieldVerification(post, fieldVerification);
+
     const storedImages = await importPostImagesToStorage(post, sourceUrl, sourceKey);
     const postWithStoredImages = { ...post, images: storedImages };
 
     // ── 1. posters 테이블 upsert ─────────────────────────────
+    const summaryShort = normalizeSummary(postWithStoredImages);
+    const summaryLong = cleanSummaryText(postWithStoredImages.content) || null;
+    const embedding = await embedPosterText({ title: post.title, summaryShort, summaryLong });
+
     const posterRecord = {
       title: (post.title || "제목 없음").substring(0, 200),
-      source_org_name: post.site || null,
-      summary_short: normalizeSummary(postWithStoredImages),
-      summary_long: cleanSummaryText(postWithStoredImages.content) || null,
+      source_org_name: verifiedOrgName || null,
+      summary_short: summaryShort,
+      summary_long: summaryLong,
       poster_status: "review",         // 관리자 검수 대기
       source_key: sourceKey,           // 중복 방지 키
       created_by: CRAWLER_USER_ID,     // 크롤러 봇 계정 (null 가능)
-      application_end_at: post.deadline
-        ? (() => { try { return new Date(post.deadline).toISOString(); } catch { return null; } })()
+      application_end_at: verifiedDeadline
+        ? (() => { try { return new Date(verifiedDeadline).toISOString(); } catch { return null; } })()
         : null,
       thumbnail_url: storedImages[0] ?? null,
+      field_verification: fieldVerification,
+      embedding: embeddingToPgVector(embedding),
     };
     if (isInvalidCrawlerTitle(posterRecord.title)) {
       fail++;
@@ -660,7 +678,7 @@ async function uploadToSupabase(filePath) {
     const sourceKeyCandidates = [...new Set([sourceKey, sourceUrl].filter(Boolean))];
     const { data: existingPoster, error: existingErr } = await supabase
       .from("posters")
-      .select("id, poster_status, title, summary_short, summary_long, thumbnail_url, source_key")
+      .select("id, poster_status, title, summary_short, summary_long, thumbnail_url, source_key, embedding, field_verification, application_end_at")
       .in("source_key", sourceKeyCandidates)
       .limit(1)
       .maybeSingle();
@@ -699,6 +717,15 @@ async function uploadToSupabase(filePath) {
       }
       if (existingPoster.source_key !== sourceKey) {
         updates.source_key = sourceKey;
+      }
+      if (!existingPoster.embedding && posterRecord.embedding) {
+        updates.embedding = posterRecord.embedding;
+      }
+      if (!existingPoster.application_end_at && posterRecord.application_end_at) {
+        updates.application_end_at = posterRecord.application_end_at;
+      }
+      if (!existingPoster.field_verification) {
+        updates.field_verification = posterRecord.field_verification;
       }
       if (Object.keys(updates).length > 0) {
         await supabase.from("posters").update(updates).eq("id", existingPoster.id);

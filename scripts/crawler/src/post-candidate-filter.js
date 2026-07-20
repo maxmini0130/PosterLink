@@ -1,5 +1,20 @@
 const TITLE_EXCLUDE_RULES = [
   {
+    name: "breadcrumb-title",
+    pattern: /^[^/]+(?:\s*\/\s*[^/]+){2,}$/i,
+    reason: "breadcrumb/navigation path captured as title",
+  },
+  {
+    name: "monthly-calendar-or-schedule-image",
+    pattern: /(?:\d{1,2}\s*\uC6D4|[0-9]{2}\s*\uC6D4).*(?:\uC6D4\s*\uD504\uB85C\uADF8\uB7A8\s*\uC548\uB0B4|\uD504\uB85C\uADF8\uB7A8\s*\uC548\uB0B4|\uCE98\uB9B0\uB354|\uB2EC\uB825|\uC2A4\uCF00\uC904|\uC2DC\uAC04\uD45C|\uC77C\uC815\uD45C)|(?:\uC6D4\s*\uD504\uB85C\uADF8\uB7A8\s*\uC548\uB0B4|\uCE98\uB9B0\uB354|\uB2EC\uB825|\uC2A4\uCF00\uC904|\uC2DC\uAC04\uD45C|\uC77C\uC815\uD45C).*(?:\d{1,2}\s*\uC6D4|[0-9]{2}\s*\uC6D4)/i,
+    reason: "monthly calendar/schedule image, not an individual poster",
+  },
+  {
+    name: "gangbuk-anc-monthly-craft-class-schedule",
+    pattern: /(?:\uAC15\uBD81\s*ANC|\uACF5\uC608\uC804\uC2DC\uAD00\s*\uAC15\uBD81\s*ANC).*(?:\d{1,2}\s*\uC6D4\s*\uACF5\uC608\s*(?:\uCCB4\uD5D8\s*)?\uD074\uB798\uC2A4|\uACF5\uC608\s*\uD074\uB798\uC2A4\s*\(\s*\d{1,2}\s*\uC6D4\s*\))/i,
+    reason: "Gangbuk ANC monthly craft class schedule, not an individual poster",
+  },
+  {
     name: "metadata-title",
     pattern: /^(작성자|관리자|번호|제목|공지사항|조회수|첨부파일|maposc)$/i,
     reason: "board metadata captured as title",
@@ -13,6 +28,46 @@ const TITLE_EXCLUDE_RULES = [
     name: "rss-or-feed",
     pattern: /^(rss|feed)$/i,
     reason: "RSS/feed navigation item",
+  },
+  {
+    name: "sports-facility-hours-or-closure",
+    pattern: /(?:부분\s*운영일|법정\s*공휴일|공휴일|시간표|이용\s*시간|운영\s*안내|이용\s*안내).*(?:배드민턴|볼링장|종합체육관|체육관|센터|시설)|(?:배드민턴|볼링장|종합체육관|체육관|센터|시설).*(?:부분\s*운영일|법정\s*공휴일|공휴일|시간표|이용\s*시간|운영\s*안내|이용\s*안내)/i,
+    reason: "sports facility hours or holiday operation notice, not a poster notice",
+  },
+  {
+    name: "holiday-operation-notice",
+    pattern: /(?:부분\s*운영일|법정\s*공휴일|공휴일).*(?:이용\s*안내|이용안내|운영\s*안내|운영안내)|(?:이용\s*안내|이용안내|운영\s*안내|운영안내).*(?:부분\s*운영일|법정\s*공휴일|공휴일)/i,
+    reason: "holiday or partial-operation notice, not a poster notice",
+  },
+  {
+    name: "election-facility-notice",
+    pattern: /(?:전국\s*동시\s*지방\s*선거|전국동시지방선거|선거일).*(?:환불\s*안내|시설|주차|이용\s*제한|이용제한|운영\s*안내)/i,
+    reason: "election-day facility operation notice, not a poster notice",
+  },
+  {
+    name: "election-administrative-notice",
+    pattern: /(?:전국\s*동시\s*지방\s*선거|전국동시지방선거).*(?:무투표|선거구|후보자|사퇴|환불|안내)/i,
+    reason: "election administrative notice, not a poster notice",
+  },
+  {
+    name: "facility-access-control-or-refund",
+    pattern: /(?:주차장|주차|시설|센터).*(?:일부\s*통제|통제|이용\s*제한|이용제한)|(?:환불\s*안내|회원\s*접수\s*및\s*이용\s*안내|회원접수\s*및\s*이용안내)/i,
+    reason: "facility access, refund, or member-use guide, not a poster notice",
+  },
+  {
+    name: "rental-schedule-table",
+    pattern: /(?:센터|체육관|시설).*(?:관내\s*대관|대관).*(?:일정표|일정\s*표)|(?:관내\s*대관|대관).*(?:일정표|일정\s*표)/i,
+    reason: "facility rental schedule table, not a poster notice",
+  },
+  {
+    name: "homepage-parking-control-notice",
+    pattern: /홈페이지.*(?:이용|접속).*(?:주차\s*통제|주차통제)|(?:주차\s*통제|주차통제).*(?:홈페이지|이용\s*안내)/i,
+    reason: "homepage or parking-control operation notice, not a poster notice",
+  },
+  {
+    name: "sports-facility-use-schedule",
+    pattern: /(?:\d{1,2}\s*월\s*(?:~|-|부터)\s*\d{1,2}\s*월|오전|오후|야간|평일|주말).*(?:종합체육관|체육관|체육센터|배드민턴|수영장|헬스장).*(?:이용\s*안내|운영\s*안내|시간\s*안내|일정\s*안내)|(?:종합체육관|체육관|체육센터|배드민턴|수영장|헬스장).*(?:오전|오후|야간|평일|주말|이용\s*안내|운영\s*안내|시간\s*안내|일정\s*안내)/i,
+    reason: "sports facility use schedule, not a poster notice",
   },
   {
     name: "application-guide",
@@ -56,7 +111,7 @@ const TITLE_EXCLUDE_RULES = [
   },
   {
     name: "public-workfare-recruitment-document",
-    pattern: /지역공동체\s*일자리\s*사업\s*참여자\s*모집|지역공동체일자리사업\s*참여자\s*모집/i,
+    pattern: /지역공동체\s*일자리\s*사업.*참여자\s*모집|지역공동체일자리사업.*참여자\s*모집/i,
     reason: "administrative workfare recruitment document, not a poster notice",
   },
   {
@@ -73,9 +128,17 @@ const TITLE_EXCLUDE_RULES = [
 
 export function getPostExclusionReason(post = {}) {
   const title = String(post.title ?? "").replace(/\s+/g, " ").trim();
-  if (!title) return null;
+  const text = [
+    post.title,
+    post.content,
+    post.summary_short,
+    post.summary_long,
+    ...(Array.isArray(post.attachments) ? post.attachments.map((attachment) => attachment?.name) : []),
+    ...(Array.isArray(post.images) ? post.images : []),
+  ].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+  if (!text) return null;
 
-  const matchedRule = TITLE_EXCLUDE_RULES.find((rule) => rule.pattern.test(title));
+  const matchedRule = TITLE_EXCLUDE_RULES.find((rule) => rule.pattern.test(title) || rule.pattern.test(text));
   if (!matchedRule) return null;
 
   return {

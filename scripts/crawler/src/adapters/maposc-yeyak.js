@@ -97,7 +97,7 @@ export default {
     $("img").each((_, img) => {
       const src = $(img).attr("src");
       if (!src) return;
-      if (/logo|btn_|gnb_|lnb_|ico_|banner/i.test(src)) return;
+      if (/logo|btn_|gnb_|lnb_|ico_|banner|accessibility|web_access|webaccess|wa[_-]?mark|wamark|wa-logo|cert/i.test(src)) return;
       if (!/file_upload|tmp|upload|attach/i.test(src)) return;
       const resolved = resolveUrl(postUrl, src);
       if (!images.includes(resolved)) images.push(resolved);

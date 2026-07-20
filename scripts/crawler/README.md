@@ -124,6 +124,18 @@ export SUPABASE_KEY=eyJ...
 node src/upload-to-supabase.js data/results/all_2026-05-08.json
 ```
 
+### Quality gate
+
+Uploads now run a quality gate before importing images into Supabase Storage.
+Hard rejects such as WA/accessibility marks, system-error pages, parking/facility notices,
+and monthly schedule tables are skipped before storage upload. Review-level warnings are
+kept in the normal admin review flow and written to a local report.
+
+```bash
+# Audit current published/review posters and write data/poster-current-audit.*
+npm run audit:current
+```
+
 ## 자동 실행 (cron)
 
 매일 오전 9시에 크롤링 실행:

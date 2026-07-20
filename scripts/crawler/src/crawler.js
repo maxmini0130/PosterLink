@@ -276,6 +276,13 @@ export async function crawlSite(site, adapter, options = {}) {
               siteId: site.id,
               crawledAt: dayjs().toISOString(),
             };
+            const detailExclusion = getPostExclusionReason(fullPost);
+            if (detailExclusion) {
+              seen.add(post.url);
+              logger.info(`  Skip (detail filter: ${detailExclusion.rule}): ${post.title} - ${detailExclusion.reason}`);
+              continue;
+            }
+
             if (!hasPosterImage(fullPost)) {
               if (shouldMarkImagelessSeen()) seen.add(post.url);
               logger.info(`  Skip (no poster image): ${post.title}`);

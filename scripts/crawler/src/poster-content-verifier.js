@@ -154,6 +154,8 @@ export async function verifyPosterMatchesNotice(imageUrl, context = {}) {
       "Use visible text in the poster image, especially title, date/period/deadline, place, organization, target audience, and program/recruitment details.",
       "Return isSameNotice=false when the image is a generic site thumbnail, unrelated banner, logo, different event, or when key fields conflict.",
       "Return isSameNotice=false for facility-use guides, sports court schedules, reservation instructions, operating-hour notices, fee tables, or text-only administrative notices when the source is not a real poster/flyer announcement.",
+      "Return isSameNotice=false for web accessibility certification/WA mark images, alt-text/accessibility guide images, homepage-use notices, parking-control notices, center rental schedule tables, or facility operation schedules.",
+      "Return isSameNotice=true for real program flyer images such as craft classes, career/community running events, job-training courses, youth-center week/festival programs, and studio/facility opening programs when visible image text matches the source notice.",
       "Return isSameNotice=true only when enough visible poster content matches the original notice. If the poster has little readable text but strongly matches title/organization/context, use lower confidence.",
       "Original notice context:",
       buildNoticeContext(context),

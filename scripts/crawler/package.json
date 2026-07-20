@@ -12,7 +12,11 @@
     "ai:train": "node ml/run-python.js train_poster_classifier.py",
     "ai:predict": "node ml/run-python.js predict_poster.py",
     "repair:images": "node src/repair-missing-poster-images.js",
-    "refresh:site": "node src/refresh-site-posters.js"
+    "repair:wa-youth": "node src/repair-wa-mark-youth-images.js",
+    "refresh:site": "node src/refresh-site-posters.js",
+    "storage:orphans": "node src/cleanup-orphan-storage.js",
+    "audit:current": "node src/audit-current-posters.js",
+    "embed:backfill": "node src/backfill-poster-embeddings.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.2",

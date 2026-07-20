@@ -208,6 +208,8 @@ export async function classifyPosterImage(imageUrl, context = {}) {
       "Decide whether the image is a public-service poster, flyer, notice, recruitment graphic, event/program card, or announcement image.",
       "Return isPoster=false for logos, icons, website UI screenshots, unrelated photos, maps, profile images, decorative banners, file icons, or generic layout assets.",
       "Return isPoster=false for plain facility-use notices, court schedules, reservation/use guides, operating-hour notices, fee tables, or text-only administrative pages even if they include an image.",
+      "Return isPoster=false for web accessibility images/certification marks, WA marks, alt-text/accessibility guide images, homepage-use notices, parking-control notices, facility rental schedule tables, or center operation schedules.",
+      "Return isPoster=true for real flyer images announcing craft classes, career-pass running/community events, job-training courses, youth-center week/festival programs, or new studio/facility opening programs when they include dates, audience, place, application, or program details.",
       "A real poster usually contains substantial readable Korean/English announcement text, dates, organization names, QR/contact info, application/recruitment/event details, or a designed flyer layout.",
       `Known title: ${context.title ?? ""}`,
       `Known organization/site: ${context.site ?? context.sourceOrgName ?? ""}`,

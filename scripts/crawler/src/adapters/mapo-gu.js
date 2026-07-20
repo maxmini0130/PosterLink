@@ -12,7 +12,22 @@ function resolveUrl(base, relative) {
 function isLikelyContentImage(src) {
   if (!src) return false;
   const normalized = src.toLowerCase();
-  return !["icon", "logo", "btn", "banner", "sns", "facebook", "twitter"].some((word) => normalized.includes(word));
+  return ![
+    "icon",
+    "logo",
+    "btn",
+    "banner",
+    "sns",
+    "facebook",
+    "twitter",
+    "accessibility",
+    "web_access",
+    "webaccess",
+    "wa_mark",
+    "wamark",
+    "wa-logo",
+    "cert",
+  ].some((word) => normalized.includes(word));
 }
 
 function addImage(images, baseUrl, src) {

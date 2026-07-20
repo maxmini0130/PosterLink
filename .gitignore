@@ -39,3 +39,6 @@ apps/web/e2e/.auth/
 .claude/
 .vercel
 .env*.local
+
+# Crawler local run output (logs, audits, downloaded images)
+data/

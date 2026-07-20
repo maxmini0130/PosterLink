@@ -32,7 +32,27 @@ function resolveUrl(base, relative) {
 function isLikelyContentImage(src) {
   if (!src) return false;
   const normalized = src.toLowerCase();
-  return !["icon", "logo", "btn", "banner", "sns", "facebook", "twitter"].some((word) => normalized.includes(word));
+  return ![
+    "icon",
+    "logo",
+    "btn",
+    "banner",
+    "bul_",
+    "bg_",
+    "addfile",
+    "skin001",
+    "anyboard/skin",
+    "sns",
+    "facebook",
+    "twitter",
+    "accessibility",
+    "web_access",
+    "webaccess",
+    "wa_mark",
+    "wamark",
+    "wa-logo",
+    "cert",
+  ].some((word) => normalized.includes(word));
 }
 
 function addImage(images, baseUrl, src) {
@@ -57,6 +77,7 @@ function cleanTitleCandidate(value, site) {
     .replace(/\s+\d{4}[-./]\d{1,2}[-./]\d{1,2}\s*$/, "")
     .trim();
   if (title === site?.name) return "";
+  if (/^[^/]+(?:\s*\/\s*[^/]+){2,}$/i.test(title)) return "";
   if (/상세보기|공지사항\s*\|/.test(title)) return "";
   return title;
 }

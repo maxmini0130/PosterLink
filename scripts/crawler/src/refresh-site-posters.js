@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import { sites } from "./sites.js";
 import { getAdapter } from "./adapters/index.js";
+import { replacePosterImagesWithStorageCleanup } from "./storage-cleanup.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "../../../apps/web/.env.local") });
@@ -95,20 +96,7 @@ async function importImage(imageUrl, sourceUrl, index) {
 }
 
 async function syncPosterImages(posterId, imageUrls) {
-  const { error: deleteError } = await supabase
-    .from("poster_images")
-    .delete()
-    .eq("poster_id", posterId);
-  if (deleteError) throw deleteError;
-
-  const { error } = await supabase.from("poster_images").insert(
-    imageUrls.map((url, index) => ({
-      poster_id: posterId,
-      storage_path: url,
-      image_type: index === 0 ? "thumbnail" : "original",
-    })),
-  );
-  if (error) throw error;
+  await replacePosterImagesWithStorageCleanup(supabase, posterId, imageUrls, { bucket });
 }
 
 const { data, error } = await supabase
