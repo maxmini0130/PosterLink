@@ -63,6 +63,9 @@ const STATUS_LABEL: Record<string, string> = {
   archived: "보관",
 };
 
+const FULL_RUN_DISABLED_MESSAGE =
+  "Full production crawl is disabled because Vercel stops requests after 300 seconds. Enter one site/source id, or run sources one by one from Collection Sources.";
+
 function formatDate(value: string | null) {
   if (!value) return "상시";
   return new Date(value).toLocaleString("ko-KR", {
@@ -161,6 +164,13 @@ export default function AdminCrawlerPage() {
 
   const runCrawler = async () => {
     if (runLoading) return;
+    const target = runSite.trim();
+    if (!target) {
+      setError(FULL_RUN_DISABLED_MESSAGE);
+      setRunLog(FULL_RUN_DISABLED_MESSAGE);
+      return;
+    }
+
     setRunLoading(true);
     setError(null);
     setRunLog(null);
@@ -169,7 +179,7 @@ export default function AdminCrawlerPage() {
       const res = await fetch("/api/admin/crawler/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ site: runSite.trim() || null }),
+        body: JSON.stringify({ target }),
       });
       const payload = await res.json().catch(() => null);
       if (!res.ok) throw new Error(payload?.error ?? "Crawler run failed.");
@@ -221,7 +231,7 @@ export default function AdminCrawlerPage() {
             <input
               value={runSite}
               onChange={(event) => setRunSite(event.target.value)}
-              placeholder="site id, blank = all"
+              placeholder="site/source id required"
               disabled={runLoading}
               className="min-w-0 flex-1 bg-transparent text-xs font-bold text-gray-700 outline-none placeholder:text-gray-300 disabled:opacity-50 dark:text-slate-200"
             />
@@ -233,7 +243,7 @@ export default function AdminCrawlerPage() {
             className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {runLoading ? <RefreshCw size={16} className="animate-spin" /> : <PlayCircle size={16} />}
-            {runLoading ? "Running..." : "Run crawler"}
+            {runLoading ? "Running..." : "Run one source"}
           </button>
           <Link
             href="/admin/posters"

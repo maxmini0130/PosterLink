@@ -8,10 +8,22 @@ import { createSupabaseServerClient } from "../../../../../lib/supabase-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 const ADMIN_ROLES = new Set(["admin", "super_admin"]);
 const MAX_LOG_CHARS = 20000;
-const RUN_TIMEOUT_MS = Number(process.env.CRAWLER_ADMIN_RUN_TIMEOUT_MS ?? 10 * 60 * 1000);
+const VERCEL_SAFE_TIMEOUT_MS = 270 * 1000;
+const REQUESTED_RUN_TIMEOUT_MS = Number(process.env.CRAWLER_ADMIN_RUN_TIMEOUT_MS ?? VERCEL_SAFE_TIMEOUT_MS);
+const RUN_TIMEOUT_MS = Math.min(
+  Number.isFinite(REQUESTED_RUN_TIMEOUT_MS) && REQUESTED_RUN_TIMEOUT_MS > 0
+    ? REQUESTED_RUN_TIMEOUT_MS
+    : VERCEL_SAFE_TIMEOUT_MS,
+  VERCEL_SAFE_TIMEOUT_MS
+);
+const FULL_RUN_DISABLED_MESSAGE = [
+  "Full crawler runs are disabled from the production admin button because Vercel stops requests after 300 seconds.",
+  "Enter one site/source id, or run sources one by one from /admin/collection-sources.",
+].join(" ");
 
 let activeRun: Promise<RunResult> | null = null;
 
@@ -121,6 +133,18 @@ async function resolveCrawlerRunner(): Promise<CrawlerRunner> {
     mode: "source",
     crawlerDir: await findCrawlerDir(),
   };
+}
+
+async function collectionSourceSlugExists(sourceSlug: string) {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("collection_sources")
+    .select("id")
+    .eq("source_slug", sourceSlug)
+    .maybeSingle();
+
+  if (error) return false;
+  return Boolean(data?.id);
 }
 
 function appendLog(current: string, chunk: Buffer | string) {
@@ -246,8 +270,21 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const site = typeof body.site === "string" && body.site.trim() ? body.site.trim() : null;
-  const source = typeof body.source === "string" && body.source.trim() ? body.source.trim() : null;
+  const target = typeof body.target === "string" && body.target.trim() ? body.target.trim() : null;
+  let site = typeof body.site === "string" && body.site.trim() ? body.site.trim() : null;
+  let source = typeof body.source === "string" && body.source.trim() ? body.source.trim() : null;
+
+  if (target && !site && !source) {
+    if (await collectionSourceSlugExists(target)) {
+      source = target;
+    } else {
+      site = target;
+    }
+  }
+
+  if (!site && !source) {
+    return NextResponse.json({ error: FULL_RUN_DISABLED_MESSAGE }, { status: 400 });
+  }
 
   activeRun = runCrawler({ site, source });
   try {
