@@ -212,6 +212,7 @@ const HEALTH_FILTER_OPTIONS = [
 ] as const;
 
 function runStatusTone(status: string) {
+  if (status === "running") return "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-200";
   if (status === "success") return "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200";
   if (status === "empty") return "bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-slate-200";
   if (status === "partial") return "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200";
@@ -225,6 +226,7 @@ function runPhaseLabel(value: string) {
 }
 
 function runStatusLabel(value: string) {
+  if (value === "running") return "실행 중";
   if (value === "success") return "성공";
   if (value === "partial") return "부분 오류";
   if (value === "error") return "오류";

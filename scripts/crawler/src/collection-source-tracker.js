@@ -436,31 +436,54 @@ async function insertCollectionSourceRun(supabase, source, stats, patch, runStat
   const finishedAt = options.finishedAt ?? new Date().toISOString();
   const startedAt = stats.startedAt ?? finishedAt;
   const durationMs = Math.max(0, new Date(finishedAt).getTime() - new Date(startedAt).getTime());
+  const runPhase = options.phase ?? "collection";
+  const payload = {
+    source_id: source.id,
+    source_slug: source.source_slug,
+    source_name: source.name,
+    run_phase: runPhase,
+    run_status: runStatus,
+    checked_count: stats.checked,
+    new_count: stats.created,
+    valid_count: stats.valid,
+    duplicate_count: stats.duplicate,
+    rejected_count: stats.rejected,
+    failed_count: stats.failed,
+    missing_required_count: stats.missingRequired,
+    valid_post_rate: patch.valid_post_rate,
+    required_field_missing_rate: patch.required_field_missing_rate,
+    latest_post_found_at: patch.latest_post_found_at ?? null,
+    error_message: patch.last_error_message ?? null,
+    started_at: startedAt,
+    finished_at: finishedAt,
+    duration_ms: Number.isFinite(durationMs) ? durationMs : null,
+    metadata_json: mergeMetadata(options.metadata ?? {}, stats.metadata),
+  };
+
+  if (runStatus !== "running") {
+    const { data: runningRuns, error: runningError } = await supabase
+      .from("collection_source_runs")
+      .select("id")
+      .eq("source_id", source.id)
+      .eq("run_phase", runPhase)
+      .eq("run_status", "running")
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (!runningError && runningRuns?.[0]?.id) {
+      const { error: updateError } = await supabase
+        .from("collection_source_runs")
+        .update(payload)
+        .eq("id", runningRuns[0].id);
+
+      if (!updateError) return true;
+      options.logger?.warn?.(`[collection-sources] Failed to update running run for ${source.source_slug}: ${updateError.message}`);
+    }
+  }
 
   const { error } = await supabase
     .from("collection_source_runs")
-    .insert({
-      source_id: source.id,
-      source_slug: source.source_slug,
-      source_name: source.name,
-      run_phase: options.phase ?? "collection",
-      run_status: runStatus,
-      checked_count: stats.checked,
-      new_count: stats.created,
-      valid_count: stats.valid,
-      duplicate_count: stats.duplicate,
-      rejected_count: stats.rejected,
-      failed_count: stats.failed,
-      missing_required_count: stats.missingRequired,
-      valid_post_rate: patch.valid_post_rate,
-      required_field_missing_rate: patch.required_field_missing_rate,
-      latest_post_found_at: patch.latest_post_found_at ?? null,
-      error_message: patch.last_error_message ?? null,
-      started_at: startedAt,
-      finished_at: finishedAt,
-      duration_ms: Number.isFinite(durationMs) ? durationMs : null,
-      metadata_json: mergeMetadata(options.metadata ?? {}, stats.metadata),
-    });
+    .insert(payload);
 
   if (!error) return true;
   if (isMissingRunHistoryError(error)) {

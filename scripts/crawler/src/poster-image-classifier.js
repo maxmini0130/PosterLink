@@ -11,6 +11,7 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY?.trim();
 const CLASSIFIER_MODE = (process.env.POSTER_IMAGE_CLASSIFIER ?? "auto").trim().toLowerCase();
 const MODEL = process.env.OPENAI_POSTER_IMAGE_MODEL?.trim() || "gpt-5-mini";
 const MIN_CONFIDENCE = Number(process.env.POSTER_IMAGE_MIN_CONFIDENCE ?? "0.65");
+const OPENAI_REQUEST_TIMEOUT_MS = Number(process.env.OPENAI_REQUEST_TIMEOUT_MS ?? "45000");
 const ALLOW_UNVERIFIED = process.env.POSTER_IMAGE_ALLOW_UNVERIFIED === "1";
 const LOCAL_MODEL_PATH = process.env.POSTER_LOCAL_MODEL_PATH?.trim();
 const LOCAL_MODEL_THRESHOLD = Number(process.env.POSTER_LOCAL_MODEL_THRESHOLD ?? MIN_CONFIDENCE);
@@ -131,6 +132,15 @@ function normalizeResult(result, fallbackReason = "") {
   };
 }
 
+function createOpenAiTimeoutSignal() {
+  const timeoutMs = Number.isFinite(OPENAI_REQUEST_TIMEOUT_MS) && OPENAI_REQUEST_TIMEOUT_MS > 0
+    ? OPENAI_REQUEST_TIMEOUT_MS
+    : 45000;
+  return typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
+    ? AbortSignal.timeout(timeoutMs)
+    : undefined;
+}
+
 async function classifyWithLocalModel(imageUrl) {
   const tempPath = await imageUrlToTempFile(imageUrl);
   try {
@@ -218,6 +228,7 @@ export async function classifyPosterImage(imageUrl, context = {}) {
 
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
+      signal: createOpenAiTimeoutSignal(),
       headers: {
         "Authorization": `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",

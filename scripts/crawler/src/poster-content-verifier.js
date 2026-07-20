@@ -9,6 +9,7 @@ const VERIFIER_MODE = (process.env.POSTER_CONTENT_VERIFIER ?? "auto").trim().toL
 const MODEL = process.env.OPENAI_POSTER_CONTENT_MODEL?.trim() || "gpt-5-mini";
 const MIN_CONFIDENCE = Number(process.env.POSTER_CONTENT_MIN_CONFIDENCE ?? "0.6");
 const MAX_CONTEXT_CHARS = Number(process.env.POSTER_CONTENT_CONTEXT_CHARS ?? "4500");
+const OPENAI_REQUEST_TIMEOUT_MS = Number(process.env.OPENAI_REQUEST_TIMEOUT_MS ?? "45000");
 const ALLOW_ON_ERROR = process.env.POSTER_CONTENT_ALLOW_ON_ERROR === "1";
 const ALLOW_UNVERIFIED = process.env.POSTER_CONTENT_ALLOW_UNVERIFIED === "1";
 
@@ -89,6 +90,15 @@ function normalizeResult(result, fallbackReason = "") {
   };
 }
 
+function createOpenAiTimeoutSignal() {
+  const timeoutMs = Number.isFinite(OPENAI_REQUEST_TIMEOUT_MS) && OPENAI_REQUEST_TIMEOUT_MS > 0
+    ? OPENAI_REQUEST_TIMEOUT_MS
+    : 45000;
+  return typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
+    ? AbortSignal.timeout(timeoutMs)
+    : undefined;
+}
+
 function buildNoticeContext(context = {}) {
   return [
     `Title: ${context.title ?? ""}`,
@@ -164,6 +174,7 @@ export async function verifyPosterMatchesNotice(imageUrl, context = {}) {
 
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
+      signal: createOpenAiTimeoutSignal(),
       headers: {
         "Authorization": `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",

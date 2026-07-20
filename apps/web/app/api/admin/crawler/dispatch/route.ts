@@ -82,6 +82,7 @@ export async function POST(request: NextRequest) {
   const ref = process.env.GITHUB_CRAWLER_REF?.trim() || DEFAULT_REF;
   const dryRun = normalizeBooleanInput(body?.dry_run ?? body?.dryRun, false);
   const upload = normalizeBooleanInput(body?.upload, true);
+  const workflowUrl = `https://github.com/${repository}/actions/workflows/${workflowId}`;
 
   const response = await fetch(
     `https://api.github.com/repos/${repository}/actions/workflows/${workflowId}/dispatches`,
@@ -114,6 +115,40 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createAdminClient();
+  const targetSlug = source || site || "all";
+  const { data: sourceRow } = targetSlug === "all"
+    ? { data: null }
+    : await admin
+      .from("collection_sources")
+      .select("id, source_slug, name")
+      .eq("source_slug", targetSlug)
+      .maybeSingle();
+
+  const { error: runInsertError } = await admin.from("collection_source_runs").insert({
+    source_id: sourceRow?.id ?? null,
+    source_slug: sourceRow?.source_slug ?? targetSlug,
+    source_name: sourceRow?.name ?? (targetSlug === "all" ? "All crawler sources" : targetSlug),
+    run_phase: "crawl",
+    run_status: "running",
+    started_at: new Date().toISOString(),
+    finished_at: null,
+    duration_ms: null,
+    metadata_json: {
+      action: "dispatch_crawler_workflow",
+      repository,
+      workflow_id: workflowId,
+      workflow_url: workflowUrl,
+      ref,
+      source: source || null,
+      site: site || null,
+      dry_run: dryRun,
+      upload,
+    },
+  });
+  if (runInsertError) {
+    console.warn("[crawler-dispatch] failed to record running collection source run", runInsertError.message);
+  }
+
   await admin.from("admin_actions").insert({
     actor_user_id: user.id,
     target_type: "collection_source",
@@ -141,6 +176,6 @@ export async function POST(request: NextRequest) {
     site: site || null,
     dry_run: dryRun === "true",
     upload: upload === "true",
-    workflowUrl: `https://github.com/${repository}/actions/workflows/${workflowId}`,
+    workflowUrl,
   });
 }

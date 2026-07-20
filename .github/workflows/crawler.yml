@@ -30,9 +30,14 @@ on:
           - "true"
           - "false"
 
+concurrency:
+  group: crawler-${{ github.event.inputs.source || github.event.inputs.site || 'all' }}
+  cancel-in-progress: true
+
 jobs:
   crawl-and-upload:
     runs-on: ubuntu-latest
+    timeout-minutes: 180
     defaults:
       run:
         working-directory: scripts/crawler
@@ -83,7 +88,13 @@ jobs:
           fi
 
           echo "Running crawler with args: ${ARGS[*]:-(all)}"
-          node src/index.js "${ARGS[@]}"
+          if [ -n "$CRAWLER_SOURCE" ] || [ -n "$CRAWLER_SITE" ]; then
+            RUN_TIMEOUT="${CRAWLER_SINGLE_RUN_TIMEOUT:-25m}"
+          else
+            RUN_TIMEOUT="${CRAWLER_ALL_RUN_TIMEOUT:-150m}"
+          fi
+          echo "Crawler timeout: $RUN_TIMEOUT"
+          timeout --preserve-status "$RUN_TIMEOUT" node src/index.js "${ARGS[@]}"
         env:
           NODE_TLS_REJECT_UNAUTHORIZED: "0"
           CRAWLER_SOURCE: ${{ github.event.inputs.source || '' }}
@@ -97,6 +108,9 @@ jobs:
           OPENAI_POSTER_CONTENT_MODEL: ${{ secrets.OPENAI_POSTER_CONTENT_MODEL || 'gpt-4o-mini' }}
           POSTER_IMAGE_MIN_CONFIDENCE: "0.65"
           POSTER_IMAGE_RULE_MIN_SCORE: "45"
+          OPENAI_REQUEST_TIMEOUT_MS: "45000"
+          CRAWLER_SINGLE_RUN_TIMEOUT: "25m"
+          CRAWLER_ALL_RUN_TIMEOUT: "150m"
 
       - name: Upload to Supabase
         run: |
