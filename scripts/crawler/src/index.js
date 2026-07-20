@@ -82,6 +82,11 @@ async function main() {
 
     targetSites = resolveSitesForCollectionSource(source, sites);
     logger.info(`collection source selected: ${source.name} (${source.source_slug}) -> ${targetSites.length} site(s)`);
+    for (const site of targetSites) {
+      if (site.collectionSourceSlug && !sites.some((knownSite) => knownSite.id === site.id)) {
+        logger.info(`  dynamic source site: ${site.id} -> ${site.boards.length} board(s), adapter ${site.adapter}`);
+      }
+    }
   } else if (targetSite) {
     targetSites = sites.filter((s) => s.id === targetSite || s.id.startsWith(targetSite));
   }

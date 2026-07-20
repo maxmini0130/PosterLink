@@ -50,6 +50,7 @@ type CollectionSource = {
   last_run_rejected_count: number;
   average_delay_hours: number | null;
   required_field_missing_rate: number;
+  config_json: Record<string, any> | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -141,6 +142,7 @@ const EMPTY_FORM = {
   status: "planned",
   reliability: "medium",
   monthly_expected_posts: 10,
+  config_json: "{\n  \"adapter\": \"generic-board\",\n  \"maxPages\": 2,\n  \"selectors\": {}\n}",
   notes: "",
 };
 
@@ -201,6 +203,20 @@ function formatElapsedHours(hours: number | null) {
   if (hours === null) return "기록 없음";
   if (hours < 24) return `${hours}시간 전`;
   return `${Math.round(hours / 24)}일 전`;
+}
+
+function parseConfigJsonInput(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return {};
+  const parsed = JSON.parse(trimmed);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("설정 JSON은 객체 형태여야 합니다.");
+  }
+  return parsed;
+}
+
+function formatConfigJson(value: Record<string, any> | null | undefined) {
+  return JSON.stringify(value && typeof value === "object" ? value : {}, null, 2);
 }
 
 function getSourceHealth(source: CollectionSource): SourceHealth {
@@ -363,10 +379,11 @@ export default function AdminCollectionSourcesPage() {
 
     setSaving(true);
     try {
+      const configJson = parseConfigJsonInput(form.config_json);
       const res = await fetch("/api/admin/collection-sources", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, config_json: configJson }),
       });
       const payload = await res.json().catch(() => null);
       if (!res.ok) throw new Error(payload?.error ?? "기관을 등록하지 못했습니다.");
@@ -377,6 +394,18 @@ export default function AdminCollectionSourcesPage() {
       toast.error(err instanceof Error ? err.message : "기관을 등록하지 못했습니다.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const updateSourceConfig = async (source: CollectionSource) => {
+    const nextConfig = prompt("고급 설정 JSON", formatConfigJson(source.config_json));
+    if (nextConfig === null) return;
+
+    try {
+      const configJson = parseConfigJsonInput(nextConfig);
+      await updateSource(source, { config_json: configJson } as Partial<CollectionSource>);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "설정 JSON을 해석하지 못했습니다.");
     }
   };
 
@@ -551,6 +580,13 @@ export default function AdminCollectionSourcesPage() {
           >
             {METHOD_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
+          <textarea
+            value={form.config_json}
+            onChange={(event) => setForm((prev) => ({ ...prev, config_json: event.target.value }))}
+            placeholder="고급 설정 JSON"
+            rows={5}
+            className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 font-mono text-xs font-bold outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 md:col-span-2 xl:col-span-3"
+          />
           <button
             type="button"
             onClick={createSource}
@@ -711,6 +747,14 @@ export default function AdminCollectionSourcesPage() {
                     </td>
                     <td className="py-3 pr-4">
                       <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void updateSourceConfig(source)}
+                          title="고급 설정 JSON 수정"
+                          className="rounded-lg p-2 text-gray-400 hover:bg-gray-50 hover:text-gray-900 dark:hover:bg-slate-800 dark:hover:text-white"
+                        >
+                          <Settings2 size={15} />
+                        </button>
                         <button
                           type="button"
                           onClick={() => void runSource(source)}

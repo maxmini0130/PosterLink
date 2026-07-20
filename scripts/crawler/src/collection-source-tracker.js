@@ -97,6 +97,67 @@ function getConfiguredSiteIds(source) {
   return raw.map((value) => String(value).trim()).filter(Boolean);
 }
 
+function getConfigObject(source) {
+  const config = source?.config_json;
+  return config && typeof config === "object" && !Array.isArray(config) ? config : {};
+}
+
+function getUrlOrigin(value) {
+  const url = normalizeUrl(value);
+  return url ? url.origin : null;
+}
+
+function getSourceCategory(source, config) {
+  return config.category
+    || config.default_category
+    || source?.source_type
+    || "other";
+}
+
+function buildSourceBoards(source, config) {
+  if (Array.isArray(config.boards) && config.boards.length > 0) {
+    return config.boards
+      .map((board, index) => {
+        const url = board?.url || board?.list_url || board?.listUrl;
+        if (!url) return null;
+        return {
+          name: String(board.name || board.title || `${source.name} ${index + 1}`).trim(),
+          url: String(url).trim(),
+          category: board.category || getSourceCategory(source, config),
+        };
+      })
+      .filter(Boolean);
+  }
+
+  if (!source?.list_url) return [];
+  return [{
+    name: config.board_name || config.boardName || source.name,
+    url: source.list_url,
+    category: getSourceCategory(source, config),
+  }];
+}
+
+export function buildSiteFromCollectionSource(source) {
+  if (!source?.source_slug || !source?.name || !source?.list_url) return null;
+  if (source.collection_method === "manual") return null;
+
+  const config = getConfigObject(source);
+  const boards = buildSourceBoards(source, config);
+  if (boards.length === 0) return null;
+
+  return {
+    id: source.source_slug,
+    name: source.name,
+    domain: source.homepage_url || getUrlOrigin(source.list_url) || source.list_url,
+    adapter: config.adapter || "generic-board",
+    boards,
+    selectors: config.selectors || undefined,
+    maxPages: Number(config.maxPages ?? config.max_pages) || undefined,
+    collectionSourceId: source.id,
+    collectionSourceSlug: source.source_slug,
+  };
+}
+
 function getSiteUrls(site) {
   return [
     site?.domain,
@@ -139,7 +200,11 @@ export function sourceMatchesSite(source, site) {
 
 export function resolveSitesForCollectionSource(source, sites = []) {
   if (!source) return [];
-  return sites.filter((site) => sourceMatchesSite(source, site));
+  const matchedSites = sites.filter((site) => sourceMatchesSite(source, site));
+  if (matchedSites.length > 0) return matchedSites;
+
+  const dynamicSite = buildSiteFromCollectionSource(source);
+  return dynamicSite ? [dynamicSite] : [];
 }
 
 function scoreSource(source, context) {

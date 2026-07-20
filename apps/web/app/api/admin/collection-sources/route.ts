@@ -36,6 +36,7 @@ const SELECT_COLUMNS = [
   "last_run_rejected_count",
   "average_delay_hours",
   "required_field_missing_rate",
+  "config_json",
   "notes",
   "created_at",
   "updated_at",
