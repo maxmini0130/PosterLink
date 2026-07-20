@@ -108,7 +108,7 @@ async function upsertPoster(params: {
   await supabase.from("poster_links").insert({
     poster_id: poster.id,
     link_type: "official_notice",
-    title: "공식 안내 페이지",
+    title: "공식 공고 원문",
     url: params.source_url,
     is_primary: true,
   });

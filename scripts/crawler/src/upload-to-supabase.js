@@ -759,7 +759,7 @@ async function uploadToSupabase(filePath) {
       poster_id: posterId,
       link_type: "official_notice",
       url: sourceUrl,
-      title: "원문 보기",
+      title: "공식 공고 원문",
       is_primary: true,
     });
     if (linkErr) {
