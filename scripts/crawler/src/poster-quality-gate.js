@@ -257,7 +257,7 @@ export function evaluatePosterQuality(input = {}, options = {}) {
     addIssue(issues, "generic-title", "high", "title looks like board metadata or a provider name", title, "reject");
   }
 
-  if (title.length < 180 && /^[^/]+(?:\s*\/\s*[^/]+){2,}$/i.test(title)) {
+  if (title.length < 180 && /^[^/<>()[\]]+\s+\/\s+[^/<>()[\]]+\s+\/\s+[^/<>()[\]]+(?:\s+\/\s+[^/<>()[\]]+)*$/i.test(title)) {
     addIssue(issues, "breadcrumb-title", "high", "breadcrumb/navigation path was captured as title", title, "reject");
   }
 
@@ -280,17 +280,19 @@ export function evaluatePosterQuality(input = {}, options = {}) {
   }
 
   const { imageClassification, contentVerification } = getVerification(input);
-  if (imageClassification?.isPoster === false) {
-    addIssue(issues, "image-not-poster", "high", "AI classifier says image is not a poster", imageClassification.reason, "reject");
-  }
-  if (contentVerification?.isSameNotice === false) {
-    addIssue(issues, "image-content-mismatch", "high", "poster image does not match the notice content", contentVerification.reason, "reject");
-  }
-  if (typeof imageClassification?.confidence === "number" && imageClassification.confidence < 0.55) {
-    addIssue(issues, "low-image-confidence", "medium", "AI poster confidence is low", String(imageClassification.confidence));
-  }
-  if (typeof contentVerification?.confidence === "number" && contentVerification.confidence < 0.55) {
-    addIssue(issues, "low-content-match-confidence", "medium", "AI notice-match confidence is low", String(contentVerification.confidence));
+  if (!isTextNotice) {
+    if (imageClassification?.isPoster === false) {
+      addIssue(issues, "image-not-poster", "high", "AI classifier says image is not a poster", imageClassification.reason, "reject");
+    }
+    if (contentVerification?.isSameNotice === false) {
+      addIssue(issues, "image-content-mismatch", "high", "poster image does not match the notice content", contentVerification.reason, "reject");
+    }
+    if (typeof imageClassification?.confidence === "number" && imageClassification.confidence < 0.55) {
+      addIssue(issues, "low-image-confidence", "medium", "AI poster confidence is low", String(imageClassification.confidence));
+    }
+    if (typeof contentVerification?.confidence === "number" && contentVerification.confidence < 0.55) {
+      addIssue(issues, "low-content-match-confidence", "medium", "AI notice-match confidence is low", String(contentVerification.confidence));
+    }
   }
 
   for (const issue of dateQuality.issues) {

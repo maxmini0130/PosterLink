@@ -16,7 +16,7 @@ const TITLE_EXCLUDE_RULES = [
   },
   {
     name: "breadcrumb-title",
-    pattern: /^[^/]+(?:\s*\/\s*[^/]+){2,}$/i,
+    pattern: /^[^/<>()[\]]+\s+\/\s+[^/<>()[\]]+\s+\/\s+[^/<>()[\]]+(?:\s+\/\s+[^/<>()[\]]+)*$/i,
     reason: "breadcrumb/navigation path captured as title",
   },
   {
@@ -157,6 +157,13 @@ const TITLE_EXCLUDE_RULES = [
 ];
 
 const COLLECTABLE_ANNOUNCEMENT_PATTERN = /\uBAA8\uC9D1|\uACF5\uACE0|\uCC44\uC6A9|\uC9C0\uC6D0\s*\uC0AC\uC5C5|\uC9C0\uC6D0\uC0AC\uC5C5|\uAD50\uC721|\uD504\uB85C\uADF8\uB7A8|\uCC38\uC5EC\uC790|\uC218\uAC15\uC0DD|\uACF5\uBAA8|\uC811\uC218|\uC2E0\uCCAD\uC790|\uD6C8\uB828|\uAC15\uC88C|\uD074\uB798\uC2A4/i;
+const STRONG_COLLECTABLE_NOTICE_PATTERN = /(?:\uC785\uC8FC\uAE30\uC5C5|\uC785\uC8FC\s*\uC2A4\uD0C0\uD2B8\uC5C5|\uCC38\uC5EC(?:\uC790|\uCCAD\uB144)|\uAD50\uC721\uC0DD|\uC218\uAC15\uC0DD|\uB4DC\uB9BC\uCCAD\uB144|\uAD6C\uC9C1\uCCAD\uB144|\uC2E0\uD63C\uBD80\uBD80|\uC790\uACA9\uC99D).*(?:\uBAA8\uC9D1|\uC9C0\uC6D0|\uAD50\uC721|\uD504\uB85C\uADF8\uB7A8|\uC0AC\uC5C5)|(?:\uBAA8\uC9D1|\uC9C0\uC6D0|\uAD50\uC721|\uD504\uB85C\uADF8\uB7A8|\uC0AC\uC5C5).*(?:\uC785\uC8FC\uAE30\uC5C5|\uC785\uC8FC\s*\uC2A4\uD0C0\uD2B8\uC5C5|\uCC38\uC5EC(?:\uC790|\uCCAD\uB144)|\uAD50\uC721\uC0DD|\uC218\uAC15\uC0DD|\uB4DC\uB9BC\uCCAD\uB144|\uAD6C\uC9C1\uCCAD\uB144|\uC2E0\uD63C\uBD80\uBD80|\uC790\uACA9\uC99D)/i;
+const WEAK_ADMIN_EXCLUSION_RULES = new Set([
+  "holiday-designation-or-partial-operation",
+  "holiday-operation-notice",
+  "closure-or-operation-notice",
+  "facility-use-guide",
+]);
 
 export function getPostExclusionReason(post = {}) {
   const title = String(post.title ?? "").replace(/\s+/g, " ").trim();
@@ -173,6 +180,9 @@ export function getPostExclusionReason(post = {}) {
   const matchedRule = TITLE_EXCLUDE_RULES.find((rule) => rule.pattern.test(title) || rule.pattern.test(text));
   if (!matchedRule) return null;
   if (matchedRule.name === "application-guide" && COLLECTABLE_ANNOUNCEMENT_PATTERN.test(`${title} ${text}`)) {
+    return null;
+  }
+  if (WEAK_ADMIN_EXCLUSION_RULES.has(matchedRule.name) && STRONG_COLLECTABLE_NOTICE_PATTERN.test(`${title} ${text}`)) {
     return null;
   }
 
