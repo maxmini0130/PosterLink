@@ -744,21 +744,19 @@ async function cleanupExcludedCrawlerReviews() {
 async function uploadToSupabase(filePath) {
   const raw = await fs.readFile(filePath, "utf-8");
   const posts = JSON.parse(raw);
-  const imagePosts = posts.filter(hasPosterImage);
-  const skippedNoImage = posts.length - imagePosts.length;
+  const textNoticePosts = posts.filter((post) => !hasPosterImage(post) && (post.noticeOnly === true || post.contentMode === "text_notice"));
   const collectionSources = await loadCollectionSources(supabase);
   const collectionStats = createCollectionSourceStats(collectionSources);
 
   for (const post of posts) {
     collectionStats.recordChecked(post);
-    if (!hasPosterImage(post)) {
-      collectionStats.recordRejected(post, "no_poster_image");
-    }
   }
 
-  console.log(`\n📤 ${imagePosts.length}건을 Supabase에 업로드합니다. (이미지 없음 제외: ${skippedNoImage}건)\n`);
+  console.log(`\n📤 ${posts.length}건을 Supabase에 업로드합니다. (텍스트 공고: ${textNoticePosts.length}건)\n`);
 
-  const cleanedCount = await cleanupImageLessCrawlerReviews();
+  const cleanedCount = process.env.CRAWLER_DELETE_IMAGELESS_REVIEWS === "1"
+    ? await cleanupImageLessCrawlerReviews()
+    : 0;
   const cleanedExcludedCount = await cleanupExcludedCrawlerReviews();
   if (cleanedCount > 0) {
     console.log(`이미지 없는 기존 크롤러 검수대기 ${cleanedCount}건 정리`);
@@ -779,7 +777,7 @@ async function uploadToSupabase(filePath) {
   const qualityRejected = [];
   const qualityReview = [];
 
-  for (const post of imagePosts) {
+  for (const post of posts) {
     const sourceUrl = post.sourceUrl || post.url;
     const sourceKey = normalizeSourceKey(sourceUrl);
     if (!sourceKey) {
@@ -803,6 +801,7 @@ async function uploadToSupabase(filePath) {
       images: sourceImages,
       links: [sourceUrl].filter(Boolean),
       extractedDeadline: post.deadline ?? null,
+      contentMode: post.contentMode,
     });
     const duplicateMatch = findBestPosterDuplicate({
       ...post,

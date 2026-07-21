@@ -1,5 +1,20 @@
 const TITLE_EXCLUDE_RULES = [
   {
+    name: "selected-list-or-award-list",
+    pattern: /\uCD5C\uC885\s*\uC120\uBC1C\s*\uBA85\uB2E8|\uC120\uBC1C\s*\uBA85\uB2E8|\uCC38\uAC00\uC0C1\s*\uBA85\uB2E8|\uC218\uC0C1(?:\uC790)?\s*\uBA85\uB2E8/i,
+    reason: "selected/result list announcement",
+  },
+  {
+    name: "service-operation-end",
+    pattern: /\uBC88\uD638\s*\uC6B4\uC601\s*\uC885\uB8CC|\uC11C\uBE44\uC2A4\s*\uC885\uB8CC|\uC6B4\uC601\s*\uC885\uB8CC\s*\uC548\uB0B4/i,
+    reason: "service operation end notice",
+  },
+  {
+    name: "street-event-schedule",
+    pattern: /(?:\uC0C1\uC0C1\uB9C8\uB2F9|\uBC34\uB4DC\uC874|\uD589\uC0AC).*(?:\uD589\uC0AC\s*\uC77C\uC815|\d{1,2}\.\d{1,2}\s*[~.-]\s*\d{1,2}\.\d{1,2})|(?:\uD589\uC0AC\s*\uC77C\uC815).*(?:\uC0C1\uC0C1\uB9C8\uB2F9|\uBC34\uB4DC\uC874)/i,
+    reason: "street/facility event schedule, not an individual poster",
+  },
+  {
     name: "breadcrumb-title",
     pattern: /^[^/]+(?:\s*\/\s*[^/]+){2,}$/i,
     reason: "breadcrumb/navigation path captured as title",
@@ -141,6 +156,8 @@ const TITLE_EXCLUDE_RULES = [
   },
 ];
 
+const COLLECTABLE_ANNOUNCEMENT_PATTERN = /\uBAA8\uC9D1|\uACF5\uACE0|\uCC44\uC6A9|\uC9C0\uC6D0\s*\uC0AC\uC5C5|\uC9C0\uC6D0\uC0AC\uC5C5|\uAD50\uC721|\uD504\uB85C\uADF8\uB7A8|\uCC38\uC5EC\uC790|\uC218\uAC15\uC0DD|\uACF5\uBAA8|\uC811\uC218|\uC2E0\uCCAD\uC790|\uD6C8\uB828|\uAC15\uC88C|\uD074\uB798\uC2A4/i;
+
 export function getPostExclusionReason(post = {}) {
   const title = String(post.title ?? "").replace(/\s+/g, " ").trim();
   const text = [
@@ -155,6 +172,9 @@ export function getPostExclusionReason(post = {}) {
 
   const matchedRule = TITLE_EXCLUDE_RULES.find((rule) => rule.pattern.test(title) || rule.pattern.test(text));
   if (!matchedRule) return null;
+  if (matchedRule.name === "application-guide" && COLLECTABLE_ANNOUNCEMENT_PATTERN.test(`${title} ${text}`)) {
+    return null;
+  }
 
   return {
     rule: matchedRule.name,

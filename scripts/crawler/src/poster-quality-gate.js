@@ -223,6 +223,7 @@ export function evaluatePosterQuality(input = {}, options = {}) {
   const title = compact(input.title);
   const org = compact(input.source_org_name ?? input.org ?? input.site);
   const summary = compact(input.summary_short ?? input.summary_long ?? input.content);
+  const isTextNotice = input.noticeOnly === true || input.contentMode === "text_notice" || options.contentMode === "text_notice";
   const sourceKey = normalizeUrl(options.sourceKey ?? input.source_key ?? input.sourceUrl ?? input.url);
   const thumbnail = normalizeUrl(input.thumbnail_url);
   const images = unique([
@@ -244,7 +245,13 @@ export function evaluatePosterQuality(input = {}, options = {}) {
   if (!org) addIssue(issues, "missing-org", "medium", "missing organization/source name");
   if (!summary || summary.length < 25) addIssue(issues, "weak-summary", "medium", "summary is missing or too short", summary);
   if (!sourceKey && links.length === 0) addIssue(issues, "missing-source", "high", "missing official source URL");
-  if (images.length === 0) addIssue(issues, "missing-image", "high", "missing poster image", "", "reject");
+  if (images.length === 0) {
+    if (isTextNotice) {
+      addIssue(issues, "text-notice-no-image", "medium", "text-only official notice needs admin review", "", "review");
+    } else {
+      addIssue(issues, "missing-image", "high", "missing poster image", "", "reject");
+    }
+  }
 
   if (title.length <= 4 || GENERIC_TITLE_PATTERNS.some((pattern) => pattern.test(title))) {
     addIssue(issues, "generic-title", "high", "title looks like board metadata or a provider name", title, "reject");

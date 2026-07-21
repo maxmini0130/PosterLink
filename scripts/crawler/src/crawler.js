@@ -115,6 +115,85 @@ function shouldMarkImagelessSeen() {
   return process.env.CRAWLER_MARK_IMAGELESS_SEEN === "1";
 }
 
+function shouldCollectTextNotices() {
+  return process.env.CRAWLER_COLLECT_TEXT_NOTICES !== "0";
+}
+
+const TEXT_NOTICE_POSITIVE_PATTERN = /\uBAA8\uC9D1|\uACF5\uACE0|\uCC44\uC6A9|\uC9C0\uC6D0\s*\uC0AC\uC5C5|\uC9C0\uC6D0\uC0AC\uC5C5|\uAD50\uC721|\uD504\uB85C\uADF8\uB7A8|\uCC38\uC5EC\uC790|\uC218\uAC15\uC0DD|\uACF5\uBAA8|\uC811\uC218|\uC2E0\uCCAD\uC790|\uD6C8\uB828|\uAC15\uC88C|\uD074\uB798\uC2A4/i;
+const TEXT_NOTICE_STRONG_TITLE_PATTERN = /\uBAA8\uC9D1|\uACF5\uACE0|\uCC44\uC6A9|\uC9C0\uC6D0\s*\uC0AC\uC5C5|\uC9C0\uC6D0\uC0AC\uC5C5|\uAD50\uC721|\uD504\uB85C\uADF8\uB7A8|\uCC38\uC5EC\uC790|\uC218\uAC15\uC0DD|\uACF5\uBAA8|\uD6C8\uB828|\uAC15\uC88C|\uD074\uB798\uC2A4/i;
+const TEXT_NOTICE_NEGATIVE_PATTERN = /\uCD5C\uC885\s*\uC120\uBC1C\s*\uBA85\uB2E8|\uC120\uBC1C\s*\uBA85\uB2E8|\uCC38\uAC00\uC0C1\s*\uBA85\uB2E8|\uC6B4\uC601\s*\uC885\uB8CC|\uD589\uC0AC\s*\uC77C\uC815|\uC778\uAD6C\s*\uBC0F\s*\uC138\uB300\uC218\s*\uD604\uD669/i;
+const ALWAYS_OPEN_TEXT_PATTERN = /\uC0C1\uC2DC|\uC218\uC2DC|\uC5F0\uC911/i;
+const DEFAULT_MAX_POST_AGE_DAYS = 540;
+
+function isCollectableTextNotice(post) {
+  if (!shouldCollectTextNotices()) return false;
+  const title = String(post?.title ?? "").replace(/\s+/g, " ").trim();
+  const content = String(post?.content ?? "").replace(/\s+/g, " ").trim();
+  const attachmentText = Array.isArray(post?.attachments)
+    ? post.attachments.map((attachment) => attachment?.name).filter(Boolean).join(" ")
+    : "";
+  const text = `${title} ${content} ${attachmentText}`;
+
+  if (title.length < 8) return false;
+  if (TEXT_NOTICE_NEGATIVE_PATTERN.test(text)) return false;
+  if (!TEXT_NOTICE_POSITIVE_PATTERN.test(text)) return false;
+  return content.length >= 40 || attachmentText.length >= 8 || TEXT_NOTICE_STRONG_TITLE_PATTERN.test(title);
+}
+
+function buildTextNoticePost(fullPost, reason, candidateChecks = []) {
+  return {
+    ...fullPost,
+    images: [],
+    contentMode: "text_notice",
+    noticeOnly: true,
+    posterImageCheck: {
+      rule: null,
+      model: {
+        isPoster: false,
+        confidence: 0,
+        reason,
+        visualType: "missing",
+        checkedAt: new Date().toISOString(),
+        model: "none",
+      },
+      content: {
+        isSameNotice: true,
+        confidence: 0.5,
+        decision: "text_notice",
+        matchedFields: ["title", "source"],
+        mismatchedFields: ["image"],
+        posterTextSummary: "",
+        reason: "Official notice is collected without a verified poster image",
+        checkedAt: new Date().toISOString(),
+        model: "none",
+      },
+      candidates: candidateChecks,
+    },
+  };
+}
+
+function getStaleNoticeReason(post) {
+  const maxAgeDays = Number(process.env.CRAWLER_MAX_POST_AGE_DAYS ?? DEFAULT_MAX_POST_AGE_DAYS);
+  const text = `${post?.title ?? ""} ${post?.content ?? ""}`.replace(/\s+/g, " ").trim();
+  if (ALWAYS_OPEN_TEXT_PATTERN.test(text)) return null;
+
+  const currentYear = new Date().getFullYear();
+  const years = [...text.matchAll(/(?:^|[^\d])(20\d{2})\s*\uB144/g)]
+    .map((match) => Number(match[1]))
+    .filter((year) => Number.isFinite(year));
+  if (years.length > 0 && Math.max(...years) < currentYear - 1) {
+    return `notice year is stale (${Math.max(...years)})`;
+  }
+
+  const rawDate = post?.date || post?.createdAt || post?.publishedAt;
+  if (!rawDate || !Number.isFinite(maxAgeDays) || maxAgeDays <= 0) return null;
+
+  const postedAt = new Date(rawDate);
+  if (Number.isNaN(postedAt.getTime())) return null;
+  const ageDays = (Date.now() - postedAt.getTime()) / (24 * 60 * 60 * 1000);
+  return ageDays > maxAgeDays ? `posted ${Math.round(ageDays)} days ago` : null;
+}
+
 function dropUndefinedValues(object) {
   return Object.fromEntries(
     Object.entries(object).filter(([, value]) => value !== undefined)
@@ -131,6 +210,7 @@ function createCrawlStats() {
     noPosterImage: 0,
     imageRuleRejected: 0,
     verificationRejected: 0,
+    textNoticeCollected: 0,
     skippedSeen: 0,
     detailFailed: 0,
     boardFailed: 0,
@@ -354,11 +434,31 @@ export async function crawlSite(site, adapter, options = {}) {
               continue;
             }
 
+            const staleReason = getStaleNoticeReason(fullPost);
+            if (staleReason) {
+              stats.detailFiltered += 1;
+              rememberSkip(stats, "detail_filter:stale_notice", fullPost, staleReason);
+              seen.add(post.url);
+              logger.info(`  Skip (stale notice): ${post.title} - ${staleReason}`);
+              continue;
+            }
+
             if (!hasPosterImage(fullPost)) {
-              stats.noPosterImage += 1;
-              rememberSkip(stats, "no_poster_image", fullPost, "no usable poster image found on detail page");
-              if (shouldMarkImagelessSeen()) seen.add(post.url);
-              logger.info(`  Skip (no poster image): ${post.title}`);
+              if (isCollectableTextNotice(fullPost)) {
+                allPosts.push(buildTextNoticePost(
+                  fullPost,
+                  "No poster image found; collected as text notice for admin review",
+                ));
+                stats.collected += 1;
+                stats.textNoticeCollected += 1;
+                seen.add(post.url);
+                logger.info(`  OK text notice: ${post.title}`);
+              } else {
+                stats.noPosterImage += 1;
+                rememberSkip(stats, "no_poster_image", fullPost, "no usable poster image found on detail page");
+                if (shouldMarkImagelessSeen()) seen.add(post.url);
+                logger.info(`  Skip (no poster image): ${post.title}`);
+              }
               continue;
             }
 
@@ -378,11 +478,22 @@ export async function crawlSite(site, adapter, options = {}) {
                 });
 
             if (!imageSelection.selectedImageUrl) {
-              stats.imageRuleRejected += 1;
-              if (shouldMarkImagelessSeen()) seen.add(post.url);
               const bestRejected = imageSelection.candidates[0]?.rule;
-              rememberSkip(stats, "image_rules", fullPost, bestRejected?.reason ?? "no usable poster image");
-              logger.info(`  Skip (image rules): ${post.title} — ${bestRejected?.reason ?? "no usable poster image"}`);
+              if (isCollectableTextNotice(fullPost)) {
+                allPosts.push(buildTextNoticePost(
+                  fullPost,
+                  bestRejected?.reason ?? "No usable poster image; collected as text notice for admin review",
+                ));
+                stats.collected += 1;
+                stats.textNoticeCollected += 1;
+                seen.add(post.url);
+                logger.info(`  OK text notice (image rules): ${post.title}`);
+              } else {
+                stats.imageRuleRejected += 1;
+                if (shouldMarkImagelessSeen()) seen.add(post.url);
+                rememberSkip(stats, "image_rules", fullPost, bestRejected?.reason ?? "no usable poster image");
+                logger.info(`  Skip (image rules): ${post.title} — ${bestRejected?.reason ?? "no usable poster image"}`);
+              }
               continue;
             }
 
@@ -396,12 +507,20 @@ export async function crawlSite(site, adapter, options = {}) {
             };
 
             if (!verifiedImage.selectedImageUrl) {
-              stats.verificationRejected += 1;
-              if (shouldMarkImagelessSeen()) seen.add(post.url);
               const bestRejected = verifiedImage.candidateChecks[0];
               const reason = bestRejected?.content?.reason ?? bestRejected?.model?.reason ?? "no poster image matched original notice";
-              rememberSkip(stats, "poster_content_mismatch", fullPost, reason);
-              logger.info(`  Skip (poster/content mismatch): ${post.title} - ${reason}`);
+              if (isCollectableTextNotice(fullPost)) {
+                allPosts.push(buildTextNoticePost(fullPost, reason, verifiedImage.candidateChecks));
+                stats.collected += 1;
+                stats.textNoticeCollected += 1;
+                seen.add(post.url);
+                logger.info(`  OK text notice (image mismatch): ${post.title}`);
+              } else {
+                stats.verificationRejected += 1;
+                if (shouldMarkImagelessSeen()) seen.add(post.url);
+                rememberSkip(stats, "poster_content_mismatch", fullPost, reason);
+                logger.info(`  Skip (poster/content mismatch): ${post.title} - ${reason}`);
+              }
               continue;
             }
 

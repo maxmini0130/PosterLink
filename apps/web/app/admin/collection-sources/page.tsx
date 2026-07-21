@@ -262,6 +262,7 @@ function getRunDiagnostic(run: CollectionSourceRun) {
   const found = totals.found ?? totals.checked ?? 0;
   if (found > 0) parts.push(`발견 ${formatNumber(found)}건`);
   if ((totals.collected ?? 0) > 0) parts.push(`수집후보 ${formatNumber(totals.collected)}건`);
+  if ((totals.text_notice_collected ?? 0) > 0) parts.push(`텍스트공고 ${formatNumber(totals.text_notice_collected)}건`);
   if ((totals.post_filtered ?? 0) > 0) parts.push(`제목제외 ${formatNumber(totals.post_filtered)}건`);
   if ((totals.no_poster_image ?? 0) > 0) parts.push(`이미지없음 ${formatNumber(totals.no_poster_image)}건`);
   if ((totals.image_rule_rejected ?? 0) > 0) parts.push(`이미지규칙제외 ${formatNumber(totals.image_rule_rejected)}건`);
