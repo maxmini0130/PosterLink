@@ -329,7 +329,7 @@ export const sites = [
     boards: [
       {
         name: "공지사항",
-        url: "https://www.kesco.or.kr/sfcont/selectPageListSfCont.do",
+        url: "https://www.kesco.or.kr/bbs/selectPageListBbs.do?bbs_code=MKB00001",
         category: "안전",
       },
     ],

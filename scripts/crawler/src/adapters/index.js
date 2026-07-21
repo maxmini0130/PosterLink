@@ -10,6 +10,7 @@ import maposcYeyak from "./maposc-yeyak.js";
 import mfac from "./mfac.js";
 import kStartup from "./k-startup.js";
 import jobAlio from "./job-alio.js";
+import kesco from "./kesco.js";
 
 // 대부분의 기관은 그누보드(Gnuboard) 계열이라 generic-board로 커버 가능
 // 구조가 다른 사이트만 전용 어댑터 작성
@@ -27,6 +28,7 @@ const adapters = {
   "youthcenter": youthcenter,
   "k-startup": kStartup,
   "job-alio": jobAlio,
+  "kesco": kesco,
 
   // 아래는 generic-board를 기본으로 사용하되,
   // 실제 크롤링 시 HTML 구조가 다르면 전용 어댑터를 추가
@@ -35,7 +37,6 @@ const adapters = {
   "mapo-employ": genericBoard,  // 고용복지지원센터
   "mapo-welfare": genericBoard, // 장애인종합복지관
   "mapowf": genericBoard,       // 마포복지재단
-  "kesco": genericBoard,        // 한국전기안전공사
   "ccfsm": genericBoard,        // 어린이급식관리지원센터
 };
 
