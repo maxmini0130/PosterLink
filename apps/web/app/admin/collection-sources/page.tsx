@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import {
   AlertTriangle,
@@ -241,22 +241,109 @@ function formatDuration(ms: number | null) {
   return `${Math.round(seconds / 60)}분`;
 }
 
-function getRunDiagnostic(run: CollectionSourceRun) {
-  const metadata = run.metadata_json;
-  if (!metadata || typeof metadata !== "object") return "";
+const RUN_SUMMARY_LABELS: Record<string, string> = {
+  found: "발견",
+  checked: "확인",
+  collected: "수집후보",
+  text_notice_collected: "텍스트공고",
+  post_filtered: "제목제외",
+  detail_filtered: "상세제외",
+  no_poster_image: "이미지없음",
+  image_rule_rejected: "이미지규칙제외",
+  verification_rejected: "AI검증제외",
+  skipped_seen: "이미확인",
+  detail_failed: "상세실패",
+  board_failed: "목록실패",
+};
 
-  const sites = Array.isArray(metadata.sites) ? metadata.sites : [];
-  const summaries = sites
+const RUN_REASON_LABELS: Record<string, string> = {
+  seen: "이미 확인한 원문",
+  no_poster_image: "이미지 없음",
+  image_rules: "이미지 규칙 제외",
+  poster_content_mismatch: "포스터/본문 불일치",
+  detail_failed: "상세 페이지 실패",
+  board_failed: "목록 페이지 실패",
+  "detail_filter:stale_notice": "오래된 공고",
+};
+
+function getMetadataSites(metadata: any) {
+  return Array.isArray(metadata?.sites) ? metadata.sites : [];
+}
+
+function getMetadataSummaries(metadata: any) {
+  return getMetadataSites(metadata)
     .map((site: any) => site?.summary)
     .filter((summary: any) => summary && typeof summary === "object");
+}
 
-  const totals = summaries.reduce((acc: Record<string, number>, summary: Record<string, any>) => {
+function getRunSummaryTotals(metadata: any) {
+  return getMetadataSummaries(metadata).reduce((acc: Record<string, number>, summary: Record<string, any>) => {
     for (const [key, value] of Object.entries(summary)) {
       const numberValue = Number(value ?? 0);
       if (Number.isFinite(numberValue)) acc[key] = (acc[key] ?? 0) + numberValue;
     }
     return acc;
   }, {});
+}
+
+function formatRunReasonLabel(key: string) {
+  if (RUN_REASON_LABELS[key]) return RUN_REASON_LABELS[key];
+  if (key.startsWith("post_filter:")) return `제목 제외: ${key.replace("post_filter:", "")}`;
+  if (key.startsWith("detail_filter:")) return `상세 제외: ${key.replace("detail_filter:", "")}`;
+  return key.replace(/[_:]/g, " ");
+}
+
+function getRunDetail(run: CollectionSourceRun) {
+  const metadata = run.metadata_json;
+  if (!metadata || typeof metadata !== "object") {
+    return { summaryItems: [], reasonItems: [], sampleItems: [], siteItems: [] };
+  }
+
+  const totals = getRunSummaryTotals(metadata);
+  const summaryItems = Object.entries(RUN_SUMMARY_LABELS)
+    .map(([key, label]) => ({ key, label, value: Number(totals[key] ?? 0) }))
+    .filter((item) => item.value > 0);
+
+  const reasonSource = metadata.skip_reasons && typeof metadata.skip_reasons === "object"
+    ? metadata.skip_reasons
+    : {};
+  const reasonItems = Object.entries(reasonSource)
+    .map(([key, value]) => ({
+      key,
+      label: formatRunReasonLabel(key),
+      value: Number(value ?? 0),
+    }))
+    .filter((item) => Number.isFinite(item.value) && item.value > 0)
+    .sort((a, b) => b.value - a.value);
+
+  const sampleItems = (Array.isArray(metadata.skip_samples) ? metadata.skip_samples : [])
+    .filter((sample: any) => sample && typeof sample === "object")
+    .slice(0, 8)
+    .map((sample: any, index: number) => ({
+      id: `${sample.bucket ?? "sample"}-${index}`,
+      bucket: String(sample.bucket ?? ""),
+      label: formatRunReasonLabel(String(sample.bucket ?? "")),
+      title: String(sample.title ?? "제목 없음"),
+      reason: String(sample.reason ?? ""),
+      url: typeof sample.url === "string" ? sample.url : null,
+    }));
+
+  const siteItems = getMetadataSites(metadata)
+    .filter((site: any) => site && typeof site === "object")
+    .map((site: any) => ({
+      id: String(site.site_id ?? site.site_name ?? "site"),
+      name: String(site.site_name ?? site.site_id ?? "수집 대상"),
+      summary: site.summary && typeof site.summary === "object" ? site.summary : {},
+    }));
+
+  return { summaryItems, reasonItems, sampleItems, siteItems };
+}
+
+function getRunDiagnostic(run: CollectionSourceRun) {
+  const metadata = run.metadata_json;
+  if (!metadata || typeof metadata !== "object") return "";
+
+  const totals = getRunSummaryTotals(metadata);
 
   const parts: string[] = [];
   const found = totals.found ?? totals.checked ?? 0;
@@ -427,6 +514,7 @@ export default function AdminCollectionSourcesPage() {
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [runningSourceId, setRunningSourceId] = useState<string | null>(null);
   const [runResult, setRunResult] = useState<RunResult | null>(null);
+  const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
 
   const loadSources = async () => {
     setLoading(true);
@@ -664,11 +752,18 @@ export default function AdminCollectionSourcesPage() {
                   <th className="py-3 pr-4">소요</th>
                   <th className="py-3 pr-4">실행 시각</th>
                   <th className="py-3 pr-4">오류</th>
+                  <th className="py-3 pr-4">상세</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
-                {recentRuns.slice(0, 12).map((run) => (
-                  <tr key={run.id} className="align-top">
+                {recentRuns.slice(0, 12).map((run) => {
+                  const diagnostic = getRunDiagnostic(run);
+                  const detail = getRunDetail(run);
+                  const expanded = expandedRunId === run.id;
+
+                  return (
+                    <Fragment key={run.id}>
+                      <tr className="align-top">
                     <td className="max-w-[220px] py-3 pr-4">
                       <p className="truncate font-black text-gray-950 dark:text-white">{run.source_name || run.source_slug}</p>
                       <p className="mt-1 truncate text-xs font-bold text-gray-400">{run.source_slug}</p>
@@ -692,14 +787,102 @@ export default function AdminCollectionSourcesPage() {
                     <td className="max-w-[260px] py-3 pr-4 text-xs font-bold text-gray-400">
                       {run.error_message ? (
                         <p className="line-clamp-2 text-rose-500">{run.error_message}</p>
-                      ) : getRunDiagnostic(run) ? (
-                        <p className="line-clamp-3">{getRunDiagnostic(run)}</p>
+                      ) : diagnostic ? (
+                        <p className="line-clamp-3">{diagnostic}</p>
                       ) : (
                         "-"
                       )}
                     </td>
+                    <td className="whitespace-nowrap py-3 pr-4">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedRunId(expanded ? null : run.id)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-600 transition-colors hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900"
+                      >
+                        <Settings2 size={13} />
+                        {expanded ? "닫기" : "상세"}
+                      </button>
+                    </td>
                   </tr>
-                ))}
+                  {expanded && (
+                    <tr>
+                      <td colSpan={8} className="bg-gray-50/70 p-4 dark:bg-slate-950/60">
+                        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                          <div className="grid gap-3 md:grid-cols-3">
+                            <div className="md:col-span-2">
+                              <p className="text-xs font-black uppercase tracking-widest text-gray-400">실행 요약</p>
+                              {detail.summaryItems.length > 0 ? (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {detail.summaryItems.map((item) => (
+                                    <span key={item.key} className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-black text-gray-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
+                                      {item.label} {formatNumber(item.value)}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="mt-3 text-xs font-bold text-gray-400">저장된 실행 요약이 없습니다.</p>
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-widest text-gray-400">수집 대상</p>
+                              <div className="mt-3 space-y-1">
+                                {detail.siteItems.length > 0 ? detail.siteItems.map((site) => (
+                                  <p key={site.id} className="truncate text-xs font-bold text-gray-500 dark:text-slate-400">{site.name}</p>
+                                )) : (
+                                  <p className="text-xs font-bold text-gray-400">-</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-widest text-gray-400">주요 제외 사유</p>
+                              {detail.reasonItems.length > 0 ? (
+                                <div className="mt-3 space-y-2">
+                                  {detail.reasonItems.slice(0, 8).map((item) => (
+                                    <div key={item.key} className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2 text-xs font-bold dark:bg-slate-950">
+                                      <span className="text-gray-600 dark:text-slate-300">{item.label}</span>
+                                      <span className="font-black text-gray-950 dark:text-white">{formatNumber(item.value)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="mt-3 text-xs font-bold text-gray-400">제외 사유가 없습니다.</p>
+                              )}
+                            </div>
+
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-widest text-gray-400">제외 샘플</p>
+                              {detail.sampleItems.length > 0 ? (
+                                <div className="mt-3 space-y-2">
+                                  {detail.sampleItems.map((sample) => (
+                                    <div key={sample.id} className="rounded-lg border border-gray-100 p-3 text-xs dark:border-slate-800">
+                                      <div className="flex items-start justify-between gap-2">
+                                        <p className="line-clamp-2 font-black text-gray-800 dark:text-slate-100">{sample.title}</p>
+                                        {sample.url && (
+                                          <a href={sample.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-indigo-500 hover:text-indigo-700">
+                                            <ExternalLink size={13} />
+                                          </a>
+                                        )}
+                                      </div>
+                                      <p className="mt-1 font-bold text-indigo-500">{sample.label}</p>
+                                      {sample.reason && <p className="mt-1 line-clamp-2 font-bold text-gray-400">{sample.reason}</p>}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="mt-3 text-xs font-bold text-gray-400">샘플이 없습니다.</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
