@@ -27,11 +27,13 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const PAGE_SIZE = 24;
 
 type PosterStatus = "review" | "published" | "rejected" | "draft";
+type PosterMediaFilter = "" | "poster_image" | "text_notice";
 type PosterSearchFilters = {
   text: string;
   org: string;
   categoryId: string;
   regionId: string;
+  media: PosterMediaFilter;
 };
 
 const EMPTY_FILTERS: PosterSearchFilters = {
@@ -39,10 +41,19 @@ const EMPTY_FILTERS: PosterSearchFilters = {
   org: "",
   categoryId: "",
   regionId: "",
+  media: "",
 };
 
 function normalizeSearchValue(value: string) {
   return value.trim().replace(/[,()]/g, " ").replace(/\s+/g, " ");
+}
+
+function getPosterImageSrc(poster: any) {
+  return resolvePosterImageUrl(poster?.thumbnail_url, poster?.source_key);
+}
+
+function isTextNoticePoster(poster: any) {
+  return !getPosterImageSrc(poster);
 }
 
 function hasFieldVerificationWarning(poster: any) {
@@ -170,6 +181,11 @@ export default function AdminPostersPage() {
     }
     if (org) {
       query = query.ilike("source_org_name", `%${org}%`);
+    }
+    if (filters.media === "text_notice") {
+      query = query.is("thumbnail_url", null);
+    } else if (filters.media === "poster_image") {
+      query = query.not("thumbnail_url", "is", null);
     }
     if (scopedPosterIds) {
       query = query.in("id", scopedPosterIds);
@@ -332,6 +348,8 @@ export default function AdminPostersPage() {
   const pageStart = totalCount === 0 ? 0 : page * PAGE_SIZE + 1;
   const pageEnd = Math.min(totalCount, (page + 1) * PAGE_SIZE);
   const activeFilterCount = Object.values(appliedFilters).filter((value) => value.trim()).length;
+  const previewImageSrc = previewPoster ? getPosterImageSrc(previewPoster) : null;
+  const previewIsTextNotice = previewPoster ? isTextNoticePoster(previewPoster) : false;
 
   const applySearchFilters = () => {
     setPage(0);
@@ -562,7 +580,7 @@ export default function AdminPostersPage() {
           )}
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <label className="block">
             <span className="mb-1.5 block text-[11px] font-black text-gray-400">텍스트 검색</span>
             <input
@@ -614,6 +632,19 @@ export default function AdminPostersPage() {
               {regions.map((region) => (
                 <option key={region.id} value={region.id}>{getRegionLabel(region)}</option>
               ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-[11px] font-black text-gray-400">매체</span>
+            <select
+              value={draftFilters.media}
+              onChange={(event) => setDraftFilters((filters) => ({ ...filters, media: event.target.value as PosterMediaFilter }))}
+              className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-900 outline-none transition-all focus:border-indigo-200 focus:ring-4 focus:ring-indigo-50 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:focus:ring-indigo-950"
+            >
+              <option value="">전체</option>
+              <option value="poster_image">이미지 공고</option>
+              <option value="text_notice">텍스트 공고</option>
             </select>
           </label>
         </div>
@@ -735,7 +766,11 @@ export default function AdminPostersPage() {
         </div>
       ) : posters.length > 0 ? (
         <div className="grid grid-cols-1 gap-6">
-          {posters.map((poster) => (
+          {posters.map((poster) => {
+            const imageSrc = getPosterImageSrc(poster);
+            const isTextNotice = isTextNoticePoster(poster);
+
+            return (
             <div
               key={poster.id}
               className={`group flex flex-col gap-8 rounded-[2.5rem] border bg-white p-8 shadow-sm transition-all hover:shadow-md dark:bg-slate-900 dark:hover:shadow-indigo-900/10 md:flex-row md:items-start ${
@@ -760,14 +795,15 @@ export default function AdminPostersPage() {
               <button
                 type="button"
                 onClick={() => {
-                  const src = resolvePosterImageUrl(poster.thumbnail_url, poster.source_key);
-                  if (src) setImageLightbox({ src, title: poster.title, org: poster.source_org_name });
+                  if (imageSrc) setImageLightbox({ src: imageSrc, title: poster.title, org: poster.source_org_name });
                 }}
-                className="group/img relative flex w-full flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-gray-100 bg-gray-50 aspect-[3/4] md:w-32 dark:border-slate-700 dark:bg-slate-800"
-                aria-label="포스터 이미지 크게 보기"
+                className={`group/img relative flex w-full flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-gray-100 bg-gray-50 aspect-[3/4] md:w-32 dark:border-slate-700 dark:bg-slate-800 ${
+                  imageSrc ? "cursor-zoom-in" : "cursor-default"
+                }`}
+                aria-label={imageSrc ? "포스터 이미지 크게 보기" : "텍스트 공고"}
               >
                 <PosterImageFallback
-                  src={resolvePosterImageUrl(poster.thumbnail_url, poster.source_key)}
+                  src={imageSrc}
                   alt={poster.title}
                   title={poster.title}
                   org={poster.source_org_name}
@@ -776,9 +812,18 @@ export default function AdminPostersPage() {
                   iconSize={22}
                 />
 
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover/img:opacity-100">
-                  <Eye className="text-white" size={24} />
-                </div>
+                {isTextNotice && (
+                  <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[10px] font-black text-blue-600 shadow-sm dark:bg-slate-950/90 dark:text-blue-300">
+                    <FileText size={11} />
+                    텍스트
+                  </span>
+                )}
+
+                {imageSrc && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover/img:opacity-100">
+                    <Eye className="text-white" size={24} />
+                  </div>
+                )}
               </button>
 
               <div className="flex-1 space-y-4">
@@ -815,6 +860,11 @@ export default function AdminPostersPage() {
                   <span className="rounded-full border border-gray-100 bg-gray-50 px-3 py-1 text-[11px] font-black text-gray-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
                     마감: {poster.application_end_at ? new Date(poster.application_end_at).toLocaleDateString() : "상시"}
                   </span>
+                  {isTextNotice && (
+                    <span className="flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-[11px] font-black text-blue-600 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300">
+                      <FileText size={12} /> 텍스트 공고
+                    </span>
+                  )}
                   {hasFieldVerificationWarning(poster) && (
                     <span
                       title={getFieldVerificationWarningReason(poster)}
@@ -889,7 +939,8 @@ export default function AdminPostersPage() {
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="rounded-[3rem] border border-dashed border-gray-200 bg-white py-40 text-center dark:border-slate-800 dark:bg-slate-900">
@@ -1016,7 +1067,7 @@ export default function AdminPostersPage() {
               <div className="bg-gray-50 p-5 dark:bg-slate-900">
                 <div className="aspect-[3/4] overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-slate-800 dark:bg-slate-950">
                   <PosterImageFallback
-                    src={resolvePosterImageUrl(previewPoster.thumbnail_url, previewPoster.source_key)}
+                    src={previewImageSrc}
                     alt={previewPoster.title}
                     title={previewPoster.title}
                     org={previewPoster.source_org_name}
@@ -1025,6 +1076,15 @@ export default function AdminPostersPage() {
                     iconSize={40}
                   />
                 </div>
+                {previewIsTextNotice && (
+                  <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-bold leading-6 text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+                    <div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wider">
+                      <FileText size={14} />
+                      텍스트 공고
+                    </div>
+                    이미지 없이 원문 텍스트로 수집된 공고입니다. 제목, 기관, 마감일, 원문 내용을 확인한 뒤 승인하세요.
+                  </div>
+                )}
               </div>
 
               <div className="space-y-6 p-6">
@@ -1038,6 +1098,11 @@ export default function AdminPostersPage() {
                   <span className="rounded-full bg-gray-50 px-3 py-1.5 text-xs font-black text-gray-500 dark:bg-slate-900 dark:text-slate-400">
                     {previewPoster.regionName || "지역 미상"}
                   </span>
+                  {previewIsTextNotice && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-600 dark:bg-blue-950/40 dark:text-blue-300">
+                      <FileText size={13} /> 텍스트 공고
+                    </span>
+                  )}
                 </div>
 
                 <div className="grid gap-3 text-sm">
