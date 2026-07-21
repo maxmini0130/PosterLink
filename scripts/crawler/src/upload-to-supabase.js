@@ -260,11 +260,27 @@ function hasPosterImage(post) {
 
 const VOLATILE_SOURCE_PARAMS = new Set([
   "cp",
+  "cpage",
   "page",
   "pageIndex",
   "pageNum",
   "pageNo",
   "recordCountPerPage",
+  "rows",
+  "rowsSel",
+  "perPage",
+  "hashCode",
+  "cat",
+  "schPblancDiv",
+  "schJrsdCodeTy",
+  "schWntyAt",
+  "schAreaDetailCodes",
+  "schEndAt",
+  "orderGb",
+  "sort",
+  "preKeywords",
+  "condition",
+  "condition1",
   "sortOrder",
   "sortDirection",
   "listType",
@@ -285,7 +301,9 @@ function normalizeSourceKey(sourceUrl) {
       url.searchParams.delete(param);
     }
 
-    const sortedParams = [...url.searchParams.entries()].sort(([a], [b]) => a.localeCompare(b));
+    const sortedParams = [...url.searchParams.entries()]
+      .filter(([, value]) => String(value ?? "").trim() !== "")
+      .sort(([a], [b]) => a.localeCompare(b));
     url.search = "";
     for (const [key, value] of sortedParams) {
       url.searchParams.append(key, value);

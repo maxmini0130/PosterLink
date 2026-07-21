@@ -59,6 +59,23 @@ function buildCrawlRunMetadata(site, stats = {}) {
   };
 }
 
+function mergeActiveCollectionSourceSites(staticSites, collectionSources) {
+  const merged = [...staticSites];
+  const siteIds = new Set(merged.map((site) => site.id));
+
+  for (const source of collectionSources ?? []) {
+    if (source.status !== "active" || source.collection_method === "manual") continue;
+
+    for (const site of resolveSitesForCollectionSource(source, staticSites)) {
+      if (!site?.id || siteIds.has(site.id)) continue;
+      siteIds.add(site.id);
+      merged.push(site);
+    }
+  }
+
+  return merged;
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const dryRun = args.includes("--dry-run");
@@ -116,6 +133,8 @@ async function main() {
     }
   } else if (targetSite) {
     targetSites = sites.filter((s) => s.id === targetSite || s.id.startsWith(targetSite));
+  } else {
+    targetSites = mergeActiveCollectionSourceSites(sites, collectionSources);
   }
 
   if (targetSites.length === 0) {

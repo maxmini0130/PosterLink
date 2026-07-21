@@ -94,13 +94,28 @@ const DEFAULT_TITLE_EXCLUDE_PATTERNS = [
 ];
 
 const VOLATILE_LIST_PARAMS = [
+  "cp",
+  "cpage",
   "page",
   "pageIndex",
   "pageNum",
   "pageNo",
   "recordCountPerPage",
   "rows",
+  "rowsSel",
   "perPage",
+  "hashCode",
+  "cat",
+  "schPblancDiv",
+  "schJrsdCodeTy",
+  "schWntyAt",
+  "schAreaDetailCodes",
+  "schEndAt",
+  "orderGb",
+  "sort",
+  "preKeywords",
+  "condition",
+  "condition1",
   "searchKeyword",
   "searchCondition",
   "keyword",
@@ -239,6 +254,7 @@ function cleanTitleCandidate(value, site) {
   if (/^(logo|home|menu|search|skip navigation|본문 바로가기)$/i.test(title)) return "";
   title = title
     .replace(/^\uC81C\uBAA9\s*:\s*/i, "")
+    .replace(/\s*(?:페이지\s*이동|새창(?:으로)?\s*열림|상세\s*보기|자세히\s*보기)\s*$/i, "")
     .replace(/\s+\d{4}[-./]\d{1,2}[-./]\d{1,2}\s*$/, "")
     .trim();
   if (/^(logo|home|menu|search|skip navigation|본문 바로가기)$/i.test(title)) return "";
@@ -288,6 +304,9 @@ function normalizeDate(value) {
 
 function extractDeadline(text) {
   const normalized = String(text ?? "").replace(/\s+/g, " ");
+  const rangeMatch = normalized.match(/(?:\uC2E0\uCCAD\uAE30\uAC04|\uC811\uC218\uAE30\uAC04|\uBAA8\uC9D1\uAE30\uAC04|\uC2E0\uCCAD|\uC811\uC218|\uBAA8\uC9D1|\uAE30\uAC04)[^\d]{0,40}(20\d{2}[-./]\d{1,2}[-./]\d{1,2})\s*(?:~|\uBD80\uD130|[-\u2013\u2014])\s*(20\d{2}[-./]\d{1,2}[-./]\d{1,2})/i);
+  if (rangeMatch?.[2]) return normalizeDate(rangeMatch[2]);
+
   for (const pattern of DEADLINE_PATTERNS) {
     const match = normalized.match(pattern);
     if (match?.[1]) return normalizeDate(match[1]);
@@ -298,9 +317,9 @@ function extractDeadline(text) {
 function getLinkTitle($, $row, $link, selectors, site) {
   const configured = firstText($, $row, selectors.listTitle, selectors.removeBeforeText);
   const raw = configured
+    || $link.text()
     || $link.attr("title")
     || $link.attr("aria-label")
-    || $link.text()
     || $row.text();
   return cleanTitleCandidate(raw, site);
 }
@@ -422,7 +441,9 @@ function normalizePostIdentity(value) {
     for (const param of VOLATILE_LIST_PARAMS) {
       url.searchParams.delete(param);
     }
-    const sortedParams = [...url.searchParams.entries()].sort(([a], [b]) => a.localeCompare(b));
+    const sortedParams = [...url.searchParams.entries()]
+      .filter(([, paramValue]) => String(paramValue ?? "").trim() !== "")
+      .sort(([a], [b]) => a.localeCompare(b));
     url.search = "";
     for (const [key, paramValue] of sortedParams) {
       url.searchParams.append(key, paramValue);
