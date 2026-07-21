@@ -136,6 +136,8 @@ function buildSourceBoards(source, config) {
           includeUrlPatterns: board.includeUrlPatterns ?? board.include_url_patterns,
           excludeUrlPatterns: board.excludeUrlPatterns ?? board.exclude_url_patterns,
           excludeTitlePatterns: board.excludeTitlePatterns ?? board.exclude_title_patterns,
+          apiParams: board.apiParams ?? board.api_params,
+          pageSize: Number(board.pageSize ?? board.page_size) || undefined,
           maxPages: Number(board.maxPages ?? board.max_pages) || undefined,
         };
       })
@@ -171,6 +173,8 @@ export function buildSiteFromCollectionSource(source) {
     includeUrlPatterns: config.includeUrlPatterns ?? config.include_url_patterns,
     excludeUrlPatterns: config.excludeUrlPatterns ?? config.exclude_url_patterns,
     excludeTitlePatterns: config.excludeTitlePatterns ?? config.exclude_title_patterns,
+    apiParams: config.apiParams ?? config.api_params,
+    pageSize: Number(config.pageSize ?? config.page_size) || undefined,
     maxPages: Number(config.maxPages ?? config.max_pages) || undefined,
     collectionSourceId: source.id,
     collectionSourceSlug: source.source_slug,

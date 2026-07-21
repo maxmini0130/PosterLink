@@ -5,6 +5,7 @@
 import genericBoard from "./generic-board.js";
 import mapoGu from "./mapo-gu.js";
 import youthSeoul from "./youth-seoul.js";
+import youthcenter from "./youthcenter.js";
 import maposcYeyak from "./maposc-yeyak.js";
 import mfac from "./mfac.js";
 
@@ -21,6 +22,7 @@ const adapters = {
   "youth-seoul": youthSeoul,
   "maposc-yeyak": maposcYeyak,
   "mfac": mfac,
+  "youthcenter": youthcenter,
 
   // 아래는 generic-board를 기본으로 사용하되,
   // 실제 크롤링 시 HTML 구조가 다르면 전용 어댑터를 추가
