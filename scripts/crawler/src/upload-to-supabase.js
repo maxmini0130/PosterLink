@@ -262,6 +262,8 @@ const VOLATILE_SOURCE_PARAMS = new Set([
   "cp",
   "page",
   "pageIndex",
+  "pageNum",
+  "pageNo",
   "recordCountPerPage",
   "sortOrder",
   "sortDirection",

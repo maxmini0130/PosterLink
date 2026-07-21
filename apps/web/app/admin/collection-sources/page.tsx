@@ -166,7 +166,7 @@ const EMPTY_FORM = {
   status: "planned",
   reliability: "medium",
   monthly_expected_posts: 10,
-  config_json: "{\n  \"adapter\": \"generic-board\",\n  \"maxPages\": 2,\n  \"selectors\": {}\n}",
+  config_json: "{\n  \"adapter\": \"generic-board\",\n  \"maxPages\": 2,\n  \"pagination\": {\n    \"param\": \"page\"\n  },\n  \"selectors\": {\n    \"listItem\": \"table tbody tr\",\n    \"listLink\": \"a[href]\",\n    \"listTitle\": null,\n    \"listDate\": \".date, .td_date, td:last-child\",\n    \"detailTitle\": \"h1, h2, .view_title, .bo_v_tit\",\n    \"detailContent\": \".view_content, .bo_v_con, .content\",\n    \"detailImages\": \".view_content img, .bo_v_con img, .content img\",\n    \"detailAttachments\": \"a[href*=download], a[href*=file], .file_list a\"\n  },\n  \"urlFilters\": {\n    \"sameHostOnly\": false,\n    \"include\": [],\n    \"exclude\": []\n  }\n}",
   notes: "",
 };
 

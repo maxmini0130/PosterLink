@@ -129,6 +129,14 @@ function buildSourceBoards(source, config) {
           name: String(board.name || board.title || `${source.name} ${index + 1}`).trim(),
           url: String(url).trim(),
           category: board.category || getSourceCategory(source, config),
+          selectors: board.selectors && typeof board.selectors === "object" ? board.selectors : undefined,
+          pagination: board.pagination && typeof board.pagination === "object" ? board.pagination : undefined,
+          urlFilters: board.urlFilters && typeof board.urlFilters === "object" ? board.urlFilters : undefined,
+          sameHostOnly: board.sameHostOnly ?? board.same_host_only,
+          includeUrlPatterns: board.includeUrlPatterns ?? board.include_url_patterns,
+          excludeUrlPatterns: board.excludeUrlPatterns ?? board.exclude_url_patterns,
+          excludeTitlePatterns: board.excludeTitlePatterns ?? board.exclude_title_patterns,
+          maxPages: Number(board.maxPages ?? board.max_pages) || undefined,
         };
       })
       .filter(Boolean);
@@ -157,6 +165,12 @@ export function buildSiteFromCollectionSource(source) {
     adapter: config.adapter || "generic-board",
     boards,
     selectors: config.selectors || undefined,
+    pagination: config.pagination || undefined,
+    urlFilters: config.urlFilters || undefined,
+    sameHostOnly: config.sameHostOnly ?? config.same_host_only,
+    includeUrlPatterns: config.includeUrlPatterns ?? config.include_url_patterns,
+    excludeUrlPatterns: config.excludeUrlPatterns ?? config.exclude_url_patterns,
+    excludeTitlePatterns: config.excludeTitlePatterns ?? config.exclude_title_patterns,
     maxPages: Number(config.maxPages ?? config.max_pages) || undefined,
     collectionSourceId: source.id,
     collectionSourceSlug: source.source_slug,

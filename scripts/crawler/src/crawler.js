@@ -375,7 +375,8 @@ export async function crawlSite(site, adapter, options = {}) {
     await queue.add(async () => {
       try {
         // 1) 목록 페이지에서 게시물 링크 추출
-        const posts = await adapter.parseList(board.url, site, siteMaxPages);
+        const boardMaxPages = board.maxPages ?? siteMaxPages;
+        const posts = await adapter.parseList(board.url, site, boardMaxPages, board);
         stats.found += posts.length;
         stats.checked += posts.length;
         logger.info(`  Found ${posts.length} posts on list page`);
@@ -410,7 +411,7 @@ export async function crawlSite(site, adapter, options = {}) {
           await new Promise((r) => setTimeout(r, 1500)); // 1.5초 대기
 
           try {
-            const detail = await adapter.parseDetail(post.url, site);
+            const detail = await adapter.parseDetail(post.url, site, board);
             const images = pickImagesByPriority(detail.images, post.images);
             const usesDetailImages = Array.isArray(detail.images) && detail.images.length > 0;
             const fullPost = {
