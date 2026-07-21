@@ -124,6 +124,21 @@ const TEXT_NOTICE_STRONG_TITLE_PATTERN = /\uBAA8\uC9D1|\uACF5\uACE0|\uCC44\uC6A9
 const TEXT_NOTICE_NEGATIVE_PATTERN = /\uCD5C\uC885\s*\uC120\uBC1C\s*\uBA85\uB2E8|\uC120\uBC1C\s*\uBA85\uB2E8|\uCC38\uAC00\uC0C1\s*\uBA85\uB2E8|\uC6B4\uC601\s*\uC885\uB8CC|\uD589\uC0AC\s*\uC77C\uC815|\uC778\uAD6C\s*\uBC0F\s*\uC138\uB300\uC218\s*\uD604\uD669/i;
 const ALWAYS_OPEN_TEXT_PATTERN = /\uC0C1\uC2DC|\uC218\uC2DC|\uC5F0\uC911/i;
 const DEFAULT_MAX_POST_AGE_DAYS = 540;
+const CENTRAL_TEXT_NOTICE_SOURCE_PATTERN = /(?:k-startup|K-Startup|k-startup\.go\.kr|bizinfo|bizinfo\.go\.kr|youthcenter|youthcenter\.go\.kr|\uAE30\uC5C5\uB9C8\uB2F9|\uC628\uD1B5\uCCAD\uB144)/i;
+const CENTRAL_TEXT_NOTICE_SIGNAL_PATTERN = /(?:\uC2E0\uCCAD|\uC811\uC218)\s*\uAE30\uAC04|\uC2E0\uCCAD\s*\uBC29\uBC95|\uC8FC\uAD00\uAE30\uAD00|\uCC3D\uC5C5|\uC2A4\uD0C0\uD2B8\uC5C5|\uCC38\uAC00\uAE30\uC5C5|\uCC38\uC5EC\uAE30\uC5C5|\uCC3D\uC5C5\uAE30\uC5C5|\uC785\uC8FC\uAE30\uC5C5|\uC9C0\uC6D0\s*\uC0AC\uC5C5|\uC0AC\uC5C5\s*\uACF5\uACE0|\uC561\uC140\uB7EC\uB808\uC774\uD305|\uCEE8\uC124\uD305|\uD22C\uC790|\uBCF4\uC721\uC13C\uD130|\bIR\b/i;
+
+function isCentralTextNotice(post, text) {
+  const sourceText = [
+    post?.site,
+    post?.siteId,
+    post?.collectionSourceSlug,
+    post?.sourceUrl,
+    post?.url,
+  ].filter(Boolean).join(" ");
+
+  return CENTRAL_TEXT_NOTICE_SOURCE_PATTERN.test(sourceText)
+    && CENTRAL_TEXT_NOTICE_SIGNAL_PATTERN.test(text);
+}
 
 function isCollectableTextNotice(post) {
   if (!shouldCollectTextNotices()) return false;
@@ -135,7 +150,7 @@ function isCollectableTextNotice(post) {
   const text = `${title} ${content} ${attachmentText}`;
 
   if (title.length < 8) return false;
-  if (TEXT_NOTICE_NEGATIVE_PATTERN.test(text)) return false;
+  if (TEXT_NOTICE_NEGATIVE_PATTERN.test(text) && !isCentralTextNotice(post, text)) return false;
   if (!TEXT_NOTICE_POSITIVE_PATTERN.test(text)) return false;
   return content.length >= 40 || attachmentText.length >= 8 || TEXT_NOTICE_STRONG_TITLE_PATTERN.test(title);
 }

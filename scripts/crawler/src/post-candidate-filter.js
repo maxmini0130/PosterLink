@@ -164,6 +164,28 @@ const WEAK_ADMIN_EXCLUSION_RULES = new Set([
   "closure-or-operation-notice",
   "facility-use-guide",
 ]);
+const CENTRAL_TEXT_NOTICE_FALSE_POSITIVE_RULES = new Set([
+  "street-event-schedule",
+  "monthly-calendar-or-schedule-image",
+  "sports-program-timetable",
+]);
+const CENTRAL_TEXT_NOTICE_SOURCE_PATTERN = /(?:k-startup|K-Startup|k-startup\.go\.kr|bizinfo|bizinfo\.go\.kr|youthcenter|youthcenter\.go\.kr|\uAE30\uC5C5\uB9C8\uB2F9|\uC628\uD1B5\uCCAD\uB144)/i;
+const CENTRAL_TEXT_NOTICE_SIGNAL_PATTERN = /(?:\uC2E0\uCCAD|\uC811\uC218)\s*\uAE30\uAC04|\uC2E0\uCCAD\s*\uBC29\uBC95|\uC8FC\uAD00\uAE30\uAD00|\uCC3D\uC5C5|\uC2A4\uD0C0\uD2B8\uC5C5|\uCC38\uAC00\uAE30\uC5C5|\uCC38\uC5EC\uAE30\uC5C5|\uCC3D\uC5C5\uAE30\uC5C5|\uC785\uC8FC\uAE30\uC5C5|\uC9C0\uC6D0\s*\uC0AC\uC5C5|\uC0AC\uC5C5\s*\uACF5\uACE0|\uC561\uC140\uB7EC\uB808\uC774\uD305|\uCEE8\uC124\uD305|\uD22C\uC790|\uBCF4\uC721\uC13C\uD130|\bIR\b/i;
+
+function isCentralTextNoticeFalsePositive(post, matchedRule, text) {
+  if (!CENTRAL_TEXT_NOTICE_FALSE_POSITIVE_RULES.has(matchedRule.name)) return false;
+
+  const sourceText = [
+    post.site,
+    post.siteId,
+    post.collectionSourceSlug,
+    post.sourceUrl,
+    post.url,
+  ].filter(Boolean).join(" ");
+
+  return CENTRAL_TEXT_NOTICE_SOURCE_PATTERN.test(sourceText)
+    && CENTRAL_TEXT_NOTICE_SIGNAL_PATTERN.test(text);
+}
 
 export function getPostExclusionReason(post = {}) {
   const title = String(post.title ?? "").replace(/\s+/g, " ").trim();
@@ -179,6 +201,9 @@ export function getPostExclusionReason(post = {}) {
 
   const matchedRule = TITLE_EXCLUDE_RULES.find((rule) => rule.pattern.test(title) || rule.pattern.test(text));
   if (!matchedRule) return null;
+  if (isCentralTextNoticeFalsePositive(post, matchedRule, `${title} ${text}`)) {
+    return null;
+  }
   if (matchedRule.name === "application-guide" && COLLECTABLE_ANNOUNCEMENT_PATTERN.test(`${title} ${text}`)) {
     return null;
   }

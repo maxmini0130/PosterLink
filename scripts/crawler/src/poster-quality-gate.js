@@ -74,6 +74,13 @@ const TEXT_RULES = [
   },
 ];
 
+const CENTRAL_TEXT_NOTICE_SOURCE_PATTERN = /(?:k-startup|K-Startup|k-startup\.go\.kr|bizinfo|bizinfo\.go\.kr|youthcenter|youthcenter\.go\.kr|\uAE30\uC5C5\uB9C8\uB2F9|\uC628\uD1B5\uCCAD\uB144)/i;
+const CENTRAL_TEXT_NOTICE_SIGNAL_PATTERN = /(?:\uC2E0\uCCAD|\uC811\uC218)\s*\uAE30\uAC04|\uC2E0\uCCAD\s*\uBC29\uBC95|\uC8FC\uAD00\uAE30\uAD00|\uCC3D\uC5C5|\uC2A4\uD0C0\uD2B8\uC5C5|\uCC38\uAC00\uAE30\uC5C5|\uCC38\uC5EC\uAE30\uC5C5|\uCC3D\uC5C5\uAE30\uC5C5|\uC785\uC8FC\uAE30\uC5C5|\uC9C0\uC6D0\s*\uC0AC\uC5C5|\uC0AC\uC5C5\s*\uACF5\uACE0|\uC561\uC140\uB7EC\uB808\uC774\uD305|\uCEE8\uC124\uD305|\uD22C\uC790|\uBCF4\uC721\uC13C\uD130|\bIR\b/i;
+const CENTRAL_TEXT_NOTICE_REVIEW_ONLY_CODES = new Set([
+  "parking-or-homepage",
+  "web-accessibility",
+]);
+
 const GENERIC_TITLE_PATTERNS = [
   /^\s*$/i,
   /^\uACF5\uC9C0\uC0AC\uD56D$/i,
@@ -184,6 +191,21 @@ function getTextBundle(input, images, links) {
   ].filter(Boolean).join(" ")).slice(0, 4000);
 }
 
+function isCentralTextNotice(input, sourceKey, allText) {
+  const sourceText = [
+    input.site,
+    input.siteId,
+    input.collectionSourceSlug,
+    input.source_org_name,
+    input.sourceUrl,
+    input.url,
+    sourceKey,
+  ].filter(Boolean).join(" ");
+
+  return CENTRAL_TEXT_NOTICE_SOURCE_PATTERN.test(sourceText)
+    && CENTRAL_TEXT_NOTICE_SIGNAL_PATTERN.test(allText);
+}
+
 export function buildPosterDuplicateMaps(rows = []) {
   const source = new Map();
   const titleOrg = new Map();
@@ -237,6 +259,7 @@ export function evaluatePosterQuality(input = {}, options = {}) {
     ...(Array.isArray(input.poster_links) ? input.poster_links.map(getLinkUrl) : []),
   ].map(normalizeUrl));
   const allText = getTextBundle(input, images, links);
+  const isCentralText = isTextNotice && isCentralTextNotice(input, sourceKey, allText);
   const dateQuality = evaluatePosterDateQuality(input, {
     extractedDeadline: options.extractedDeadline ?? input.deadline ?? input.application_end_at ?? null,
   });
@@ -270,6 +293,10 @@ export function evaluatePosterQuality(input = {}, options = {}) {
       ? rule.pattern.test(title)
       : rule.pattern.test(title) || rule.pattern.test(allText);
     if (isMatch) {
+      if (isCentralText && CENTRAL_TEXT_NOTICE_REVIEW_ONLY_CODES.has(rule.code)) {
+        addIssue(issues, rule.code, "medium", rule.reason, title || allText, "review");
+        continue;
+      }
       addIssue(issues, rule.code, rule.severity, rule.reason, title || allText, rule.decision);
     }
   }
@@ -329,7 +356,10 @@ export function evaluatePosterQuality(input = {}, options = {}) {
     if (issue.severity === "medium") return sum + 3;
     return sum + 1;
   }, 0);
-  const decision = issues.some((issue) => issue.decision === "reject" || REJECT_CODES.has(issue.code))
+  const decision = issues.some((issue) => (
+    issue.decision === "reject"
+    || (REJECT_CODES.has(issue.code) && !(isCentralText && CENTRAL_TEXT_NOTICE_REVIEW_ONLY_CODES.has(issue.code)))
+  ))
     ? "reject"
     : issues.length > 0
       ? "review"
