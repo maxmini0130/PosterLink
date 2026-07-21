@@ -19,7 +19,7 @@ INSERT INTO collection_sources (
 ) VALUES (
   'kesco',
   '한국전기안전공사',
-  'public_agency',
+  'other',
   'national',
   '전국',
   'https://www.kesco.or.kr',
