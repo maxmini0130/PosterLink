@@ -61,12 +61,12 @@ export const sites = [
     return {
       id: `mapo-dong-${dong}`,
       name: `마포구 ${dongNames[i]} 주민센터`,
-      domain: "https://www.mapo.go.kr",
+      domain: "https://culture.mapo.go.kr",
       adapter: "mapo-dong",
       boards: [
         {
           name: "주민센터 소식",
-          url: `https://www.mapo.go.kr/site/${dong}/board/notice/list`,
+          url: `https://culture.mapo.go.kr/site/${dong}/board/townnews/list`,
           category: "동주민센터",
         },
       ],
@@ -162,8 +162,16 @@ export const sites = [
     boards: [
       {
         name: "공지사항",
-        url: "http://www.mapocc.or.kr/board/notice",
+        url: "http://www.mapocc.or.kr/bbs/board1",
         category: "문화",
+        selectors: {
+          listItem: "table tbody tr, .gallery_list li, .basic_board li, .board_list li, li",
+          listLink: "a[href]",
+        },
+        urlFilters: {
+          sameHostOnly: true,
+          include: ["/bbs/board1", "/bbs_shop/read.htm", "board1/"],
+        },
       },
     ],
   },
@@ -286,7 +294,7 @@ export const sites = [
     boards: [
       {
         name: "공지사항",
-        url: "https://mapocare.or.kr/bbs/board.php?bo_table=notice",
+        url: "https://mapocare.or.kr/bbs/board.php?bo_table=0401",
         category: "노인복지",
       },
     ],
