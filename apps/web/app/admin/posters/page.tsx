@@ -61,6 +61,7 @@ function hasFieldVerificationWarning(poster: any) {
   if (!verification) return false;
   if (Array.isArray(verification.dateIssues) && verification.dateIssues.length > 0) return true;
   if (Array.isArray(verification.duplicateIssues) && verification.duplicateIssues.length > 0) return true;
+  if (Array.isArray(verification.qualityIssues) && verification.qualityIssues.length > 0) return true;
   if (verification.deadlineMatches === false || verification.orgNameMatches === false) return true;
   return typeof verification.confidence === "number" && verification.confidence < 0.6 && verification.decision !== "not_checked";
 }
@@ -75,9 +76,15 @@ function getDuplicateVerificationIssues(poster: any) {
   return Array.isArray(issues) ? issues : [];
 }
 
+function getQualityVerificationIssues(poster: any) {
+  const issues = poster?.field_verification?.qualityIssues;
+  return Array.isArray(issues) ? issues : [];
+}
+
 function getFieldVerificationWarningLabel(poster: any) {
   if (getDateVerificationIssues(poster).length > 0) return "\uB0A0\uC9DC \uAC80\uC99D \uD544\uC694";
   if (getDuplicateVerificationIssues(poster).length > 0) return "\uC911\uBCF5 \uAC80\uC99D \uD544\uC694";
+  if (getQualityVerificationIssues(poster).length > 0) return "품질 검증 필요";
   return "AI 검증 필요";
 }
 
@@ -93,6 +100,14 @@ function getFieldVerificationWarningReason(poster: any) {
   const duplicateIssues = getDuplicateVerificationIssues(poster);
   if (duplicateIssues.length > 0) {
     return duplicateIssues
+      .slice(0, 3)
+      .map((issue: any) => `${issue.code}: ${issue.reason}${issue.evidence ? ` (${issue.evidence})` : ""}`)
+      .join("\n");
+  }
+
+  const qualityIssues = getQualityVerificationIssues(poster);
+  if (qualityIssues.length > 0) {
+    return qualityIssues
       .slice(0, 3)
       .map((issue: any) => `${issue.code}: ${issue.reason}${issue.evidence ? ` (${issue.evidence})` : ""}`)
       .join("\n");
@@ -1151,6 +1166,21 @@ export default function AdminPostersPage() {
                                 {"\uAE30\uC874 \uACF5\uACE0 \uBCF4\uAE30"}
                               </Link>
                             )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {getQualityVerificationIssues(previewPoster).length > 0 && (
+                    <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 dark:border-violet-900 dark:bg-violet-950/40">
+                      <p className="mb-2 flex items-center gap-1.5 text-xs font-black text-violet-700 dark:text-violet-300">
+                        <AlertTriangle size={13} /> 품질 검증 필요
+                      </p>
+                      <div className="space-y-2">
+                        {getQualityVerificationIssues(previewPoster).slice(0, 4).map((issue: any, index: number) => (
+                          <div key={`${issue.code ?? "quality"}-${index}`} className="text-xs font-bold leading-5 text-violet-800 dark:text-violet-200">
+                            <p>{issue.reason}</p>
+                            {issue.evidence && <p className="mt-0.5 text-violet-700/70 dark:text-violet-300/70">{issue.evidence}</p>}
                           </div>
                         ))}
                       </div>

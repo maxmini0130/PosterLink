@@ -156,6 +156,11 @@ function getLinkUrl(link) {
   return link.url ?? "";
 }
 
+function getLinkLabel(link) {
+  if (!link || typeof link === "string") return "";
+  return [link.title, link.name, link.label, link.link_type].filter(Boolean).join(" ");
+}
+
 function addIssue(issues, code, severity, reason, evidence = "", decision = "review") {
   issues.push({
     code,
@@ -172,6 +177,71 @@ function hostOf(value) {
   } catch {
     return "";
   }
+}
+
+function normalizeLinkUrl(value, baseUrl = "") {
+  const text = String(value ?? "").trim();
+  if (!text || /^javascript:/i.test(text) || text === "#") return "";
+  if (/^(mailto|tel):/i.test(text)) return text;
+  if (/^\/\//.test(text)) return `https:${text}`;
+  try {
+    return new URL(text, baseUrl || undefined).href;
+  } catch {
+    return "";
+  }
+}
+
+const APPLICATION_LINK_LABEL_PATTERN = /신청|접수|지원|응모|등록|apply|application/i;
+const BAD_APPLICATION_URL_TEXT_PATTERN = /^(?:https?:\/\/?|www\.?|#|-|없음|해당없음|미정|준비중)$/i;
+
+function isApplicationLink(entry) {
+  const label = getLinkLabel(entry);
+  return entry?.link_type === "official_apply" || APPLICATION_LINK_LABEL_PATTERN.test(label);
+}
+
+function collectLinkEntries(input = {}, options = {}) {
+  const entries = [];
+  const addEntry = (entry, fallbackLabel = "") => {
+    if (!entry) return;
+    if (typeof entry === "string") {
+      entries.push({ title: fallbackLabel, url: entry });
+      return;
+    }
+    entries.push(entry);
+  };
+
+  for (const entry of options.linkEntries ?? []) addEntry(entry);
+  for (const entry of input.poster_links ?? []) addEntry(entry);
+  for (const entry of input.attachments ?? []) addEntry(entry);
+  return entries;
+}
+
+function findBadApplicationLink(input, options, sourceKey) {
+  const baseUrl = options.sourceUrl ?? input.sourceUrl ?? input.url ?? sourceKey;
+  const sourceHost = hostOf(sourceKey);
+
+  for (const entry of collectLinkEntries(input, options)) {
+    if (!isApplicationLink(entry)) continue;
+
+    const rawUrl = getLinkUrl(entry);
+    const normalizedUrl = normalizeLinkUrl(rawUrl, baseUrl);
+    if (!rawUrl || BAD_APPLICATION_URL_TEXT_PATTERN.test(String(rawUrl).trim()) || !normalizedUrl) {
+      return { ...entry, evidence: `${getLinkLabel(entry) || "application link"}: ${rawUrl || "(empty)"}` };
+    }
+
+    if (/^https?:\/\//i.test(normalizedUrl)) {
+      const parsed = new URL(normalizedUrl);
+      const path = `${parsed.pathname}${parsed.search}`.replace(/[/?&=_-]/g, "");
+      if (!parsed.hostname.includes(".") || /^localhost$/i.test(parsed.hostname)) {
+        return { ...entry, evidence: `${getLinkLabel(entry) || "application link"}: ${normalizedUrl}` };
+      }
+      if (sourceHost && parsed.hostname.replace(/^www\./, "") === sourceHost && path.length < 4) {
+        return { ...entry, evidence: `${getLinkLabel(entry) || "application link"} points to the source homepage: ${normalizedUrl}` };
+      }
+    }
+  }
+
+  return null;
 }
 
 function hasMojibake(value) {
@@ -286,7 +356,9 @@ export function evaluatePosterQuality(input = {}, options = {}) {
   ].map(normalizeUrl));
   const links = unique([
     ...(options.links ?? []),
+    ...(options.linkEntries ?? []).map(getLinkUrl),
     ...(Array.isArray(input.poster_links) ? input.poster_links.map(getLinkUrl) : []),
+    ...(Array.isArray(input.attachments) ? input.attachments.map(getLinkUrl) : []),
   ].map(normalizeUrl));
   const allText = getTextBundle(input, images, links);
   const isCentralText = isTextNotice && isCentralTextNotice(input, sourceKey, allText);
@@ -317,6 +389,18 @@ export function evaluatePosterQuality(input = {}, options = {}) {
 
   if (hasMojibake(allText)) {
     addIssue(issues, "mojibake", "high", "broken encoding text detected", allText, "reject");
+  }
+
+  const badApplicationLink = findBadApplicationLink(input, options, sourceKey);
+  if (badApplicationLink) {
+    addIssue(
+      issues,
+      "bad-application-url",
+      "medium",
+      "application URL is missing, malformed, placeholder-like, or points to a homepage instead of an application page",
+      badApplicationLink.evidence,
+      "review"
+    );
   }
 
   for (const rule of TEXT_RULES) {

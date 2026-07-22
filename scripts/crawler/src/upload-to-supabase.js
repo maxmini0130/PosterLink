@@ -336,6 +336,120 @@ function normalizeSourceKey(sourceUrl) {
   }
 }
 
+const APPLICATION_LINK_LABEL_PATTERN = /신청|접수|지원|응모|등록|apply|application/i;
+
+function normalizeCrawlerLinkUrl(value, baseUrl) {
+  const text = String(value ?? "").trim();
+  if (!text || /^javascript:/i.test(text) || text === "#") return null;
+  if (/^(mailto|tel):/i.test(text)) return text;
+  if (/^\/\//.test(text)) return `https:${text}`;
+  try {
+    return new URL(text, baseUrl || undefined).href;
+  } catch {
+    return null;
+  }
+}
+
+function linkIdentity(url) {
+  if (/^(mailto|tel):/i.test(url)) return url.toLowerCase();
+  return normalizeSourceUrl(url);
+}
+
+function isUsableApplicationLink(url, sourceUrl) {
+  if (!url) return false;
+  if (/^(mailto|tel):/i.test(url)) return true;
+  if (!/^https?:\/\//i.test(url)) return false;
+
+  try {
+    const parsed = new URL(url);
+    if (!parsed.hostname.includes(".") || /^localhost$/i.test(parsed.hostname)) return false;
+
+    const sourceHost = sourceUrl ? new URL(sourceUrl).hostname.replace(/^www\./, "") : "";
+    const linkHost = parsed.hostname.replace(/^www\./, "");
+    const meaningfulPath = `${parsed.pathname}${parsed.search}`.replace(/[/?&=_-]/g, "").length >= 4;
+    if (sourceHost && linkHost === sourceHost && !meaningfulPath) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getAttachmentLabel(attachment) {
+  return String(attachment?.name ?? attachment?.title ?? attachment?.label ?? "").replace(/\s+/g, " ").trim();
+}
+
+function extractInlineUrls(text) {
+  const source = String(text ?? "");
+  return [...source.matchAll(/https?:\/\/[^\s<>"')\]}]+/gi)].map((match) => {
+    const index = match.index ?? 0;
+    return {
+      url: match[0].replace(/[.,;:]+$/, ""),
+      context: source.slice(Math.max(0, index - 80), Math.min(source.length, index + match[0].length + 80)),
+    };
+  });
+}
+
+function buildPosterLinkEntries(post, sourceUrl) {
+  const linkMap = new Map();
+  const addLink = (linkType, url, title, isPrimary = false) => {
+    const normalizedUrl = normalizeCrawlerLinkUrl(url, sourceUrl);
+    if (!normalizedUrl) return;
+    const key = `${linkType}:${linkIdentity(normalizedUrl)}`;
+    if (linkMap.has(key)) {
+      const existing = linkMap.get(key);
+      existing.is_primary = Boolean(existing.is_primary || isPrimary);
+      return;
+    }
+    linkMap.set(key, {
+      link_type: linkType,
+      url: normalizedUrl,
+      title,
+      is_primary: isPrimary,
+    });
+  };
+
+  for (const attachment of post.attachments ?? []) {
+    const label = getAttachmentLabel(attachment);
+    const url = normalizeCrawlerLinkUrl(attachment?.url, sourceUrl);
+    if (!url || !APPLICATION_LINK_LABEL_PATTERN.test(label)) continue;
+    if (!isUsableApplicationLink(url, sourceUrl)) continue;
+    if (linkIdentity(url) === linkIdentity(sourceUrl)) continue;
+    addLink("official_apply", url, label || "공식 신청 링크", true);
+  }
+
+  for (const entry of extractInlineUrls(post.content)) {
+    if (!APPLICATION_LINK_LABEL_PATTERN.test(entry.context)) continue;
+    if (!isUsableApplicationLink(entry.url, sourceUrl)) continue;
+    if (linkIdentity(entry.url) === linkIdentity(sourceUrl)) continue;
+    addLink("official_apply", entry.url, "공식 신청 링크", true);
+  }
+
+  const hasApplyLink = [...linkMap.values()].some((link) => link.link_type === "official_apply");
+  addLink("official_notice", sourceUrl, "공식 공고 원문", !hasApplyLink);
+
+  let primaryAssigned = false;
+  return [...linkMap.values()].map((link) => {
+    const isPrimary = !primaryAssigned && Boolean(link.is_primary);
+    if (isPrimary) primaryAssigned = true;
+    return { ...link, is_primary: isPrimary };
+  });
+}
+
+async function insertPosterLinks(posterId, links) {
+  if (!posterId || links.length === 0) return;
+
+  const rows = links.map((link) => ({
+    poster_id: posterId,
+    link_type: link.link_type,
+    url: link.url,
+    title: link.title,
+    is_primary: link.is_primary,
+  }));
+
+  const { error } = await supabase.from("poster_links").insert(sanitizeForPostgrest(rows));
+  if (error) throw error;
+}
+
 function cleanSummaryText(value) {
   return String(value ?? "")
     .replace(/<[^>]+>/g, " ")
@@ -466,6 +580,39 @@ function createQualityReportEntry(post, sourceUrl, quality) {
     issue_score: quality.issue_score,
     issues: quality.issues,
     images: post.images ?? [],
+  };
+}
+
+const QUALITY_ISSUE_FIELD_CODES = new Set([
+  "bad-application-url",
+  "known-source-title-risk",
+  "weak-summary",
+  "missing-org",
+  "low-image-confidence",
+  "low-content-match-confidence",
+  "text-notice-no-image",
+]);
+
+function mergeQualityIssuesIntoFieldVerification(verification = {}, quality = {}) {
+  const qualityIssues = (quality.issues ?? [])
+    .filter((issue) => QUALITY_ISSUE_FIELD_CODES.has(issue.code))
+    .slice(0, 8);
+  if (qualityIssues.length === 0) return verification;
+
+  const qualityReason = qualityIssues
+    .slice(0, 4)
+    .map((issue) => `${issue.code}: ${issue.reason}`)
+    .join("; ");
+  const confidence = typeof verification.confidence === "number"
+    ? Math.min(verification.confidence, 0.45)
+    : 0.45;
+
+  return {
+    ...verification,
+    confidence,
+    decision: "needs_review",
+    reason: [verification.reason, qualityReason].filter(Boolean).join(" | ").slice(0, 800),
+    qualityIssues,
   };
 }
 
@@ -718,38 +865,47 @@ async function loadDuplicateCandidates() {
   }
 }
 
-async function addSupplementalSourceLink(posterId, sourceUrl) {
-  if (!posterId || !sourceUrl) return false;
+async function addSupplementalPosterLinks(posterId, linkEntries) {
+  if (!posterId || !Array.isArray(linkEntries) || linkEntries.length === 0) return 0;
 
-  const normalizedSource = normalizeSourceUrl(sourceUrl);
   const { data: existingLinks, error: selectError } = await supabase
     .from("poster_links")
     .select("id,url,is_primary")
     .eq("poster_id", posterId);
 
   if (selectError) {
-    console.warn(`Supplemental source lookup failed: ${selectError.message}`);
-    return false;
+    console.warn(`Supplemental link lookup failed: ${selectError.message}`);
+    return 0;
   }
 
-  const links = existingLinks ?? [];
-  const alreadyLinked = links.some((link) => normalizeSourceUrl(link.url) === normalizedSource);
-  if (alreadyLinked) return false;
+  const existing = existingLinks ?? [];
+  const existingIdentities = new Set(existing.map((link) => linkIdentity(link.url)));
+  const hasPrimary = existing.some((link) => link.is_primary);
+  let assignedPrimary = hasPrimary;
+  const rows = [];
 
-  const { error: insertError } = await supabase.from("poster_links").insert({
-    poster_id: posterId,
-    link_type: "official_notice",
-    url: sourceUrl,
-    title: "\uACF5\uC2DD \uACF5\uACE0 \uC6D0\uBB38",
-    is_primary: !links.some((link) => link.is_primary),
-  });
+  for (const link of linkEntries) {
+    const identity = linkIdentity(link.url);
+    if (!identity || existingIdentities.has(identity)) continue;
+    existingIdentities.add(identity);
+    const isPrimary = !assignedPrimary && Boolean(link.is_primary);
+    if (isPrimary) assignedPrimary = true;
+    rows.push({
+      poster_id: posterId,
+      link_type: link.link_type,
+      url: link.url,
+      title: link.title,
+      is_primary: isPrimary,
+    });
+  }
 
+  if (rows.length === 0) return 0;
+  const { error: insertError } = await supabase.from("poster_links").insert(sanitizeForPostgrest(rows));
   if (insertError) {
-    console.warn(`Supplemental source insert failed: ${insertError.message}`);
-    return false;
+    console.warn(`Supplemental link insert failed: ${insertError.message}`);
+    return 0;
   }
-
-  return true;
+  return rows.length;
 }
 
 function mergeDuplicateIssueIntoFieldVerification(verification = {}, issue) {
@@ -916,10 +1072,13 @@ async function uploadToSupabase(filePath) {
     }
 
     const sourceImages = normalizePostImages(post, sourceUrl);
+    const linkEntries = buildPosterLinkEntries(post, sourceUrl);
     const quality = evaluatePosterQuality({ ...post, images: sourceImages }, {
       sourceKey,
       images: sourceImages,
-      links: [sourceUrl].filter(Boolean),
+      links: linkEntries.map((link) => link.url),
+      linkEntries,
+      sourceUrl,
       extractedDeadline: post.deadline ?? null,
       contentMode: post.contentMode,
     });
@@ -936,7 +1095,7 @@ async function uploadToSupabase(filePath) {
       skip++;
       collectionStats.recordDuplicate(post);
       skippedSourceKeys.push(sourceKey);
-      await addSupplementalSourceLink(duplicateMatch.row.id, sourceUrl);
+      await addSupplementalPosterLinks(duplicateMatch.row.id, linkEntries);
       await assignPosterCategories(duplicateMatch.row.id, post, categoryMap);
       await assignPosterRegions(duplicateMatch.row.id, post, regionMap);
       process.stdout.write("=");
@@ -976,6 +1135,7 @@ async function uploadToSupabase(filePath) {
     let fieldVerification = mergeDateQualityIntoFieldVerification(fieldVerificationResult, finalDateQuality, {
       storedDeadline: finalDeadline,
     });
+    fieldVerification = mergeQualityIssuesIntoFieldVerification(fieldVerification, quality);
     if (duplicateMatch.decision === "review" && duplicateIssue) {
       fieldVerification = mergeDuplicateIssueIntoFieldVerification(fieldVerification, duplicateIssue);
     }
@@ -1062,7 +1222,7 @@ async function uploadToSupabase(filePath) {
       skip++;
       collectionStats.recordDuplicate(post);
       skippedSourceKeys.push(sourceKey);
-      await addSupplementalSourceLink(existingPoster.id, sourceUrl);
+      await addSupplementalPosterLinks(existingPoster.id, linkEntries);
       const updates = {};
       if (
         posterRecord.title !== "제목 없음" &&
@@ -1126,16 +1286,11 @@ async function uploadToSupabase(filePath) {
     const posterId = poster.id;
     await syncPosterImages(posterId, postWithStoredImages, sourceUrl);
 
-    // ── 2. poster_links 저장 (원본 URL) ─────────────────────
-    const { error: linkErr } = await supabase.from("poster_links").insert({
-      poster_id: posterId,
-      link_type: "official_notice",
-      url: sourceUrl,
-      title: "공식 공고 원문",
-      is_primary: true,
-    });
-    if (linkErr) {
-      console.warn(`\n  원문 링크 저장 실패: ${post.title} — ${linkErr.message}`);
+    // ── 2. poster_links 저장 (신청 URL + 원문 URL) ─────────────
+    try {
+      await insertPosterLinks(posterId, linkEntries);
+    } catch (linkErr) {
+      console.warn(`\n  링크 저장 실패: ${post.title} — ${linkErr.message}`);
     }
 
     // ── 3. poster_categories 저장 ───────────────────────────
