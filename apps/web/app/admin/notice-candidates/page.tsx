@@ -654,6 +654,12 @@ export default function AdminNoticeCandidatesPage() {
   const [lastConvertedPoster, setLastConvertedPoster] = useState<ConvertedPosterLink | null>(null);
   const [duplicateOnly, setDuplicateOnly] = useState(false);
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
+  const [comparePair, setComparePair] = useState<{
+    current: NoticeCandidate;
+    duplicate: NoticeCandidate | null;
+    issue: CandidateQualityIssue;
+  } | null>(null);
+  const [compareLoadingId, setCompareLoadingId] = useState<string | null>(null);
 
   const loadCandidates = async () => {
     setLoading(true);
@@ -682,6 +688,9 @@ export default function AdminNoticeCandidatesPage() {
   const summary = data?.summary;
   const duplicateCandidateCount = useMemo(() => {
     return (data?.candidates ?? []).filter((candidate) => getCandidateDuplicateIssues(candidate).length > 0).length;
+  }, [data?.candidates]);
+  const candidateMap = useMemo(() => {
+    return new Map((data?.candidates ?? []).map((candidate) => [candidate.id, candidate]));
   }, [data?.candidates]);
 
   const sortedCandidates = useMemo(() => {
@@ -721,11 +730,39 @@ export default function AdminNoticeCandidatesPage() {
     });
   };
 
-  const bulkDismissSelectedCandidates = async () => {
+  const loadCandidateById = async (candidateId: string) => {
+    const response = await fetch(`/api/admin/notice-candidates?id=${encodeURIComponent(candidateId)}&status=all`, { cache: "no-store" });
+    const payload = (await response.json()) as ApiPayload;
+    if (!response.ok) throw new Error(payload.error ?? "중복 후보를 불러오지 못했습니다.");
+    return payload.candidates?.[0] ?? null;
+  };
+
+  const openDuplicateCompare = async (candidate: NoticeCandidate, issue: CandidateQualityIssue) => {
+    if (!issue.duplicateCandidateId) {
+      if (issue.duplicatePosterId) {
+        window.open(`/admin/posters?posterId=${issue.duplicatePosterId}`, "_blank", "noopener,noreferrer");
+      }
+      return;
+    }
+
+    setCompareLoadingId(candidate.id);
+    try {
+      const duplicate = candidateMap.get(issue.duplicateCandidateId) ?? await loadCandidateById(issue.duplicateCandidateId);
+      setComparePair({ current: candidate, duplicate, issue });
+      if (!duplicate) toast.error("중복 후보를 찾지 못했습니다.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "중복 후보를 불러오지 못했습니다.");
+    } finally {
+      setCompareLoadingId(null);
+    }
+  };
+
+  const bulkUpdateSelectedCandidates = async (nextStatus: CandidateStatus) => {
     if (selectedVisibleCandidates.length === 0) return;
+    const label = statusLabel(nextStatus);
     const duplicateSelectedCount = selectedVisibleCandidates.filter((candidate) => getCandidateDuplicateIssues(candidate).length > 0).length;
     const confirmed = window.confirm([
-      `선택한 후보 ${selectedVisibleCandidates.length}건을 제외 처리할까요?`,
+      `선택한 후보 ${selectedVisibleCandidates.length}건을 ${label} 상태로 변경할까요?`,
       duplicateSelectedCount > 0 ? `중복 의심 후보 ${duplicateSelectedCount}건이 포함되어 있습니다.` : "",
     ].filter(Boolean).join("\n"));
     if (!confirmed) return;
@@ -736,19 +773,44 @@ export default function AdminNoticeCandidatesPage() {
         const response = await fetch("/api/admin/notice-candidates", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: candidate.id, candidate_status: "dismissed" }),
+          body: JSON.stringify({ id: candidate.id, candidate_status: nextStatus }),
         });
         if (!response.ok) {
           const payload = await response.json().catch(() => ({}));
-          throw new Error(payload.error ?? `${candidate.title} 제외 처리 실패`);
+          throw new Error(payload.error ?? `${candidate.title} ${label} 처리 실패`);
         }
         return candidate.id;
       }));
-      toast.success(`${results.length}건을 제외 처리했습니다.`);
+      toast.success(`${results.length}건을 ${label} 상태로 변경했습니다.`);
       setSelectedCandidateIds([]);
       await loadCandidates();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "선택 후보를 제외 처리하지 못했습니다.");
+      toast.error(err instanceof Error ? err.message : "선택 후보 상태를 변경하지 못했습니다.");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const bulkDeleteSelectedCandidates = async () => {
+    if (selectedVisibleCandidates.length === 0) return;
+    const confirmed = window.confirm(`선택한 후보 ${selectedVisibleCandidates.length}건을 완전히 삭제할까요?\n삭제 후 복구하기 어렵습니다.`);
+    if (!confirmed) return;
+
+    setUpdatingId("bulk");
+    try {
+      const results = await Promise.all(selectedVisibleCandidates.map(async (candidate) => {
+        const response = await fetch(`/api/admin/notice-candidates?id=${candidate.id}`, { method: "DELETE" });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload.error ?? `${candidate.title} 삭제 실패`);
+        }
+        return candidate.id;
+      }));
+      toast.success(`${results.length}건을 삭제했습니다.`);
+      setSelectedCandidateIds([]);
+      await loadCandidates();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "선택 후보를 삭제하지 못했습니다.");
     } finally {
       setUpdatingId(null);
     }
@@ -771,6 +833,11 @@ export default function AdminNoticeCandidatesPage() {
     } finally {
       setUpdatingId(null);
     }
+  };
+
+  const dismissCompareCandidate = async (candidate: NoticeCandidate) => {
+    setComparePair(null);
+    await updateStatus(candidate, "dismissed");
   };
 
   const startEditing = (candidate: NoticeCandidate) => {
@@ -1011,6 +1078,93 @@ export default function AdminNoticeCandidatesPage() {
     }
   };
 
+  const renderCompareCandidateCard = (
+    label: string,
+    candidate: NoticeCandidate | null,
+    actionLabel: string
+  ) => {
+    if (!candidate) {
+      return (
+        <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-5 text-sm font-bold text-gray-400 dark:border-slate-700 dark:bg-slate-950">
+          비교할 후보를 찾지 못했습니다. 이미 삭제되었거나 현재 필터에서 접근할 수 없는 항목일 수 있습니다.
+        </div>
+      );
+    }
+
+    const sourceUrl = candidate.source_url || candidate.source_key;
+    const isBusy = updatingId === candidate.id;
+
+    return (
+      <div className="flex min-h-full flex-col rounded-lg border border-gray-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-black text-gray-500 dark:bg-slate-800 dark:text-slate-300">
+            {label}
+          </span>
+          <span className={`rounded-full px-2.5 py-1 text-xs font-black ${statusTone(candidate.candidate_status)}`}>
+            {statusLabel(candidate.candidate_status)}
+          </span>
+          {candidate.category_name && (
+            <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-black text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-200">
+              {candidate.category_name}
+            </span>
+          )}
+        </div>
+
+        <h3 className="mt-4 text-lg font-black leading-snug text-gray-950 dark:text-white">{candidate.title}</h3>
+        <p className="mt-2 text-xs font-bold text-gray-400">
+          {candidate.source_org_name ?? "-"} · {candidate.collection_source_slug ?? candidate.source_site_id ?? "-"} · {formatDate(candidate.created_at)}
+        </p>
+
+        <div className="mt-4 grid gap-2 text-xs font-bold text-gray-500 sm:grid-cols-2">
+          <div className="rounded-lg bg-gray-50 p-3 dark:bg-slate-900">
+            <p className="font-black text-gray-400">공고일</p>
+            <p className="mt-1 text-gray-950 dark:text-white">{formatDate(candidate.notice_date)}</p>
+          </div>
+          <div className="rounded-lg bg-gray-50 p-3 dark:bg-slate-900">
+            <p className="font-black text-gray-400">마감일</p>
+            <p className="mt-1 text-gray-950 dark:text-white">{formatDate(candidate.application_end_at)}</p>
+          </div>
+        </div>
+
+        {(candidate.summary_short || candidate.summary_long) && (
+          <div className="mt-4 rounded-lg bg-gray-50 p-4 dark:bg-slate-900">
+            {candidate.summary_short && (
+              <p className="text-sm font-black leading-6 text-gray-700 dark:text-slate-200">{candidate.summary_short}</p>
+            )}
+            {candidate.summary_long && (
+              <p className="mt-2 line-clamp-6 whitespace-pre-wrap text-xs font-bold leading-5 text-gray-500 dark:text-slate-400">
+                {candidate.summary_long}
+              </p>
+            )}
+          </div>
+        )}
+
+        <div className="mt-auto flex flex-wrap justify-end gap-2 pt-5">
+          {sourceUrl && (
+            <a
+              href={sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-xs font-black text-gray-600 hover:bg-gray-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              <ExternalLink size={15} />
+              원문
+            </a>
+          )}
+          <button
+            type="button"
+            disabled={isBusy}
+            onClick={() => void dismissCompareCandidate(candidate)}
+            className="inline-flex h-10 items-center gap-2 rounded-lg bg-rose-50 px-3 text-xs font-black text-rose-700 hover:bg-rose-100 disabled:opacity-50 dark:bg-rose-500/10 dark:text-rose-100"
+          >
+            {isBusy ? <Loader2 size={15} className="animate-spin" /> : <XCircle size={15} />}
+            {actionLabel}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-8">
       <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -1137,11 +1291,38 @@ export default function AdminNoticeCandidatesPage() {
             <button
               type="button"
               disabled={selectedVisibleCandidates.length === 0 || updatingId === "bulk"}
-              onClick={bulkDismissSelectedCandidates}
+              onClick={() => bulkUpdateSelectedCandidates("drafting")}
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-indigo-50 px-4 text-xs font-black text-indigo-700 transition-colors hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-indigo-500/10 dark:text-indigo-100"
+            >
+              {updatingId === "bulk" ? <Loader2 size={15} className="animate-spin" /> : <Wand2 size={15} />}
+              선택 제작중
+            </button>
+            <button
+              type="button"
+              disabled={selectedVisibleCandidates.length === 0 || updatingId === "bulk"}
+              onClick={() => bulkUpdateSelectedCandidates("archived")}
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-gray-100 px-4 text-xs font-black text-gray-700 transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-slate-800 dark:text-slate-100"
+            >
+              {updatingId === "bulk" ? <Loader2 size={15} className="animate-spin" /> : <Archive size={15} />}
+              선택 보관
+            </button>
+            <button
+              type="button"
+              disabled={selectedVisibleCandidates.length === 0 || updatingId === "bulk"}
+              onClick={() => bulkUpdateSelectedCandidates("dismissed")}
               className="inline-flex h-10 items-center gap-2 rounded-lg bg-rose-50 px-4 text-xs font-black text-rose-700 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-rose-500/10 dark:text-rose-100"
             >
               {updatingId === "bulk" ? <Loader2 size={15} className="animate-spin" /> : <XCircle size={15} />}
               선택 제외
+            </button>
+            <button
+              type="button"
+              disabled={selectedVisibleCandidates.length === 0 || updatingId === "bulk"}
+              onClick={bulkDeleteSelectedCandidates}
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-rose-100 bg-white px-4 text-xs font-black text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-rose-500/20 dark:bg-slate-950 dark:text-rose-100 dark:hover:bg-rose-500/10"
+            >
+              {updatingId === "bulk" ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+              선택 삭제
             </button>
           </div>
         </section>
@@ -1158,6 +1339,7 @@ export default function AdminNoticeCandidatesPage() {
             const sourceUrl = activeCandidate.source_url || activeCandidate.source_key;
             const issues = candidate.quality_issues ?? [];
             const duplicateIssues = getCandidateDuplicateIssues(activeCandidate);
+            const duplicateCompareIssue = duplicateIssues.find((issue) => issue.duplicateCandidateId || issue.duplicatePosterId);
             const disabled = updatingId === "bulk" || updatingId === candidate.id;
             const isEditing = editingId === candidate.id && editDraft;
             const isConverted = candidate.candidate_status === "converted";
@@ -1207,6 +1389,17 @@ export default function AdminNoticeCandidatesPage() {
                           <AlertTriangle size={13} />
                           중복 의심 {duplicateIssues.length}
                         </span>
+                      )}
+                      {duplicateCompareIssue && (
+                        <button
+                          type="button"
+                          disabled={disabled || compareLoadingId === candidate.id}
+                          onClick={() => void openDuplicateCompare(activeCandidate, duplicateCompareIssue)}
+                          className="inline-flex items-center gap-1 rounded-full border border-rose-100 bg-white px-2.5 py-1 text-xs font-black text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-rose-500/20 dark:bg-slate-950 dark:text-rose-200 dark:hover:bg-rose-500/10"
+                        >
+                          {compareLoadingId === candidate.id ? <Loader2 size={13} className="animate-spin" /> : <ExternalLink size={13} />}
+                          중복 비교
+                        </button>
                       )}
                       {preflightProblems.length > 0 && (
                         <span
@@ -1505,7 +1698,7 @@ export default function AdminNoticeCandidatesPage() {
                         </p>
                         <div className="mt-3 space-y-2">
                           {duplicateIssues.slice(0, 5).map((issue, index) => (
-                            <div key={`${issue.code ?? "duplicate"}-${issue.duplicatePosterId ?? index}`} className="rounded-lg bg-white/80 p-3 text-xs font-bold leading-5 text-rose-900 dark:bg-slate-950/40 dark:text-rose-100">
+                            <div key={`${issue.code ?? "duplicate"}-${issue.duplicatePosterId ?? issue.duplicateCandidateId ?? index}`} className="rounded-lg bg-white/80 p-3 text-xs font-bold leading-5 text-rose-900 dark:bg-slate-950/40 dark:text-rose-100">
                               <p className="font-black">{getDuplicateIssueLabel(issue)}</p>
                               <p className="mt-1 opacity-80">{getDuplicateIssueDetail(issue)}</p>
                               {issue.duplicatePosterId && (
@@ -1518,13 +1711,15 @@ export default function AdminNoticeCandidatesPage() {
                                 </a>
                               )}
                               {!issue.duplicatePosterId && issue.duplicateCandidateId && (
-                                <a
-                                  href={`#candidate-${issue.duplicateCandidateId}`}
-                                  className="mt-2 inline-flex items-center gap-1 font-mono text-[11px] font-black text-rose-700 underline-offset-2 hover:underline dark:text-rose-200"
+                                <button
+                                  type="button"
+                                  disabled={disabled || compareLoadingId === candidate.id}
+                                  onClick={() => void openDuplicateCompare(activeCandidate, issue)}
+                                  className="mt-2 inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-1 text-[11px] font-black text-rose-800 transition-colors hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-rose-500/20 dark:text-rose-100"
                                 >
-                                  <ExternalLink size={12} />
-                                  기존 후보로 이동
-                                </a>
+                                  {compareLoadingId === candidate.id ? <Loader2 size={12} className="animate-spin" /> : <ExternalLink size={12} />}
+                                  후보 비교하기
+                                </button>
                               )}
                             </div>
                           ))}
@@ -1545,6 +1740,35 @@ export default function AdminNoticeCandidatesPage() {
         </section>
       ) : (
         <EmptyBlock text={duplicateOnly ? "중복 의심으로 표시된 후보가 없습니다." : "조건에 맞는 이미지 없는 공고 후보가 없습니다."} />
+      )}
+
+      {comparePair && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
+          <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-lg bg-white shadow-2xl dark:bg-slate-900">
+            <div className="flex items-start justify-between gap-4 border-b border-gray-100 p-5 dark:border-slate-800">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.24em] text-rose-500">Duplicate Compare</p>
+                <h2 className="mt-2 text-2xl font-black text-gray-950 dark:text-white">중복 후보 비교</h2>
+                <p className="mt-2 text-sm font-bold text-gray-500 dark:text-slate-300">
+                  {getDuplicateIssueLabel(comparePair.issue)} · {getDuplicateIssueDetail(comparePair.issue)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setComparePair(null)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
+                title="닫기"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="grid gap-4 p-5 lg:grid-cols-2">
+              {renderCompareCandidateCard("현재 후보", comparePair.current, "현재 후보 제외")}
+              {renderCompareCandidateCard("중복 후보", comparePair.duplicate, "중복 후보 제외")}
+            </div>
+          </div>
+        </div>
       )}
 
       {makerCandidate && makerDraft && (

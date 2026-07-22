@@ -140,6 +140,7 @@ export async function GET(request: NextRequest) {
 
   const status = request.nextUrl.searchParams.get("status") ?? "pending";
   const query = request.nextUrl.searchParams.get("q")?.trim();
+  const id = request.nextUrl.searchParams.get("id")?.trim();
   const admin = createAdminClient();
 
   let candidatesQuery = admin
@@ -148,7 +149,11 @@ export async function GET(request: NextRequest) {
     .order("created_at", { ascending: false })
     .limit(200);
 
-  if (status !== "all") candidatesQuery = candidatesQuery.eq("candidate_status", status);
+  if (id) {
+    candidatesQuery = candidatesQuery.eq("id", id);
+  } else if (status !== "all") {
+    candidatesQuery = candidatesQuery.eq("candidate_status", status);
+  }
   if (query) {
     candidatesQuery = candidatesQuery.or(
       `title.ilike.%${query}%,source_org_name.ilike.%${query}%,collection_source_slug.ilike.%${query}%`
