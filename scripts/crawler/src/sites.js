@@ -252,6 +252,17 @@ export const sites = [
     name: "구립마포청소년문화의집",
     domain: "https://www.mycc.or.kr",
     adapter: "generic-board",
+    selectors: {
+      detailRoot: "#sub-content-body",
+      detailTitle: ["table.AWbbs_view_table.border tr:first-child"],
+      detailContent: [".AWbbs_view_content"],
+      detailDate: ["table.AWbbs_view_table.border tr:nth-child(2)"],
+      detailImages: [".AWbbs_view_content img"],
+      detailAttachments: [
+        "table.AWbbs_view_table.border a[href*=download]",
+        "table.AWbbs_view_table.border a[href*=file]",
+      ],
+    },
     boards: [
       {
         name: "공지사항",

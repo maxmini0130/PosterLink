@@ -126,6 +126,16 @@ function compact(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
+function removeInvalidSurrogates(value) {
+  return String(value ?? "")
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, "")
+    .replace(/(^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "$1");
+}
+
+function safeSlice(value, maxLength) {
+  return Array.from(removeInvalidSurrogates(value)).slice(0, maxLength).join("");
+}
+
 function normalizeUrl(value) {
   return String(value ?? "").trim();
 }
@@ -152,7 +162,7 @@ function addIssue(issues, code, severity, reason, evidence = "", decision = "rev
     severity,
     decision,
     reason,
-    evidence: compact(evidence).slice(0, 240),
+    evidence: safeSlice(compact(evidence), 240),
   });
 }
 
@@ -177,7 +187,7 @@ function getVerification(input = {}) {
 }
 
 function getTextBundle(input, images, links) {
-  return compact([
+  return safeSlice(compact([
     input.title,
     input.source_org_name,
     input.org,
@@ -193,7 +203,7 @@ function getTextBundle(input, images, links) {
     input.thumbnail_url,
     ...images,
     ...links,
-  ].filter(Boolean).join(" ")).slice(0, 4000);
+  ].filter(Boolean).join(" ")), 4000);
 }
 
 function isCentralTextNotice(input, sourceKey, allText) {

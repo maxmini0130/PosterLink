@@ -8,6 +8,16 @@ function compact(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
+function removeInvalidSurrogates(value) {
+  return String(value ?? "")
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, "")
+    .replace(/(^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "$1");
+}
+
+function safeSlice(value, maxLength) {
+  return Array.from(removeInvalidSurrogates(value)).slice(0, maxLength).join("");
+}
+
 function textBundle(input = {}) {
   return [
     input.title,
@@ -131,7 +141,7 @@ function addIssue(issues, code, severity, reason, evidence = "") {
     severity,
     decision: "review",
     reason,
-    evidence: compact(evidence).slice(0, 240),
+    evidence: safeSlice(compact(evidence), 240),
   });
 }
 
@@ -283,7 +293,7 @@ export function mergeDateQualityIntoFieldVerification(verification = {}, dateQua
     deadlineMatches: false,
     confidence,
     decision: "needs_review",
-    reason: compact([verification.reason, dateReason].filter(Boolean).join(" | ")).slice(0, 800),
+    reason: safeSlice(compact([verification.reason, dateReason].filter(Boolean).join(" | ")), 800),
     dateIssues: issues,
     dateQuality: {
       decision: "review",

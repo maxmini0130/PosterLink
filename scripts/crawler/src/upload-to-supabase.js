@@ -83,6 +83,26 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
 const POSTER_IMAGE_BUCKET = process.env.POSTER_IMAGE_BUCKET?.trim() || "poster-originals";
 const POSTER_DUPLICATE_LOOKUP_LIMIT = Number(process.env.POSTER_DUPLICATE_LOOKUP_LIMIT ?? "5000");
 
+function removeInvalidSurrogates(value) {
+  return String(value ?? "")
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, "")
+    .replace(/(^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "$1");
+}
+
+function sanitizeForPostgrest(value) {
+  if (typeof value === "string") return removeInvalidSurrogates(value);
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (Array.isArray(value)) return value.map(sanitizeForPostgrest);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, item]) => item !== undefined)
+        .map(([key, item]) => [key, sanitizeForPostgrest(item)])
+    );
+  }
+  return value ?? null;
+}
+
 // 카테고리 코드 → DB UUID 매핑 (시작 시 한 번 로드)
 async function loadCategoryMap() {
   const { data, error } = await supabase.from("categories").select("id, code, name, sort_order");
@@ -888,7 +908,7 @@ async function uploadToSupabase(filePath) {
     const summaryLong = cleanSummaryText(postWithStoredImages.content) || null;
     const embedding = await embedPosterText({ title: post.title, summaryShort, summaryLong });
 
-    const posterRecord = {
+    const posterRecord = sanitizeForPostgrest({
       title: (post.title || "제목 없음").substring(0, 200),
       source_org_name: verifiedOrgName || null,
       summary_short: summaryShort,
@@ -902,7 +922,7 @@ async function uploadToSupabase(filePath) {
       thumbnail_url: storedImages[0] ?? null,
       field_verification: fieldVerification,
       embedding: embeddingToPgVector(embedding),
-    };
+    });
     if (isInvalidCrawlerTitle(posterRecord.title)) {
       fail++;
       collectionStats.recordRejected(post, "invalid_title");

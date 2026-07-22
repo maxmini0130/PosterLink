@@ -375,7 +375,7 @@ async function selectVerifiedPosterImage(fullPost, imageSelection) {
 
 // ── 메인 크롤 엔진 ───────────────────────────────
 export async function crawlSite(site, adapter, options = {}) {
-  const { maxPages = 3, dryRun = false } = options;
+  const { maxPages = 3, dryRun = false, ignoreSeen = false } = options;
   const siteMaxPages = site.maxPages ?? maxPages;
   const seen = await loadSeen();
   const allPosts = [];
@@ -400,7 +400,7 @@ export async function crawlSite(site, adapter, options = {}) {
         for (const post of posts) {
           updateLatestPostFoundAt(stats, post);
 
-          if (!dryRun && seen.has(post.url)) {
+          if (!dryRun && !ignoreSeen && seen.has(post.url)) {
             stats.skippedSeen += 1;
             rememberSkip(stats, "seen", post, "already crawled in seen_urls");
             logger.info(`  Skip (seen): ${post.title}`);

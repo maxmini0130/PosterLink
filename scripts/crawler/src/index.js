@@ -79,6 +79,7 @@ function mergeActiveCollectionSourceSites(staticSites, collectionSources) {
 async function main() {
   const args = process.argv.slice(2);
   const dryRun = args.includes("--dry-run");
+  const force = args.includes("--force");
   const listOnly = args.includes("--list");
   const siteIdx = args.indexOf("--site");
   const targetSite = siteIdx >= 0 ? args[siteIdx + 1] : null;
@@ -159,6 +160,7 @@ async function main() {
       const posts = await crawlSite(site, adapter, {
         maxPages: 2,
         dryRun,
+        ignoreSeen: force,
       });
       const siteStats = posts.crawlerStats ?? {};
       allResults.push(...posts);
