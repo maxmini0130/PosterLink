@@ -443,6 +443,18 @@ function normalizePostImages(post, sourceUrl) {
     .filter(Boolean))];
 }
 
+function isTextNoticePost(post, sourceImages = []) {
+  return sourceImages.length === 0
+    && !hasPosterImage(post)
+    && (post?.noticeOnly === true || post?.contentMode === "text_notice");
+}
+
+function toIsoOrNull(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
 function createQualityReportEntry(post, sourceUrl, quality) {
   return {
     title: post.title ?? null,
@@ -455,6 +467,72 @@ function createQualityReportEntry(post, sourceUrl, quality) {
     issues: quality.issues,
     images: post.images ?? [],
   };
+}
+
+async function upsertNoticeCandidate(post, {
+  sourceUrl,
+  sourceKey,
+  verifiedOrgName,
+  finalDeadline,
+  fieldVerification,
+  quality,
+}) {
+  const summaryShort = normalizeSummary(post);
+  const summaryLong = cleanSummaryText(post.content) || null;
+  const record = sanitizeForPostgrest({
+    source_key: sourceKey,
+    source_url: sourceUrl,
+    title: (post.title || "제목 없음").substring(0, 200),
+    source_org_name: verifiedOrgName || post.site || null,
+    summary_short: summaryShort,
+    summary_long: summaryLong,
+    candidate_status: "pending",
+    candidate_type: "text_notice",
+    source_site_id: post.siteId ?? null,
+    collection_source_slug: post.collectionSourceSlug ?? post.siteId ?? null,
+    board_name: post.board ?? null,
+    category_name: post.category ?? null,
+    notice_date: toIsoOrNull(post.date ?? post.createdAt ?? post.publishedAt),
+    application_end_at: finalDeadline ? toIsoOrNull(finalDeadline) : null,
+    reason: "poster image missing; stored as notice candidate",
+    quality_issues: quality?.issues ?? [],
+    field_verification: fieldVerification ?? {},
+    raw_payload: post,
+  });
+
+  const { data: existing, error: existingError } = await supabase
+    .from("poster_notice_candidates")
+    .select("id,candidate_status")
+    .eq("source_key", sourceKey)
+    .maybeSingle();
+
+  if (existingError) throw new Error(`notice_candidate_lookup:${existingError.message}`);
+
+  if (existing?.id) {
+    const updateRecord = { ...record };
+    delete updateRecord.source_key;
+    delete updateRecord.candidate_status;
+
+    const { error: updateError } = await supabase
+      .from("poster_notice_candidates")
+      .update(updateRecord)
+      .eq("id", existing.id);
+
+    if (updateError) throw new Error(`notice_candidate_update:${updateError.message}`);
+    return { created: false, id: existing.id };
+  }
+
+  const { data, error } = await supabase
+    .from("poster_notice_candidates")
+    .insert(record)
+    .select("id")
+    .single();
+
+  if (error || !data?.id) {
+    throw new Error(`notice_candidate_insert:${error?.message ?? "insert returned no row"}`);
+  }
+
+  return { created: true, id: data.id };
 }
 
 async function writeUploadQualityReport(inputFilePath, qualityReport) {
@@ -813,6 +891,8 @@ async function uploadToSupabase(filePath) {
   let success = 0;
   let skip = 0;
   let fail = 0;
+  let noticeCandidateSuccess = 0;
+  let noticeCandidateDuplicate = 0;
   const skippedSourceKeys = [];
   const qualityRejected = [];
   const qualityReview = [];
@@ -898,6 +978,37 @@ async function uploadToSupabase(filePath) {
     });
     if (duplicateMatch.decision === "review" && duplicateIssue) {
       fieldVerification = mergeDuplicateIssueIntoFieldVerification(fieldVerification, duplicateIssue);
+    }
+
+    if (isTextNoticePost(post, sourceImages)) {
+      try {
+        const candidateResult = await upsertNoticeCandidate(post, {
+          sourceUrl,
+          sourceKey,
+          verifiedOrgName,
+          finalDeadline,
+          fieldVerification,
+          quality,
+        });
+        if (candidateResult.created) {
+          success++;
+          noticeCandidateSuccess++;
+          collectionStats.recordCreated(post);
+          process.stdout.write("t");
+        } else {
+          skip++;
+          noticeCandidateDuplicate++;
+          collectionStats.recordDuplicate(post);
+          skippedSourceKeys.push(sourceKey);
+          process.stdout.write("~");
+        }
+      } catch (error) {
+        fail++;
+        collectionStats.recordFailed(post, error.message);
+        process.stdout.write("!");
+        console.error(`\n  Notice candidate save failed: ${post.title} — ${error.message}`);
+      }
+      continue;
     }
 
     const storedImages = await importPostImagesToStorage(post, sourceUrl, sourceKey);
@@ -1045,6 +1156,9 @@ async function uploadToSupabase(filePath) {
   console.log(`  실패: ${fail}건`);
   console.log(`  품질검증 자동차단: ${qualityRejected.length}건`);
   console.log(`  품질검증 확인필요: ${qualityReview.length}건`);
+
+  console.log(`  이미지 없는 공고 후보 신규: ${noticeCandidateSuccess}건`);
+  console.log(`  이미지 없는 공고 후보 중복: ${noticeCandidateDuplicate}건`);
 
   const qualityReportPath = await writeUploadQualityReport(filePath, {
     rejected: qualityRejected,
