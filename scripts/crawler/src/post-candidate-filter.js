@@ -195,6 +195,13 @@ const LOCAL_EMPLOYMENT_FALSE_POSITIVE_RULES = new Set([
 ]);
 const LOCAL_EMPLOYMENT_SOURCE_PATTERN = /(?:mapo-employ|mapoworkfare\.or\.kr|\uB9C8\uD3EC\uAD6C\uACE0\uC6A9\uBCF5\uC9C0\uC9C0\uC6D0\uC13C\uD130)/i;
 const LOCAL_EMPLOYMENT_RECRUIT_NOTICE_PATTERN = /(?:\uCC44\uC6A9\s*\uACF5\uACE0|\uCC44\uC6A9\uACF5\uACE0|\uBAA8\uC9D1\s*\uACF5\uACE0|\uBAA8\uC9D1\uACF5\uACE0|\uBC14\uB9AC\uC2A4\uD0C0.*\uBAA8\uC9D1|\uC0AC\uD68C\uBCF5\uC9C0\uC0AC.*\uCC44\uC6A9|\uB9E4\uB2C8\uC800.*\uCC44\uC6A9|\uACC4\uC57D\uC9C1.*\uCC44\uC6A9)/i;
+const LOCAL_SCHOLARSHIP_FALSE_POSITIVE_RULES = new Set([
+  "closure-or-operation-notice",
+  "facility-use-guide",
+]);
+const LOCAL_SCHOLARSHIP_SOURCE_PATTERN = /(?:mapo-scholarship|mapojh\.or\.kr|\uB9C8\uD3EC\uC778\uC7AC\uC721\uC131\uC7A5\uD559\uC7AC\uB2E8)/i;
+const LOCAL_SCHOLARSHIP_SELECTION_NOTICE_PATTERN = /(?:\uC7A5\uD559(?:\uC0DD|\uAE08)?).*(?:\uC120\uBC1C|\uBAA8\uC9D1|\uC811\uC218|\uC2E0\uCCAD|\uC9C0\uC6D0\s*\uB300\uC0C1)|(?:\uC120\uBC1C|\uBAA8\uC9D1|\uC811\uC218|\uC2E0\uCCAD|\uC9C0\uC6D0\s*\uB300\uC0C1).*(?:\uC7A5\uD559(?:\uC0DD|\uAE08)?)/i;
+const SCHOLARSHIP_RESULT_OR_CEREMONY_PATTERN = /\uACB0\uACFC|\uBC1C\uD45C|\uBA85\uB2E8|\uC218\uC5EC\uC2DD/i;
 
 function isCentralTextNoticeFalsePositive(post, matchedRule, text) {
   if (!CENTRAL_TEXT_NOTICE_FALSE_POSITIVE_RULES.has(matchedRule.name)) return false;
@@ -241,6 +248,22 @@ function isLocalEmploymentRecruitNoticeFalsePositive(post, matchedRule, text) {
     && LOCAL_EMPLOYMENT_RECRUIT_NOTICE_PATTERN.test(text);
 }
 
+function isLocalScholarshipSelectionNoticeFalsePositive(post, matchedRule, text) {
+  if (!LOCAL_SCHOLARSHIP_FALSE_POSITIVE_RULES.has(matchedRule.name)) return false;
+  if (SCHOLARSHIP_RESULT_OR_CEREMONY_PATTERN.test(text)) return false;
+
+  const sourceText = [
+    post.site,
+    post.siteId,
+    post.collectionSourceSlug,
+    post.sourceUrl,
+    post.url,
+  ].filter(Boolean).join(" ");
+
+  return LOCAL_SCHOLARSHIP_SOURCE_PATTERN.test(sourceText)
+    && LOCAL_SCHOLARSHIP_SELECTION_NOTICE_PATTERN.test(text);
+}
+
 export function getPostExclusionReason(post = {}) {
   const title = String(post.title ?? "").replace(/\s+/g, " ").trim();
   const text = [
@@ -262,6 +285,9 @@ export function getPostExclusionReason(post = {}) {
     return null;
   }
   if (isLocalEmploymentRecruitNoticeFalsePositive(post, matchedRule, `${title} ${text}`)) {
+    return null;
+  }
+  if (isLocalScholarshipSelectionNoticeFalsePositive(post, matchedRule, `${title} ${text}`)) {
     return null;
   }
   if (matchedRule.name === "application-guide" && COLLECTABLE_ANNOUNCEMENT_PATTERN.test(`${title} ${text}`)) {

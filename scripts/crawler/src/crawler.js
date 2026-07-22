@@ -126,6 +126,9 @@ const ALWAYS_OPEN_TEXT_PATTERN = /\uC0C1\uC2DC|\uC218\uC2DC|\uC5F0\uC911/i;
 const DEFAULT_MAX_POST_AGE_DAYS = 540;
 const CENTRAL_TEXT_NOTICE_SOURCE_PATTERN = /(?:k-startup|K-Startup|k-startup\.go\.kr|bizinfo|bizinfo\.go\.kr|youthcenter|youthcenter\.go\.kr|\uAE30\uC5C5\uB9C8\uB2F9|\uC628\uD1B5\uCCAD\uB144)/i;
 const CENTRAL_TEXT_NOTICE_SIGNAL_PATTERN = /(?:\uC2E0\uCCAD|\uC811\uC218)\s*\uAE30\uAC04|\uC2E0\uCCAD\s*\uBC29\uBC95|\uC8FC\uAD00\uAE30\uAD00|\uCC3D\uC5C5|\uC2A4\uD0C0\uD2B8\uC5C5|\uCC38\uAC00\uAE30\uC5C5|\uCC38\uC5EC\uAE30\uC5C5|\uCC3D\uC5C5\uAE30\uC5C5|\uC785\uC8FC\uAE30\uC5C5|\uC9C0\uC6D0\s*\uC0AC\uC5C5|\uC0AC\uC5C5\s*\uACF5\uACE0|\uC561\uC140\uB7EC\uB808\uC774\uD305|\uCEE8\uC124\uD305|\uD22C\uC790|\uBCF4\uC721\uC13C\uD130|\bIR\b/i;
+const LOCAL_SCHOLARSHIP_TEXT_NOTICE_SOURCE_PATTERN = /(?:mapo-scholarship|mapojh\.or\.kr|\uB9C8\uD3EC\uC778\uC7AC\uC721\uC131\uC7A5\uD559\uC7AC\uB2E8)/i;
+const LOCAL_SCHOLARSHIP_TEXT_NOTICE_SIGNAL_PATTERN = /(?:\uC7A5\uD559(?:\uC0DD|\uAE08)?).*(?:\uC120\uBC1C|\uBAA8\uC9D1|\uC811\uC218|\uC2E0\uCCAD|\uC9C0\uC6D0\s*\uB300\uC0C1)|(?:\uC120\uBC1C|\uBAA8\uC9D1|\uC811\uC218|\uC2E0\uCCAD|\uC9C0\uC6D0\s*\uB300\uC0C1).*(?:\uC7A5\uD559(?:\uC0DD|\uAE08)?)/i;
+const SCHOLARSHIP_RESULT_OR_CEREMONY_PATTERN = /\uACB0\uACFC|\uBC1C\uD45C|\uBA85\uB2E8|\uC218\uC5EC\uC2DD/i;
 
 function isCentralTextNotice(post, text) {
   const sourceText = [
@@ -140,6 +143,21 @@ function isCentralTextNotice(post, text) {
     && CENTRAL_TEXT_NOTICE_SIGNAL_PATTERN.test(text);
 }
 
+function isLocalScholarshipTextNotice(post, text) {
+  if (SCHOLARSHIP_RESULT_OR_CEREMONY_PATTERN.test(text)) return false;
+
+  const sourceText = [
+    post?.site,
+    post?.siteId,
+    post?.collectionSourceSlug,
+    post?.sourceUrl,
+    post?.url,
+  ].filter(Boolean).join(" ");
+
+  return LOCAL_SCHOLARSHIP_TEXT_NOTICE_SOURCE_PATTERN.test(sourceText)
+    && LOCAL_SCHOLARSHIP_TEXT_NOTICE_SIGNAL_PATTERN.test(text);
+}
+
 function isCollectableTextNotice(post) {
   if (!shouldCollectTextNotices()) return false;
   const title = String(post?.title ?? "").replace(/\s+/g, " ").trim();
@@ -148,11 +166,15 @@ function isCollectableTextNotice(post) {
     ? post.attachments.map((attachment) => attachment?.name).filter(Boolean).join(" ")
     : "";
   const text = `${title} ${content} ${attachmentText}`;
+  const localScholarshipText = isLocalScholarshipTextNotice(post, text);
 
   if (title.length < 8) return false;
   if (TEXT_NOTICE_NEGATIVE_PATTERN.test(text) && !isCentralTextNotice(post, text)) return false;
-  if (!TEXT_NOTICE_POSITIVE_PATTERN.test(text)) return false;
-  return content.length >= 40 || attachmentText.length >= 8 || TEXT_NOTICE_STRONG_TITLE_PATTERN.test(title);
+  if (!TEXT_NOTICE_POSITIVE_PATTERN.test(text) && !localScholarshipText) return false;
+  return content.length >= 40
+    || attachmentText.length >= 8
+    || TEXT_NOTICE_STRONG_TITLE_PATTERN.test(title)
+    || localScholarshipText;
 }
 
 function buildTextNoticePost(fullPost, reason, candidateChecks = []) {
@@ -196,6 +218,9 @@ function getStaleNoticeReason(post) {
   const years = [...text.matchAll(/(?:^|[^\d])(20\d{2})\s*\uB144/g)]
     .map((match) => Number(match[1]))
     .filter((year) => Number.isFinite(year));
+  if (years.length > 0 && isLocalScholarshipTextNotice(post, text) && Math.max(...years) < currentYear) {
+    return `scholarship notice year is stale (${Math.max(...years)})`;
+  }
   if (years.length > 0 && Math.max(...years) < currentYear - 1) {
     return `notice year is stale (${Math.max(...years)})`;
   }
