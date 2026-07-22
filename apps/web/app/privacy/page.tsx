@@ -78,7 +78,7 @@ export default function PrivacyPage() {
             <h2 className="text-lg font-black text-gray-900 mb-4">7. 개인정보 보호책임자</h2>
             <p>개인정보 관련 문의, 불만 처리, 피해 구제 등은 아래 연락처로 문의해주세요.</p>
             <div className="mt-3 p-4 bg-gray-50 rounded-2xl">
-              <p><strong>이메일:</strong> privacy@posterlink.co.kr</p>
+              <p><strong>이메일:</strong> privacy@posterlink.kr</p>
             </div>
           </section>
         </div>

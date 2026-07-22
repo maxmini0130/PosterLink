@@ -54,7 +54,7 @@ export function Header() {
         <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1 md:flex">
           <HeaderNavLink href="/posters" icon={<Search size={15} />} label="공고 찾기" />
           <HeaderNavLink href="/#organizations" icon={<ClipboardList size={15} />} label="기관 찾기" />
-          <HeaderNavLink href="/favorites" icon={<Heart size={15} />} label="관심 공고" />
+          <HeaderNavLink href="/favorites" icon={<Heart size={15} />} label="저장한 공고" />
           <HeaderNavLink href="/#about" icon={<ShieldCheck size={15} />} label="서비스 소개" />
         </nav>
 

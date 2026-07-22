@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { getAppOrigin } from "../../../lib/siteUrl";
@@ -190,6 +191,44 @@ function buildPosterStructuredData(poster: PosterDetailPoster, links: PosterDeta
     ...(imageUrls.length > 0 ? { image: imageUrls } : {}),
     ...(primaryLink?.url ? { sameAs: [primaryLink.url] } : {}),
     about: [poster.categoryName, poster.regionName].filter(Boolean),
+  };
+}
+
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+  const detail = await fetchPosterDetail(params.id);
+
+  if (!detail) {
+    return {
+      title: "공고를 찾을 수 없습니다",
+    };
+  }
+
+  const { poster, links } = detail;
+  const description = plainText(poster.summary_short || poster.summary_long).slice(0, 155) ||
+    `${poster.source_org_name || "공공기관"} 공고를 PosterLink에서 확인하세요.`;
+  const imageUrls = resolvePosterImageGallery(poster.images ?? [], poster.thumbnail_url, poster.source_key);
+  const primaryLink = links.find((link) => link.is_primary) || links[0] || null;
+
+  return {
+    title: `${poster.title} | ${poster.source_org_name || "공공 공고"}`,
+    description,
+    alternates: {
+      canonical: `/posters/${poster.id}`,
+    },
+    openGraph: {
+      title: `${poster.title} | ${poster.source_org_name || "공공 공고"} | PosterLink`,
+      description,
+      url: `/posters/${poster.id}`,
+      type: "article",
+      images: imageUrls.length > 0 ? imageUrls.map((url) => ({ url })) : undefined,
+    },
+    ...(primaryLink?.url
+      ? {
+          other: {
+            "posterlink:source_url": primaryLink.url,
+          },
+        }
+      : {}),
   };
 }
 

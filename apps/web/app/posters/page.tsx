@@ -191,10 +191,6 @@ function PosterListPageContent() {
         if (sortBy === "favorites") {
           return (b.favoriteCount ?? 0) - (a.favoriteCount ?? 0);
         }
-        if (sortBy === "clicks") {
-          return (b.linkClickCount ?? 0) - (a.linkClickCount ?? 0);
-        }
-
         return new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime();
       });
 
@@ -286,7 +282,7 @@ function PosterListPageContent() {
               <section className="mb-10">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                    <History size={14} /> Recent Searches
+                    <History size={14} /> 최근 검색어
                   </h3>
                   <button onClick={() => {setRecentSearches([]); localStorage.removeItem("recent_searches");}} className="text-xs font-bold text-gray-300 hover:text-rose-500">모두 삭제</button>
                 </div>
@@ -303,7 +299,7 @@ function PosterListPageContent() {
 
             <section>
               <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-4">
-                <TrendingUp size={14} /> Popular Keywords
+                <TrendingUp size={14} /> 인기 검색어
               </h3>
               <div className="flex flex-wrap gap-2">
                 {popularKeywords.map(k => (
@@ -352,7 +348,7 @@ function PosterListPageContent() {
                 <span className={`flex h-5 w-9 items-center rounded-full p-0.5 transition-colors ${hideClosedPosters ? "bg-blue-600" : "bg-gray-300"}`}>
                   <span className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${hideClosedPosters ? "translate-x-4" : ""}`} />
                 </span>
-                마감 제외
+                접수 중인 공고만 보기
              </button>
              </div>
           </div>
@@ -440,7 +436,7 @@ function PosterListPageContent() {
           {/* Sort & Result Count */}
           <div className="flex items-center justify-between border-b border-gray-50 pb-4">
              <span className="text-[11px] font-black text-gray-300 uppercase tracking-widest">
-               Total {posters.length} Results {hideClosedPosters ? "· 진행 중" : "· 전체"} {myMatchesOnly ? "· 내 맞춤" : ""}
+               총 {posters.length.toLocaleString()}건 {hideClosedPosters ? "· 접수 중" : "· 전체"} {myMatchesOnly ? "· 내 맞춤" : ""}
              </span>
 
              <div className="flex flex-wrap justify-end gap-3">
@@ -449,7 +445,6 @@ function PosterListPageContent() {
                <button onClick={() => setSortBy("popular")} className={`text-xs font-black transition-colors ${sortBy === 'popular' ? 'text-blue-600' : 'text-gray-300'}`}>인기</button>
                <button onClick={() => setSortBy("views")} className={`text-xs font-black transition-colors ${sortBy === 'views' ? 'text-blue-600' : 'text-gray-300'}`}>조회</button>
                <button onClick={() => setSortBy("favorites")} className={`text-xs font-black transition-colors ${sortBy === 'favorites' ? 'text-blue-600' : 'text-gray-300'}`}>찜</button>
-               <button onClick={() => setSortBy("clicks")} className={`text-xs font-black transition-colors ${sortBy === 'clicks' ? 'text-blue-600' : 'text-gray-300'}`}>클릭</button>
              </div>
           </div>
         </div>

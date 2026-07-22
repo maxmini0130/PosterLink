@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getDDay, isDeadlineSoon } from "@posterlink/lib";
-import { Building2, CalendarClock, Eye, Heart, MapPin, MousePointerClick } from "lucide-react";
+import { Building2, CalendarClock, Eye, Heart, MapPin } from "lucide-react";
 import { resolvePosterImageGallery } from "../../lib/posterImage";
 import { PosterImageCarousel } from "./PosterImageCarousel";
 
@@ -27,6 +27,8 @@ export function PosterCard({ poster }: PosterCardProps) {
   const tags = poster.tags ?? [];
   const [category, region] = tags;
   const imageUrls = resolvePosterImageGallery(poster.images ?? [], poster.image, poster.sourceUrl);
+  const showViewCount = (poster.viewCount ?? 0) >= 100;
+  const showFavoriteCount = (poster.favoriteCount ?? 0) >= 10;
 
   return (
     <Link href={`/posters/${poster.id}`} className="group block h-full">
@@ -87,20 +89,22 @@ export function PosterCard({ poster }: PosterCardProps) {
 
         <div className="mt-4 flex items-center justify-between border-t border-slate-100 px-4 py-3">
           <span className="text-xs font-black text-blue-700">상세보기</span>
-          <div className="flex items-center gap-2 text-[10px] font-black text-slate-500">
-            <span className="inline-flex items-center gap-1">
-              <Eye size={12} />
-              {compactNumber(poster.viewCount)}
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <Heart size={12} />
-              {compactNumber(poster.favoriteCount)}
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <MousePointerClick size={12} />
-              {compactNumber(poster.linkClickCount)}
-            </span>
-          </div>
+          {(showViewCount || showFavoriteCount) && (
+            <div className="flex items-center gap-2 text-[10px] font-black text-slate-500">
+              {showViewCount && (
+                <span className="inline-flex items-center gap-1">
+                  <Eye size={12} />
+                  {compactNumber(poster.viewCount)}
+                </span>
+              )}
+              {showFavoriteCount && (
+                <span className="inline-flex items-center gap-1">
+                  <Heart size={12} />
+                  {compactNumber(poster.favoriteCount)}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </article>
     </Link>
@@ -108,19 +112,23 @@ export function PosterCard({ poster }: PosterCardProps) {
 }
 
 function deadlineLabel(deadline: string | undefined, dDay: string) {
-  if (!deadline) return "상시 또는 기관 공지 확인";
+  if (!deadline) return "상시 모집";
   if (dDay === "마감") return "신청 마감";
   if (dDay === "D-Day") return "오늘 마감";
 
   const date = new Date(deadline);
-  if (Number.isNaN(date.getTime())) return dDay;
+  if (Number.isNaN(date.getTime())) return "기관 공고 확인";
 
-  const formatted = new Intl.DateTimeFormat("ko-KR", {
-    month: "long",
-    day: "numeric",
-  }).format(date);
+  const formatted = formatKoreanDate(date);
 
-  return `신청 마감 ${formatted} · ${dDay}`;
+  return `${formatted}까지 · ${dDay}`;
+}
+
+function formatKoreanDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}.${month}.${day}`;
 }
 
 function compactNumber(value?: number) {

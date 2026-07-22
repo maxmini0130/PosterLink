@@ -9,7 +9,7 @@ import { getAppOrigin } from "../lib/siteUrl";
 
 const appOrigin = getAppOrigin();
 const siteDescription =
-  "정부·지자체·공공기관의 청년지원, 소상공인 지원사업, 교육, 문화행사, 채용·모집 공고를 지역과 관심분야별로 찾아보세요.";
+  "청년 지원, 소상공인 지원, 교육, 문화행사, 채용·모집 등 흩어진 공공기관 공고를 지역과 관심분야별로 찾아보세요.";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -20,7 +20,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   applicationName: "PosterLink",
   title: {
-    default: "포스터링크 | 공공기관 지원사업·교육·행사·모집 공고",
+    default: "공공 공고·지원사업·교육·행사 검색 | PosterLink",
     template: "%s | PosterLink",
   },
   description: siteDescription,
@@ -51,13 +51,13 @@ export const metadata: Metadata = {
     locale: "ko_KR",
     siteName: "PosterLink",
     url: appOrigin,
-    title: "포스터링크 | 공공기관 지원사업·교육·행사·모집 공고",
+    title: "공공 공고·지원사업·교육·행사 검색 | PosterLink",
     description: siteDescription,
     images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "포스터링크 공공기관 공고 탐색" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "포스터링크 | 공공기관 공고 탐색",
+    title: "공공 공고·지원사업·교육·행사 검색 | PosterLink",
     description: siteDescription,
     images: ["/opengraph-image"],
   },

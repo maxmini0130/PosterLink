@@ -19,7 +19,7 @@ export function Footer() {
             <Link href="/privacy" className="text-xs font-bold text-gray-500 hover:text-gray-700 transition-colors">
               개인정보처리방침
             </Link>
-            <a href="mailto:contact@posterlink.co.kr" className="text-xs font-bold text-gray-400 hover:text-gray-700 transition-colors">
+            <a href="mailto:contact@posterlink.kr" className="text-xs font-bold text-gray-400 hover:text-gray-700 transition-colors">
               문의하기
             </a>
           </nav>

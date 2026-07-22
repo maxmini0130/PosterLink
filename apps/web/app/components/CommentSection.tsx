@@ -157,20 +157,23 @@ export function CommentSection({ posterId }: CommentSectionProps) {
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-2 rounded-2xl bg-gray-50 p-1.5">
-        {(["question", "review"] as CommentType[]).map((type) => (
-          <button
-            key={type}
-            type="button"
-            onClick={() => setSelectedType(type)}
-            className={`rounded-xl px-4 py-3 text-sm font-black transition-all ${
-              selectedType === type
-                ? COMMENT_TYPE_META[type].activeTabClass
-                : "text-gray-400 hover:text-gray-700"
-            }`}
-          >
-            {COMMENT_TYPE_META[type].label} {type === "question" ? questionCount : reviewCount}
-          </button>
-        ))}
+        {(["question", "review"] as CommentType[]).map((type) => {
+          const count = type === "question" ? questionCount : reviewCount;
+          return (
+            <button
+              key={type}
+              type="button"
+              onClick={() => setSelectedType(type)}
+              className={`rounded-xl px-4 py-3 text-sm font-black transition-all ${
+                selectedType === type
+                  ? COMMENT_TYPE_META[type].activeTabClass
+                  : "text-gray-400 hover:text-gray-700"
+              }`}
+            >
+              {COMMENT_TYPE_META[type].label}{count > 0 ? ` ${count}` : ""}
+            </button>
+          );
+        })}
       </div>
 
       {/* 삭제 확인 인라인 모달 */}

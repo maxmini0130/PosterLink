@@ -11,11 +11,11 @@ export function BottomNav() {
         </Link>
         <Link href="/posters" className="flex flex-col items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
           <Compass size={24} />
-          <span className="text-[10px] font-black">탐색</span>
+          <span className="text-[10px] font-black">공고 찾기</span>
         </Link>
         <Link href="/favorites" className="flex flex-col items-center gap-1 hover:text-rose-500 dark:hover:text-rose-400 transition-colors">
           <Heart size={24} />
-          <span className="text-[10px] font-black">찜</span>
+          <span className="text-[10px] font-black">저장</span>
         </Link>
         <Link href="/mypage" className="flex flex-col items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
           <User size={24} />

@@ -10,7 +10,7 @@ import { supabase } from "../../lib/supabase";
 import { fetchPosterMetricCounts, logPosterView } from "../../lib/posterMetrics";
 import { resolvePosterImageGallery } from "../../../lib/posterImage";
 import { Footer } from "../../components/Footer";
-import { ChevronLeft, ChevronRight, Eye, Heart, Link2, MousePointerClick, Share2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, Heart, Link2, Share2, X } from "lucide-react";
 
 export type PosterDetailPoster = {
   id: string;
@@ -23,6 +23,7 @@ export type PosterDetailPoster = {
   application_end_at: string | null;
   thumbnail_url: string | null;
   source_key: string | null;
+  published_at?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
   categoryId?: string | null;
@@ -79,6 +80,51 @@ function getPrimaryActionLink(links: PosterDetailLink[]) {
     links[0] ||
     null
   );
+}
+
+function parseDateTime(value?: string | null) {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
+function formatKoreanDate(value?: string | null) {
+  const time = parseDateTime(value);
+  if (time === null) return null;
+  const date = new Date(time);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}.${month}.${day}`;
+}
+
+function formatKoreanDateTime(value?: string | null) {
+  const time = parseDateTime(value);
+  if (time === null) return "확인 필요";
+  const date = new Date(time);
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${formatKoreanDate(value)} ${hours}:${minutes}`;
+}
+
+function formatApplicationPeriod(startAt?: string | null, endAt?: string | null) {
+  const startLabel = formatKoreanDate(startAt);
+  const endLabel = formatKoreanDate(endAt);
+  const hasInvalidDate = Boolean(startAt && !startLabel) || Boolean(endAt && !endLabel);
+
+  if (hasInvalidDate) return "기관 공고 확인";
+  if (startLabel && endLabel) return `${startLabel} ~ ${endLabel}까지`;
+  if (endLabel) return `${endLabel}까지`;
+  if (startLabel) return `${startLabel}부터 상시 모집`;
+  return "상시 모집";
+}
+
+function formatHostName(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
 }
 
 type SummaryLine = {
@@ -346,18 +392,15 @@ export function PosterDetailClient({
   poster,
   links,
   initialViewCount = 0,
-  initialLinkClickCount = 0,
   initialFavoriteCount = 0,
 }: {
   poster: PosterDetailPoster;
   links: PosterDetailLink[];
   initialViewCount?: number;
-  initialLinkClickCount?: number;
   initialFavoriteCount?: number;
 }) {
   const [isFavorited, setIsFavorited] = useState(false);
   const [viewCount, setViewCount] = useState(initialViewCount);
-  const [linkClickCount, setLinkClickCount] = useState(initialLinkClickCount);
   const [favoriteCount, setFavoriteCount] = useState(initialFavoriteCount);
   const [imageExpanded, setImageExpanded] = useState(false);
   const [expandedImageIndex, setExpandedImageIndex] = useState(0);
@@ -368,7 +411,6 @@ export function PosterDetailClient({
     void fetchPosterMetricCounts([poster.id]).then((metricCounts) => {
       if (cancelled) return;
       setViewCount(metricCounts.viewCounts[poster.id] ?? initialViewCount);
-      setLinkClickCount(metricCounts.linkClickCounts[poster.id] ?? initialLinkClickCount);
       setFavoriteCount(metricCounts.favoriteCounts[poster.id] ?? initialFavoriteCount);
     }).finally(() => {
       void logPosterView(poster.id).then((logged) => {
@@ -392,7 +434,7 @@ export function PosterDetailClient({
     return () => {
       cancelled = true;
     };
-  }, [initialFavoriteCount, initialLinkClickCount, initialViewCount, poster.id]);
+  }, [initialFavoriteCount, initialViewCount, poster.id]);
 
   const toggleFavorite = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -428,7 +470,6 @@ export function PosterDetailClient({
     });
 
     try {
-      setLinkClickCount((count) => count + 1);
       if (navigator.sendBeacon) {
         const blob = new Blob([body], { type: "application/json" });
         const queued = navigator.sendBeacon("/api/poster-link-clicks", blob);
@@ -446,18 +487,28 @@ export function PosterDetailClient({
     }
   };
 
-  const daysLeft = poster.application_end_at
-    ? Math.ceil((new Date(poster.application_end_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-    : null;
+  const deadlineTime = parseDateTime(poster.application_end_at);
+  const hasInvalidDeadline = Boolean(poster.application_end_at && deadlineTime === null);
+  const daysLeft = deadlineTime === null
+    ? null
+    : Math.ceil((deadlineTime - new Date().getTime()) / (1000 * 60 * 60 * 24));
 
   const imageUrls = resolvePosterImageGallery(poster.images ?? [], poster.thumbnail_url, poster.source_key);
   const primaryLink = getPrimaryActionLink(links);
+  const sourceLink = links.find((link) => link.link_type === "official_notice") || primaryLink;
   const primaryActionLabel = primaryLink ? getLinkActionLabel(primaryLink) : "공식 공고 확인";
   const referenceLinks = links.filter((link) => link.id !== primaryLink?.id);
   const summaryLines = formatSummaryLines(poster.summary_long || poster.summary_short);
-  const statusLabel = daysLeft === null ? "상시" : daysLeft < 0 ? "마감됨" : daysLeft === 0 ? "오늘 마감" : "신청 가능";
-  const statusClass = daysLeft === null
-    ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+  const applicationPeriodLabel = formatApplicationPeriod(poster.application_start_at, poster.application_end_at);
+  const lastCheckedLabel = formatKoreanDateTime(poster.updated_at || poster.created_at || poster.published_at);
+  const sourceHostLabel = sourceLink ? formatHostName(sourceLink.url) : null;
+  const showViewCount = viewCount >= 100;
+  const showFavoriteCount = favoriteCount >= 10;
+  const statusLabel = hasInvalidDeadline ? "기관 확인 필요" : daysLeft === null ? "상시 모집" : daysLeft < 0 ? "마감됨" : daysLeft === 0 ? "오늘 마감" : "신청 가능";
+  const statusClass = hasInvalidDeadline
+    ? "bg-amber-50 text-amber-700 border-amber-100"
+    : daysLeft === null
+      ? "bg-emerald-50 text-emerald-700 border-emerald-100"
     : daysLeft < 0
       ? "bg-slate-100 text-slate-500 border-slate-200"
       : daysLeft <= 3
@@ -515,20 +566,22 @@ export function PosterDetailClient({
               </span>
             )}
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <span className="inline-flex items-center gap-2 rounded-2xl bg-sky-50 px-3 py-2 text-xs font-black text-sky-600">
-              <Eye size={14} />
-              조회 {viewCount.toLocaleString()}
-            </span>
-            <span className="inline-flex items-center gap-2 rounded-2xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-600">
-              <Heart size={14} fill="currentColor" />
-              찜 {favoriteCount.toLocaleString()}
-            </span>
-            <span className="inline-flex items-center gap-2 rounded-2xl bg-amber-50 px-3 py-2 text-xs font-black text-amber-600">
-              <MousePointerClick size={14} />
-              공식 링크 클릭 {linkClickCount.toLocaleString()}
-            </span>
-          </div>
+          {(showViewCount || showFavoriteCount) && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {showViewCount && (
+                <span className="inline-flex items-center gap-2 rounded-2xl bg-sky-50 px-3 py-2 text-xs font-black text-sky-600">
+                  <Eye size={14} />
+                  조회 {viewCount.toLocaleString()}
+                </span>
+              )}
+              {showFavoriteCount && (
+                <span className="inline-flex items-center gap-2 rounded-2xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-600">
+                  <Heart size={14} fill="currentColor" />
+                  찜 {favoriteCount.toLocaleString()}
+                </span>
+              )}
+            </div>
+          )}
 
           <a
             href={primaryLink?.url || "#"}
@@ -556,7 +609,7 @@ export function PosterDetailClient({
             <li className="flex gap-4">
               <span className="text-gray-400 w-16 flex-shrink-0">신청기간</span>
               <span className="text-gray-900 font-bold">
-                {poster.application_end_at ? new Date(poster.application_end_at).toLocaleDateString() : "상시"} 까지
+                {applicationPeriodLabel}
               </span>
             </li>
             <li className="flex gap-4">
@@ -587,6 +640,37 @@ export function PosterDetailClient({
             정확한 신청 자격 및 절차는 아래 버튼을 눌러<br />공식 공고문을 반드시 확인해 주세요.
           </p>
         </div>
+
+        <section className="mb-10 rounded-2xl border border-gray-100 bg-white p-5">
+          <dl className="grid gap-4 text-xs sm:grid-cols-3">
+            <div>
+              <dt className="mb-1 font-black text-gray-400">원문 출처</dt>
+              <dd className="font-bold text-gray-900">
+                {sourceLink ? (
+                  <a
+                    href={sourceLink.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => void logOfficialLinkClick(sourceLink)}
+                    className="text-blue-600 underline-offset-4 hover:underline"
+                  >
+                    {poster.source_org_name || sourceHostLabel || "공식 원문"}
+                  </a>
+                ) : (
+                  "공식 링크 확인 필요"
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt className="mb-1 font-black text-gray-400">최종 확인</dt>
+              <dd className="font-bold text-gray-900">{lastCheckedLabel}</dd>
+            </div>
+            <div>
+              <dt className="mb-1 font-black text-gray-400">공고 상태</dt>
+              <dd className="font-bold text-gray-900">{statusLabel}</dd>
+            </div>
+          </dl>
+        </section>
 
         {referenceLinks.length > 0 && (
           <section className="mb-10">
