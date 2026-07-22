@@ -23,6 +23,7 @@ export type PosterDetailPoster = {
   application_end_at: string | null;
   thumbnail_url: string | null;
   source_key: string | null;
+  field_verification?: Record<string, any> | null;
   published_at?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -125,6 +126,36 @@ function formatHostName(url: string) {
   } catch {
     return null;
   }
+}
+
+function normalizeOrgDisplayValue(value: unknown) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function getOrganizationVerification(poster: PosterDetailPoster) {
+  const organization = poster.field_verification?.organization;
+  if (!organization || typeof organization !== "object") return null;
+
+  const sourceOrgName = normalizeOrgDisplayValue(organization.sourceOrgName);
+  const displayOrgName = normalizeOrgDisplayValue(organization.displayOrgName);
+  const organizerName = normalizeOrgDisplayValue(organization.organizerName);
+  const operatorName = normalizeOrgDisplayValue(organization.operatorName);
+  const boardName = normalizeOrgDisplayValue(organization.boardName);
+
+  if (!sourceOrgName && !displayOrgName && !organizerName && !operatorName && !boardName) return null;
+
+  return {
+    sourceOrgName,
+    displayOrgName,
+    organizerName,
+    operatorName,
+    boardName,
+    sourceDiffersFromOrganizer: Boolean(organization.sourceDiffersFromOrganizer),
+  };
+}
+
+function getPosterOrgDisplayName(poster: PosterDetailPoster) {
+  return getOrganizationVerification(poster)?.displayOrgName || poster.source_org_name || null;
 }
 
 type SummaryLine = {
@@ -502,6 +533,8 @@ export function PosterDetailClient({
   const applicationPeriodLabel = formatApplicationPeriod(poster.application_start_at, poster.application_end_at);
   const lastCheckedLabel = formatKoreanDateTime(poster.updated_at || poster.created_at || poster.published_at);
   const sourceHostLabel = sourceLink ? formatHostName(sourceLink.url) : null;
+  const organizationInfo = getOrganizationVerification(poster);
+  const displayOrgName = getPosterOrgDisplayName(poster);
   const showViewCount = viewCount >= 100;
   const showFavoriteCount = favoriteCount >= 10;
   const statusLabel = hasInvalidDeadline ? "기관 확인 필요" : daysLeft === null ? "상시 모집" : daysLeft < 0 ? "마감됨" : daysLeft === 0 ? "오늘 마감" : "신청 가능";
@@ -529,7 +562,7 @@ export function PosterDetailClient({
           <PosterImageCarousel
             images={imageUrls}
             title={poster.title}
-            org={poster.source_org_name}
+            org={displayOrgName}
             fallbackClassName="p-8"
             imgClassName="h-full w-full object-contain bg-gray-50"
             showControls
@@ -551,7 +584,7 @@ export function PosterDetailClient({
                 {daysLeft === 0 ? "D-Day" : `D-${daysLeft}`}
               </span>
             )}
-            <span className="text-sm text-gray-500 font-bold">{poster.source_org_name}</span>
+            <span className="text-sm text-gray-500 font-bold">{displayOrgName}</span>
           </div>
           <h1 className="text-2xl font-bold text-gray-900 leading-tight mb-4">{poster.title}</h1>
           <div className="flex flex-wrap gap-2">
@@ -566,6 +599,12 @@ export function PosterDetailClient({
               </span>
             )}
           </div>
+          {organizationInfo?.sourceDiffersFromOrganizer && organizationInfo.sourceOrgName && (
+            <p className="mt-3 text-xs font-bold text-gray-400">
+              수집 출처: {organizationInfo.sourceOrgName}
+              {organizationInfo.boardName ? ` · ${organizationInfo.boardName}` : ""}
+            </p>
+          )}
           {(showViewCount || showFavoriteCount) && (
             <div className="mt-4 flex flex-wrap gap-2">
               {showViewCount && (
@@ -642,7 +681,13 @@ export function PosterDetailClient({
         </div>
 
         <section className="mb-10 rounded-2xl border border-gray-100 bg-white p-5">
-          <dl className="grid gap-4 text-xs sm:grid-cols-3">
+          <dl className="grid gap-4 text-xs sm:grid-cols-4">
+            {displayOrgName && (
+              <div>
+                <dt className="mb-1 font-black text-gray-400">주최/주관</dt>
+                <dd className="font-bold text-gray-900">{displayOrgName}</dd>
+              </div>
+            )}
             <div>
               <dt className="mb-1 font-black text-gray-400">원문 출처</dt>
               <dd className="font-bold text-gray-900">
@@ -654,7 +699,7 @@ export function PosterDetailClient({
                     onClick={() => void logOfficialLinkClick(sourceLink)}
                     className="text-blue-600 underline-offset-4 hover:underline"
                   >
-                    {poster.source_org_name || sourceHostLabel || "공식 원문"}
+                    {organizationInfo?.sourceOrgName || sourceHostLabel || "공식 원문"}
                   </a>
                 ) : (
                   "공식 링크 확인 필요"

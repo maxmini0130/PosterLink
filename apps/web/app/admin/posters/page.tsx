@@ -81,6 +81,41 @@ function getQualityVerificationIssues(poster: any) {
   return Array.isArray(issues) ? issues : [];
 }
 
+function normalizeOrgDisplayValue(value: any) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function getOrganizationVerification(poster: any) {
+  const organization = poster?.field_verification?.organization;
+  if (!organization || typeof organization !== "object") return null;
+
+  const sourceOrgName = normalizeOrgDisplayValue(organization.sourceOrgName);
+  const displayOrgName = normalizeOrgDisplayValue(organization.displayOrgName);
+  const organizerName = normalizeOrgDisplayValue(organization.organizerName);
+  const hostName = normalizeOrgDisplayValue(organization.hostName);
+  const operatorName = normalizeOrgDisplayValue(organization.operatorName);
+  const boardName = normalizeOrgDisplayValue(organization.boardName);
+  const evidence = normalizeOrgDisplayValue(organization.evidence);
+
+  if (!sourceOrgName && !displayOrgName && !organizerName && !hostName && !operatorName && !boardName) return null;
+
+  return {
+    sourceOrgName,
+    displayOrgName,
+    organizerName,
+    hostName,
+    operatorName,
+    boardName,
+    evidence,
+    sourceDiffersFromOrganizer: Boolean(organization.sourceDiffersFromOrganizer),
+  };
+}
+
+function getPosterOrgDisplayName(poster: any) {
+  const organization = getOrganizationVerification(poster);
+  return organization?.displayOrgName || poster?.source_org_name || "기관 미상";
+}
+
 function getFieldVerificationWarningLabel(poster: any) {
   if (getDateVerificationIssues(poster).length > 0) return "\uB0A0\uC9DC \uAC80\uC99D \uD544\uC694";
   if (getDuplicateVerificationIssues(poster).length > 0) return "\uC911\uBCF5 \uAC80\uC99D \uD544\uC694";
@@ -784,6 +819,8 @@ export default function AdminPostersPage() {
           {posters.map((poster) => {
             const imageSrc = getPosterImageSrc(poster);
             const isTextNotice = isTextNoticePoster(poster);
+            const organizationInfo = getOrganizationVerification(poster);
+            const displayOrgName = getPosterOrgDisplayName(poster);
 
             return (
             <div
@@ -810,7 +847,7 @@ export default function AdminPostersPage() {
               <button
                 type="button"
                 onClick={() => {
-                  if (imageSrc) setImageLightbox({ src: imageSrc, title: poster.title, org: poster.source_org_name });
+                  if (imageSrc) setImageLightbox({ src: imageSrc, title: poster.title, org: displayOrgName });
                 }}
                 className={`group/img relative flex w-full flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-gray-100 bg-gray-50 aspect-[3/4] md:w-32 dark:border-slate-700 dark:bg-slate-800 ${
                   imageSrc ? "cursor-zoom-in" : "cursor-default"
@@ -821,7 +858,7 @@ export default function AdminPostersPage() {
                   src={imageSrc}
                   alt={poster.title}
                   title={poster.title}
-                  org={poster.source_org_name}
+                  org={displayOrgName}
                   fallbackClassName="p-4"
                   imgClassName="h-full w-full object-cover transition-transform duration-500 group-hover/img:scale-110"
                   iconSize={22}
@@ -863,10 +900,16 @@ export default function AdminPostersPage() {
                   {poster.title}
                 </h3>
                 <p className="flex items-center gap-2 text-sm font-bold text-gray-500 dark:text-slate-400">
-                  <span className="text-indigo-500">@{poster.source_org_name}</span>
+                  <span className="text-indigo-500">@{displayOrgName}</span>
                   <span className="h-1 w-1 rounded-full bg-gray-300" />
                   <span>{poster.regionName || "광역"}</span>
                 </p>
+                {organizationInfo?.sourceDiffersFromOrganizer && organizationInfo.sourceOrgName && (
+                  <p className="text-xs font-bold text-gray-400 dark:text-slate-500">
+                    수집 출처: {organizationInfo.sourceOrgName}
+                    {organizationInfo.boardName ? ` · ${organizationInfo.boardName}` : ""}
+                  </p>
+                )}
 
                 <div className="flex flex-wrap gap-2">
                   <span className="rounded-full border border-gray-100 bg-gray-50 px-3 py-1 text-[11px] font-black text-gray-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
@@ -1067,7 +1110,7 @@ export default function AdminPostersPage() {
               <div>
                 <p className="text-[11px] font-black uppercase tracking-wider text-indigo-500">Review Preview</p>
                 <h3 className="mt-1 text-xl font-black leading-tight text-gray-900 dark:text-white">{previewPoster.title}</h3>
-                <p className="mt-1 text-sm font-bold text-gray-400">{previewPoster.source_org_name || "기관 미상"}</p>
+                <p className="mt-1 text-sm font-bold text-gray-400">{getPosterOrgDisplayName(previewPoster)}</p>
               </div>
               <button
                 onClick={() => setPreviewPoster(null)}
@@ -1085,7 +1128,7 @@ export default function AdminPostersPage() {
                     src={previewImageSrc}
                     alt={previewPoster.title}
                     title={previewPoster.title}
-                    org={previewPoster.source_org_name}
+                    org={getPosterOrgDisplayName(previewPoster)}
                     fallbackClassName="p-6"
                     imgClassName="h-full w-full object-contain"
                     iconSize={40}
@@ -1119,6 +1162,56 @@ export default function AdminPostersPage() {
                     </span>
                   )}
                 </div>
+
+                {getOrganizationVerification(previewPoster) && (
+                  <div className="rounded-2xl border border-indigo-100 bg-indigo-50/70 p-4 dark:border-indigo-900 dark:bg-indigo-950/30">
+                    {(() => {
+                      const organizationInfo = getOrganizationVerification(previewPoster)!;
+                      return (
+                        <>
+                          <p className="mb-3 text-xs font-black text-indigo-600 dark:text-indigo-300">기관 정보</p>
+                          <dl className="grid gap-3 text-xs sm:grid-cols-2">
+                            {organizationInfo.displayOrgName && (
+                              <div>
+                                <dt className="font-black text-indigo-400">표시 기관</dt>
+                                <dd className="mt-1 font-bold text-gray-900 dark:text-white">{organizationInfo.displayOrgName}</dd>
+                              </div>
+                            )}
+                            {organizationInfo.sourceOrgName && (
+                              <div>
+                                <dt className="font-black text-indigo-400">수집 출처</dt>
+                                <dd className="mt-1 font-bold text-gray-900 dark:text-white">{organizationInfo.sourceOrgName}</dd>
+                              </div>
+                            )}
+                            {organizationInfo.organizerName && organizationInfo.organizerName !== organizationInfo.displayOrgName && (
+                              <div>
+                                <dt className="font-black text-indigo-400">주최/주관</dt>
+                                <dd className="mt-1 font-bold text-gray-900 dark:text-white">{organizationInfo.organizerName}</dd>
+                              </div>
+                            )}
+                            {organizationInfo.operatorName && (
+                              <div>
+                                <dt className="font-black text-indigo-400">게시/운영</dt>
+                                <dd className="mt-1 font-bold text-gray-900 dark:text-white">{organizationInfo.operatorName}</dd>
+                              </div>
+                            )}
+                            {organizationInfo.boardName && (
+                              <div>
+                                <dt className="font-black text-indigo-400">게시판</dt>
+                                <dd className="mt-1 font-bold text-gray-900 dark:text-white">{organizationInfo.boardName}</dd>
+                              </div>
+                            )}
+                          </dl>
+                          {organizationInfo.evidence && (
+                            <p className="mt-3 text-xs font-bold leading-5 text-indigo-700/80 dark:text-indigo-200/80">
+                              {organizationInfo.evidence}
+                            </p>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
 
                 <div className="grid gap-3 text-sm">
                   <div className="rounded-2xl border border-gray-100 p-4 dark:border-slate-800">

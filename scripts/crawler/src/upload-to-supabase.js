@@ -616,6 +616,72 @@ function mergeQualityIssuesIntoFieldVerification(verification = {}, quality = {}
   };
 }
 
+function normalizeOrgInfoText(value, maxLength = 200) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  return text ? text.slice(0, maxLength) : null;
+}
+
+function normalizeOrgCompare(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[()（）\[\]{}]/g, "")
+    .trim();
+}
+
+function enrichOrganizationVerification(verification = {}, post = {}, sourceUrl = null) {
+  const existing = verification?.organization && typeof verification.organization === "object"
+    ? verification.organization
+    : {};
+  const sourceOrgName = normalizeOrgInfoText(
+    existing.sourceOrgName ??
+    verification.sourceOrgName ??
+    post.site
+  );
+  const organizerName = normalizeOrgInfoText(
+    existing.organizerName ??
+    verification.organizerName ??
+    verification.correctedOrgName
+  );
+  const hostName = normalizeOrgInfoText(existing.hostName ?? verification.hostName);
+  const operatorName = normalizeOrgInfoText(existing.operatorName ?? verification.operatorName);
+  const displayOrgName = normalizeOrgInfoText(
+    existing.displayOrgName ??
+    verification.correctedOrgName ??
+    organizerName ??
+    hostName ??
+    sourceOrgName
+  );
+  const sourceDiffersFromOrganizer = Boolean(
+    sourceOrgName &&
+    displayOrgName &&
+    normalizeOrgCompare(sourceOrgName) !== normalizeOrgCompare(displayOrgName)
+  );
+
+  return {
+    ...verification,
+    sourceOrgName,
+    organizerName,
+    hostName,
+    operatorName,
+    organization: {
+      ...existing,
+      sourceOrgName,
+      organizerName,
+      hostName,
+      operatorName,
+      displayOrgName,
+      sourceDiffersFromOrganizer,
+      sourceOrgRole: normalizeOrgInfoText(existing.sourceOrgRole ?? verification.sourceOrgRole, 80),
+      evidence: normalizeOrgInfoText(existing.evidence ?? verification.organizationEvidence, 500),
+      confidence: Number(existing.confidence ?? verification.organizationConfidence ?? verification.confidence ?? 0),
+      boardName: normalizeOrgInfoText(post.board, 160),
+      collectionSourceSlug: normalizeOrgInfoText(post.collectionSourceSlug ?? post.siteId, 120),
+      sourceUrl,
+    },
+  };
+}
+
 async function upsertNoticeCandidate(post, {
   sourceUrl,
   sourceKey,
@@ -1119,14 +1185,14 @@ async function uploadToSupabase(filePath) {
       qualityReview.push(createQualityReportEntry({ ...post, images: sourceImages }, sourceUrl, quality));
     }
 
-    const fieldVerificationResult = await verifyPosterFields({
+    const fieldVerificationResult = enrichOrganizationVerification(await verifyPosterFields({
       title: post.title,
       content: post.content,
       site: post.site,
       sourceUrl,
       extractedDeadline: post.deadline ?? null,
       extractedOrgName: post.site ?? null,
-    });
+    }), post, sourceUrl);
     const { deadline: verifiedDeadline, orgName: verifiedOrgName } = applyFieldVerification(post, fieldVerificationResult);
     const finalDateQuality = evaluatePosterDateQuality(post, {
       extractedDeadline: verifiedDeadline ?? post.deadline ?? null,

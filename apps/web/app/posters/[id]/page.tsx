@@ -19,6 +19,7 @@ type PosterRow = {
   application_end_at: string | null;
   thumbnail_url: string | null;
   source_key: string | null;
+  field_verification: Record<string, any> | null;
   published_at: string | null;
   created_at: string | null;
   updated_at: string | null;
@@ -82,13 +83,26 @@ function plainText(value?: string | null) {
     .trim();
 }
 
+function normalizeOrgDisplayValue(value: unknown) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function getPosterDisplayOrgName(poster: Pick<PosterDetailPoster, "source_org_name" | "field_verification">) {
+  const organization = poster.field_verification?.organization;
+  if (organization && typeof organization === "object") {
+    const displayOrgName = normalizeOrgDisplayValue((organization as Record<string, any>).displayOrgName);
+    if (displayOrgName) return displayOrgName;
+  }
+  return poster.source_org_name || null;
+}
+
 async function fetchPosterDetail(id: string) {
   const supabase = createPosterServerClient();
 
   const [posterRes, categoryLinksRes, regionLinksRes, imageRes, linkRes] = await Promise.all([
     supabase
       .from("posters")
-      .select("id, title, source_org_name, summary_short, summary_long, poster_status, application_start_at, application_end_at, thumbnail_url, source_key, published_at, created_at, updated_at")
+      .select("id, title, source_org_name, summary_short, summary_long, poster_status, application_start_at, application_end_at, thumbnail_url, source_key, field_verification, published_at, created_at, updated_at")
       .eq("id", id)
       .maybeSingle(),
     supabase
@@ -170,6 +184,8 @@ function buildPosterStructuredData(poster: PosterDetailPoster, links: PosterDeta
   const primaryLink = links.find((link) => link.is_primary) || links[0] || null;
   const description = plainText(poster.summary_short || poster.summary_long).slice(0, 300);
 
+  const organizationName = getPosterDisplayOrgName(poster);
+
   return {
     "@context": "https://schema.org",
     "@type": "Article",
@@ -178,11 +194,11 @@ function buildPosterStructuredData(poster: PosterDetailPoster, links: PosterDeta
     url: pageUrl,
     mainEntityOfPage: pageUrl,
     inLanguage: "ko-KR",
-    ...(poster.source_org_name
+    ...(organizationName
       ? {
           publisher: {
             "@type": "Organization",
-            name: poster.source_org_name,
+            name: organizationName,
           },
         }
       : {}),
@@ -204,19 +220,20 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   }
 
   const { poster, links } = detail;
+  const organizationName = getPosterDisplayOrgName(poster);
   const description = plainText(poster.summary_short || poster.summary_long).slice(0, 155) ||
-    `${poster.source_org_name || "공공기관"} 공고를 PosterLink에서 확인하세요.`;
+    `${organizationName || "공공기관"} 공고를 PosterLink에서 확인하세요.`;
   const imageUrls = resolvePosterImageGallery(poster.images ?? [], poster.thumbnail_url, poster.source_key);
   const primaryLink = links.find((link) => link.is_primary) || links[0] || null;
 
   return {
-    title: `${poster.title} | ${poster.source_org_name || "공공 공고"}`,
+    title: `${poster.title} | ${organizationName || "공공 공고"}`,
     description,
     alternates: {
       canonical: `/posters/${poster.id}`,
     },
     openGraph: {
-      title: `${poster.title} | ${poster.source_org_name || "공공 공고"} | PosterLink`,
+      title: `${poster.title} | ${organizationName || "공공 공고"} | PosterLink`,
       description,
       url: `/posters/${poster.id}`,
       type: "article",
