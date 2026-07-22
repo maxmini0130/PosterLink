@@ -171,6 +171,141 @@ function getFieldVerificationWarningReason(poster: any) {
   return poster.field_verification?.reason || "AI가 마감일/기관명 불일치 가능성을 감지했습니다. 승인 전 원문을 확인하세요.";
 }
 
+type ApprovalCheckStatus = "pass" | "warning" | "block";
+type ApprovalCheck = {
+  key: string;
+  label: string;
+  status: ApprovalCheckStatus;
+  detail: string;
+};
+
+function isValidHttpUrl(value: any) {
+  try {
+    const url = new URL(String(value ?? ""));
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function createApprovalCheck(key: string, label: string, status: ApprovalCheckStatus, detail: string): ApprovalCheck {
+  return { key, label, status, detail };
+}
+
+function getApprovalChecklist(poster: any): ApprovalCheck[] {
+  const checks: ApprovalCheck[] = [];
+  const title = normalizeOrgDisplayValue(poster?.title);
+  const orgName = normalizeOrgDisplayValue(getPosterOrgDisplayName(poster));
+  const classification = getClassificationVerification(poster);
+  const categories = Array.isArray(classification?.categories) ? classification.categories : [];
+  const regions = Array.isArray(classification?.regions) ? classification.regions : [];
+  const primaryCategory = categories[0];
+  const primaryRegion = regions[0];
+  const dateIssues = getDateVerificationIssues(poster);
+  const duplicateIssues = getDuplicateVerificationIssues(poster);
+  const qualityIssues = getQualityVerificationIssues(poster);
+  const classificationIssues = getClassificationVerificationIssues(poster);
+  const imageSrc = getPosterImageSrc(poster);
+  const isTextNotice = isTextNoticePoster(poster);
+  const deadlineTime = poster?.application_end_at ? new Date(poster.application_end_at).getTime() : null;
+  const deadlineInvalid = Boolean(poster?.application_end_at && Number.isNaN(deadlineTime));
+  const deadlineExpired = typeof deadlineTime === "number" && !Number.isNaN(deadlineTime) && deadlineTime < Date.now();
+  const hasSummary = Boolean(normalizeOrgDisplayValue(poster?.summary_short || poster?.summary_long));
+
+  checks.push(createApprovalCheck(
+    "title",
+    "제목",
+    !title || title === "제목 없음" ? "block" : "pass",
+    title ? "제목이 있습니다." : "제목이 비어 있습니다."
+  ));
+  checks.push(createApprovalCheck(
+    "organization",
+    "기관",
+    orgName && !/기관\s*미상/.test(orgName) ? "pass" : "warning",
+    orgName && !/기관\s*미상/.test(orgName) ? `표시 기관: ${orgName}` : "표시 기관을 확인하세요."
+  ));
+  checks.push(createApprovalCheck(
+    "source",
+    "원문 URL",
+    isValidHttpUrl(poster?.source_key) ? "pass" : "block",
+    isValidHttpUrl(poster?.source_key) ? "원문 URL이 있습니다." : "원문 URL이 없거나 올바르지 않습니다."
+  ));
+  checks.push(createApprovalCheck(
+    "media",
+    "이미지/텍스트",
+    imageSrc ? "pass" : "warning",
+    imageSrc ? "포스터 이미지가 있습니다." : isTextNotice ? "이미지 없는 텍스트 공고입니다." : "대표 이미지가 없습니다."
+  ));
+  checks.push(createApprovalCheck(
+    "deadline",
+    "마감일",
+    deadlineInvalid || deadlineExpired || dateIssues.length > 0 ? "warning" : "pass",
+    deadlineInvalid
+      ? "마감일 형식 확인이 필요합니다."
+      : deadlineExpired
+        ? "이미 지난 마감일입니다."
+        : dateIssues.length > 0
+          ? "날짜 검증 이슈가 있습니다."
+          : poster?.application_end_at
+            ? "마감일이 있습니다."
+            : "상시 또는 마감일 미기재 공고입니다."
+  ));
+  checks.push(createApprovalCheck(
+    "category",
+    "분야",
+    !poster?.categoryName || poster.categoryName === "기타" || classificationIssues.some((issue: any) => /category/i.test(issue.code)) ? "warning" : "pass",
+    primaryCategory
+      ? `${primaryCategory.label ?? primaryCategory.code}${typeof primaryCategory.confidence === "number" ? ` · ${Math.round(primaryCategory.confidence * 100)}%` : ""}`
+      : poster?.categoryName || "분야 분류를 확인하세요."
+  ));
+  checks.push(createApprovalCheck(
+    "region",
+    "지역",
+    !poster?.regionName || classificationIssues.some((issue: any) => /region/i.test(issue.code)) ? "warning" : "pass",
+    primaryRegion
+      ? `${primaryRegion.code}${typeof primaryRegion.confidence === "number" ? ` · ${Math.round(primaryRegion.confidence * 100)}%` : ""}`
+      : poster?.regionName || "지역 분류를 확인하세요."
+  ));
+  checks.push(createApprovalCheck(
+    "summary",
+    "요약",
+    hasSummary ? "pass" : "warning",
+    hasSummary ? "요약이 있습니다." : "요약이 없어 상세 확인이 필요합니다."
+  ));
+
+  const reviewIssueCount = dateIssues.length + duplicateIssues.length + qualityIssues.length + classificationIssues.length;
+  checks.push(createApprovalCheck(
+    "verification",
+    "검증 이슈",
+    reviewIssueCount > 0 ? "warning" : "pass",
+    reviewIssueCount > 0 ? `확인 필요한 이슈 ${reviewIssueCount}건` : "추가 검증 이슈가 없습니다."
+  ));
+
+  return checks;
+}
+
+function getApprovalChecklistCounts(checks: ApprovalCheck[]) {
+  return checks.reduce((counts, check) => {
+    counts[check.status] += 1;
+    return counts;
+  }, { pass: 0, warning: 0, block: 0 } as Record<ApprovalCheckStatus, number>);
+}
+
+function getApprovalProblemChecks(poster: any) {
+  return getApprovalChecklist(poster).filter((check) => check.status !== "pass");
+}
+
+function formatApprovalCheckSummary(checks: ApprovalCheck[]) {
+  const counts = getApprovalChecklistCounts(checks);
+  return `통과 ${counts.pass} · 경고 ${counts.warning} · 차단 ${counts.block}`;
+}
+
+function getCheckToneClass(status: ApprovalCheckStatus) {
+  if (status === "block") return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200";
+  if (status === "warning") return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200";
+  return "border-emerald-100 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200";
+}
+
 export default function AdminPostersPage() {
   const [posters, setPosters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -338,7 +473,28 @@ export default function AdminPostersPage() {
       return;
     }
 
-    if (!confirm("승인하시겠습니까? 즉시 서비스에 반영됩니다.")) return;
+    const posterForApproval = previewPoster?.id === id
+      ? previewPoster
+      : posters.find((poster) => poster.id === id);
+    const approvalChecks = posterForApproval ? getApprovalChecklist(posterForApproval) : [];
+    const blockingChecks = approvalChecks.filter((check) => check.status === "block");
+    const warningChecks = approvalChecks.filter((check) => check.status === "warning");
+
+    if (blockingChecks.length > 0) {
+      toast.error(`승인 차단: ${blockingChecks.map((check) => check.label).join(", ")} 확인 필요`);
+      if (posterForApproval) setPreviewPoster(posterForApproval);
+      return;
+    }
+
+    const approvalMessage = [
+      "승인하시겠습니까? 즉시 서비스에 반영됩니다.",
+      approvalChecks.length > 0 ? `\n체크리스트: ${formatApprovalCheckSummary(approvalChecks)}` : "",
+      warningChecks.length > 0
+        ? `\n경고 항목:\n${warningChecks.slice(0, 5).map((check) => `- ${check.label}: ${check.detail}`).join("\n")}`
+        : "",
+    ].join("");
+
+    if (!confirm(approvalMessage)) return;
 
     const { data: { user } } = await supabase.auth.getUser();
     const { error } = await supabase
@@ -360,7 +516,15 @@ export default function AdminPostersPage() {
       target_type: "poster",
       target_id: id,
       action_type: "approve",
-      metadata_json: { status: newStatus },
+      metadata_json: {
+        status: newStatus,
+        approval_checklist: approvalChecks.map((check) => ({
+          key: check.key,
+          label: check.label,
+          status: check.status,
+          detail: check.detail,
+        })),
+      },
     });
 
     let pushSummary: string | null = null;
@@ -420,6 +584,7 @@ export default function AdminPostersPage() {
   const activeFilterCount = Object.values(appliedFilters).filter((value) => value.trim()).length;
   const previewImageSrc = previewPoster ? getPosterImageSrc(previewPoster) : null;
   const previewIsTextNotice = previewPoster ? isTextNoticePoster(previewPoster) : false;
+  const previewApprovalChecks = previewPoster ? getApprovalChecklist(previewPoster) : [];
 
   const applySearchFilters = () => {
     setPage(0);
@@ -442,10 +607,34 @@ export default function AdminPostersPage() {
 
   const handleBulkApprove = async () => {
     if (selectedCount === 0) return;
-    if (!confirm(`선택한 ${selectedCount}건을 승인하시겠습니까? 즉시 서비스에 반영됩니다.`)) return;
+    const selectedPosters = posters.filter((poster) => selectedIds.includes(poster.id));
+    const approvalResults = selectedPosters.map((poster) => ({
+      poster,
+      checks: getApprovalChecklist(poster),
+    }));
+    const blockedResults = approvalResults.filter((result) => result.checks.some((check) => check.status === "block"));
+    const eligibleResults = approvalResults.filter((result) => !result.checks.some((check) => check.status === "block"));
+    const warningCount = eligibleResults.reduce((sum, result) => sum + result.checks.filter((check) => check.status === "warning").length, 0);
+
+    if (eligibleResults.length === 0) {
+      toast.error("선택한 공고에 승인 가능한 항목이 없습니다. 차단 항목을 먼저 확인하세요.");
+      return;
+    }
+
+    const bulkMessage = [
+      `선택 ${selectedCount}건 중 ${eligibleResults.length}건을 승인하시겠습니까? 즉시 서비스에 반영됩니다.`,
+      blockedResults.length > 0 ? `\n차단으로 제외: ${blockedResults.length}건` : "",
+      warningCount > 0 ? `\n경고 항목: ${warningCount}건` : "",
+      blockedResults.length > 0
+        ? `\n제외 대상:\n${blockedResults.slice(0, 5).map((result) => `- ${result.poster.title}`).join("\n")}`
+        : "",
+    ].join("");
+
+    if (!confirm(bulkMessage)) return;
 
     setBulkProcessing(true);
     const { data: { user } } = await supabase.auth.getUser();
+    const eligibleIds = eligibleResults.map((result) => result.poster.id);
     const { error } = await supabase
       .from("posters")
       .update({
@@ -453,7 +642,7 @@ export default function AdminPostersPage() {
         published_at: new Date().toISOString(),
         rejection_reason: null,
       })
-      .in("id", selectedIds);
+      .in("id", eligibleIds);
 
     if (error) {
       toast.error(error.message);
@@ -461,16 +650,25 @@ export default function AdminPostersPage() {
       return;
     }
 
-    await supabase.from("admin_actions").insert(selectedIds.map((id) => ({
+    await supabase.from("admin_actions").insert(eligibleResults.map(({ poster, checks }) => ({
       actor_user_id: user?.id ?? null,
       target_type: "poster",
-      target_id: id,
+      target_id: poster.id,
       action_type: "approve",
-      metadata_json: { status: "published", bulk: true },
+      metadata_json: {
+        status: "published",
+        bulk: true,
+        approval_checklist: checks.map((check) => ({
+          key: check.key,
+          label: check.label,
+          status: check.status,
+          detail: check.detail,
+        })),
+      },
     })));
 
-    toast.success(`${selectedCount}건을 승인했습니다.`);
-    setSelectedIds([]);
+    toast.success(`${eligibleResults.length}건을 승인했습니다.${blockedResults.length > 0 ? ` ${blockedResults.length}건은 제외했습니다.` : ""}`);
+    setSelectedIds(blockedResults.map((result) => result.poster.id));
     setBulkProcessing(false);
     void fetchPosters(currentFilter, page, appliedFilters);
   };
@@ -841,6 +1039,8 @@ export default function AdminPostersPage() {
             const isTextNotice = isTextNoticePoster(poster);
             const organizationInfo = getOrganizationVerification(poster);
             const displayOrgName = getPosterOrgDisplayName(poster);
+            const approvalProblems = getApprovalProblemChecks(poster);
+            const approvalBlocked = approvalProblems.some((check) => check.status === "block");
 
             return (
             <div
@@ -949,6 +1149,18 @@ export default function AdminPostersPage() {
                       className="flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-black text-amber-600 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400"
                     >
                       <AlertTriangle size={12} /> {getFieldVerificationWarningLabel(poster)}
+                    </span>
+                  )}
+                  {approvalProblems.length > 0 && (
+                    <span
+                      title={approvalProblems.map((check) => `${check.label}: ${check.detail}`).join("\n")}
+                      className={`flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-black ${
+                        approvalBlocked
+                          ? "border-rose-200 bg-rose-50 text-rose-600 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300"
+                          : "border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300"
+                      }`}
+                    >
+                      <AlertTriangle size={12} /> 승인 체크 {approvalProblems.length}
                     </span>
                   )}
                 </div>
@@ -1181,6 +1393,29 @@ export default function AdminPostersPage() {
                       <FileText size={13} /> 텍스트 공고
                     </span>
                   )}
+                </div>
+
+                <div className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/40">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <p className="flex items-center gap-1.5 text-xs font-black text-gray-700 dark:text-slate-200">
+                      <CheckSquare size={13} />
+                      승인 전 체크리스트
+                    </p>
+                    <span className="text-[11px] font-black text-gray-400">
+                      {formatApprovalCheckSummary(previewApprovalChecks)}
+                    </span>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {previewApprovalChecks.map((check) => (
+                      <div
+                        key={check.key}
+                        className={`rounded-xl border px-3 py-2 ${getCheckToneClass(check.status)}`}
+                      >
+                        <p className="text-xs font-black">{check.label}</p>
+                        <p className="mt-1 text-[11px] font-bold leading-4 opacity-80">{check.detail}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 {getOrganizationVerification(previewPoster) && (
