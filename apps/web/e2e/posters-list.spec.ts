@@ -1,19 +1,20 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("포스터 목록 - 마감 토글", () => {
-  test("마감 제외 토글 존재", async ({ page }) => {
+const activeOnlyToggleName = "접수 중인 공고만 보기";
+
+test.describe("포스터 목록 - 접수 중 토글", () => {
+  test("접수 중 토글 존재", async ({ page }) => {
     await page.goto("/posters");
     await page.waitForLoadState("networkidle");
-    // role="switch" 또는 텍스트로 찾기
-    const toggle = page.locator('[role="switch"]:has-text("마감 제외"), button:has-text("마감 제외")').first();
+    const toggle = page.getByRole("switch", { name: activeOnlyToggleName });
     await expect(toggle).toBeVisible();
   });
 
-  test("마감 제외 토글 클릭 후 aria-checked 변경", async ({ page }) => {
+  test("접수 중 토글 클릭 후 aria-checked 변경", async ({ page }) => {
     await page.goto("/posters");
     await page.waitForLoadState("networkidle");
 
-    const toggle = page.locator('[role="switch"]:has-text("마감 제외"), button:has-text("마감 제외")').first();
+    const toggle = page.getByRole("switch", { name: activeOnlyToggleName });
     if (await toggle.count() === 0) { test.skip(); return; }
 
     const before = await toggle.getAttribute("aria-checked");
@@ -25,7 +26,7 @@ test.describe("포스터 목록 - 마감 토글", () => {
 });
 
 test.describe("포스터 목록 - 정렬", () => {
-  const sortButtons = ["최신", "마감임박", "인기", "조회", "찜", "클릭"];
+  const sortButtons = ["최신", "마감임박", "인기", "조회", "찜"];
 
   for (const name of sortButtons) {
     test(`정렬 버튼 표시: ${name}`, async ({ page }) => {
@@ -134,7 +135,7 @@ test.describe("메인 화면 - 포스터 카운트", () => {
     await page.goto("/");
     await page.waitForLoadState("networkidle");
 
-    const toggle = page.locator('[role="switch"]:has-text("마감 제외"), button:has-text("마감 제외")').first();
+    const toggle = page.getByRole("switch", { name: activeOnlyToggleName });
     if (await toggle.count() === 0) { test.skip(); return; }
 
     await toggle.click();

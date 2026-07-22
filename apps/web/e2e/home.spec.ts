@@ -10,7 +10,7 @@ test.describe("메인 화면", () => {
   test("포스터 목록 표시", async ({ page }) => {
     await page.goto("/posters");
     await page.waitForLoadState("networkidle");
-    await expect(page.locator("text=Explore")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "공공 공고 찾기" })).toBeVisible();
   });
 
   test("포스터 검색", async ({ page }) => {
