@@ -8,6 +8,7 @@ import {
   ExternalLink,
   FileText,
   ImageOff,
+  ImagePlus,
   Loader2,
   Pencil,
   RefreshCcw,
@@ -319,6 +320,39 @@ export default function AdminNoticeCandidatesPage() {
     }
   };
 
+  const convertCandidateWithImage = async (candidate: NoticeCandidate, file: File) => {
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      toast.error("jpg, png, webp 이미지만 업로드할 수 있습니다.");
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      toast.error("이미지는 8MB 이하만 업로드할 수 있습니다.");
+      return;
+    }
+
+    setUpdatingId(candidate.id);
+    try {
+      const formData = new FormData();
+      formData.append("id", candidate.id);
+      formData.append("image", file);
+
+      const response = await fetch("/api/admin/notice-candidates/convert", {
+        method: "POST",
+        body: formData,
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "포스터로 전환하지 못했습니다.");
+
+      toast.success("이미지를 붙여 포스터 검수 항목으로 전환했습니다.");
+      cancelEditing();
+      await loadCandidates();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "포스터로 전환하지 못했습니다.");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
   return (
     <div className="space-y-8">
       <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -393,6 +427,8 @@ export default function AdminNoticeCandidatesPage() {
             const issues = candidate.quality_issues ?? [];
             const disabled = updatingId === candidate.id;
             const isEditing = editingId === candidate.id && editDraft;
+            const isConverted = candidate.candidate_status === "converted";
+            const imageInputId = `notice-candidate-image-${candidate.id}`;
 
             return (
               <article
@@ -424,6 +460,17 @@ export default function AdminNoticeCandidatesPage() {
                   </div>
 
                   <div className="flex shrink-0 flex-wrap gap-2">
+                    <input
+                      id={imageInputId}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="sr-only"
+                      onChange={(event) => {
+                        const file = event.currentTarget.files?.[0];
+                        event.currentTarget.value = "";
+                        if (file) void convertCandidateWithImage(candidate, file);
+                      }}
+                    />
                     {sourceUrl && (
                       <a
                         href={sourceUrl}
@@ -444,6 +491,24 @@ export default function AdminNoticeCandidatesPage() {
                       {isEditing ? <X size={15} /> : <Pencil size={15} />}
                       {isEditing ? "닫기" : "편집"}
                     </button>
+                    <button
+                      type="button"
+                      disabled={disabled || isConverted}
+                      onClick={() => document.getElementById(imageInputId)?.click()}
+                      className="inline-flex h-10 items-center gap-2 rounded-lg bg-gray-950 px-3 text-xs font-black text-white hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-slate-200"
+                    >
+                      {disabled ? <Loader2 size={15} className="animate-spin" /> : <ImagePlus size={15} />}
+                      이미지 업로드
+                    </button>
+                    {candidate.generated_poster_id && (
+                      <a
+                        href="/admin/posters"
+                        className="inline-flex h-10 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-xs font-black text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200"
+                      >
+                        <CheckCircle2 size={15} />
+                        포스터 검수
+                      </a>
+                    )}
                     <button
                       type="button"
                       disabled={disabled}
