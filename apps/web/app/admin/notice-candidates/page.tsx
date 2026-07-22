@@ -648,6 +648,7 @@ export default function AdminNoticeCandidatesPage() {
   const [makerDraft, setMakerDraft] = useState<PosterMakerDraft | null>(null);
   const [makerBusy, setMakerBusy] = useState(false);
   const [lastConvertedPoster, setLastConvertedPoster] = useState<ConvertedPosterLink | null>(null);
+  const [duplicateOnly, setDuplicateOnly] = useState(false);
 
   const loadCandidates = async () => {
     setLoading(true);
@@ -674,15 +675,20 @@ export default function AdminNoticeCandidatesPage() {
   }, [status]);
 
   const summary = data?.summary;
+  const duplicateCandidateCount = useMemo(() => {
+    return (data?.candidates ?? []).filter((candidate) => getCandidateDuplicateIssues(candidate).length > 0).length;
+  }, [data?.candidates]);
 
   const sortedCandidates = useMemo(() => {
-    const candidates = data?.candidates ?? [];
+    const candidates = duplicateOnly
+      ? (data?.candidates ?? []).filter((candidate) => getCandidateDuplicateIssues(candidate).length > 0)
+      : data?.candidates ?? [];
     return [...candidates].sort((a, b) => {
       const statusWeight = Number(a.candidate_status === "pending") - Number(b.candidate_status === "pending");
       if (statusWeight !== 0) return -statusWeight;
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
-  }, [data?.candidates]);
+  }, [data?.candidates, duplicateOnly]);
   const activeMakerPalette = makerDraft ? getPalette(makerDraft.accent) : POSTER_PALETTES[0];
   const makerDisabled = makerBusy || Boolean(makerCandidate && updatingId === makerCandidate.id);
 
@@ -839,6 +845,17 @@ export default function AdminNoticeCandidatesPage() {
       toast.error("원문 URL을 확인해주세요.");
       return false;
     }
+    const duplicateIssues = getCandidateDuplicateIssues(candidate);
+    if (duplicateIssues.length > 0) {
+      const confirmed = window.confirm([
+        `이 후보는 기존 포스터와 중복 의심 ${duplicateIssues.length}건이 있습니다.`,
+        "",
+        duplicateIssues.slice(0, 3).map((issue) => `- ${getDuplicateIssueLabel(issue)}: ${getDuplicateIssueDetail(issue)}`).join("\n"),
+        "",
+        "그래도 포스터로 전환할까요?",
+      ].join("\n"));
+      if (!confirmed) return false;
+    }
 
     setUpdatingId(candidate.id);
     try {
@@ -963,6 +980,19 @@ export default function AdminNoticeCandidatesPage() {
           >
             {STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
+          <button
+            type="button"
+            aria-pressed={duplicateOnly}
+            onClick={() => setDuplicateOnly((value) => !value)}
+            className={`inline-flex h-10 items-center gap-2 rounded-lg border px-4 text-xs font-black shadow-sm transition-colors ${
+              duplicateOnly
+                ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-100"
+                : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+            }`}
+          >
+            <AlertTriangle size={15} />
+            중복 의심만 {formatNumber(duplicateCandidateCount)}
+          </button>
           <button
             type="button"
             onClick={loadCandidates}
@@ -1402,7 +1432,7 @@ export default function AdminNoticeCandidatesPage() {
           })}
         </section>
       ) : (
-        <EmptyBlock text="조건에 맞는 이미지 없는 공고 후보가 없습니다." />
+        <EmptyBlock text={duplicateOnly ? "중복 의심으로 표시된 후보가 없습니다." : "조건에 맞는 이미지 없는 공고 후보가 없습니다."} />
       )}
 
       {makerCandidate && makerDraft && (
