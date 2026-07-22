@@ -8,6 +8,7 @@ import youthSeoul from "./youth-seoul.js";
 import youthcenter from "./youthcenter.js";
 import maposcYeyak from "./maposc-yeyak.js";
 import mfac from "./mfac.js";
+import bizinfo from "./bizinfo.js";
 import kStartup from "./k-startup.js";
 import jobAlio from "./job-alio.js";
 import kesco from "./kesco.js";
@@ -26,6 +27,7 @@ const adapters = {
   "maposc-yeyak": maposcYeyak,
   "mfac": mfac,
   "youthcenter": youthcenter,
+  "bizinfo": bizinfo,
   "k-startup": kStartup,
   "job-alio": jobAlio,
   "kesco": kesco,
