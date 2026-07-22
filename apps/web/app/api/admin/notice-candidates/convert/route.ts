@@ -96,6 +96,21 @@ function normalizeOptionalText(value: FormDataEntryValue | null, limit: number) 
   return normalized ? normalized.slice(0, limit) : null;
 }
 
+function normalizeOptionalLongText(value: FormDataEntryValue | null, limit: number) {
+  if (typeof value !== "string") return null;
+  const normalized = value.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  return normalized ? normalized.slice(0, limit) : null;
+}
+
+function normalizeOptionalDate(value: FormDataEntryValue | null, fieldName: string) {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const date = new Date(trimmed);
+  if (Number.isNaN(date.getTime())) throw new HttpError(`invalid ${fieldName}`, 400);
+  return date.toISOString();
+}
+
 function compactText(value: unknown) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
@@ -235,8 +250,17 @@ export async function POST(request: NextRequest) {
     const image = formData.get("image");
     const titleOverride = normalizeOptionalText(formData.get("title"), 300);
     const orgOverride = normalizeOptionalText(formData.get("source_org_name"), 200);
+    const sourceUrlOverride = formData.has("source_url") ? normalizeOptionalText(formData.get("source_url"), 2000) : undefined;
     const summaryOverride = normalizeOptionalText(formData.get("summary_short"), 1000);
+    const summaryLongOverride = formData.has("summary_long") ? normalizeOptionalLongText(formData.get("summary_long"), 8000) : undefined;
     const categoryNameOverride = normalizeOptionalText(formData.get("category_name"), 100);
+    const noticeDateOverride = formData.has("notice_date") ? normalizeOptionalDate(formData.get("notice_date"), "notice_date") : undefined;
+    const applicationStartOverride = formData.has("application_start_at")
+      ? normalizeOptionalDate(formData.get("application_start_at"), "application_start_at")
+      : undefined;
+    const applicationEndOverride = formData.has("application_end_at")
+      ? normalizeOptionalDate(formData.get("application_end_at"), "application_end_at")
+      : undefined;
     const imageSourceInput = normalizeOptionalText(formData.get("image_source"), 50);
     const imageSource = imageSourceInput && IMAGE_SOURCE_VALUES.has(imageSourceInput)
       ? imageSourceInput
@@ -269,7 +293,12 @@ export async function POST(request: NextRequest) {
     const title = titleOverride ?? String(candidate.title ?? "").replace(/\s+/g, " ").trim();
     const sourceOrgName = orgOverride ?? candidate.source_org_name ?? candidate.collection_source_slug ?? null;
     const summaryShort = summaryOverride ?? candidate.summary_short ?? null;
+    const summaryLong = summaryLongOverride !== undefined ? summaryLongOverride : candidate.summary_long ?? null;
     const categoryName = categoryNameOverride ?? candidate.category_name ?? null;
+    const noticeDate = noticeDateOverride !== undefined ? noticeDateOverride : candidate.notice_date ?? null;
+    const applicationStartAt = applicationStartOverride !== undefined ? applicationStartOverride : candidate.application_start_at ?? null;
+    const applicationEndAt = applicationEndOverride !== undefined ? applicationEndOverride : candidate.application_end_at ?? null;
+    const candidateSourceUrl = sourceUrlOverride !== undefined ? sourceUrlOverride : candidate.source_url ?? null;
     if (!title) throw new HttpError("후보 제목이 비어 있습니다.", 400);
 
     const { data: existingPoster, error: existingPosterError } = await admin
@@ -298,7 +327,7 @@ export async function POST(request: NextRequest) {
     } = admin.storage.from(POSTER_IMAGE_BUCKET).getPublicUrl(uploadedStoragePath);
 
     const convertedAt = new Date().toISOString();
-    const sourceUrl = normalizeHttpUrl(candidate.source_url) ?? normalizeHttpUrl(candidate.source_key);
+    const sourceUrl = normalizeHttpUrl(candidateSourceUrl) ?? normalizeHttpUrl(candidate.source_key);
     const fieldVerification = {
       ...asPlainObject(candidate.field_verification),
       imageSource,
@@ -322,10 +351,10 @@ export async function POST(request: NextRequest) {
         title,
         source_org_name: sourceOrgName,
         summary_short: summaryShort,
-        summary_long: candidate.summary_long ?? null,
+        summary_long: summaryLong,
         poster_status: "review",
-        application_start_at: candidate.application_start_at ?? null,
-        application_end_at: candidate.application_end_at ?? null,
+        application_start_at: applicationStartAt,
+        application_end_at: applicationEndAt,
         created_by: user.id,
         thumbnail_url: publicUrl,
         source_key: candidate.source_key,
@@ -381,7 +410,15 @@ export async function POST(request: NextRequest) {
       .from("poster_notice_candidates")
       .update({
         candidate_status: "converted",
+        title,
+        source_org_name: sourceOrgName,
+        source_url: candidateSourceUrl,
+        summary_short: summaryShort,
+        summary_long: summaryLong,
         category_name: categoryName,
+        notice_date: noticeDate,
+        application_start_at: applicationStartAt,
+        application_end_at: applicationEndAt,
         generated_poster_id: poster.id,
         reviewed_by: user.id,
         reviewed_at: convertedAt,
@@ -403,6 +440,7 @@ export async function POST(request: NextRequest) {
         action: "convert_to_review_poster",
         poster_id: poster.id,
         source_key: candidate.source_key,
+        source_url: candidateSourceUrl,
         image_source: imageSource,
         image_storage_path: uploadedStoragePath,
         assigned_category_codes: taxonomy.assignedCategoryCodes,

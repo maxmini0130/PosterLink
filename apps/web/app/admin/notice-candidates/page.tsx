@@ -92,10 +92,15 @@ type PosterMakerDraft = {
 };
 
 type ConvertCandidateOverrides = {
-  title?: string;
-  source_org_name?: string;
-  summary_short?: string;
-  category_name?: string;
+  title?: string | null;
+  source_org_name?: string | null;
+  source_url?: string | null;
+  category_name?: string | null;
+  notice_date?: string | null;
+  application_start_at?: string | null;
+  application_end_at?: string | null;
+  summary_short?: string | null;
+  summary_long?: string | null;
   image_source?: "admin_upload" | "template_canvas";
 };
 
@@ -214,6 +219,23 @@ function buildPosterMakerDraft(candidate: NoticeCandidate): PosterMakerDraft {
     period_text: buildDefaultPeriodText(candidate),
     summary: normalizePosterText(candidate.summary_short ?? candidate.summary_long, "자세한 내용은 원문 공고를 확인하세요."),
     accent: DEFAULT_ACCENT,
+  };
+}
+
+function applyEditDraftToCandidate(candidate: NoticeCandidate, draft: EditDraft | null): NoticeCandidate {
+  if (!draft) return candidate;
+  return {
+    ...candidate,
+    title: draft.title,
+    source_org_name: draft.source_org_name,
+    source_url: draft.source_url || null,
+    category_name: draft.category_name || null,
+    notice_date: dateTimeLocalToIso(draft.notice_date) || null,
+    application_start_at: dateTimeLocalToIso(draft.application_start_at) || null,
+    application_end_at: dateTimeLocalToIso(draft.application_end_at) || null,
+    summary_short: draft.summary_short || null,
+    summary_long: draft.summary_long || null,
+    admin_note: draft.admin_note || null,
   };
 }
 
@@ -570,9 +592,33 @@ export default function AdminNoticeCandidatesPage() {
     }
   };
 
+  const getActiveCandidate = (candidate: NoticeCandidate) => {
+    return editingId === candidate.id ? applyEditDraftToCandidate(candidate, editDraft) : candidate;
+  };
+
+  const getActiveCandidateOverrides = (candidate: NoticeCandidate): ConvertCandidateOverrides => {
+    const activeCandidate = getActiveCandidate(candidate);
+    return {
+      title: activeCandidate.title,
+      source_org_name: activeCandidate.source_org_name,
+      source_url: activeCandidate.source_url ?? activeCandidate.source_key,
+      category_name: activeCandidate.category_name,
+      notice_date: activeCandidate.notice_date,
+      application_start_at: activeCandidate.application_start_at,
+      application_end_at: activeCandidate.application_end_at,
+      summary_short: activeCandidate.summary_short,
+      summary_long: activeCandidate.summary_long,
+    };
+  };
+
   const openPosterMaker = (candidate: NoticeCandidate) => {
-    setMakerCandidate(candidate);
-    setMakerDraft(buildPosterMakerDraft(candidate));
+    const activeCandidate = getActiveCandidate(candidate);
+    if (!activeCandidate.title.trim()) {
+      toast.error("포스터 제목을 입력해주세요.");
+      return;
+    }
+    setMakerCandidate(activeCandidate);
+    setMakerDraft(buildPosterMakerDraft(activeCandidate));
   };
 
   const closePosterMaker = () => {
@@ -598,16 +644,33 @@ export default function AdminNoticeCandidatesPage() {
       toast.error("이미지는 8MB 이하만 업로드할 수 있습니다.");
       return false;
     }
+    const effectiveTitle = normalizePosterText(
+      overrides && Object.prototype.hasOwnProperty.call(overrides, "title") ? overrides.title : candidate.title
+    );
+    if (!effectiveTitle) {
+      toast.error("포스터 제목을 입력해주세요.");
+      return false;
+    }
 
     setUpdatingId(candidate.id);
     try {
       const formData = new FormData();
       formData.append("id", candidate.id);
       formData.append("image", file);
-      if (overrides?.title) formData.append("title", overrides.title);
-      if (overrides?.source_org_name) formData.append("source_org_name", overrides.source_org_name);
-      if (overrides?.summary_short) formData.append("summary_short", overrides.summary_short);
-      if (overrides?.category_name) formData.append("category_name", overrides.category_name);
+      const appendOverride = (field: keyof ConvertCandidateOverrides) => {
+        if (!overrides || !Object.prototype.hasOwnProperty.call(overrides, field)) return;
+        const value = overrides[field];
+        if (value !== undefined) formData.append(field, value ?? "");
+      };
+      appendOverride("title");
+      appendOverride("source_org_name");
+      appendOverride("source_url");
+      appendOverride("category_name");
+      appendOverride("notice_date");
+      appendOverride("application_start_at");
+      appendOverride("application_end_at");
+      appendOverride("summary_short");
+      appendOverride("summary_long");
       if (overrides?.image_source) formData.append("image_source", overrides.image_source);
 
       const response = await fetch("/api/admin/notice-candidates/convert", {
@@ -640,9 +703,11 @@ export default function AdminNoticeCandidatesPage() {
     try {
       const file = await generateTemplatePosterFile(makerDraft);
       const converted = await convertCandidateWithImage(makerCandidate, file, {
+        ...getActiveCandidateOverrides(makerCandidate),
         title: makerDraft.title,
         source_org_name: makerDraft.source_org_name,
         summary_short: makerDraft.summary,
+        summary_long: makerCandidate.summary_long,
         category_name: makerDraft.category_name,
         image_source: "template_canvas",
       });
@@ -787,7 +852,7 @@ export default function AdminNoticeCandidatesPage() {
                       onChange={(event) => {
                         const file = event.currentTarget.files?.[0];
                         event.currentTarget.value = "";
-                        if (file) void convertCandidateWithImage(candidate, file);
+                        if (file) void convertCandidateWithImage(candidate, file, getActiveCandidateOverrides(candidate));
                       }}
                     />
                     {sourceUrl && (
