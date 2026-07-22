@@ -4,6 +4,31 @@ import { createSupabaseServerClient } from "../../../../lib/supabase-server";
 
 const ADMIN_ROLES = new Set(["admin", "super_admin"]);
 const STATUS_VALUES = new Set(["pending", "drafting", "converted", "dismissed", "archived"]);
+const EDITABLE_TEXT_FIELDS = [
+  "title",
+  "source_org_name",
+  "source_url",
+  "summary_short",
+  "summary_long",
+  "category_name",
+  "admin_note",
+] as const;
+
+const TEXT_FIELD_LIMITS: Record<(typeof EDITABLE_TEXT_FIELDS)[number], number> = {
+  title: 300,
+  source_org_name: 200,
+  source_url: 2000,
+  summary_short: 1000,
+  summary_long: 8000,
+  category_name: 100,
+  admin_note: 1000,
+};
+
+const EDITABLE_DATE_FIELDS = [
+  "notice_date",
+  "application_start_at",
+  "application_end_at",
+] as const;
 
 const SELECT_COLUMNS = [
   "id",
@@ -84,6 +109,30 @@ function summarize(rows: Array<{ candidate_status: string | null }>) {
   };
 }
 
+function sanitizeTextField(value: unknown, limit: number) {
+  if (value === null) return null;
+  if (typeof value !== "string") return undefined;
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized ? normalized.slice(0, limit) : null;
+}
+
+function sanitizeLongTextField(value: unknown, limit: number) {
+  if (value === null) return null;
+  if (typeof value !== "string") return undefined;
+  const normalized = value.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  return normalized ? normalized.slice(0, limit) : null;
+}
+
+function sanitizeDateField(value: unknown) {
+  if (value === null) return null;
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const date = new Date(trimmed);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date.toISOString();
+}
+
 export async function GET(request: NextRequest) {
   if (!(await requireAdmin())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -147,22 +196,52 @@ export async function PATCH(request: NextRequest) {
   }
 
   const id = String((body as Record<string, unknown>).id ?? "");
-  const candidateStatus = String((body as Record<string, unknown>).candidate_status ?? "");
-  const adminNote = (body as Record<string, unknown>).admin_note;
+  const rawBody = body as Record<string, unknown>;
+  const candidateStatus = typeof rawBody.candidate_status === "string" ? rawBody.candidate_status : "";
 
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
-  if (!STATUS_VALUES.has(candidateStatus)) {
+  if (candidateStatus && !STATUS_VALUES.has(candidateStatus)) {
     return NextResponse.json({ error: "invalid candidate_status" }, { status: 400 });
   }
 
   const payload: Record<string, unknown> = {
-    candidate_status: candidateStatus,
     reviewed_by: user.id,
     reviewed_at: new Date().toISOString(),
   };
 
-  if (typeof adminNote === "string") {
-    payload.admin_note = adminNote.replace(/\s+/g, " ").trim().slice(0, 1000) || null;
+  const changedFields: string[] = [];
+  if (candidateStatus) {
+    payload.candidate_status = candidateStatus;
+    changedFields.push("candidate_status");
+  }
+
+  for (const field of EDITABLE_TEXT_FIELDS) {
+    if (!(field in rawBody)) continue;
+    const value = field === "summary_long"
+      ? sanitizeLongTextField(rawBody[field], TEXT_FIELD_LIMITS[field])
+      : sanitizeTextField(rawBody[field], TEXT_FIELD_LIMITS[field]);
+    if (value === undefined) {
+      return NextResponse.json({ error: `invalid ${field}` }, { status: 400 });
+    }
+    if (field === "title" && value === null) {
+      return NextResponse.json({ error: "title is required" }, { status: 400 });
+    }
+    payload[field] = value;
+    changedFields.push(field);
+  }
+
+  for (const field of EDITABLE_DATE_FIELDS) {
+    if (!(field in rawBody)) continue;
+    const value = sanitizeDateField(rawBody[field]);
+    if (value === undefined) {
+      return NextResponse.json({ error: `invalid ${field}` }, { status: 400 });
+    }
+    payload[field] = value;
+    changedFields.push(field);
+  }
+
+  if (changedFields.length === 0) {
+    return NextResponse.json({ error: "no editable fields provided" }, { status: 400 });
   }
 
   const admin = createAdminClient();
@@ -183,7 +262,11 @@ export async function PATCH(request: NextRequest) {
     target_type: "notice_candidate",
     target_id: id,
     action_type: "update",
-    metadata_json: { table: "poster_notice_candidates", candidate_status: candidateStatus },
+    metadata_json: {
+      table: "poster_notice_candidates",
+      candidate_status: candidateStatus || undefined,
+      changed_fields: changedFields,
+    },
   });
 
   return NextResponse.json({ candidate: data });

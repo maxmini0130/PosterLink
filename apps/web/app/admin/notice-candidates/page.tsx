@@ -11,9 +11,11 @@ import {
   Loader2,
   Pencil,
   RefreshCcw,
+  Save,
   Search,
   Trash2,
   Wand2,
+  X,
   XCircle,
 } from "lucide-react";
 
@@ -65,6 +67,19 @@ type ApiPayload = {
   error?: string;
 };
 
+type EditDraft = {
+  title: string;
+  source_org_name: string;
+  source_url: string;
+  category_name: string;
+  notice_date: string;
+  application_start_at: string;
+  application_end_at: string;
+  summary_short: string;
+  summary_long: string;
+  admin_note: string;
+};
+
 const STATUS_OPTIONS: Array<[CandidateStatus | "all", string]> = [
   ["pending", "대기"],
   ["drafting", "제작중"],
@@ -101,6 +116,40 @@ function statusTone(status: string) {
 
 function statusLabel(status: string) {
   return STATUS_OPTIONS.find(([value]) => value === status)?.[1] ?? status;
+}
+
+function toDateTimeLocalValue(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+  ].join("-") + `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function buildEditDraft(candidate: NoticeCandidate): EditDraft {
+  return {
+    title: candidate.title ?? "",
+    source_org_name: candidate.source_org_name ?? "",
+    source_url: candidate.source_url ?? candidate.source_key ?? "",
+    category_name: candidate.category_name ?? "",
+    notice_date: toDateTimeLocalValue(candidate.notice_date),
+    application_start_at: toDateTimeLocalValue(candidate.application_start_at),
+    application_end_at: toDateTimeLocalValue(candidate.application_end_at),
+    summary_short: candidate.summary_short ?? "",
+    summary_long: candidate.summary_long ?? "",
+    admin_note: candidate.admin_note ?? "",
+  };
+}
+
+function dateTimeLocalToIso(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const date = new Date(trimmed);
+  return Number.isNaN(date.getTime()) ? trimmed : date.toISOString();
 }
 
 function MetricCard({
@@ -145,6 +194,8 @@ export default function AdminNoticeCandidatesPage() {
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
 
   const loadCandidates = async () => {
     setLoading(true);
@@ -195,6 +246,58 @@ export default function AdminNoticeCandidatesPage() {
       await loadCandidates();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "상태를 변경하지 못했습니다.");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const startEditing = (candidate: NoticeCandidate) => {
+    setEditingId(candidate.id);
+    setEditDraft(buildEditDraft(candidate));
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditDraft(null);
+  };
+
+  const updateDraft = (field: keyof EditDraft, value: string) => {
+    setEditDraft((prev) => prev ? { ...prev, [field]: value } : prev);
+  };
+
+  const saveCandidate = async (candidate: NoticeCandidate) => {
+    if (!editDraft) return;
+    if (!editDraft.title.trim()) {
+      toast.error("제목은 비워둘 수 없습니다.");
+      return;
+    }
+
+    setUpdatingId(candidate.id);
+    try {
+      const response = await fetch("/api/admin/notice-candidates", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: candidate.id,
+          title: editDraft.title,
+          source_org_name: editDraft.source_org_name,
+          source_url: editDraft.source_url,
+          category_name: editDraft.category_name,
+          notice_date: dateTimeLocalToIso(editDraft.notice_date),
+          application_start_at: dateTimeLocalToIso(editDraft.application_start_at),
+          application_end_at: dateTimeLocalToIso(editDraft.application_end_at),
+          summary_short: editDraft.summary_short,
+          summary_long: editDraft.summary_long,
+          admin_note: editDraft.admin_note,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "후보 정보를 저장하지 못했습니다.");
+      toast.success("후보 정보를 저장했습니다.");
+      cancelEditing();
+      await loadCandidates();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "후보 정보를 저장하지 못했습니다.");
     } finally {
       setUpdatingId(null);
     }
@@ -289,6 +392,7 @@ export default function AdminNoticeCandidatesPage() {
             const sourceUrl = candidate.source_url || candidate.source_key;
             const issues = candidate.quality_issues ?? [];
             const disabled = updatingId === candidate.id;
+            const isEditing = editingId === candidate.id && editDraft;
 
             return (
               <article
@@ -334,6 +438,15 @@ export default function AdminNoticeCandidatesPage() {
                     <button
                       type="button"
                       disabled={disabled}
+                      onClick={() => isEditing ? cancelEditing() : startEditing(candidate)}
+                      className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-xs font-black text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300"
+                    >
+                      {isEditing ? <X size={15} /> : <Pencil size={15} />}
+                      {isEditing ? "닫기" : "편집"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={disabled}
                       onClick={() => updateStatus(candidate, "drafting")}
                       className="inline-flex h-10 items-center gap-2 rounded-lg bg-indigo-600 px-3 text-xs font-black text-white hover:bg-indigo-700 disabled:opacity-50"
                     >
@@ -369,6 +482,118 @@ export default function AdminNoticeCandidatesPage() {
                     </button>
                   </div>
                 </div>
+
+                {isEditing && (
+                  <div className="mt-5 rounded-lg border border-indigo-100 bg-indigo-50/60 p-4 dark:border-indigo-500/20 dark:bg-indigo-500/10">
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className="block text-xs font-black text-gray-500 dark:text-slate-300">
+                        제목
+                        <input
+                          value={editDraft.title}
+                          onChange={(event) => updateDraft("title", event.target.value)}
+                          className="mt-2 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+                        />
+                      </label>
+                      <label className="block text-xs font-black text-gray-500 dark:text-slate-300">
+                        기관명
+                        <input
+                          value={editDraft.source_org_name}
+                          onChange={(event) => updateDraft("source_org_name", event.target.value)}
+                          className="mt-2 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+                        />
+                      </label>
+                      <label className="block text-xs font-black text-gray-500 dark:text-slate-300">
+                        카테고리
+                        <input
+                          value={editDraft.category_name}
+                          onChange={(event) => updateDraft("category_name", event.target.value)}
+                          className="mt-2 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+                        />
+                      </label>
+                      <label className="block text-xs font-black text-gray-500 dark:text-slate-300">
+                        원문 URL
+                        <input
+                          value={editDraft.source_url}
+                          onChange={(event) => updateDraft("source_url", event.target.value)}
+                          className="mt-2 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+                        />
+                      </label>
+                      <label className="block text-xs font-black text-gray-500 dark:text-slate-300">
+                        공고일
+                        <input
+                          type="datetime-local"
+                          value={editDraft.notice_date}
+                          onChange={(event) => updateDraft("notice_date", event.target.value)}
+                          className="mt-2 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+                        />
+                      </label>
+                      <label className="block text-xs font-black text-gray-500 dark:text-slate-300">
+                        신청 시작일
+                        <input
+                          type="datetime-local"
+                          value={editDraft.application_start_at}
+                          onChange={(event) => updateDraft("application_start_at", event.target.value)}
+                          className="mt-2 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+                        />
+                      </label>
+                      <label className="block text-xs font-black text-gray-500 dark:text-slate-300">
+                        신청 마감일
+                        <input
+                          type="datetime-local"
+                          value={editDraft.application_end_at}
+                          onChange={(event) => updateDraft("application_end_at", event.target.value)}
+                          className="mt-2 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+                        />
+                      </label>
+                      <label className="block text-xs font-black text-gray-500 dark:text-slate-300">
+                        관리자 메모
+                        <input
+                          value={editDraft.admin_note}
+                          onChange={(event) => updateDraft("admin_note", event.target.value)}
+                          className="mt-2 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+                        />
+                      </label>
+                    </div>
+                    <label className="mt-3 block text-xs font-black text-gray-500 dark:text-slate-300">
+                      한줄 요약
+                      <textarea
+                        value={editDraft.summary_short}
+                        onChange={(event) => updateDraft("summary_short", event.target.value)}
+                        rows={2}
+                        className="mt-2 w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold leading-6 text-gray-950 outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+                      />
+                    </label>
+                    <label className="mt-3 block text-xs font-black text-gray-500 dark:text-slate-300">
+                      상세 요약
+                      <textarea
+                        value={editDraft.summary_long}
+                        onChange={(event) => updateDraft("summary_long", event.target.value)}
+                        rows={5}
+                        className="mt-2 w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold leading-6 text-gray-950 outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+                      />
+                    </label>
+                    <div className="mt-4 flex flex-wrap justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={cancelEditing}
+                        disabled={disabled}
+                        className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 text-xs font-black text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300"
+                      >
+                        <X size={15} />
+                        취소
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => saveCandidate(candidate)}
+                        disabled={disabled}
+                        className="inline-flex h-10 items-center gap-2 rounded-lg bg-gray-950 px-4 text-xs font-black text-white hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-slate-200"
+                      >
+                        {disabled ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                        저장
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="mt-4 grid gap-3 text-xs font-bold text-gray-500 md:grid-cols-3">
                   <div className="rounded-lg bg-gray-50 p-3 dark:bg-slate-950">
