@@ -54,8 +54,8 @@ const SEOUL_REGION_KEYWORDS = {
   REG_SEOUL_GANGDONG: ["강동구", "서울청년센터 강동", "강동중앙도서관"],
 };
 
-export function inferRegionCodes(post) {
-  const source = [
+function buildRegionSource(post) {
+  return [
     post.title,
     post.content,
     post.summary_short,
@@ -67,14 +67,63 @@ export function inferRegionCodes(post) {
     post.source_key,
     post.url,
   ].filter(Boolean).join(" ");
+}
 
+function compactEvidence(value) {
+  return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
+}
+
+export function inferRegionMatches(post) {
+  const source = buildRegionSource(post);
   const codes = [];
   for (const [code, keywords] of Object.entries(SEOUL_REGION_KEYWORDS)) {
-    if (keywords.some((keyword) => source.includes(keyword))) codes.push(code);
+    const evidence = keywords.filter((keyword) => source.includes(keyword)).slice(0, 4);
+    if (evidence.length > 0) {
+      codes.push({
+        code,
+        confidence: Number(Math.min(0.95, 0.68 + evidence.length * 0.07).toFixed(2)),
+        evidence: compactEvidence(evidence.join(", ")),
+        source: "keyword",
+      });
+    }
   }
 
-  if (codes.length > 0) return [...new Set(codes)].slice(0, 2);
-  if (/전국|온라인|비대면/.test(source)) return ["REG_NATION"];
-  if (/서울|서울시|서울특별시|youth\.seoul\.go\.kr/.test(source)) return ["REG_SEOUL"];
+  if (codes.length > 0) {
+    const unique = new Map();
+    for (const match of codes) {
+      const previous = unique.get(match.code);
+      if (!previous || previous.confidence < match.confidence) unique.set(match.code, match);
+    }
+    const ranked = [...unique.values()].sort((a, b) => b.confidence - a.confidence).slice(0, 2);
+    if (ranked.length > 1) {
+      return ranked.map((match) => ({
+        ...match,
+        confidence: Math.min(match.confidence, 0.72),
+        ambiguous: true,
+      }));
+    }
+    return ranked;
+  }
+
+  if (/전국|온라인|비대면/.test(source)) {
+    return [{
+      code: "REG_NATION",
+      confidence: 0.72,
+      evidence: compactEvidence(source.match(/전국|온라인|비대면/)?.[0] ?? "national/online signal"),
+      source: "scope",
+    }];
+  }
+  if (/서울|서울시|서울특별시|youth\.seoul\.go\.kr/.test(source)) {
+    return [{
+      code: "REG_SEOUL",
+      confidence: 0.64,
+      evidence: compactEvidence(source.match(/서울|서울시|서울특별시|youth\.seoul\.go\.kr/)?.[0] ?? "seoul signal"),
+      source: "scope",
+    }];
+  }
   return [];
+}
+
+export function inferRegionCodes(post) {
+  return inferRegionMatches(post).map((match) => match.code);
 }

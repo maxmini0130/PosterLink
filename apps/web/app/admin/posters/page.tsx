@@ -62,6 +62,7 @@ function hasFieldVerificationWarning(poster: any) {
   if (Array.isArray(verification.dateIssues) && verification.dateIssues.length > 0) return true;
   if (Array.isArray(verification.duplicateIssues) && verification.duplicateIssues.length > 0) return true;
   if (Array.isArray(verification.qualityIssues) && verification.qualityIssues.length > 0) return true;
+  if (Array.isArray(verification.classificationIssues) && verification.classificationIssues.length > 0) return true;
   if (verification.deadlineMatches === false || verification.orgNameMatches === false) return true;
   return typeof verification.confidence === "number" && verification.confidence < 0.6 && verification.decision !== "not_checked";
 }
@@ -79,6 +80,16 @@ function getDuplicateVerificationIssues(poster: any) {
 function getQualityVerificationIssues(poster: any) {
   const issues = poster?.field_verification?.qualityIssues;
   return Array.isArray(issues) ? issues : [];
+}
+
+function getClassificationVerificationIssues(poster: any) {
+  const issues = poster?.field_verification?.classificationIssues;
+  return Array.isArray(issues) ? issues : [];
+}
+
+function getClassificationVerification(poster: any) {
+  const classification = poster?.field_verification?.classification;
+  return classification && typeof classification === "object" ? classification : null;
 }
 
 function normalizeOrgDisplayValue(value: any) {
@@ -120,6 +131,7 @@ function getFieldVerificationWarningLabel(poster: any) {
   if (getDateVerificationIssues(poster).length > 0) return "\uB0A0\uC9DC \uAC80\uC99D \uD544\uC694";
   if (getDuplicateVerificationIssues(poster).length > 0) return "\uC911\uBCF5 \uAC80\uC99D \uD544\uC694";
   if (getQualityVerificationIssues(poster).length > 0) return "품질 검증 필요";
+  if (getClassificationVerificationIssues(poster).length > 0) return "분류 검증 필요";
   return "AI 검증 필요";
 }
 
@@ -143,6 +155,14 @@ function getFieldVerificationWarningReason(poster: any) {
   const qualityIssues = getQualityVerificationIssues(poster);
   if (qualityIssues.length > 0) {
     return qualityIssues
+      .slice(0, 3)
+      .map((issue: any) => `${issue.code}: ${issue.reason}${issue.evidence ? ` (${issue.evidence})` : ""}`)
+      .join("\n");
+  }
+
+  const classificationIssues = getClassificationVerificationIssues(poster);
+  if (classificationIssues.length > 0) {
+    return classificationIssues
       .slice(0, 3)
       .map((issue: any) => `${issue.code}: ${issue.reason}${issue.evidence ? ` (${issue.evidence})` : ""}`)
       .join("\n");
@@ -1277,6 +1297,76 @@ export default function AdminPostersPage() {
                           </div>
                         ))}
                       </div>
+                    </div>
+                  )}
+                  {getClassificationVerification(previewPoster) && (
+                    <div className="rounded-2xl border border-sky-100 bg-sky-50/70 p-4 dark:border-sky-900 dark:bg-sky-950/30">
+                      {(() => {
+                        const classification = getClassificationVerification(previewPoster)!;
+                        const categories = Array.isArray(classification.categories) ? classification.categories : [];
+                        const regions = Array.isArray(classification.regions) ? classification.regions : [];
+                        const audiences = Array.isArray(classification.audiences) ? classification.audiences : [];
+                        return (
+                          <>
+                            <p className="mb-3 flex items-center gap-1.5 text-xs font-black text-sky-700 dark:text-sky-300">
+                              <AlertTriangle size={13} /> 분류 검증
+                            </p>
+                            <div className="grid gap-3 text-xs sm:grid-cols-3">
+                              <div>
+                                <p className="font-black text-sky-400">분야</p>
+                                <div className="mt-1 space-y-1">
+                                  {categories.length > 0 ? categories.slice(0, 2).map((category: any) => (
+                                    <p key={category.code} className="font-bold text-gray-900 dark:text-white">
+                                      {category.label ?? category.code}
+                                      {typeof category.confidence === "number" ? ` · ${Math.round(category.confidence * 100)}%` : ""}
+                                    </p>
+                                  )) : <p className="font-bold text-gray-400">-</p>}
+                                </div>
+                              </div>
+                              <div>
+                                <p className="font-black text-sky-400">지역</p>
+                                <div className="mt-1 space-y-1">
+                                  {regions.length > 0 ? regions.slice(0, 2).map((region: any) => (
+                                    <p key={region.code} className="font-bold text-gray-900 dark:text-white">
+                                      {region.code}
+                                      {typeof region.confidence === "number" ? ` · ${Math.round(region.confidence * 100)}%` : ""}
+                                    </p>
+                                  )) : <p className="font-bold text-gray-400">-</p>}
+                                </div>
+                              </div>
+                              <div>
+                                <p className="font-black text-sky-400">대상</p>
+                                <div className="mt-1 space-y-1">
+                                  {audiences.length > 0 ? audiences.slice(0, 3).map((audience: any) => (
+                                    <p key={audience.code} className="font-bold text-gray-900 dark:text-white">
+                                      {audience.name ?? audience.code}
+                                      {typeof audience.confidence === "number" ? ` · ${Math.round(audience.confidence * 100)}%` : ""}
+                                    </p>
+                                  )) : <p className="font-bold text-gray-400">명시 없음</p>}
+                                </div>
+                              </div>
+                            </div>
+                            {[...categories, ...regions, ...audiences]
+                              .map((item: any) => item.evidence)
+                              .filter(Boolean)
+                              .slice(0, 4)
+                              .map((evidence: string, index: number) => (
+                                <p key={`${evidence}-${index}`} className="mt-2 text-xs font-bold leading-5 text-sky-700/80 dark:text-sky-200/80">
+                                  {evidence}
+                                </p>
+                              ))}
+                            {getClassificationVerificationIssues(previewPoster).length > 0 && (
+                              <div className="mt-3 space-y-1 border-t border-sky-100 pt-3 dark:border-sky-900">
+                                {getClassificationVerificationIssues(previewPoster).slice(0, 3).map((issue: any, index: number) => (
+                                  <p key={`${issue.code ?? "classification"}-${index}`} className="text-xs font-black text-sky-800 dark:text-sky-200">
+                                    {issue.reason}
+                                  </p>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   )}
                   {previewPoster.summary_short && (

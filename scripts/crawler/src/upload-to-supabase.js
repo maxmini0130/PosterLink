@@ -14,7 +14,7 @@ import crypto from "node:crypto";
 import fs from "fs/promises";
 import { createClient } from "@supabase/supabase-js";
 import WebSocket from "ws";
-import { inferRegionCodes } from "./region-rules.js";
+import { inferPosterClassification } from "./poster-classifier.js";
 import { getPostExclusionReason } from "./post-candidate-filter.js";
 import { evaluatePosterQuality, summarizeQualityIssues } from "./poster-quality-gate.js";
 import { verifyPosterFields, applyFieldVerification } from "./poster-field-verifier.js";
@@ -127,6 +127,28 @@ async function loadRegionMap() {
   return map;
 }
 
+async function loadAudienceMap() {
+  const { data, error } = await supabase
+    .from("audience_groups")
+    .select("id, name, min_age, max_age, gender_restriction");
+  if (error) throw new Error("audience_groups 로드 실패: " + error.message);
+
+  const map = {};
+  for (const audience of data ?? []) {
+    if (audience.name) map[audience.name] = audience;
+  }
+  return map;
+}
+
+const AUDIENCE_DEFINITIONS = {
+  youth: { name: "청년", description: "청년 대상 공고", min_age: 19, max_age: 39, gender_restriction: "None" },
+  teen: { name: "청소년", description: "청소년 대상 공고", min_age: 9, max_age: 24, gender_restriction: "None" },
+  middle_aged: { name: "중장년", description: "중장년 대상 공고", min_age: 40, max_age: 64, gender_restriction: "None" },
+  senior: { name: "어르신", description: "어르신 대상 공고", min_age: 65, max_age: null, gender_restriction: "None" },
+  child: { name: "아동", description: "아동 대상 공고", min_age: 0, max_age: 12, gender_restriction: "None" },
+  women: { name: "여성", description: "여성 대상 공고", min_age: null, max_age: null, gender_restriction: "female" },
+};
+
 const CATEGORY_DEFINITIONS = {
   CAT_WELFARE: {
     name: "지원금/복지",
@@ -215,43 +237,14 @@ async function ensureCategory(categoryMap, code) {
   return data.id;
 }
 
-function inferCategoryCodes(post) {
-  const source = [
-    post.title,
-    post.content,
-    post.summary_short,
-    post.site,
-    post.board,
-    post.category,
-  ].filter(Boolean).join(" ").toLowerCase();
-
-  const scores = new Map();
-  const mappedCode = CATEGORY_CODE_MAP[post.category];
-  if (mappedCode) scores.set(mappedCode, 8);
-
-  for (const [code, definition] of Object.entries(CATEGORY_DEFINITIONS)) {
-    if (code === "CAT_OTHER") continue;
-
-    let score = scores.get(code) ?? 0;
-    for (const keyword of definition.keywords) {
-      if (source.includes(keyword.toLowerCase())) score += 3;
-    }
-    if (score > 0) scores.set(code, score);
-  }
-
-  const ranked = [...scores.entries()]
-    .filter(([, score]) => score >= 3)
-    .sort((a, b) => b[1] - a[1])
-    .map(([code]) => code);
-
-  const uniqueCodes = [...new Set(ranked)];
-  if (uniqueCodes.length === 0) return ["CAT_OTHER"];
-
-  return uniqueCodes.slice(0, 2);
+function inferCategoryCodes(post, classification = null) {
+  const categories = classification?.categories ?? inferPosterClassification(post).categories;
+  const codes = categories.map((category) => category.code).filter(Boolean);
+  return codes.length > 0 ? [...new Set(codes)].slice(0, 2) : ["CAT_OTHER"];
 }
 
-async function assignPosterCategories(posterId, post, categoryMap) {
-  const categoryCodes = inferCategoryCodes(post);
+async function assignPosterCategories(posterId, post, categoryMap, classification = null) {
+  const categoryCodes = inferCategoryCodes(post, classification);
   for (const categoryCode of categoryCodes) {
     const categoryId = await ensureCategory(categoryMap, categoryCode);
     if (!categoryId) continue;
@@ -262,8 +255,8 @@ async function assignPosterCategories(posterId, post, categoryMap) {
   }
 }
 
-async function assignPosterRegions(posterId, post, regionMap) {
-  const regionCodes = inferRegionCodes(post);
+async function assignPosterRegions(posterId, post, regionMap, classification = null) {
+  const regionCodes = classification?.regionCodes ?? inferPosterClassification(post).regionCodes;
   for (const regionCode of regionCodes) {
     const regionId = regionMap[regionCode];
     if (!regionId) continue;
@@ -271,6 +264,62 @@ async function assignPosterRegions(posterId, post, regionMap) {
       poster_id: posterId,
       region_id: regionId,
     }, { onConflict: "poster_id,region_id", ignoreDuplicates: true });
+  }
+}
+
+async function ensureAudience(audienceMap, audienceCode) {
+  const definition = AUDIENCE_DEFINITIONS[audienceCode];
+  if (!definition) return null;
+  if (audienceMap[definition.name]?.id) return audienceMap[definition.name].id;
+
+  const { data: existing, error: lookupError } = await supabase
+    .from("audience_groups")
+    .select("id, name, min_age, max_age, gender_restriction")
+    .eq("name", definition.name)
+    .limit(1)
+    .maybeSingle();
+  if (lookupError) {
+    console.warn(`  audience lookup failed: ${definition.name} - ${lookupError.message}`);
+    return null;
+  }
+  if (existing?.id) {
+    audienceMap[definition.name] = existing;
+    return existing.id;
+  }
+
+  const { data, error } = await supabase
+    .from("audience_groups")
+    .insert({
+      name: definition.name,
+      description: definition.description,
+      min_age: definition.min_age,
+      max_age: definition.max_age,
+      gender_restriction: definition.gender_restriction,
+      is_active: true,
+    })
+    .select("id, name, min_age, max_age, gender_restriction")
+    .single();
+
+  if (error) {
+    console.warn(`  audience create failed: ${definition.name} - ${error.message}`);
+    return null;
+  }
+
+  audienceMap[definition.name] = data;
+  return data.id;
+}
+
+async function assignPosterAudiences(posterId, classification, audienceMap) {
+  const audiences = (classification?.audiences ?? [])
+    .filter((audience) => audience.assignable && audience.confidence >= 0.58)
+    .slice(0, 3);
+  for (const audience of audiences) {
+    const audienceId = await ensureAudience(audienceMap, audience.code);
+    if (!audienceId) continue;
+    await supabase.from("poster_audiences").upsert({
+      poster_id: posterId,
+      audience_id: audienceId,
+    }, { onConflict: "poster_id,audience_id", ignoreDuplicates: true });
   }
 }
 
@@ -678,6 +727,43 @@ function enrichOrganizationVerification(verification = {}, post = {}, sourceUrl 
       boardName: normalizeOrgInfoText(post.board, 160),
       collectionSourceSlug: normalizeOrgInfoText(post.collectionSourceSlug ?? post.siteId, 120),
       sourceUrl,
+    },
+  };
+}
+
+function mergeClassificationIntoFieldVerification(verification = {}, classification = {}) {
+  const classificationIssues = (classification.issues ?? []).slice(0, 8);
+  if (classificationIssues.length === 0) {
+    return {
+      ...verification,
+      classification: {
+        categories: classification.categories ?? [],
+        regions: classification.regions ?? [],
+        audiences: classification.audiences ?? [],
+        confidence: classification.confidence ?? null,
+      },
+    };
+  }
+
+  const classificationReason = classificationIssues
+    .slice(0, 4)
+    .map((issue) => `${issue.code}: ${issue.reason}`)
+    .join("; ");
+  const confidence = typeof verification.confidence === "number"
+    ? Math.min(verification.confidence, 0.5)
+    : 0.5;
+
+  return {
+    ...verification,
+    confidence,
+    decision: "needs_review",
+    reason: [verification.reason, classificationReason].filter(Boolean).join(" | ").slice(0, 800),
+    classificationIssues,
+    classification: {
+      categories: classification.categories ?? [],
+      regions: classification.regions ?? [],
+      audiences: classification.audiences ?? [],
+      confidence: classification.confidence ?? null,
     },
   };
 }
@@ -1108,6 +1194,7 @@ async function uploadToSupabase(filePath) {
   // 카테고리/지역 맵 로드
   const categoryMap = await loadCategoryMap();
   const regionMap = await loadRegionMap();
+  const audienceMap = await loadAudienceMap();
   const duplicateCandidates = await loadDuplicateCandidates();
 
   let success = 0;
@@ -1139,6 +1226,7 @@ async function uploadToSupabase(filePath) {
 
     const sourceImages = normalizePostImages(post, sourceUrl);
     const linkEntries = buildPosterLinkEntries(post, sourceUrl);
+    const classification = inferPosterClassification({ ...post, sourceUrl, source_key: sourceKey });
     const quality = evaluatePosterQuality({ ...post, images: sourceImages }, {
       sourceKey,
       images: sourceImages,
@@ -1162,8 +1250,9 @@ async function uploadToSupabase(filePath) {
       collectionStats.recordDuplicate(post);
       skippedSourceKeys.push(sourceKey);
       await addSupplementalPosterLinks(duplicateMatch.row.id, linkEntries);
-      await assignPosterCategories(duplicateMatch.row.id, post, categoryMap);
-      await assignPosterRegions(duplicateMatch.row.id, post, regionMap);
+      await assignPosterCategories(duplicateMatch.row.id, post, categoryMap, classification);
+      await assignPosterRegions(duplicateMatch.row.id, post, regionMap, classification);
+      await assignPosterAudiences(duplicateMatch.row.id, classification, audienceMap);
       process.stdout.write("=");
       console.log(`\n  Duplicate merged into existing poster ${duplicateMatch.row.id}: ${post.title} (${duplicateMatch.score})`);
       continue;
@@ -1201,6 +1290,7 @@ async function uploadToSupabase(filePath) {
     let fieldVerification = mergeDateQualityIntoFieldVerification(fieldVerificationResult, finalDateQuality, {
       storedDeadline: finalDeadline,
     });
+    fieldVerification = mergeClassificationIntoFieldVerification(fieldVerification, classification);
     fieldVerification = mergeQualityIssuesIntoFieldVerification(fieldVerification, quality);
     if (duplicateMatch.decision === "review" && duplicateIssue) {
       fieldVerification = mergeDuplicateIssueIntoFieldVerification(fieldVerification, duplicateIssue);
@@ -1318,19 +1408,28 @@ async function uploadToSupabase(filePath) {
       if (!existingPoster.application_end_at && posterRecord.application_end_at) {
         updates.application_end_at = posterRecord.application_end_at;
       }
-      const nextHasDateIssues = Array.isArray(posterRecord.field_verification?.dateIssues)
-        && posterRecord.field_verification.dateIssues.length > 0;
-      const existingHasDateIssues = Array.isArray(existingPoster.field_verification?.dateIssues)
-        && existingPoster.field_verification.dateIssues.length > 0;
-      if (!existingPoster.field_verification || (nextHasDateIssues && !existingHasDateIssues)) {
+      const hasReviewIssues = (verification) => (
+        ["dateIssues", "classificationIssues", "qualityIssues", "duplicateIssues"]
+          .some((key) => Array.isArray(verification?.[key]) && verification[key].length > 0)
+      );
+      const nextHasReviewIssues = hasReviewIssues(posterRecord.field_verification);
+      const existingHasReviewIssues = hasReviewIssues(existingPoster.field_verification);
+      const nextHasClassification = Boolean(posterRecord.field_verification?.classification);
+      const existingHasClassification = Boolean(existingPoster.field_verification?.classification);
+      if (
+        !existingPoster.field_verification ||
+        (nextHasReviewIssues && !existingHasReviewIssues) ||
+        (nextHasClassification && !existingHasClassification)
+      ) {
         updates.field_verification = posterRecord.field_verification;
       }
       if (Object.keys(updates).length > 0) {
         await supabase.from("posters").update(updates).eq("id", existingPoster.id);
       }
       await syncPosterImages(existingPoster.id, postWithStoredImages, sourceUrl);
-      await assignPosterCategories(existingPoster.id, post, categoryMap);
-      await assignPosterRegions(existingPoster.id, post, regionMap);
+      await assignPosterCategories(existingPoster.id, post, categoryMap, classification);
+      await assignPosterRegions(existingPoster.id, post, regionMap, classification);
+      await assignPosterAudiences(existingPoster.id, classification, audienceMap);
       process.stdout.write("-");
       continue;
     }
@@ -1360,8 +1459,9 @@ async function uploadToSupabase(filePath) {
     }
 
     // ── 3. poster_categories 저장 ───────────────────────────
-    await assignPosterCategories(posterId, post, categoryMap);
-    await assignPosterRegions(posterId, post, regionMap);
+    await assignPosterCategories(posterId, post, categoryMap, classification);
+    await assignPosterRegions(posterId, post, regionMap, classification);
+    await assignPosterAudiences(posterId, classification, audienceMap);
     addDuplicateCandidate(duplicateCandidates, posterId, posterRecord, post, sourceUrl, storedImages);
 
     success++;
