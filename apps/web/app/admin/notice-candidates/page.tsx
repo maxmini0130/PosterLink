@@ -95,6 +95,7 @@ type ConvertCandidateOverrides = {
   title?: string;
   source_org_name?: string;
   summary_short?: string;
+  category_name?: string;
   image_source?: "admin_upload" | "template_canvas";
 };
 
@@ -606,6 +607,7 @@ export default function AdminNoticeCandidatesPage() {
       if (overrides?.title) formData.append("title", overrides.title);
       if (overrides?.source_org_name) formData.append("source_org_name", overrides.source_org_name);
       if (overrides?.summary_short) formData.append("summary_short", overrides.summary_short);
+      if (overrides?.category_name) formData.append("category_name", overrides.category_name);
       if (overrides?.image_source) formData.append("image_source", overrides.image_source);
 
       const response = await fetch("/api/admin/notice-candidates/convert", {
@@ -641,6 +643,7 @@ export default function AdminNoticeCandidatesPage() {
         title: makerDraft.title,
         source_org_name: makerDraft.source_org_name,
         summary_short: makerDraft.summary,
+        category_name: makerDraft.category_name,
         image_source: "template_canvas",
       });
       if (converted) closePosterMaker();

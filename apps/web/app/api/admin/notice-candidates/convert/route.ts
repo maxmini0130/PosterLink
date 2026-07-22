@@ -10,6 +10,29 @@ const POSTER_IMAGE_BUCKET = process.env.POSTER_IMAGE_BUCKET?.trim() || "poster-o
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const IMAGE_SOURCE_VALUES = new Set(["admin_upload", "template_canvas"]);
+const CATEGORY_LABEL_CODE_MAP = new Map([
+  ["지원금/복지", "CAT_WELFARE"],
+  ["복지", "CAT_WELFARE"],
+  ["교육/취업", "CAT_EDUCATION"],
+  ["교육", "CAT_EDUCATION"],
+  ["취업", "CAT_EDUCATION"],
+  ["채용", "CAT_EDUCATION"],
+  ["일자리", "CAT_EDUCATION"],
+  ["장학", "CAT_EDUCATION"],
+  ["문화/행사", "CAT_CULTURE"],
+  ["문화", "CAT_CULTURE"],
+  ["행사", "CAT_CULTURE"],
+  ["체육", "CAT_HEALTH"],
+  ["주거/금융", "CAT_HOUSING"],
+  ["금융", "CAT_HOUSING"],
+  ["소상공인", "CAT_BUSINESS"],
+  ["창업", "CAT_BUSINESS"],
+  ["육아/가족", "CAT_FAMILY"],
+  ["가족", "CAT_FAMILY"],
+  ["건강/의료", "CAT_HEALTH"],
+  ["건강", "CAT_HEALTH"],
+  ["기타", "CAT_OTHER"],
+]);
 
 class HttpError extends Error {
   status: number;
@@ -73,6 +96,114 @@ function normalizeOptionalText(value: FormDataEntryValue | null, limit: number) 
   return normalized ? normalized.slice(0, limit) : null;
 }
 
+function compactText(value: unknown) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function asPlainObjectArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item))
+    : [];
+}
+
+function getCandidateClassification(candidate: Record<string, unknown>) {
+  const fieldVerification = asPlainObject(candidate.field_verification);
+  return asPlainObject(fieldVerification.classification);
+}
+
+function collectCandidateCategoryCodes(candidate: Record<string, unknown>, categoryNameOverride: string | null) {
+  const classification = getCandidateClassification(candidate);
+  const codes = new Set<string>();
+
+  for (const category of asPlainObjectArray(classification.categories)) {
+    const code = compactText(category.code);
+    if (code) codes.add(code);
+  }
+  for (const code of Array.isArray(classification.categoryCodes) ? classification.categoryCodes : []) {
+    const normalized = compactText(code);
+    if (normalized) codes.add(normalized);
+  }
+
+  const categoryName = categoryNameOverride ?? compactText(candidate.category_name);
+  if (categoryName) {
+    const mapped = CATEGORY_LABEL_CODE_MAP.get(categoryName);
+    if (mapped) codes.add(mapped);
+    if (/^CAT_[A-Z_]+$/.test(categoryName)) codes.add(categoryName);
+  }
+
+  return [...codes].slice(0, 3);
+}
+
+function collectCandidateRegionCodes(candidate: Record<string, unknown>) {
+  const classification = getCandidateClassification(candidate);
+  const codes = new Set<string>();
+
+  for (const region of asPlainObjectArray(classification.regions)) {
+    const code = compactText(region.code);
+    if (code) codes.add(code);
+  }
+  for (const code of Array.isArray(classification.regionCodes) ? classification.regionCodes : []) {
+    const normalized = compactText(code);
+    if (normalized) codes.add(normalized);
+  }
+
+  return [...codes].slice(0, 3);
+}
+
+async function attachPosterTaxonomy(
+  admin: ReturnType<typeof createAdminClient>,
+  posterId: string,
+  candidate: Record<string, unknown>,
+  categoryNameOverride: string | null
+) {
+  const assignedCategoryCodes: string[] = [];
+  const assignedRegionCodes: string[] = [];
+  const categoryCodes = collectCandidateCategoryCodes(candidate, categoryNameOverride);
+  const regionCodes = collectCandidateRegionCodes(candidate);
+
+  if (categoryCodes.length > 0) {
+    const { data: categories, error } = await admin
+      .from("categories")
+      .select("id,code,name")
+      .in("code", categoryCodes);
+    if (error) throw new HttpError(error.message, 500);
+
+    const categoryRows = categories ?? [];
+    if (categoryRows.length > 0) {
+      const { error: categoryInsertError } = await admin
+        .from("poster_categories")
+        .upsert(categoryRows.map((category) => ({
+          poster_id: posterId,
+          category_id: category.id,
+        })), { onConflict: "poster_id,category_id", ignoreDuplicates: true });
+      if (categoryInsertError) throw new HttpError(categoryInsertError.message, 500);
+      assignedCategoryCodes.push(...categoryRows.map((category) => category.code).filter(Boolean));
+    }
+  }
+
+  if (regionCodes.length > 0) {
+    const { data: regions, error } = await admin
+      .from("regions")
+      .select("id,code,name,full_name")
+      .in("code", regionCodes);
+    if (error) throw new HttpError(error.message, 500);
+
+    const regionRows = regions ?? [];
+    if (regionRows.length > 0) {
+      const { error: regionInsertError } = await admin
+        .from("poster_regions")
+        .upsert(regionRows.map((region) => ({
+          poster_id: posterId,
+          region_id: region.id,
+        })), { onConflict: "poster_id,region_id", ignoreDuplicates: true });
+      if (regionInsertError) throw new HttpError(regionInsertError.message, 500);
+      assignedRegionCodes.push(...regionRows.map((region) => region.code).filter(Boolean));
+    }
+  }
+
+  return { assignedCategoryCodes, assignedRegionCodes };
+}
+
 function getExtension(contentType: string) {
   if (contentType === "image/png") return "png";
   if (contentType === "image/webp") return "webp";
@@ -105,6 +236,7 @@ export async function POST(request: NextRequest) {
     const titleOverride = normalizeOptionalText(formData.get("title"), 300);
     const orgOverride = normalizeOptionalText(formData.get("source_org_name"), 200);
     const summaryOverride = normalizeOptionalText(formData.get("summary_short"), 1000);
+    const categoryNameOverride = normalizeOptionalText(formData.get("category_name"), 100);
     const imageSourceInput = normalizeOptionalText(formData.get("image_source"), 50);
     const imageSource = imageSourceInput && IMAGE_SOURCE_VALUES.has(imageSourceInput)
       ? imageSourceInput
@@ -137,6 +269,7 @@ export async function POST(request: NextRequest) {
     const title = titleOverride ?? String(candidate.title ?? "").replace(/\s+/g, " ").trim();
     const sourceOrgName = orgOverride ?? candidate.source_org_name ?? candidate.collection_source_slug ?? null;
     const summaryShort = summaryOverride ?? candidate.summary_short ?? null;
+    const categoryName = categoryNameOverride ?? candidate.category_name ?? null;
     if (!title) throw new HttpError("후보 제목이 비어 있습니다.", 400);
 
     const { data: existingPoster, error: existingPosterError } = await admin
@@ -171,6 +304,14 @@ export async function POST(request: NextRequest) {
       imageSource,
       noticeCandidateId: candidate.id,
       noticeCandidateSourceKey: candidate.source_key,
+      noticeCandidateType: candidate.candidate_type ?? null,
+      noticeCandidateReason: candidate.reason ?? null,
+      noticeCandidateQualityIssues: Array.isArray(candidate.quality_issues) ? candidate.quality_issues : [],
+      generatedPoster: {
+        imageSource,
+        categoryName,
+        createdFrom: "notice_candidate",
+      },
       convertedAt,
       convertedBy: user.id,
     };
@@ -195,6 +336,24 @@ export async function POST(request: NextRequest) {
 
     if (posterError) throw new HttpError(posterError.message, 500);
     createdPosterId = poster.id;
+
+    const taxonomy = await attachPosterTaxonomy(admin, poster.id, candidate, categoryNameOverride);
+    if (taxonomy.assignedCategoryCodes.length > 0 || taxonomy.assignedRegionCodes.length > 0) {
+      const { error: taxonomyMetaError } = await admin
+        .from("posters")
+        .update({
+          field_verification: {
+            ...fieldVerification,
+            generatedPoster: {
+              ...fieldVerification.generatedPoster,
+              assignedCategoryCodes: taxonomy.assignedCategoryCodes,
+              assignedRegionCodes: taxonomy.assignedRegionCodes,
+            },
+          },
+        })
+        .eq("id", poster.id);
+      if (taxonomyMetaError) throw new HttpError(taxonomyMetaError.message, 500);
+    }
 
     const { error: imageInsertError } = await admin.from("poster_images").insert({
       poster_id: poster.id,
@@ -222,6 +381,7 @@ export async function POST(request: NextRequest) {
       .from("poster_notice_candidates")
       .update({
         candidate_status: "converted",
+        category_name: categoryName,
         generated_poster_id: poster.id,
         reviewed_by: user.id,
         reviewed_at: convertedAt,
@@ -245,6 +405,8 @@ export async function POST(request: NextRequest) {
         source_key: candidate.source_key,
         image_source: imageSource,
         image_storage_path: uploadedStoragePath,
+        assigned_category_codes: taxonomy.assignedCategoryCodes,
+        assigned_region_codes: taxonomy.assignedRegionCodes,
       },
     });
 
