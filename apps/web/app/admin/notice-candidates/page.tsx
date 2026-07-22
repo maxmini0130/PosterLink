@@ -29,7 +29,9 @@ type CandidateQualityIssue = {
   reason?: string;
   severity?: string;
   evidence?: string;
+  duplicateTargetType?: string;
   duplicatePosterId?: string | null;
+  duplicateCandidateId?: string | null;
   duplicateScore?: number | null;
   [key: string]: any;
 };
@@ -267,6 +269,7 @@ function getCandidateDuplicateIssues(candidate: NoticeCandidate): CandidateQuali
     const key = [
       issue.code ?? "",
       issue.duplicatePosterId ?? "",
+      issue.duplicateCandidateId ?? "",
       issue.duplicateScore ?? "",
       issue.evidence ?? "",
     ].join("|");
@@ -281,6 +284,7 @@ function getDuplicateIssueLabel(issue: CandidateQualityIssue) {
     issue.code ?? "duplicate-suspected",
     typeof issue.duplicateScore === "number" ? `점수 ${issue.duplicateScore}` : "",
     issue.duplicatePosterId ? `기존 ${issue.duplicatePosterId}` : "",
+    issue.duplicateCandidateId ? `기존 후보 ${issue.duplicateCandidateId}` : "",
   ].filter(Boolean).join(" · ");
 }
 
@@ -1413,6 +1417,11 @@ export default function AdminNoticeCandidatesPage() {
                                   <ExternalLink size={12} />
                                   기존 포스터 열기
                                 </a>
+                              )}
+                              {!issue.duplicatePosterId && issue.duplicateCandidateId && (
+                                <p className="mt-2 font-mono text-[11px] font-black text-rose-700 dark:text-rose-200">
+                                  기존 후보 ID: {issue.duplicateCandidateId}
+                                </p>
                               )}
                             </div>
                           ))}

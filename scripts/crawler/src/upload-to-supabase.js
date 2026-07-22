@@ -969,6 +969,46 @@ async function fetchByPosterIds(table, columns, posterIds, batchSize = 100) {
   return rows;
 }
 
+async function loadNoticeCandidateDuplicateCandidates(limit) {
+  const rows = [];
+  const pageSize = 1000;
+
+  for (let offset = 0; offset < limit; offset += pageSize) {
+    const to = Math.min(offset + pageSize - 1, limit - 1);
+    const { data, error } = await supabase
+      .from("poster_notice_candidates")
+      .select("id,title,source_org_name,candidate_status,created_at,application_end_at,source_key,source_url,summary_short,summary_long,field_verification")
+      .in("candidate_status", ["pending", "drafting"])
+      .order("created_at", { ascending: false })
+      .range(offset, to);
+
+    if (error) {
+      console.warn(`Notice candidate duplicate load failed: ${error.message}`);
+      return [];
+    }
+
+    rows.push(...(data ?? []));
+    if (!data || data.length < pageSize) break;
+  }
+
+  return rows.map((row) => ({
+    ...row,
+    duplicateTargetType: "notice_candidate",
+    poster_status: row.candidate_status,
+    sourceUrl: row.source_url,
+    url: row.source_url,
+    poster_images: [],
+    poster_links: row.source_url
+      ? [{
+          url: row.source_url,
+          title: "이미지 없는 후보 원문",
+          link_type: "official_notice",
+          is_primary: true,
+        }]
+      : [],
+  }));
+}
+
 async function loadDuplicateCandidates() {
   const limit = Number.isFinite(POSTER_DUPLICATE_LOOKUP_LIMIT)
     ? Math.max(0, POSTER_DUPLICATE_LOOKUP_LIMIT)
@@ -992,13 +1032,17 @@ async function loadDuplicateCandidates() {
       return [];
     }
 
-    rows.push(...(data ?? []));
+    rows.push(...(data ?? []).map((row) => ({ ...row, duplicateTargetType: "poster" })));
     if (!data || data.length < pageSize) break;
   }
 
   const posterIds = rows.map((row) => row.id).filter(Boolean);
-  if (posterIds.length === 0) return rows;
+  if (posterIds.length === 0) {
+    const noticeRows = await loadNoticeCandidateDuplicateCandidates(limit);
+    return noticeRows;
+  }
 
+  let posterRows = rows;
   try {
     const [imageRows, linkRows] = await Promise.all([
       fetchByPosterIds("poster_images", "poster_id,storage_path,width,height", posterIds),
@@ -1006,15 +1050,17 @@ async function loadDuplicateCandidates() {
     ]);
     const imagesByPosterId = groupByPosterId(imageRows);
     const linksByPosterId = groupByPosterId(linkRows);
-    return rows.map((row) => ({
+    posterRows = rows.map((row) => ({
       ...row,
       poster_images: imagesByPosterId.get(row.id) ?? [],
       poster_links: linksByPosterId.get(row.id) ?? [],
     }));
   } catch (error) {
     console.warn(`Duplicate relation load failed: ${error.message}`);
-    return rows;
   }
+
+  const noticeRows = await loadNoticeCandidateDuplicateCandidates(limit);
+  return [...posterRows, ...noticeRows];
 }
 
 async function addSupplementalPosterLinks(posterId, linkEntries) {
@@ -1112,6 +1158,34 @@ function addDuplicateCandidate(candidates, posterId, posterRecord, post, sourceU
         }]
       : [],
     deadline: post.deadline ?? null,
+  });
+}
+
+function addNoticeDuplicateCandidate(candidates, candidateId, post, sourceKey, sourceUrl, verifiedOrgName, finalDeadline, fieldVerification) {
+  if (!candidateId) return;
+  candidates.unshift({
+    id: candidateId,
+    duplicateTargetType: "notice_candidate",
+    title: post.title,
+    source_org_name: verifiedOrgName || post.site || null,
+    poster_status: "pending",
+    application_end_at: finalDeadline ?? post.deadline ?? null,
+    source_key: sourceKey,
+    sourceUrl,
+    url: sourceUrl,
+    summary_short: normalizeSummary(post),
+    summary_long: cleanSummaryText(post.content) || null,
+    field_verification: fieldVerification ?? {},
+    poster_images: [],
+    poster_links: sourceUrl
+      ? [{
+          url: sourceUrl,
+          title: "이미지 없는 후보 원문",
+          link_type: "official_notice",
+          is_primary: true,
+        }]
+      : [],
+    deadline: finalDeadline ?? post.deadline ?? null,
   });
 }
 
@@ -1236,6 +1310,10 @@ async function uploadToSupabase(filePath) {
       extractedDeadline: post.deadline ?? null,
       contentMode: post.contentMode,
     });
+    const duplicateSearchCandidates = duplicateCandidates.filter((row) => !(
+      row.duplicateTargetType === "notice_candidate" &&
+      normalizeSourceKey(row.source_key ?? row.sourceUrl ?? row.url) === sourceKey
+    ));
     const duplicateMatch = findBestPosterDuplicate({
       ...post,
       source_key: sourceKey,
@@ -1243,9 +1321,12 @@ async function uploadToSupabase(filePath) {
       url: sourceUrl,
       images: sourceImages,
       application_end_at: post.deadline ?? null,
-    }, duplicateCandidates);
+    }, duplicateSearchCandidates);
     const duplicateIssue = duplicateIssueFromMatch(duplicateMatch);
-    if (duplicateMatch.decision === "merge" && duplicateMatch.row?.id) {
+    const duplicateTargetType = duplicateMatch.row?.duplicateTargetType ?? "poster";
+    const shouldMergeDuplicate = duplicateMatch.decision === "merge" && duplicateTargetType === "poster" && duplicateMatch.row?.id;
+    const shouldReviewDuplicate = duplicateIssue && !shouldMergeDuplicate && duplicateMatch.decision !== "none";
+    if (shouldMergeDuplicate) {
       skip++;
       collectionStats.recordDuplicate(post);
       skippedSourceKeys.push(sourceKey);
@@ -1257,7 +1338,7 @@ async function uploadToSupabase(filePath) {
       console.log(`\n  Duplicate merged into existing poster ${duplicateMatch.row.id}: ${post.title} (${duplicateMatch.score})`);
       continue;
     }
-    if (duplicateMatch.decision === "review" && duplicateIssue) {
+    if (shouldReviewDuplicate) {
       quality.issues.push(duplicateIssue);
       quality.decision = "review";
       quality.issue_score += duplicateIssue.severity === "high" ? 5 : 3;
@@ -1292,7 +1373,7 @@ async function uploadToSupabase(filePath) {
     });
     fieldVerification = mergeClassificationIntoFieldVerification(fieldVerification, classification);
     fieldVerification = mergeQualityIssuesIntoFieldVerification(fieldVerification, quality);
-    if (duplicateMatch.decision === "review" && duplicateIssue) {
+    if (shouldReviewDuplicate) {
       fieldVerification = mergeDuplicateIssueIntoFieldVerification(fieldVerification, duplicateIssue);
     }
 
@@ -1306,6 +1387,7 @@ async function uploadToSupabase(filePath) {
           fieldVerification,
           quality,
         });
+        addNoticeDuplicateCandidate(duplicateCandidates, candidateResult.id, post, sourceKey, sourceUrl, verifiedOrgName, finalDeadline, fieldVerification);
         if (candidateResult.created) {
           success++;
           noticeCandidateSuccess++;

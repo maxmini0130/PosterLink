@@ -267,15 +267,20 @@ export function findBestPosterDuplicate(candidate = {}, existingRows = []) {
 
 export function duplicateIssueFromMatch(match) {
   if (!match || match.decision === "none") return null;
+  const targetType = match.row?.duplicateTargetType === "notice_candidate" ? "notice_candidate" : "poster";
+  const canAutoMerge = match.decision === "merge" && targetType === "poster";
+
   return {
-    code: match.decision === "merge" ? "duplicate-auto-merge" : "duplicate-suspected",
-    severity: match.decision === "merge" ? "medium" : "high",
+    code: canAutoMerge ? "duplicate-auto-merge" : "duplicate-suspected",
+    severity: canAutoMerge ? "medium" : "high",
     decision: "review",
-    reason: match.decision === "merge"
+    reason: canAutoMerge
       ? "same or highly similar notice already exists; source should be merged"
       : "similar existing notice found; confirm before publishing",
-    evidence: `score ${match.score}; ${match.matched.join(", ")}; existing ${match.row?.id ?? ""}`.trim(),
-    duplicatePosterId: match.row?.id ?? null,
+    evidence: `score ${match.score}; ${match.matched.join(", ")}; existing ${targetType} ${match.row?.id ?? ""}`.trim(),
+    duplicateTargetType: targetType,
+    duplicatePosterId: targetType === "poster" ? match.row?.id ?? null : null,
+    duplicateCandidateId: targetType === "notice_candidate" ? match.row?.id ?? null : null,
     duplicateScore: match.score,
   };
 }
