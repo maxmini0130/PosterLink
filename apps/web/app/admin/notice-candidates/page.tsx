@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import {
   Archive,
   CheckCircle2,
+  Download,
   ExternalLink,
   FileText,
   ImageOff,
@@ -81,6 +82,22 @@ type EditDraft = {
   admin_note: string;
 };
 
+type PosterMakerDraft = {
+  title: string;
+  source_org_name: string;
+  category_name: string;
+  period_text: string;
+  summary: string;
+  accent: string;
+};
+
+type ConvertCandidateOverrides = {
+  title?: string;
+  source_org_name?: string;
+  summary_short?: string;
+  image_source?: "admin_upload" | "template_canvas";
+};
+
 const STATUS_OPTIONS: Array<[CandidateStatus | "all", string]> = [
   ["pending", "대기"],
   ["drafting", "제작중"],
@@ -89,6 +106,16 @@ const STATUS_OPTIONS: Array<[CandidateStatus | "all", string]> = [
   ["archived", "보관"],
   ["all", "전체"],
 ];
+
+const POSTER_PALETTES = [
+  { name: "Blue", accent: "#2563eb", soft: "#dbeafe", dark: "#0f172a" },
+  { name: "Green", accent: "#059669", soft: "#d1fae5", dark: "#052e16" },
+  { name: "Rose", accent: "#e11d48", soft: "#ffe4e6", dark: "#4c0519" },
+  { name: "Amber", accent: "#d97706", soft: "#fef3c7", dark: "#451a03" },
+  { name: "Violet", accent: "#7c3aed", soft: "#ede9fe", dark: "#2e1065" },
+] as const;
+
+const DEFAULT_ACCENT = POSTER_PALETTES[0].accent;
 
 const numberFormatter = new Intl.NumberFormat("ko-KR");
 
@@ -153,6 +180,223 @@ function dateTimeLocalToIso(value: string) {
   return Number.isNaN(date.getTime()) ? trimmed : date.toISOString();
 }
 
+function formatPosterDate(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function buildDefaultPeriodText(candidate: NoticeCandidate) {
+  const start = formatPosterDate(candidate.application_start_at);
+  const end = formatPosterDate(candidate.application_end_at);
+  if (start && end) return `${start} - ${end}`;
+  if (end) return `마감 ${end}`;
+  return "원문 공고 확인";
+}
+
+function normalizePosterText(value?: string | null, fallback = "") {
+  const normalized = (value ?? "").replace(/\s+/g, " ").trim();
+  return normalized || fallback;
+}
+
+function buildPosterMakerDraft(candidate: NoticeCandidate): PosterMakerDraft {
+  return {
+    title: normalizePosterText(candidate.title, "공고 제목"),
+    source_org_name: normalizePosterText(candidate.source_org_name, "기관명 확인"),
+    category_name: normalizePosterText(candidate.category_name, "공고"),
+    period_text: buildDefaultPeriodText(candidate),
+    summary: normalizePosterText(candidate.summary_short ?? candidate.summary_long, "자세한 내용은 원문 공고를 확인하세요."),
+    accent: DEFAULT_ACCENT,
+  };
+}
+
+function getPalette(accent: string) {
+  return POSTER_PALETTES.find((palette) => palette.accent === accent) ?? POSTER_PALETTES[0];
+}
+
+function splitLongWord(ctx: CanvasRenderingContext2D, word: string, maxWidth: number) {
+  const parts: string[] = [];
+  let current = "";
+  for (const char of word) {
+    const next = current + char;
+    if (current && ctx.measureText(next).width > maxWidth) {
+      parts.push(current);
+      current = char;
+    } else {
+      current = next;
+    }
+  }
+  if (current) parts.push(current);
+  return parts;
+}
+
+function wrapCanvasLines(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  maxLines: number
+) {
+  const words = normalizePosterText(text).split(/\s+/).flatMap((word) => {
+    return ctx.measureText(word).width > maxWidth ? splitLongWord(ctx, word, maxWidth) : word;
+  });
+  const lines: string[] = [];
+  let current = "";
+
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (ctx.measureText(next).width <= maxWidth) {
+      current = next;
+      continue;
+    }
+    if (current) lines.push(current);
+    current = word;
+    if (lines.length === maxLines) break;
+  }
+  if (current && lines.length < maxLines) lines.push(current);
+
+  if (lines.length === maxLines && words.length > lines.join(" ").split(/\s+/).length) {
+    let lastLine = `${lines[maxLines - 1]}...`;
+    while (lastLine.length > 1 && ctx.measureText(lastLine).width > maxWidth) {
+      lastLine = `${lastLine.slice(0, -4)}...`;
+    }
+    lines[maxLines - 1] = lastLine;
+  }
+
+  return lines;
+}
+
+function drawWrappedText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  lineHeight: number,
+  maxLines: number
+) {
+  const lines = wrapCanvasLines(ctx, text, maxWidth, maxLines);
+  lines.forEach((line, index) => {
+    ctx.fillText(line, x, y + index * lineHeight);
+  });
+  return y + lines.length * lineHeight;
+}
+
+function roundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number
+) {
+  const safeRadius = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + safeRadius, y);
+  ctx.arcTo(x + width, y, x + width, y + height, safeRadius);
+  ctx.arcTo(x + width, y + height, x, y + height, safeRadius);
+  ctx.arcTo(x, y + height, x, y, safeRadius);
+  ctx.arcTo(x, y, x + width, y, safeRadius);
+  ctx.closePath();
+}
+
+async function generateTemplatePosterFile(draft: PosterMakerDraft) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1080;
+  canvas.height = 1350;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("이미지를 생성할 수 없습니다.");
+
+  const palette = getPalette(draft.accent);
+  const fontFamily = `"Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif`;
+
+  ctx.fillStyle = "#f8fafc";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = palette.accent;
+  ctx.fillRect(0, 0, canvas.width, 415);
+  ctx.fillStyle = palette.dark;
+  ctx.globalAlpha = 0.2;
+  ctx.beginPath();
+  ctx.moveTo(670, 0);
+  ctx.lineTo(1080, 0);
+  ctx.lineTo(1080, 415);
+  ctx.lineTo(500, 415);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.18)";
+  roundedRect(ctx, 72, 72, 250, 58, 29);
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `800 28px ${fontFamily}`;
+  ctx.fillText(draft.category_name.slice(0, 18), 102, 111);
+
+  ctx.font = `900 ${draft.title.length > 70 ? 58 : 66}px ${fontFamily}`;
+  ctx.fillStyle = "#ffffff";
+  const titleBottom = drawWrappedText(ctx, draft.title, 72, 205, 910, 78, 5);
+
+  ctx.font = `800 30px ${fontFamily}`;
+  ctx.fillStyle = "rgba(255,255,255,0.84)";
+  ctx.fillText(draft.source_org_name.slice(0, 32), 72, Math.min(titleBottom + 35, 382));
+
+  ctx.fillStyle = "#ffffff";
+  roundedRect(ctx, 72, 485, 936, 710, 24);
+  ctx.fill();
+
+  ctx.fillStyle = palette.soft;
+  roundedRect(ctx, 112, 535, 856, 150, 20);
+  ctx.fill();
+  ctx.fillStyle = palette.dark;
+  ctx.font = `900 28px ${fontFamily}`;
+  ctx.fillText("신청 기간", 152, 590);
+  ctx.font = `900 44px ${fontFamily}`;
+  drawWrappedText(ctx, draft.period_text, 152, 652, 780, 52, 2);
+
+  ctx.fillStyle = "#111827";
+  ctx.font = `900 34px ${fontFamily}`;
+  ctx.fillText("주요 내용", 112, 770);
+  ctx.fillStyle = "#334155";
+  ctx.font = `800 38px ${fontFamily}`;
+  drawWrappedText(ctx, draft.summary, 112, 840, 856, 56, 6);
+
+  ctx.strokeStyle = "#e5e7eb";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(112, 1092);
+  ctx.lineTo(968, 1092);
+  ctx.stroke();
+
+  ctx.fillStyle = "#0f172a";
+  ctx.font = `900 34px ${fontFamily}`;
+  ctx.fillText("자세한 내용은 원문 공고를 확인하세요", 112, 1155);
+
+  ctx.fillStyle = palette.accent;
+  roundedRect(ctx, 72, 1240, 250, 52, 26);
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `900 25px ${fontFamily}`;
+  ctx.fillText("PosterLink", 114, 1275);
+  ctx.fillStyle = "#64748b";
+  ctx.font = `800 24px ${fontFamily}`;
+  ctx.fillText("정부·지자체·공공기관 공고 모아보기", 348, 1275);
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((result) => {
+      if (result) resolve(result);
+      else reject(new Error("이미지를 생성하지 못했습니다."));
+    }, "image/png");
+  });
+
+  return new File([blob], `posterlink-template-${Date.now()}.png`, { type: "image/png" });
+}
+
 function MetricCard({
   icon: Icon,
   label,
@@ -197,6 +441,9 @@ export default function AdminNoticeCandidatesPage() {
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
+  const [makerCandidate, setMakerCandidate] = useState<NoticeCandidate | null>(null);
+  const [makerDraft, setMakerDraft] = useState<PosterMakerDraft | null>(null);
+  const [makerBusy, setMakerBusy] = useState(false);
 
   const loadCandidates = async () => {
     setLoading(true);
@@ -232,6 +479,8 @@ export default function AdminNoticeCandidatesPage() {
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
   }, [data?.candidates]);
+  const activeMakerPalette = makerDraft ? getPalette(makerDraft.accent) : POSTER_PALETTES[0];
+  const makerDisabled = makerBusy || Boolean(makerCandidate && updatingId === makerCandidate.id);
 
   const updateStatus = async (candidate: NoticeCandidate, nextStatus: CandidateStatus) => {
     setUpdatingId(candidate.id);
@@ -320,14 +569,33 @@ export default function AdminNoticeCandidatesPage() {
     }
   };
 
-  const convertCandidateWithImage = async (candidate: NoticeCandidate, file: File) => {
+  const openPosterMaker = (candidate: NoticeCandidate) => {
+    setMakerCandidate(candidate);
+    setMakerDraft(buildPosterMakerDraft(candidate));
+  };
+
+  const closePosterMaker = () => {
+    setMakerCandidate(null);
+    setMakerDraft(null);
+    setMakerBusy(false);
+  };
+
+  const updateMakerDraft = (field: keyof PosterMakerDraft, value: string) => {
+    setMakerDraft((prev) => prev ? { ...prev, [field]: value } : prev);
+  };
+
+  const convertCandidateWithImage = async (
+    candidate: NoticeCandidate,
+    file: File,
+    overrides?: ConvertCandidateOverrides
+  ) => {
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
       toast.error("jpg, png, webp 이미지만 업로드할 수 있습니다.");
-      return;
+      return false;
     }
     if (file.size > 8 * 1024 * 1024) {
       toast.error("이미지는 8MB 이하만 업로드할 수 있습니다.");
-      return;
+      return false;
     }
 
     setUpdatingId(candidate.id);
@@ -335,6 +603,10 @@ export default function AdminNoticeCandidatesPage() {
       const formData = new FormData();
       formData.append("id", candidate.id);
       formData.append("image", file);
+      if (overrides?.title) formData.append("title", overrides.title);
+      if (overrides?.source_org_name) formData.append("source_org_name", overrides.source_org_name);
+      if (overrides?.summary_short) formData.append("summary_short", overrides.summary_short);
+      if (overrides?.image_source) formData.append("image_source", overrides.image_source);
 
       const response = await fetch("/api/admin/notice-candidates/convert", {
         method: "POST",
@@ -346,10 +618,54 @@ export default function AdminNoticeCandidatesPage() {
       toast.success("이미지를 붙여 포스터 검수 항목으로 전환했습니다.");
       cancelEditing();
       await loadCandidates();
+      return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "포스터로 전환하지 못했습니다.");
+      return false;
     } finally {
       setUpdatingId(null);
+    }
+  };
+
+  const submitTemplatePoster = async () => {
+    if (!makerCandidate || !makerDraft) return;
+    if (!makerDraft.title.trim()) {
+      toast.error("포스터 제목을 입력해주세요.");
+      return;
+    }
+
+    setMakerBusy(true);
+    try {
+      const file = await generateTemplatePosterFile(makerDraft);
+      const converted = await convertCandidateWithImage(makerCandidate, file, {
+        title: makerDraft.title,
+        source_org_name: makerDraft.source_org_name,
+        summary_short: makerDraft.summary,
+        image_source: "template_canvas",
+      });
+      if (converted) closePosterMaker();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "포스터 이미지를 생성하지 못했습니다.");
+    } finally {
+      setMakerBusy(false);
+    }
+  };
+
+  const downloadTemplatePoster = async () => {
+    if (!makerDraft) return;
+    setMakerBusy(true);
+    try {
+      const file = await generateTemplatePosterFile(makerDraft);
+      const url = URL.createObjectURL(file);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = file.name;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "포스터 이미지를 저장하지 못했습니다.");
+    } finally {
+      setMakerBusy(false);
     }
   };
 
@@ -500,6 +816,15 @@ export default function AdminNoticeCandidatesPage() {
                       {disabled ? <Loader2 size={15} className="animate-spin" /> : <ImagePlus size={15} />}
                       이미지 업로드
                     </button>
+                    <button
+                      type="button"
+                      disabled={disabled || isConverted}
+                      onClick={() => openPosterMaker(candidate)}
+                      className="inline-flex h-10 items-center gap-2 rounded-lg bg-indigo-600 px-3 text-xs font-black text-white hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      <Wand2 size={15} />
+                      간단 제작
+                    </button>
                     {candidate.generated_poster_id && (
                       <a
                         href="/admin/posters"
@@ -513,20 +838,22 @@ export default function AdminNoticeCandidatesPage() {
                       type="button"
                       disabled={disabled}
                       onClick={() => updateStatus(candidate, "drafting")}
-                      className="inline-flex h-10 items-center gap-2 rounded-lg bg-indigo-600 px-3 text-xs font-black text-white hover:bg-indigo-700 disabled:opacity-50"
+                      className="inline-flex h-10 items-center gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-3 text-xs font-black text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-200"
                     >
                       {disabled ? <Loader2 size={15} className="animate-spin" /> : <Wand2 size={15} />}
                       제작중
                     </button>
-                    <button
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => updateStatus(candidate, "converted")}
-                      className="inline-flex h-10 items-center gap-2 rounded-lg bg-emerald-600 px-3 text-xs font-black text-white hover:bg-emerald-700 disabled:opacity-50"
-                    >
-                      <CheckCircle2 size={15} />
-                      완료
-                    </button>
+                    {isConverted && (
+                      <button
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => updateStatus(candidate, "converted")}
+                        className="inline-flex h-10 items-center gap-2 rounded-lg bg-emerald-600 px-3 text-xs font-black text-white hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        <CheckCircle2 size={15} />
+                        완료
+                      </button>
+                    )}
                     <button
                       type="button"
                       disabled={disabled}
@@ -708,6 +1035,148 @@ export default function AdminNoticeCandidatesPage() {
         </section>
       ) : (
         <EmptyBlock text="조건에 맞는 이미지 없는 공고 후보가 없습니다." />
+      )}
+
+      {makerCandidate && makerDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
+          <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-lg bg-white shadow-2xl dark:bg-slate-900">
+            <div className="flex items-start justify-between gap-4 border-b border-gray-100 p-5 dark:border-slate-800">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.24em] text-indigo-500">Template Poster</p>
+                <h2 className="mt-2 text-2xl font-black text-gray-950 dark:text-white">간단 포스터 제작</h2>
+              </div>
+              <button
+                type="button"
+                onClick={closePosterMaker}
+                disabled={makerDisabled}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
+                title="닫기"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="grid gap-6 p-5 lg:grid-cols-[380px_1fr]">
+              <div className="rounded-lg border border-gray-100 bg-gray-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+                <div className="mx-auto aspect-[4/5] w-full max-w-[320px] overflow-hidden rounded-lg bg-white shadow-sm">
+                  <div className="flex h-[31%] flex-col justify-between p-5 text-white" style={{ backgroundColor: activeMakerPalette.accent }}>
+                    <span className="w-fit rounded-full bg-white/20 px-3 py-1 text-xs font-black">{makerDraft.category_name || "공고"}</span>
+                    <div>
+                      <h3 className="line-clamp-4 text-2xl font-black leading-tight">{makerDraft.title || "공고 제목"}</h3>
+                      <p className="mt-2 text-xs font-black text-white/80">{makerDraft.source_org_name || "기관명"}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-4 p-5">
+                    <div className="rounded-lg p-4" style={{ backgroundColor: activeMakerPalette.soft }}>
+                      <p className="text-xs font-black" style={{ color: activeMakerPalette.dark }}>신청 기간</p>
+                      <p className="mt-2 line-clamp-2 text-base font-black text-gray-950">{makerDraft.period_text || "원문 공고 확인"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-black text-gray-400">주요 내용</p>
+                      <p className="mt-2 line-clamp-6 text-sm font-black leading-6 text-gray-700">{makerDraft.summary || "자세한 내용은 원문 공고를 확인하세요."}</p>
+                    </div>
+                    <div className="border-t border-gray-100 pt-4">
+                      <p className="text-sm font-black text-gray-950">자세한 내용은 원문 공고를 확인하세요</p>
+                      <p className="mt-3 inline-flex rounded-full px-3 py-1 text-xs font-black text-white" style={{ backgroundColor: activeMakerPalette.accent }}>PosterLink</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="block text-xs font-black text-gray-500 dark:text-slate-300">
+                    제목
+                    <textarea
+                      value={makerDraft.title}
+                      onChange={(event) => updateMakerDraft("title", event.target.value)}
+                      rows={3}
+                      className="mt-2 w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold leading-6 text-gray-950 outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+                    />
+                  </label>
+                  <label className="block text-xs font-black text-gray-500 dark:text-slate-300">
+                    기관명
+                    <input
+                      value={makerDraft.source_org_name}
+                      onChange={(event) => updateMakerDraft("source_org_name", event.target.value)}
+                      className="mt-2 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+                    />
+                  </label>
+                  <label className="block text-xs font-black text-gray-500 dark:text-slate-300">
+                    분류
+                    <input
+                      value={makerDraft.category_name}
+                      onChange={(event) => updateMakerDraft("category_name", event.target.value)}
+                      className="mt-2 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+                    />
+                  </label>
+                  <label className="block text-xs font-black text-gray-500 dark:text-slate-300">
+                    기간
+                    <input
+                      value={makerDraft.period_text}
+                      onChange={(event) => updateMakerDraft("period_text", event.target.value)}
+                      className="mt-2 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+                    />
+                  </label>
+                </div>
+
+                <label className="block text-xs font-black text-gray-500 dark:text-slate-300">
+                  주요 내용
+                  <textarea
+                    value={makerDraft.summary}
+                    onChange={(event) => updateMakerDraft("summary", event.target.value)}
+                    rows={5}
+                    className="mt-2 w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold leading-6 text-gray-950 outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+                  />
+                </label>
+
+                <div>
+                  <p className="text-xs font-black text-gray-500 dark:text-slate-300">색상</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {POSTER_PALETTES.map((palette) => (
+                      <button
+                        key={palette.accent}
+                        type="button"
+                        onClick={() => updateMakerDraft("accent", palette.accent)}
+                        className={`h-9 w-9 rounded-full border-4 transition-transform hover:scale-105 ${
+                          makerDraft.accent === palette.accent ? "border-gray-950 dark:border-white" : "border-white dark:border-slate-700"
+                        }`}
+                        style={{ backgroundColor: palette.accent }}
+                        aria-label={`${palette.name} 색상`}
+                        title={`${palette.name} 색상`}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-amber-100 bg-amber-50 p-4 text-xs font-bold leading-5 text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-100">
+                  원문과 기간을 확인한 뒤 전환하세요. 생성된 이미지는 검수 화면에서 한 번 더 승인해야 공개됩니다.
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-2 border-t border-gray-100 p-5 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={downloadTemplatePoster}
+                disabled={makerDisabled}
+                className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 text-xs font-black text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                {makerBusy ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+                PNG 저장
+              </button>
+              <button
+                type="button"
+                onClick={submitTemplatePoster}
+                disabled={makerDisabled}
+                className="inline-flex h-10 items-center gap-2 rounded-lg bg-gray-950 px-4 text-xs font-black text-white hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-slate-200"
+              >
+                {makerBusy ? <Loader2 size={15} className="animate-spin" /> : <Wand2 size={15} />}
+                검수 포스터로 전환
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <section className="rounded-lg border border-indigo-100 bg-indigo-50 p-5 text-sm font-bold text-indigo-800 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-100">

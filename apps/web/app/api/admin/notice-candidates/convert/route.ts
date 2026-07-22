@@ -9,6 +9,7 @@ const ADMIN_ROLES = new Set(["admin", "super_admin"]);
 const POSTER_IMAGE_BUCKET = process.env.POSTER_IMAGE_BUCKET?.trim() || "poster-originals";
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const IMAGE_SOURCE_VALUES = new Set(["admin_upload", "template_canvas"]);
 
 class HttpError extends Error {
   status: number;
@@ -66,6 +67,12 @@ function normalizeHttpUrl(value: unknown) {
   }
 }
 
+function normalizeOptionalText(value: FormDataEntryValue | null, limit: number) {
+  if (typeof value !== "string") return null;
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized ? normalized.slice(0, limit) : null;
+}
+
 function getExtension(contentType: string) {
   if (contentType === "image/png") return "png";
   if (contentType === "image/webp") return "webp";
@@ -95,6 +102,13 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const candidateId = String(formData.get("id") ?? "").trim();
     const image = formData.get("image");
+    const titleOverride = normalizeOptionalText(formData.get("title"), 300);
+    const orgOverride = normalizeOptionalText(formData.get("source_org_name"), 200);
+    const summaryOverride = normalizeOptionalText(formData.get("summary_short"), 1000);
+    const imageSourceInput = normalizeOptionalText(formData.get("image_source"), 50);
+    const imageSource = imageSourceInput && IMAGE_SOURCE_VALUES.has(imageSourceInput)
+      ? imageSourceInput
+      : "admin_upload";
 
     if (!candidateId) throw new HttpError("candidate id is required", 400);
     if (!(image instanceof File)) throw new HttpError("image file is required", 400);
@@ -120,7 +134,9 @@ export async function POST(request: NextRequest) {
       throw new HttpError("이미 포스터로 전환된 후보입니다.", 409);
     }
 
-    const title = String(candidate.title ?? "").replace(/\s+/g, " ").trim();
+    const title = titleOverride ?? String(candidate.title ?? "").replace(/\s+/g, " ").trim();
+    const sourceOrgName = orgOverride ?? candidate.source_org_name ?? candidate.collection_source_slug ?? null;
+    const summaryShort = summaryOverride ?? candidate.summary_short ?? null;
     if (!title) throw new HttpError("후보 제목이 비어 있습니다.", 400);
 
     const { data: existingPoster, error: existingPosterError } = await admin
@@ -152,7 +168,7 @@ export async function POST(request: NextRequest) {
     const sourceUrl = normalizeHttpUrl(candidate.source_url) ?? normalizeHttpUrl(candidate.source_key);
     const fieldVerification = {
       ...asPlainObject(candidate.field_verification),
-      imageSource: "admin_upload",
+      imageSource,
       noticeCandidateId: candidate.id,
       noticeCandidateSourceKey: candidate.source_key,
       convertedAt,
@@ -163,8 +179,8 @@ export async function POST(request: NextRequest) {
       .from("posters")
       .insert({
         title,
-        source_org_name: candidate.source_org_name ?? candidate.collection_source_slug ?? null,
-        summary_short: candidate.summary_short ?? null,
+        source_org_name: sourceOrgName,
+        summary_short: summaryShort,
         summary_long: candidate.summary_long ?? null,
         poster_status: "review",
         application_start_at: candidate.application_start_at ?? null,
@@ -199,7 +215,7 @@ export async function POST(request: NextRequest) {
     }
 
     const existingNote = typeof candidate.admin_note === "string" ? candidate.admin_note.trim() : "";
-    const conversionNote = `직접 이미지 업로드로 포스터 검수 항목 전환: ${convertedAt}`;
+    const conversionNote = `${imageSource === "template_canvas" ? "간단 제작 이미지" : "직접 이미지 업로드"}로 포스터 검수 항목 전환: ${convertedAt}`;
     const nextAdminNote = [existingNote, conversionNote].filter(Boolean).join("\n");
 
     const { data: updatedCandidate, error: candidateUpdateError } = await admin
@@ -227,6 +243,7 @@ export async function POST(request: NextRequest) {
         action: "convert_to_review_poster",
         poster_id: poster.id,
         source_key: candidate.source_key,
+        image_source: imageSource,
         image_storage_path: uploadedStoragePath,
       },
     });
