@@ -80,6 +80,11 @@ const CENTRAL_TEXT_NOTICE_REVIEW_ONLY_CODES = new Set([
   "parking-or-homepage",
   "web-accessibility",
 ]);
+const JOB_ALIO_SOURCE_PATTERN = /(?:job-alio|JOB-ALIO|job\.alio\.go\.kr)/i;
+const JOB_ALIO_RECRUIT_NOTICE_PATTERN = /(?:\uCC44\uC6A9\s*\uAE30\uAC04|\uC751\uC2DC\s*\uC790\uACA9|\uCC44\uC6A9\s*\uC778\uC6D0|\uACE0\uC6A9\s*\uD615\uD0DC|\uADFC\uBB34\s*\uC9C0|\uD559\uB825\s*\uC815\uBCF4|\uC804\uD615\s*\uC808\uCC28|\uC9C0\uC6D0\uC11C|\uC9C1\uBB34\s*\uAE30\uC220\uC11C)/i;
+const JOB_ALIO_REVIEW_ONLY_CODES = new Set([
+  "facility-use",
+]);
 
 const GENERIC_TITLE_PATTERNS = [
   /^\s*$/i,
@@ -206,6 +211,21 @@ function isCentralTextNotice(input, sourceKey, allText) {
     && CENTRAL_TEXT_NOTICE_SIGNAL_PATTERN.test(allText);
 }
 
+function isJobAlioRecruitTextNotice(input, sourceKey, allText) {
+  const sourceText = [
+    input.site,
+    input.siteId,
+    input.collectionSourceSlug,
+    input.source_org_name,
+    input.sourceUrl,
+    input.url,
+    sourceKey,
+  ].filter(Boolean).join(" ");
+
+  return JOB_ALIO_SOURCE_PATTERN.test(sourceText)
+    && JOB_ALIO_RECRUIT_NOTICE_PATTERN.test(allText);
+}
+
 export function buildPosterDuplicateMaps(rows = []) {
   const source = new Map();
   const titleOrg = new Map();
@@ -260,6 +280,7 @@ export function evaluatePosterQuality(input = {}, options = {}) {
   ].map(normalizeUrl));
   const allText = getTextBundle(input, images, links);
   const isCentralText = isTextNotice && isCentralTextNotice(input, sourceKey, allText);
+  const isJobAlioText = isTextNotice && isJobAlioRecruitTextNotice(input, sourceKey, allText);
   const dateQuality = evaluatePosterDateQuality(input, {
     extractedDeadline: options.extractedDeadline ?? input.deadline ?? input.application_end_at ?? null,
   });
@@ -294,6 +315,10 @@ export function evaluatePosterQuality(input = {}, options = {}) {
       : rule.pattern.test(title) || rule.pattern.test(allText);
     if (isMatch) {
       if (isCentralText && CENTRAL_TEXT_NOTICE_REVIEW_ONLY_CODES.has(rule.code)) {
+        addIssue(issues, rule.code, "medium", rule.reason, title || allText, "review");
+        continue;
+      }
+      if (isJobAlioText && JOB_ALIO_REVIEW_ONLY_CODES.has(rule.code)) {
         addIssue(issues, rule.code, "medium", rule.reason, title || allText, "review");
         continue;
       }
@@ -356,9 +381,13 @@ export function evaluatePosterQuality(input = {}, options = {}) {
     if (issue.severity === "medium") return sum + 3;
     return sum + 1;
   }, 0);
+  const isReviewOnlyRejectCode = (issue) => (
+    (isCentralText && CENTRAL_TEXT_NOTICE_REVIEW_ONLY_CODES.has(issue.code))
+    || (isJobAlioText && JOB_ALIO_REVIEW_ONLY_CODES.has(issue.code))
+  );
   const decision = issues.some((issue) => (
-    issue.decision === "reject"
-    || (REJECT_CODES.has(issue.code) && !(isCentralText && CENTRAL_TEXT_NOTICE_REVIEW_ONLY_CODES.has(issue.code)))
+    (issue.decision === "reject" && !isReviewOnlyRejectCode(issue))
+    || (REJECT_CODES.has(issue.code) && !isReviewOnlyRejectCode(issue))
   ))
     ? "reject"
     : issues.length > 0
