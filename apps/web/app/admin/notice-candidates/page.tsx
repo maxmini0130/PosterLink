@@ -24,6 +24,16 @@ import {
 
 type CandidateStatus = "pending" | "drafting" | "converted" | "dismissed" | "archived";
 
+type CandidateQualityIssue = {
+  code?: string;
+  reason?: string;
+  severity?: string;
+  evidence?: string;
+  duplicatePosterId?: string | null;
+  duplicateScore?: number | null;
+  [key: string]: any;
+};
+
 type NoticeCandidate = {
   id: string;
   source_key: string;
@@ -42,7 +52,7 @@ type NoticeCandidate = {
   application_start_at: string | null;
   application_end_at: string | null;
   reason: string | null;
-  quality_issues: Array<{ code?: string; reason?: string; severity?: string }> | null;
+  quality_issues: CandidateQualityIssue[] | null;
   field_verification: Record<string, any> | null;
   raw_payload: Record<string, any> | null;
   generated_poster_id: string | null;
@@ -236,6 +246,51 @@ function normalizePosterText(value?: string | null, fallback = "") {
   return normalized || fallback;
 }
 
+function getCandidateDuplicateIssues(candidate: NoticeCandidate): CandidateQualityIssue[] {
+  const qualityIssues = candidate.quality_issues ?? [];
+  const verificationIssues = Array.isArray(candidate.field_verification?.duplicateIssues)
+    ? candidate.field_verification.duplicateIssues as CandidateQualityIssue[]
+    : [];
+  const issues = [...qualityIssues, ...verificationIssues].filter((issue) => {
+    const code = String(issue?.code ?? "").toLowerCase();
+    const reason = String(issue?.reason ?? "").toLowerCase();
+    const evidence = String(issue?.evidence ?? "").toLowerCase();
+    return Boolean(
+      issue?.duplicatePosterId ||
+      code.includes("duplicate") ||
+      reason.includes("duplicate") ||
+      evidence.includes("existing")
+    );
+  });
+  const seen = new Set<string>();
+  return issues.filter((issue) => {
+    const key = [
+      issue.code ?? "",
+      issue.duplicatePosterId ?? "",
+      issue.duplicateScore ?? "",
+      issue.evidence ?? "",
+    ].join("|");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function getDuplicateIssueLabel(issue: CandidateQualityIssue) {
+  return [
+    issue.code ?? "duplicate-suspected",
+    typeof issue.duplicateScore === "number" ? `점수 ${issue.duplicateScore}` : "",
+    issue.duplicatePosterId ? `기존 ${issue.duplicatePosterId}` : "",
+  ].filter(Boolean).join(" · ");
+}
+
+function getDuplicateIssueDetail(issue: CandidateQualityIssue) {
+  return normalizePosterText(
+    [issue.reason, issue.evidence].filter(Boolean).join(" · "),
+    "기존 포스터와 비슷한 항목입니다. 제작/전환 전 원문을 확인하세요."
+  );
+}
+
 function createCandidatePreflightCheck(
   key: string,
   label: string,
@@ -252,6 +307,7 @@ function getCandidatePreflightChecks(candidate: NoticeCandidate): CandidatePrefl
   const categoryName = normalizePosterText(candidate.category_name);
   const summary = normalizePosterText(candidate.summary_short ?? candidate.summary_long);
   const qualityIssues = candidate.quality_issues ?? [];
+  const duplicateIssues = getCandidateDuplicateIssues(candidate);
   const applicationEnd = candidate.application_end_at ? new Date(candidate.application_end_at) : null;
   const applicationStart = candidate.application_start_at ? new Date(candidate.application_start_at) : null;
   const endInvalid = Boolean(applicationEnd && Number.isNaN(applicationEnd.getTime()));
@@ -309,6 +365,12 @@ function getCandidatePreflightChecks(candidate: NoticeCandidate): CandidatePrefl
       "요약",
       summary ? "pass" : "warning",
       summary ? "요약이 있습니다." : "요약이 없어 원문 확인이 필요합니다."
+    ),
+    createCandidatePreflightCheck(
+      "duplicate",
+      "중복",
+      duplicateIssues.length > 0 ? "warning" : "pass",
+      duplicateIssues.length > 0 ? `기존 포스터와 유사한 항목 ${duplicateIssues.length}건` : "중복 의심이 없습니다."
     ),
     createCandidatePreflightCheck(
       "quality",
@@ -977,6 +1039,7 @@ export default function AdminNoticeCandidatesPage() {
             const activeCandidate = getActiveCandidate(candidate);
             const sourceUrl = activeCandidate.source_url || activeCandidate.source_key;
             const issues = candidate.quality_issues ?? [];
+            const duplicateIssues = getCandidateDuplicateIssues(activeCandidate);
             const disabled = updatingId === candidate.id;
             const isEditing = editingId === candidate.id && editDraft;
             const isConverted = candidate.candidate_status === "converted";
@@ -1004,6 +1067,15 @@ export default function AdminNoticeCandidatesPage() {
                       <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-black text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-200">
                         이미지 없음
                       </span>
+                      {duplicateIssues.length > 0 && (
+                        <span
+                          title={duplicateIssues.map((issue) => `${getDuplicateIssueLabel(issue)}\n${getDuplicateIssueDetail(issue)}`).join("\n\n")}
+                          className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-black text-rose-700 dark:bg-rose-500/10 dark:text-rose-200"
+                        >
+                          <AlertTriangle size={13} />
+                          중복 의심 {duplicateIssues.length}
+                        </span>
+                      )}
                       {preflightProblems.length > 0 && (
                         <span
                           title={preflightProblems.map((check) => `${check.label}: ${check.detail}`).join("\n")}
@@ -1273,7 +1345,7 @@ export default function AdminNoticeCandidatesPage() {
                   </details>
                 )}
 
-                {(candidate.summary_long || issues.length > 0 || candidate.admin_note) && (
+                {(candidate.summary_long || issues.length > 0 || duplicateIssues.length > 0 || candidate.admin_note) && (
                   <details className="mt-4 rounded-lg border border-gray-100 p-4 dark:border-slate-800">
                     <summary className="cursor-pointer text-xs font-black text-gray-500 dark:text-slate-300">
                       원문 요약과 검증 이슈 보기
@@ -1290,6 +1362,31 @@ export default function AdminNoticeCandidatesPage() {
                             {issue.code ?? issue.reason ?? "review"}
                           </span>
                         ))}
+                      </div>
+                    )}
+                    {duplicateIssues.length > 0 && (
+                      <div className="mt-4 rounded-lg border border-rose-100 bg-rose-50/70 p-3 dark:border-rose-500/20 dark:bg-rose-500/10">
+                        <p className="flex items-center gap-1.5 text-xs font-black text-rose-700 dark:text-rose-100">
+                          <AlertTriangle size={13} />
+                          중복 의심 근거
+                        </p>
+                        <div className="mt-3 space-y-2">
+                          {duplicateIssues.slice(0, 5).map((issue, index) => (
+                            <div key={`${issue.code ?? "duplicate"}-${issue.duplicatePosterId ?? index}`} className="rounded-lg bg-white/80 p-3 text-xs font-bold leading-5 text-rose-900 dark:bg-slate-950/40 dark:text-rose-100">
+                              <p className="font-black">{getDuplicateIssueLabel(issue)}</p>
+                              <p className="mt-1 opacity-80">{getDuplicateIssueDetail(issue)}</p>
+                              {issue.duplicatePosterId && (
+                                <a
+                                  href={`/admin/posters?posterId=${issue.duplicatePosterId}`}
+                                  className="mt-2 inline-flex items-center gap-1 text-[11px] font-black text-rose-700 underline-offset-2 hover:underline dark:text-rose-200"
+                                >
+                                  <ExternalLink size={12} />
+                                  기존 포스터 열기
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                     {candidate.admin_note && (
