@@ -830,7 +830,7 @@ export default function AdminNoticeCandidatesPage() {
                     </button>
                     {candidate.generated_poster_id && (
                       <a
-                        href="/admin/posters"
+                        href={`/admin/posters?status=review&posterId=${candidate.generated_poster_id}`}
                         className="inline-flex h-10 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-xs font-black text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200"
                       >
                         <CheckCircle2 size={15} />

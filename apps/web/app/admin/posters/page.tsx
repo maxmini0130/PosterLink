@@ -44,6 +44,12 @@ const EMPTY_FILTERS: PosterSearchFilters = {
   media: "",
 };
 
+const POSTER_STATUS_VALUES = new Set<PosterStatus>(["review", "published", "rejected", "draft"]);
+
+function isPosterStatus(value: string | null): value is PosterStatus {
+  return Boolean(value && POSTER_STATUS_VALUES.has(value as PosterStatus));
+}
+
 function normalizeSearchValue(value: string) {
   return value.trim().replace(/[,()]/g, " ").replace(/\s+/g, " ");
 }
@@ -324,6 +330,7 @@ export default function AdminPostersPage() {
   const [regions, setRegions] = useState<any[]>([]);
   const [draftFilters, setDraftFilters] = useState<PosterSearchFilters>(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<PosterSearchFilters>(EMPTY_FILTERS);
+  const [focusedPosterId, setFocusedPosterId] = useState<string | null>(null);
 
   const fetchPosters = useCallback(async (status: PosterStatus, pageIndex: number, filters: PosterSearchFilters) => {
     setLoading(true);
@@ -419,6 +426,59 @@ export default function AdminPostersPage() {
   useEffect(() => {
     void fetchPosters(currentFilter, page, appliedFilters);
   }, [appliedFilters, currentFilter, fetchPosters, page]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const posterId = params.get("posterId");
+    const statusParam = params.get("status");
+
+    if (isPosterStatus(statusParam)) setCurrentFilter(statusParam);
+    if (posterId) setFocusedPosterId(posterId);
+  }, []);
+
+  useEffect(() => {
+    if (!focusedPosterId) return;
+
+    let cancelled = false;
+    const loadFocusedPoster = async () => {
+      const { data, error } = await supabase
+        .from("posters")
+        .select("*")
+        .eq("id", focusedPosterId)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (error) {
+        toast.error(error.message);
+        setFocusedPosterId(null);
+        return;
+      }
+
+      if (!data) {
+        toast.error("해당 포스터를 찾지 못했습니다.");
+        setFocusedPosterId(null);
+        return;
+      }
+
+      const metaMap = await fetchCategoryRegionNames([data.id]);
+      if (cancelled) return;
+
+      const focusedPoster = { ...data, ...metaMap[data.id] };
+      setPreviewPoster(focusedPoster);
+      if (isPosterStatus(data.poster_status) && data.poster_status !== currentFilter) {
+        setCurrentFilter(data.poster_status);
+      }
+      toast.success("전환된 포스터를 검수 화면에서 열었습니다.");
+      setFocusedPosterId(null);
+    };
+
+    void loadFocusedPoster();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentFilter, focusedPosterId]);
 
   useEffect(() => {
     const fetchOptions = async () => {
