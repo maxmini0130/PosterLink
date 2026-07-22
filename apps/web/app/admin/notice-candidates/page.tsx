@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import {
   Archive,
+  AlertTriangle,
   CheckCircle2,
   Download,
   ExternalLink,
@@ -73,6 +74,14 @@ type ConvertedPosterLink = {
   id: string;
   title: string;
   source_org_name: string | null;
+};
+
+type CandidatePreflightStatus = "pass" | "warning" | "block";
+type CandidatePreflightCheck = {
+  key: string;
+  label: string;
+  status: CandidatePreflightStatus;
+  detail: string;
 };
 
 type EditDraft = {
@@ -146,6 +155,16 @@ function formatDate(value?: string | null) {
   }).format(new Date(value));
 }
 
+function isValidHttpUrl(value?: string | null) {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function statusTone(status: string) {
   if (status === "pending") return "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200";
   if (status === "drafting") return "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-200";
@@ -215,6 +234,95 @@ function buildDefaultPeriodText(candidate: NoticeCandidate) {
 function normalizePosterText(value?: string | null, fallback = "") {
   const normalized = (value ?? "").replace(/\s+/g, " ").trim();
   return normalized || fallback;
+}
+
+function createCandidatePreflightCheck(
+  key: string,
+  label: string,
+  status: CandidatePreflightStatus,
+  detail: string
+): CandidatePreflightCheck {
+  return { key, label, status, detail };
+}
+
+function getCandidatePreflightChecks(candidate: NoticeCandidate): CandidatePreflightCheck[] {
+  const title = normalizePosterText(candidate.title);
+  const sourceUrl = candidate.source_url || candidate.source_key;
+  const orgName = normalizePosterText(candidate.source_org_name);
+  const categoryName = normalizePosterText(candidate.category_name);
+  const summary = normalizePosterText(candidate.summary_short ?? candidate.summary_long);
+  const qualityIssues = candidate.quality_issues ?? [];
+  const applicationEnd = candidate.application_end_at ? new Date(candidate.application_end_at) : null;
+  const applicationStart = candidate.application_start_at ? new Date(candidate.application_start_at) : null;
+  const endInvalid = Boolean(applicationEnd && Number.isNaN(applicationEnd.getTime()));
+  const startInvalid = Boolean(applicationStart && Number.isNaN(applicationStart.getTime()));
+  const isExpired = Boolean(applicationEnd && !endInvalid && applicationEnd.getTime() < Date.now());
+  const startAfterEnd = Boolean(
+    applicationStart &&
+    applicationEnd &&
+    !startInvalid &&
+    !endInvalid &&
+    applicationStart.getTime() > applicationEnd.getTime()
+  );
+
+  return [
+    createCandidatePreflightCheck(
+      "title",
+      "제목",
+      title ? "pass" : "block",
+      title ? "제목이 있습니다." : "제목이 비어 있습니다."
+    ),
+    createCandidatePreflightCheck(
+      "source",
+      "원문 URL",
+      isValidHttpUrl(sourceUrl) ? "pass" : "block",
+      isValidHttpUrl(sourceUrl) ? "원문 URL이 있습니다." : "원문 URL이 없거나 올바르지 않습니다."
+    ),
+    createCandidatePreflightCheck(
+      "organization",
+      "기관",
+      orgName ? "pass" : "warning",
+      orgName ? `기관: ${orgName}` : "기관명을 확인하세요."
+    ),
+    createCandidatePreflightCheck(
+      "period",
+      "신청 기간",
+      endInvalid || startInvalid || startAfterEnd || isExpired ? "warning" : "pass",
+      endInvalid || startInvalid
+        ? "날짜 형식 확인이 필요합니다."
+        : startAfterEnd
+          ? "시작일이 마감일보다 늦습니다."
+          : isExpired
+            ? "이미 지난 마감일입니다."
+            : candidate.application_end_at
+              ? "마감일이 있습니다."
+              : "상시 또는 마감일 미기재 공고입니다."
+    ),
+    createCandidatePreflightCheck(
+      "category",
+      "분류",
+      categoryName ? "pass" : "warning",
+      categoryName ? `분류: ${categoryName}` : "분류를 확인하세요."
+    ),
+    createCandidatePreflightCheck(
+      "summary",
+      "요약",
+      summary ? "pass" : "warning",
+      summary ? "요약이 있습니다." : "요약이 없어 원문 확인이 필요합니다."
+    ),
+    createCandidatePreflightCheck(
+      "quality",
+      "수집 이슈",
+      qualityIssues.length > 0 ? "warning" : "pass",
+      qualityIssues.length > 0 ? `수집/검증 이슈 ${qualityIssues.length}건` : "수집 이슈가 없습니다."
+    ),
+  ];
+}
+
+function getCandidatePreflightToneClass(status: CandidatePreflightStatus) {
+  if (status === "block") return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-100";
+  if (status === "warning") return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-100";
+  return "border-emerald-100 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-100";
 }
 
 function buildPosterMakerDraft(candidate: NoticeCandidate): PosterMakerDraft {
@@ -662,6 +770,13 @@ export default function AdminNoticeCandidatesPage() {
       toast.error("포스터 제목을 입력해주세요.");
       return false;
     }
+    const effectiveSourceUrl = overrides && Object.prototype.hasOwnProperty.call(overrides, "source_url")
+      ? overrides.source_url
+      : candidate.source_url ?? candidate.source_key;
+    if (!isValidHttpUrl(effectiveSourceUrl)) {
+      toast.error("원문 URL을 확인해주세요.");
+      return false;
+    }
 
     setUpdatingId(candidate.id);
     try {
@@ -859,12 +974,16 @@ export default function AdminNoticeCandidatesPage() {
       ) : sortedCandidates.length > 0 ? (
         <section className="space-y-3">
           {sortedCandidates.map((candidate) => {
-            const sourceUrl = candidate.source_url || candidate.source_key;
+            const activeCandidate = getActiveCandidate(candidate);
+            const sourceUrl = activeCandidate.source_url || activeCandidate.source_key;
             const issues = candidate.quality_issues ?? [];
             const disabled = updatingId === candidate.id;
             const isEditing = editingId === candidate.id && editDraft;
             const isConverted = candidate.candidate_status === "converted";
             const imageInputId = `notice-candidate-image-${candidate.id}`;
+            const preflightChecks = getCandidatePreflightChecks(activeCandidate);
+            const preflightProblems = preflightChecks.filter((check) => check.status !== "pass");
+            const hasPreflightBlocker = preflightProblems.some((check) => check.status === "block");
 
             return (
               <article
@@ -885,6 +1004,19 @@ export default function AdminNoticeCandidatesPage() {
                       <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-black text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-200">
                         이미지 없음
                       </span>
+                      {preflightProblems.length > 0 && (
+                        <span
+                          title={preflightProblems.map((check) => `${check.label}: ${check.detail}`).join("\n")}
+                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black ${
+                            hasPreflightBlocker
+                              ? "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-200"
+                              : "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200"
+                          }`}
+                        >
+                          <AlertTriangle size={13} />
+                          전환 체크 {preflightProblems.length}
+                        </span>
+                      )}
                     </div>
                     <h2 className="text-lg font-black leading-snug text-gray-950 dark:text-white">{candidate.title}</h2>
                     <p className="mt-1 text-xs font-bold text-gray-400">
@@ -1121,6 +1253,25 @@ export default function AdminNoticeCandidatesPage() {
                     <p className="mt-1 line-clamp-2 text-gray-900 dark:text-white">{candidate.reason ?? "poster image missing"}</p>
                   </div>
                 </div>
+
+                {preflightProblems.length > 0 && (
+                  <details className="mt-4 rounded-lg border border-amber-100 bg-amber-50/50 p-4 dark:border-amber-500/20 dark:bg-amber-500/10">
+                    <summary className="cursor-pointer text-xs font-black text-amber-800 dark:text-amber-100">
+                      전환 전 체크리스트 보기
+                    </summary>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                      {preflightChecks.map((check) => (
+                        <div
+                          key={check.key}
+                          className={`rounded-lg border px-3 py-2 ${getCandidatePreflightToneClass(check.status)}`}
+                        >
+                          <p className="text-xs font-black">{check.label}</p>
+                          <p className="mt-1 text-[11px] font-bold leading-4 opacity-80">{check.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
 
                 {(candidate.summary_long || issues.length > 0 || candidate.admin_note) && (
                   <details className="mt-4 rounded-lg border border-gray-100 p-4 dark:border-slate-800">
