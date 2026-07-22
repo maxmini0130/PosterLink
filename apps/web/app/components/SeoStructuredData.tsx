@@ -3,7 +3,7 @@ import { getAppOrigin } from "../../lib/siteUrl";
 const appOrigin = getAppOrigin();
 
 const description =
-  "정부·지자체·공공기관의 청년지원, 소상공인 지원사업, 교육, 문화행사, 채용·모집 공고를 지역과 관심분야별로 찾아보세요.";
+  "청년 지원, 소상공인 지원, 교육, 문화행사, 채용·모집 등 흩어진 공공기관 공고를 지역과 관심분야별로 찾아보세요.";
 
 export function SeoStructuredData() {
   const structuredData = [
