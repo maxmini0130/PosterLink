@@ -20,6 +20,26 @@ const TITLE_EXCLUDE_RULES = [
     reason: "breadcrumb/navigation path captured as title",
   },
   {
+    name: "system-error-page",
+    pattern: /\uC2DC\uC2A4\uD15C\s*\uC624\uB958(?:\s*\uC785\uB2C8\uB2E4|\s*\uC785\uB2C8\uB2E4\.)?|\uC624\uB958\s*\uD398\uC774\uC9C0|\uC694\uCCAD\uD558\uC2E0\s*\uD398\uC774\uC9C0\uB97C\s*\uCC3E\uC744\s*\uC218\s*\uC5C6/i,
+    reason: "system error page captured instead of notice content",
+  },
+  {
+    name: "web-accessibility-mark",
+    pattern: /\uC6F9\s*\uC811\uADFC\uC131|\uD488\uC9C8\s*\uC778\uC99D\s*\uB9C8\uD06C|\uACFC\uD559\uAE30\uC220\uC815\uBCF4\uD1B5\uC2E0\uBD80|\bWA\b\s*(?:\uB9C8\uD06C|\uC778\uC99D)/i,
+    reason: "web accessibility mark/certification asset is not a poster",
+  },
+  {
+    name: "facility-schedule-or-parking-control",
+    pattern: /(?:\uC2DC\uAC04\uD45C|\uC77C\uC815\uD45C|\uC77C\uC815\s*\uD45C|\uAD00\uB0B4\s*\uB300\uAD00\s*\uC77C\uC815|\uC6D4\s*\uAD00\uB0B4\s*\uB300\uAD00|\uBCFC\uB9C1\uC7A5\s*\uC2DC\uAC04\uD45C|\uC8FC\uCC28\uC7A5\s*\uC77C\uBD80\s*\uD1B5\uC81C|\uC8FC\uCC28\s*\uD1B5\uC81C|\uD648\uD398\uC774\uC9C0\s*\uC774\uC6A9|\uD68C\uC6D0\s*\uC811\uC218\s*\uBC0F\s*\uC774\uC6A9\s*\uC548\uB0B4)/i,
+    reason: "facility schedule, timetable, homepage, or parking-control notice is not a poster notice",
+  },
+  {
+    name: "partial-operation-or-public-holiday",
+    pattern: /(?:\uBD80\uBD84\s*\uC6B4\uC601\uC77C|\uBD80\uBD84\uC6B4\uC601\uC77C|\uBC95\uC815\s*\uACF5\uD734\uC77C|\uACF5\uD734\uC77C\s*\uC6B4\uC601|\uC774\uC6A9\s*\uC2DC\uAC04\s*\uC548\uB0B4).*(?:\uC548\uB0B4|\uC6B4\uC601|\uC774\uC6A9)|(?:\uC548\uB0B4|\uC6B4\uC601|\uC774\uC6A9).*(?:\uBD80\uBD84\s*\uC6B4\uC601\uC77C|\uBC95\uC815\s*\uACF5\uD734\uC77C|\uACF5\uD734\uC77C\s*\uC6B4\uC601|\uC774\uC6A9\s*\uC2DC\uAC04)/i,
+    reason: "partial operation or public-holiday facility notice is not a poster notice",
+  },
+  {
     name: "monthly-calendar-or-schedule-image",
     pattern: /(?:\d{1,2}\s*\uC6D4|[0-9]{2}\s*\uC6D4).*(?:\uC6D4\s*\uD504\uB85C\uADF8\uB7A8\s*\uC548\uB0B4|\uD504\uB85C\uADF8\uB7A8\s*\uC548\uB0B4|\uCE98\uB9B0\uB354|\uB2EC\uB825|\uC2A4\uCF00\uC904|\uC2DC\uAC04\uD45C|\uC77C\uC815\uD45C)|(?:\uC6D4\s*\uD504\uB85C\uADF8\uB7A8\s*\uC548\uB0B4|\uCE98\uB9B0\uB354|\uB2EC\uB825|\uC2A4\uCF00\uC904|\uC2DC\uAC04\uD45C|\uC77C\uC815\uD45C).*(?:\d{1,2}\s*\uC6D4|[0-9]{2}\s*\uC6D4)/i,
     reason: "monthly calendar/schedule image, not an individual poster",
@@ -118,6 +138,11 @@ const TITLE_EXCLUDE_RULES = [
     name: "korean-result-or-selected-list",
     pattern: /합격자\s*발표|최종\s*합격자?|서류\s*합격자?|1차\s*합격자?|2차\s*합격자?|선정\s*결과|추첨\s*결과|결과\s*발표|대상자\s*발표|명단\s*발표/i,
     reason: "result announcement",
+  },
+  {
+    name: "selected-or-result-announcement",
+    pattern: /\uC120\uBC1C\s*\uACB0\uACFC|\uC120\uBC1C\uACB0\uACFC|\uACB0\uACFC\s*\uBC1C\uD45C|\uACB0\uACFC\uBC1C\uD45C|\uCD5C\uC885\s*\uD569\uACA9|\uC11C\uB958\s*\uD569\uACA9|\uC120\uC815\s*\uACB0\uACFC|\uCD94\uCCA8\s*\uACB0\uACFC|\uC218\uC5EC\uC2DD\s*\uC77C\uC815|\uC7A5\uD559\uC0DD\s*\uC120\uBC1C\s*\uACB0\uACFC|\uC7A5\uD559\uC11C\s*\uC218\uC5EC\uC2DD/i,
+    reason: "selected/result announcement is not a recruitment poster",
   },
   {
     name: "closure-or-operation-notice",

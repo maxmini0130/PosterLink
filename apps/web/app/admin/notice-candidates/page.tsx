@@ -653,6 +653,7 @@ export default function AdminNoticeCandidatesPage() {
   const [makerBusy, setMakerBusy] = useState(false);
   const [lastConvertedPoster, setLastConvertedPoster] = useState<ConvertedPosterLink | null>(null);
   const [duplicateOnly, setDuplicateOnly] = useState(false);
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
 
   const loadCandidates = async () => {
     setLoading(true);
@@ -693,8 +694,65 @@ export default function AdminNoticeCandidatesPage() {
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
   }, [data?.candidates, duplicateOnly]);
+  const visibleCandidateIds = sortedCandidates.map((candidate) => candidate.id);
+  const selectedVisibleCandidates = sortedCandidates.filter((candidate) => selectedCandidateIds.includes(candidate.id));
+  const allVisibleSelected = visibleCandidateIds.length > 0 && visibleCandidateIds.every((id) => selectedCandidateIds.includes(id));
   const activeMakerPalette = makerDraft ? getPalette(makerDraft.accent) : POSTER_PALETTES[0];
   const makerDisabled = makerBusy || Boolean(makerCandidate && updatingId === makerCandidate.id);
+
+  useEffect(() => {
+    const availableIds = new Set((data?.candidates ?? []).map((candidate) => candidate.id));
+    setSelectedCandidateIds((ids) => ids.filter((id) => availableIds.has(id)));
+  }, [data?.candidates]);
+
+  const toggleCandidateSelection = (candidateId: string) => {
+    setSelectedCandidateIds((ids) => (
+      ids.includes(candidateId)
+        ? ids.filter((id) => id !== candidateId)
+        : [...ids, candidateId]
+    ));
+  };
+
+  const toggleVisibleSelection = () => {
+    setSelectedCandidateIds((ids) => {
+      const visibleSet = new Set(visibleCandidateIds);
+      if (allVisibleSelected) return ids.filter((id) => !visibleSet.has(id));
+      return [...new Set([...ids, ...visibleCandidateIds])];
+    });
+  };
+
+  const bulkDismissSelectedCandidates = async () => {
+    if (selectedVisibleCandidates.length === 0) return;
+    const duplicateSelectedCount = selectedVisibleCandidates.filter((candidate) => getCandidateDuplicateIssues(candidate).length > 0).length;
+    const confirmed = window.confirm([
+      `선택한 후보 ${selectedVisibleCandidates.length}건을 제외 처리할까요?`,
+      duplicateSelectedCount > 0 ? `중복 의심 후보 ${duplicateSelectedCount}건이 포함되어 있습니다.` : "",
+    ].filter(Boolean).join("\n"));
+    if (!confirmed) return;
+
+    setUpdatingId("bulk");
+    try {
+      const results = await Promise.all(selectedVisibleCandidates.map(async (candidate) => {
+        const response = await fetch("/api/admin/notice-candidates", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: candidate.id, candidate_status: "dismissed" }),
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload.error ?? `${candidate.title} 제외 처리 실패`);
+        }
+        return candidate.id;
+      }));
+      toast.success(`${results.length}건을 제외 처리했습니다.`);
+      setSelectedCandidateIds([]);
+      await loadCandidates();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "선택 후보를 제외 처리하지 못했습니다.");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
 
   const updateStatus = async (candidate: NoticeCandidate, nextStatus: CandidateStatus) => {
     setUpdatingId(candidate.id);
@@ -1063,6 +1121,32 @@ export default function AdminNoticeCandidatesPage() {
         <MetricCard icon={Archive} label="전체" value={summary?.total ?? 0} sub="누적 후보 수" />
       </section>
 
+      {sortedCandidates.length > 0 && (
+        <section className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between">
+          <label className="inline-flex items-center gap-2 text-xs font-black text-gray-600 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={allVisibleSelected}
+              onChange={toggleVisibleSelection}
+              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            현재 목록 전체 선택
+            <span className="font-bold text-gray-400">{selectedVisibleCandidates.length} / {sortedCandidates.length}</span>
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={selectedVisibleCandidates.length === 0 || updatingId === "bulk"}
+              onClick={bulkDismissSelectedCandidates}
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-rose-50 px-4 text-xs font-black text-rose-700 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-rose-500/10 dark:text-rose-100"
+            >
+              {updatingId === "bulk" ? <Loader2 size={15} className="animate-spin" /> : <XCircle size={15} />}
+              선택 제외
+            </button>
+          </div>
+        </section>
+      )}
+
       {loading && !data ? (
         <div className="flex min-h-80 items-center justify-center rounded-lg border border-gray-200 bg-white dark:border-slate-800 dark:bg-slate-900">
           <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
@@ -1074,21 +1158,35 @@ export default function AdminNoticeCandidatesPage() {
             const sourceUrl = activeCandidate.source_url || activeCandidate.source_key;
             const issues = candidate.quality_issues ?? [];
             const duplicateIssues = getCandidateDuplicateIssues(activeCandidate);
-            const disabled = updatingId === candidate.id;
+            const disabled = updatingId === "bulk" || updatingId === candidate.id;
             const isEditing = editingId === candidate.id && editDraft;
             const isConverted = candidate.candidate_status === "converted";
             const imageInputId = `notice-candidate-image-${candidate.id}`;
             const preflightChecks = getCandidatePreflightChecks(activeCandidate);
             const preflightProblems = preflightChecks.filter((check) => check.status !== "pass");
             const hasPreflightBlocker = preflightProblems.some((check) => check.status === "block");
+            const isSelected = selectedCandidateIds.includes(candidate.id);
 
             return (
               <article
+                id={`candidate-${candidate.id}`}
                 key={candidate.id}
-                className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+                className={`rounded-lg border bg-white p-5 shadow-sm dark:bg-slate-900 ${
+                  isSelected
+                    ? "border-indigo-300 ring-4 ring-indigo-50 dark:border-indigo-500 dark:ring-indigo-500/10"
+                    : "border-gray-200 dark:border-slate-800"
+                }`}
               >
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="min-w-0">
+                  <div className="flex min-w-0 flex-1 gap-3">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleCandidateSelection(candidate.id)}
+                      className="mt-1 h-4 w-4 shrink-0 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      aria-label={`${candidate.title} 선택`}
+                    />
+                    <div className="min-w-0">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <span className={`rounded-full px-2.5 py-1 text-xs font-black ${statusTone(candidate.candidate_status)}`}>
                         {statusLabel(candidate.candidate_status)}
@@ -1131,6 +1229,7 @@ export default function AdminNoticeCandidatesPage() {
                     {candidate.summary_short && (
                       <p className="mt-3 text-sm font-bold leading-6 text-gray-600 dark:text-slate-300">{candidate.summary_short}</p>
                     )}
+                    </div>
                   </div>
 
                   <div className="flex shrink-0 flex-wrap gap-2">
@@ -1419,9 +1518,13 @@ export default function AdminNoticeCandidatesPage() {
                                 </a>
                               )}
                               {!issue.duplicatePosterId && issue.duplicateCandidateId && (
-                                <p className="mt-2 font-mono text-[11px] font-black text-rose-700 dark:text-rose-200">
-                                  기존 후보 ID: {issue.duplicateCandidateId}
-                                </p>
+                                <a
+                                  href={`#candidate-${issue.duplicateCandidateId}`}
+                                  className="mt-2 inline-flex items-center gap-1 font-mono text-[11px] font-black text-rose-700 underline-offset-2 hover:underline dark:text-rose-200"
+                                >
+                                  <ExternalLink size={12} />
+                                  기존 후보로 이동
+                                </a>
                               )}
                             </div>
                           ))}
