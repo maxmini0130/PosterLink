@@ -69,6 +69,12 @@ type ApiPayload = {
   error?: string;
 };
 
+type ConvertedPosterLink = {
+  id: string;
+  title: string;
+  source_org_name: string | null;
+};
+
 type EditDraft = {
   title: string;
   source_org_name: string;
@@ -220,6 +226,10 @@ function buildPosterMakerDraft(candidate: NoticeCandidate): PosterMakerDraft {
     summary: normalizePosterText(candidate.summary_short ?? candidate.summary_long, "자세한 내용은 원문 공고를 확인하세요."),
     accent: DEFAULT_ACCENT,
   };
+}
+
+function buildAdminPosterReviewHref(posterId: string) {
+  return `/admin/posters?status=review&posterId=${posterId}`;
 }
 
 function applyEditDraftToCandidate(candidate: NoticeCandidate, draft: EditDraft | null): NoticeCandidate {
@@ -467,6 +477,7 @@ export default function AdminNoticeCandidatesPage() {
   const [makerCandidate, setMakerCandidate] = useState<NoticeCandidate | null>(null);
   const [makerDraft, setMakerDraft] = useState<PosterMakerDraft | null>(null);
   const [makerBusy, setMakerBusy] = useState(false);
+  const [lastConvertedPoster, setLastConvertedPoster] = useState<ConvertedPosterLink | null>(null);
 
   const loadCandidates = async () => {
     setLoading(true);
@@ -680,6 +691,13 @@ export default function AdminNoticeCandidatesPage() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? "포스터로 전환하지 못했습니다.");
 
+      if (payload.poster?.id) {
+        setLastConvertedPoster({
+          id: payload.poster.id,
+          title: payload.poster.title ?? effectiveTitle,
+          source_org_name: payload.poster.source_org_name ?? candidate.source_org_name ?? null,
+        });
+      }
       toast.success("이미지를 붙여 포스터 검수 항목으로 전환했습니다.");
       cancelEditing();
       await loadCandidates();
@@ -783,6 +801,40 @@ export default function AdminNoticeCandidatesPage() {
         <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm font-bold text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-200">
           {error}
         </div>
+      )}
+
+      {lastConvertedPoster && (
+        <section className="rounded-lg border border-emerald-200 bg-emerald-50 p-5 text-sm font-bold text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-100">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <CheckCircle2 className="mt-0.5 shrink-0" size={20} />
+              <div className="min-w-0">
+                <p className="text-base font-black">검수 포스터로 전환했습니다.</p>
+                <p className="mt-1 truncate text-xs text-emerald-700/80 dark:text-emerald-100/80">
+                  {lastConvertedPoster.title}
+                  {lastConvertedPoster.source_org_name ? ` · ${lastConvertedPoster.source_org_name}` : ""}
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <a
+                href={buildAdminPosterReviewHref(lastConvertedPoster.id)}
+                className="inline-flex h-10 items-center gap-2 rounded-lg bg-emerald-700 px-4 text-xs font-black text-white transition-colors hover:bg-emerald-800"
+              >
+                <ExternalLink size={15} />
+                검수 열기
+              </a>
+              <button
+                type="button"
+                onClick={() => setLastConvertedPoster(null)}
+                className="inline-flex h-10 items-center gap-2 rounded-lg border border-emerald-200 bg-white px-3 text-xs font-black text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-slate-950 dark:text-emerald-100 dark:hover:bg-emerald-500/10"
+              >
+                <X size={15} />
+                닫기
+              </button>
+            </div>
+          </div>
+        </section>
       )}
 
       {data?.configured === false && (
@@ -895,7 +947,7 @@ export default function AdminNoticeCandidatesPage() {
                     </button>
                     {candidate.generated_poster_id && (
                       <a
-                        href={`/admin/posters?status=review&posterId=${candidate.generated_poster_id}`}
+                        href={buildAdminPosterReviewHref(candidate.generated_poster_id)}
                         className="inline-flex h-10 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-xs font-black text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200"
                       >
                         <CheckCircle2 size={15} />
