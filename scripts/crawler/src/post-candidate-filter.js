@@ -135,9 +135,19 @@ const TITLE_EXCLUDE_RULES = [
     reason: "donation/signature notice",
   },
   {
+    name: "job-result-announcement",
+    pattern: /\uCC44\uC6A9\s*\uACB0\uACFC|\uCC44\uC6A9\uACB0\uACFC|\uC120\uBC1C\s*\uACB0\uACFC|\uC11C\uB958\s*\uC804\uD615\s*\uACB0\uACFC|\uC11C\uB958\uC804\uD615\s*\uACB0\uACFC/i,
+    reason: "job/result announcement",
+  },
+  {
+    name: "budget-or-expense-disclosure",
+    pattern: /\uC5C5\uBB34\s*\uCD94\uC9C4\uBE44|\uC5C5\uBB34\uCD94\uC9C4\uBE44|\uC608\s*[.\u00B7]?\s*\uACB0\uC0B0\s*\uACF5\uACE0|\uC608\uC0B0\s*\uACF5\uC2DC|\uACB0\uC0B0\s*\uBC0F\s*\d{4}\uB144?\s*\d*\uCC28?\s*\uCD94\uACBD\s*\uC608\uC0B0|\uD6C4\uC6D0\uAE08\uD488\s*\uC218\uC785\s*\uBC0F\s*\uC0AC\uC6A9\s*\uACB0\uACFC/i,
+    reason: "budget/expense disclosure is not a poster notice",
+  },
+  {
     name: "job-document-notice",
-    pattern: /직원\s*채용공고|직원\s*채용\s*공고|채용\s*서류|이의신청서|반환\s*신청서/i,
-    reason: "job document notice",
+    pattern: /채용\s*서류\s*(?:반환|청구|접수|안내)|이의신청서|반환\s*신청서/i,
+    reason: "job administrative document notice",
   },
   {
     name: "public-workfare-recruitment-document",
@@ -178,6 +188,13 @@ const JOB_ALIO_FALSE_POSITIVE_RULES = new Set([
 ]);
 const JOB_ALIO_SOURCE_PATTERN = /(?:job-alio|JOB-ALIO|job\.alio\.go\.kr)/i;
 const JOB_ALIO_RECRUIT_NOTICE_PATTERN = /(?:\uCC44\uC6A9\s*\uAE30\uAC04|\uC751\uC2DC\s*\uC790\uACA9|\uCC44\uC6A9\s*\uC778\uC6D0|\uACE0\uC6A9\s*\uD615\uD0DC|\uADFC\uBB34\s*\uC9C0|\uD559\uB825\s*\uC815\uBCF4|\uC804\uD615\s*\uC808\uCC28|\uC9C0\uC6D0\uC11C|\uC9C1\uBB34\s*\uAE30\uC220\uC11C)/i;
+const LOCAL_EMPLOYMENT_FALSE_POSITIVE_RULES = new Set([
+  "sports-facility-hours-or-closure",
+  "sports-program-timetable",
+  "facility-use-guide",
+]);
+const LOCAL_EMPLOYMENT_SOURCE_PATTERN = /(?:mapo-employ|mapoworkfare\.or\.kr|\uB9C8\uD3EC\uAD6C\uACE0\uC6A9\uBCF5\uC9C0\uC9C0\uC6D0\uC13C\uD130)/i;
+const LOCAL_EMPLOYMENT_RECRUIT_NOTICE_PATTERN = /(?:\uCC44\uC6A9\s*\uACF5\uACE0|\uCC44\uC6A9\uACF5\uACE0|\uBAA8\uC9D1\s*\uACF5\uACE0|\uBAA8\uC9D1\uACF5\uACE0|\uBC14\uB9AC\uC2A4\uD0C0.*\uBAA8\uC9D1|\uC0AC\uD68C\uBCF5\uC9C0\uC0AC.*\uCC44\uC6A9|\uB9E4\uB2C8\uC800.*\uCC44\uC6A9|\uACC4\uC57D\uC9C1.*\uCC44\uC6A9)/i;
 
 function isCentralTextNoticeFalsePositive(post, matchedRule, text) {
   if (!CENTRAL_TEXT_NOTICE_FALSE_POSITIVE_RULES.has(matchedRule.name)) return false;
@@ -209,6 +226,21 @@ function isJobAlioRecruitNoticeFalsePositive(post, matchedRule, text) {
     && JOB_ALIO_RECRUIT_NOTICE_PATTERN.test(text);
 }
 
+function isLocalEmploymentRecruitNoticeFalsePositive(post, matchedRule, text) {
+  if (!LOCAL_EMPLOYMENT_FALSE_POSITIVE_RULES.has(matchedRule.name)) return false;
+
+  const sourceText = [
+    post.site,
+    post.siteId,
+    post.collectionSourceSlug,
+    post.sourceUrl,
+    post.url,
+  ].filter(Boolean).join(" ");
+
+  return LOCAL_EMPLOYMENT_SOURCE_PATTERN.test(sourceText)
+    && LOCAL_EMPLOYMENT_RECRUIT_NOTICE_PATTERN.test(text);
+}
+
 export function getPostExclusionReason(post = {}) {
   const title = String(post.title ?? "").replace(/\s+/g, " ").trim();
   const text = [
@@ -227,6 +259,9 @@ export function getPostExclusionReason(post = {}) {
     return null;
   }
   if (isJobAlioRecruitNoticeFalsePositive(post, matchedRule, `${title} ${text}`)) {
+    return null;
+  }
+  if (isLocalEmploymentRecruitNoticeFalsePositive(post, matchedRule, `${title} ${text}`)) {
     return null;
   }
   if (matchedRule.name === "application-guide" && COLLECTABLE_ANNOUNCEMENT_PATTERN.test(`${title} ${text}`)) {

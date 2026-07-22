@@ -12,6 +12,7 @@ import bizinfo from "./bizinfo.js";
 import kStartup from "./k-startup.js";
 import jobAlio from "./job-alio.js";
 import kesco from "./kesco.js";
+import mapoEmploy from "./mapo-employ.js";
 
 // 대부분의 기관은 그누보드(Gnuboard) 계열이라 generic-board로 커버 가능
 // 구조가 다른 사이트만 전용 어댑터 작성
@@ -36,7 +37,7 @@ const adapters = {
   // 실제 크롤링 시 HTML 구조가 다르면 전용 어댑터를 추가
   "seoul-city": genericBoard,
   "mfmc": genericBoard,        // 마포구시설관리공단
-  "mapo-employ": genericBoard,  // 고용복지지원센터
+  "mapo-employ": mapoEmploy,
   "mapo-welfare": genericBoard, // 장애인종합복지관
   "mapowf": genericBoard,       // 마포복지재단
   "ccfsm": genericBoard,        // 어린이급식관리지원센터
