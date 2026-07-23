@@ -440,6 +440,86 @@ function getRunDiagnostic(run: CollectionSourceRun) {
   return parts.join(" · ");
 }
 
+function findSourceForRun(run: CollectionSourceRun, sourceRows: CollectionSource[]) {
+  return sourceRows.find((source) => (
+    (run.source_id && source.id === run.source_id) ||
+    source.source_slug === run.source_slug
+  )) ?? null;
+}
+
+function getRunTuningHints(run: CollectionSourceRun, detail: ReturnType<typeof getRunDetail>) {
+  const totals = run.metadata_json ? getRunSummaryTotals(run.metadata_json) : {};
+  const reasonKeys = new Set(detail.reasonItems.map((item) => item.key));
+  const hints: Array<{ title: string; detail: string; tone: string }> = [];
+  const addHint = (title: string, hintDetail: string, tone = "border-indigo-100 bg-indigo-50 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-200") => {
+    if (hints.some((hint) => hint.title === title)) return;
+    hints.push({ title, detail: hintDetail, tone });
+  };
+
+  if (run.run_status === "empty" || run.checked_count === 0) {
+    addHint(
+      "목록 수집 규칙 점검",
+      "목록 셀렉터, 상세 링크 셀렉터, 페이지 이동 규칙이 현재 게시판 구조와 맞는지 확인하세요.",
+      "border-rose-100 bg-rose-50 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-200"
+    );
+  }
+  if ((totals.board_failed ?? 0) > 0 || (totals.detail_failed ?? 0) > 0) {
+    addHint(
+      "상세 페이지 파싱 보정",
+      "상세 본문, 상세 제목, 첨부파일 셀렉터를 실제 원문 화면 기준으로 다시 맞추는 것이 좋습니다.",
+      "border-amber-100 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200"
+    );
+  }
+  if ((totals.no_poster_image ?? 0) > 0 || (totals.text_notice_collected ?? 0) > 0) {
+    addHint(
+      "이미지 없는 후보 처리",
+      "대표 이미지가 없는 공고는 후보 화면으로 보내고, 포스터가 아닌 단순 텍스트 공고는 제외 기준을 유지하세요."
+    );
+  }
+  if ((totals.image_rule_rejected ?? 0) > 0 || (totals.verification_rejected ?? 0) > 0) {
+    addHint(
+      "이미지 검증 규칙 확인",
+      "웹접근성 마크, 배너, 로고가 걸러졌는지 확인하고 실제 포스터 이미지까지 같이 제외되지는 않는지 샘플을 보세요."
+    );
+  }
+  if ((totals.external_original_failed ?? 0) > 0) {
+    addHint(
+      "최종 원문 추적 보정",
+      "경유 페이지에서 실제 기관 원문으로 넘어가는 링크 패턴을 externalOriginal 설정에 추가하세요."
+    );
+  }
+  if ((totals.attachment_failed ?? 0) > 0 || (totals.attachment_unsupported ?? 0) > 0) {
+    addHint(
+      "첨부파일 분석 보정",
+      "첨부 링크 셀렉터, 파일 크기 제한, PDF/HWPX/HWP 추출 설정을 확인하세요."
+    );
+  }
+  if (reasonKeys.has("post_filter:result-or-selected-list") || reasonKeys.has("detail_filter:result-or-selected-list")) {
+    addHint(
+      "결과 발표 제외 확인",
+      "선정 결과나 수상자 발표가 많이 제외되고 있습니다. 모집 공고까지 섞이지 않는지 샘플 제목을 확인하세요.",
+      "border-gray-200 bg-gray-50 text-gray-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300"
+    );
+  }
+  if (run.checked_count >= 5 && run.valid_count === 0) {
+    addHint(
+      "유효 공고 0건 원인 확인",
+      "수집은 되었지만 모두 제외되었습니다. 제목 제외 규칙, 이미지 규칙, 날짜 품질 기준 중 어떤 단계가 과한지 확인하세요.",
+      "border-rose-100 bg-rose-50 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-200"
+    );
+  }
+
+  if (hints.length === 0) {
+    addHint(
+      "운영 상태 양호",
+      "이번 실행에서 큰 튜닝 신호는 보이지 않습니다. 샘플만 빠르게 확인하면 됩니다.",
+      "border-emerald-100 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200"
+    );
+  }
+
+  return hints.slice(0, 6);
+}
+
 function parseTime(value: string | null) {
   if (!value) return null;
   const timestamp = new Date(value).getTime();
@@ -1373,6 +1453,8 @@ export default function AdminCollectionSourcesPage() {
                   const diagnostic = getRunDiagnostic(run);
                   const detail = getRunDetail(run);
                   const expanded = expandedRunId === run.id;
+                  const runSource = findSourceForRun(run, sources);
+                  const tuningHints = getRunTuningHints(run, detail);
 
                   return (
                     <Fragment key={run.id}>
@@ -1421,6 +1503,51 @@ export default function AdminCollectionSourcesPage() {
                     <tr>
                       <td colSpan={8} className="bg-gray-50/70 p-4 dark:bg-slate-950/60">
                         <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                          <div className="mb-5 flex flex-col gap-3 border-b border-gray-100 pb-4 dark:border-slate-800 md:flex-row md:items-start md:justify-between">
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-widest text-gray-400">운영 튜닝</p>
+                              <h3 className="mt-1 text-base font-black text-gray-950 dark:text-white">{run.source_name || run.source_slug}</h3>
+                              <p className="mt-1 text-xs font-bold text-gray-400">
+                                {run.run_phase} · {runStatusLabel(run.run_status)} · {formatDate(run.created_at)}
+                              </p>
+                            </div>
+                            {runSource && (
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    openEditSource(runSource);
+                                    setExpandedSourceId(runSource.id);
+                                  }}
+                                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-xs font-black text-white transition-colors hover:bg-indigo-700"
+                                >
+                                  <PencilLine size={14} />
+                                  기관 설정 편집
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedSourceId(runSource.id)}
+                                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-black text-gray-600 transition-colors hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
+                                >
+                                  <Search size={14} />
+                                  기관 진단 보기
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="mb-5">
+                            <p className="text-xs font-black uppercase tracking-widest text-gray-400">튜닝 제안</p>
+                            <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                              {tuningHints.map((hint) => (
+                                <div key={hint.title} className={`rounded-lg border px-3 py-2 text-xs ${hint.tone}`}>
+                                  <p className="font-black">{hint.title}</p>
+                                  <p className="mt-1 font-bold leading-5 opacity-80">{hint.detail}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
                           <div className="grid gap-3 md:grid-cols-3">
                             <div className="md:col-span-2">
                               <p className="text-xs font-black uppercase tracking-widest text-gray-400">실행 요약</p>

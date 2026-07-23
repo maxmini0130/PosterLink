@@ -248,6 +248,36 @@ function normalizePosterText(value?: string | null, fallback = "") {
   return normalized || fallback;
 }
 
+const READABLE_FACT_LABELS: Array<[string, string]> = [
+  ["target", "대상"],
+  ["period", "기간"],
+  ["content", "내용"],
+  ["application", "신청"],
+  ["contact", "문의"],
+];
+
+function extractSummaryFact(summary: string, label: string) {
+  const pattern = new RegExp(`${label}\\s*[:：]\\s*([^·\\n]{3,120})`);
+  return summary.match(pattern)?.[1]?.replace(/\s+/g, " ").trim() ?? "";
+}
+
+function getReadableNoticeFacts(candidate: NoticeCandidate) {
+  const readableNotice = candidate.field_verification?.readableNotice;
+  const facts = readableNotice && typeof readableNotice === "object" && !Array.isArray(readableNotice)
+    && readableNotice.facts && typeof readableNotice.facts === "object"
+    ? readableNotice.facts as Record<string, unknown>
+    : {};
+  const summary = normalizePosterText(candidate.summary_short);
+
+  return READABLE_FACT_LABELS
+    .map(([key, label]) => {
+      const storedValue = normalizePosterText(String(facts[key] ?? ""));
+      const fallbackValue = storedValue || extractSummaryFact(summary, label);
+      return fallbackValue ? { key, label, value: fallbackValue } : null;
+    })
+    .filter(Boolean) as Array<{ key: string; label: string; value: string }>;
+}
+
 function getCandidateDuplicateIssues(candidate: NoticeCandidate): CandidateQualityIssue[] {
   const qualityIssues = candidate.quality_issues ?? [];
   const verificationIssues = Array.isArray(candidate.field_verification?.duplicateIssues)
@@ -1348,6 +1378,7 @@ export default function AdminNoticeCandidatesPage() {
             const preflightProblems = preflightChecks.filter((check) => check.status !== "pass");
             const hasPreflightBlocker = preflightProblems.some((check) => check.status === "block");
             const isSelected = selectedCandidateIds.includes(candidate.id);
+            const readableFacts = getReadableNoticeFacts(activeCandidate);
 
             return (
               <article
@@ -1421,6 +1452,16 @@ export default function AdminNoticeCandidatesPage() {
                     </p>
                     {candidate.summary_short && (
                       <p className="mt-3 text-sm font-bold leading-6 text-gray-600 dark:text-slate-300">{candidate.summary_short}</p>
+                    )}
+                    {readableFacts.length > 0 && (
+                      <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2 xl:grid-cols-3">
+                        {readableFacts.slice(0, 5).map((fact) => (
+                          <div key={fact.key} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-950">
+                            <p className="font-black text-gray-400">{fact.label}</p>
+                            <p className="mt-1 line-clamp-2 font-bold leading-5 text-gray-800 dark:text-slate-100">{fact.value}</p>
+                          </div>
+                        ))}
+                      </div>
                     )}
                     </div>
                   </div>

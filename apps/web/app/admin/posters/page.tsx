@@ -102,6 +102,36 @@ function normalizeOrgDisplayValue(value: any) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
+const READABLE_FACT_LABELS: Array<[string, string]> = [
+  ["target", "대상"],
+  ["period", "기간"],
+  ["content", "내용"],
+  ["application", "신청"],
+  ["contact", "문의"],
+];
+
+function extractReadableSummaryFact(summary: string, label: string) {
+  const pattern = new RegExp(`${label}\\s*[:：]\\s*([^·\\n]{3,120})`);
+  return summary.match(pattern)?.[1]?.replace(/\s+/g, " ").trim() ?? "";
+}
+
+function getReadableNoticeFacts(poster: any) {
+  const readableNotice = poster?.field_verification?.readableNotice;
+  const facts = readableNotice && typeof readableNotice === "object" && !Array.isArray(readableNotice)
+    && readableNotice.facts && typeof readableNotice.facts === "object"
+    ? readableNotice.facts as Record<string, unknown>
+    : {};
+  const summary = normalizeOrgDisplayValue(poster?.summary_short);
+
+  return READABLE_FACT_LABELS
+    .map(([key, label]) => {
+      const storedValue = normalizeOrgDisplayValue(facts[key]);
+      const fallbackValue = storedValue || extractReadableSummaryFact(summary, label);
+      return fallbackValue ? { key, label, value: fallbackValue } : null;
+    })
+    .filter(Boolean) as Array<{ key: string; label: string; value: string }>;
+}
+
 function formatAdminDateTime(value: any) {
   const date = new Date(String(value ?? ""));
   if (Number.isNaN(date.getTime())) return "";
@@ -733,6 +763,7 @@ export default function AdminPostersPage() {
   const previewGeneratedPosterInfo = previewPoster ? getGeneratedPosterInfo(previewPoster) : null;
   const previewPosterImageOcrInfo = previewPoster ? getPosterImageOcrInfo(previewPoster) : null;
   const previewApprovalChecks = previewPoster ? getApprovalChecklist(previewPoster) : [];
+  const previewReadableFacts = previewPoster ? getReadableNoticeFacts(previewPoster) : [];
 
   const applySearchFilters = () => {
     setPage(0);
@@ -1583,6 +1614,23 @@ export default function AdminPostersPage() {
                     ))}
                   </div>
                 </div>
+
+                {previewReadableFacts.length > 0 && (
+                  <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-slate-800 dark:bg-slate-900/40">
+                    <p className="mb-3 flex items-center gap-1.5 text-xs font-black text-gray-700 dark:text-slate-200">
+                      <FileText size={13} />
+                      정리된 핵심 정보
+                    </p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {previewReadableFacts.slice(0, 5).map((fact) => (
+                        <div key={fact.key} className="rounded-xl bg-white px-3 py-2 text-xs dark:bg-slate-950">
+                          <p className="font-black text-gray-400">{fact.label}</p>
+                          <p className="mt-1 line-clamp-2 font-bold leading-5 text-gray-800 dark:text-slate-100">{fact.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {previewGeneratedPosterInfo && (
                   <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">

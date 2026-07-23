@@ -519,13 +519,52 @@ async function insertPosterLinks(posterId, links) {
   if (error) throw error;
 }
 
-function cleanSummaryText(value) {
+const SUMMARY_NOISE_LINE_PATTERNS = [
+  /^(목록|공유|첨부파일|이전글|다음글|조회수|작성자|관리자|번호|제목|공지사항|등록일|담당부서|담당자)$/i,
+  /^첨부파일\s*[:：]?/i,
+  /^이전글|^다음글|^목록\s*보기/i,
+  /^(facebook|twitter|kakaotalk|url\s*copy|rss)$/i,
+  /^청년정책\s*>\s*청년정책검색\s*>\s*청년지원정보/i,
+];
+
+function decodeHtmlEntities(value) {
   return String(value ?? "")
-    .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;|&#160;/gi, " ")
-    .replace(/\bRSS\b/gi, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&#39;|&apos;/gi, "'");
+}
+
+function splitReadableLines(value) {
+  const raw = decodeHtmlEntities(value)
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(?:p|div|li|tr|h[1-6])>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
+
+  const seen = new Set();
+  return raw
+    .split(/\n+/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter((line) => line && !SUMMARY_NOISE_LINE_PATTERNS.some((pattern) => pattern.test(line)))
+    .filter((line) => {
+      const key = line.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function cleanSummaryText(value) {
+  return splitReadableLines(value).join(" ").replace(/\s+/g, " ").trim();
+}
+
+function cleanLongSummaryText(value, maxLength = 8000) {
+  const text = splitReadableLines(value).join("\n").trim();
+  return text ? Array.from(text).slice(0, maxLength).join("") : "";
 }
 
 function cleanOcrText(value, maxLength = 1200) {
@@ -606,10 +645,36 @@ function isInvalidCrawlerTitle(value) {
   );
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function firstReadableContentLine(value, minLength = 8) {
+  return splitReadableLines(value)
+    .find((line) => (
+      line.length >= minLength &&
+      !/^(지원|지원대상|모집대상|참여대상|기간|신청기간|접수기간|내용|주요내용|문의|문의처|신청|접수|신청방법|접수방법)\s*[:：]/i.test(line)
+    )) ?? "";
+}
+
+function normalizeStorageTitle(post = {}) {
+  const current = cleanSummaryText(post.title);
+  if (current && !isInvalidCrawlerTitle(current)) return Array.from(current).slice(0, 200).join("");
+
+  const fallback = firstReadableContentLine(post.content, 10) || current || "제목 없음";
+  const cleaned = cleanSummaryText(fallback);
+  return Array.from(cleaned || "제목 없음").slice(0, 200).join("");
+}
+
 function pickField(text, labels) {
+  const lines = splitReadableLines(text);
   for (const label of labels) {
-    const pattern = new RegExp(`${label}\\s*[:：]?\\s*([^\\n。.!?]{4,90})`, "i");
-    const match = text.match(pattern);
+    const linePattern = new RegExp(`^${escapeRegExp(label)}\\s*[:：]?\\s*(.{4,140})$`, "i");
+    const lineMatch = lines.map((line) => line.match(linePattern)).find(Boolean);
+    if (lineMatch?.[1]) return lineMatch[1].replace(/\s+/g, " ").trim();
+
+    const pattern = new RegExp(`${escapeRegExp(label)}\\s*[:：]?\\s*([^\\n。.!?]{4,120})`, "i");
+    const match = String(text ?? "").match(pattern);
     if (match?.[1]) return match[1].replace(/\s+/g, " ").trim();
   }
   return null;
@@ -631,33 +696,74 @@ function pickDateRange(text) {
 }
 
 function normalizeSummary(post) {
-  const title = cleanSummaryText(post.title);
-  const content = cleanSummaryText(post.content);
-  if (!content && !title) return null;
+  return buildReadableNoticeInfo(post).summaryShort;
+}
+
+function buildReadableNoticeInfo(post = {}) {
+  const title = normalizeStorageTitle(post);
+  const contentLines = splitReadableLines(post.content);
+  const content = contentLines.join("\n");
+  if (!content && !title) {
+    return { title: "제목 없음", summaryShort: null, summaryLong: null, facts: {} };
+  }
 
   const source = `${title}\n${content}`;
   const parts = [];
   const period = pickDateRange(source);
   const target = pickField(source, ["대상", "지원대상", "모집대상", "참여대상", "신청대상"]);
-  const benefit = pickField(source, ["내용", "지원내용", "주요내용", "사업내용", "교육내용", "프로그램"]);
+  const benefit = pickField(source, ["내용", "지원내용", "주요내용", "사업내용", "교육내용", "프로그램", "모집내용"]);
+  const application = pickField(source, ["신청방법", "접수방법", "신청", "접수", "지원방법"]);
   const contact = pickField(source, ["문의", "문의처", "연락처"]);
 
   if (target) parts.push(`대상: ${target}`);
   if (period) parts.push(`기간: ${period}`);
   if (benefit) parts.push(`내용: ${benefit}`);
+  if (application) parts.push(`신청: ${application}`);
   if (contact) parts.push(`문의: ${contact}`);
 
+  const facts = Object.fromEntries(Object.entries({
+    target,
+    period,
+    content: benefit,
+    application,
+    contact,
+  }).filter(([, value]) => Boolean(value)));
+
   if (parts.length > 0) {
-    return parts.join(" · ").slice(0, 300);
+    return {
+      title,
+      summaryShort: Array.from(parts.join(" · ")).slice(0, 300).join(""),
+      summaryLong: cleanLongSummaryText(post.content) || null,
+      facts,
+    };
   }
 
-  const sentence = content
-    .split(/(?<=[.!?。])\s+|[\n\r]+/)
-    .map((line) => line.trim())
+  const sentence = contentLines
     .find((line) => line.length >= 20 && !/(목록|공유|첨부파일|이전글|다음글)/.test(line));
 
   const fallback = sentence || content || title;
-  return fallback.length > 300 ? `${fallback.slice(0, 297).trim()}...` : fallback;
+  const summaryShort = fallback.length > 300 ? `${fallback.slice(0, 297).trim()}...` : fallback;
+  return {
+    title,
+    summaryShort,
+    summaryLong: cleanLongSummaryText(post.content) || null,
+    facts,
+  };
+}
+
+function mergeReadableNoticeIntoFieldVerification(verification = {}, post = {}, readableInfo = null) {
+  const info = readableInfo ?? buildReadableNoticeInfo(post);
+  if (!info.summaryShort && Object.keys(info.facts ?? {}).length === 0) return verification;
+
+  return {
+    ...verification,
+    readableNotice: {
+      source: "crawler-normalizer",
+      title: info.title,
+      summaryShort: info.summaryShort,
+      facts: info.facts ?? {},
+    },
+  };
 }
 
 function normalizeImageUrl(imageUrl, sourceUrl) {
@@ -850,12 +956,14 @@ async function upsertNoticeCandidate(post, {
   fieldVerification,
   quality,
 }) {
-  const summaryShort = normalizeSummary(post);
-  const summaryLong = cleanSummaryText(post.content) || null;
+  const readableInfo = buildReadableNoticeInfo(post);
+  const summaryShort = readableInfo.summaryShort;
+  const summaryLong = readableInfo.summaryLong;
+  const enrichedFieldVerification = mergeReadableNoticeIntoFieldVerification(fieldVerification ?? {}, post, readableInfo);
   const record = sanitizeForPostgrest({
     source_key: sourceKey,
     source_url: sourceUrl,
-    title: (post.title || "제목 없음").substring(0, 200),
+    title: readableInfo.title,
     source_org_name: verifiedOrgName || post.site || null,
     summary_short: summaryShort,
     summary_long: summaryLong,
@@ -869,7 +977,7 @@ async function upsertNoticeCandidate(post, {
     application_end_at: finalDeadline ? toIsoOrNull(finalDeadline) : null,
     reason: "poster image missing; stored as notice candidate",
     quality_issues: quality?.issues ?? [],
-    field_verification: fieldVerification ?? {},
+    field_verification: enrichedFieldVerification,
     raw_payload: post,
   });
 
@@ -1237,19 +1345,20 @@ function addDuplicateCandidate(candidates, posterId, posterRecord, post, sourceU
 
 function addNoticeDuplicateCandidate(candidates, candidateId, post, sourceKey, sourceUrl, verifiedOrgName, finalDeadline, fieldVerification) {
   if (!candidateId) return;
+  const readableInfo = buildReadableNoticeInfo(post);
   candidates.unshift({
     id: candidateId,
     duplicateTargetType: "notice_candidate",
-    title: post.title,
+    title: readableInfo.title,
     source_org_name: verifiedOrgName || post.site || null,
     poster_status: "pending",
     application_end_at: finalDeadline ?? post.deadline ?? null,
     source_key: sourceKey,
     sourceUrl,
     url: sourceUrl,
-    summary_short: normalizeSummary(post),
-    summary_long: cleanSummaryText(post.content) || null,
-    field_verification: fieldVerification ?? {},
+    summary_short: readableInfo.summaryShort,
+    summary_long: readableInfo.summaryLong,
+    field_verification: mergeReadableNoticeIntoFieldVerification(fieldVerification ?? {}, post, readableInfo),
     poster_images: [],
     poster_links: sourceUrl
       ? [{
@@ -1462,6 +1571,7 @@ async function uploadToSupabase(filePath) {
     if (shouldReviewDuplicate) {
       fieldVerification = mergeDuplicateIssueIntoFieldVerification(fieldVerification, duplicateIssue);
     }
+    fieldVerification = mergeReadableNoticeIntoFieldVerification(fieldVerification, post);
 
     if (isTextNoticePost(post, sourceImages)) {
       try {
@@ -1499,12 +1609,14 @@ async function uploadToSupabase(filePath) {
     const postWithStoredImages = { ...post, images: storedImages };
 
     // ── 1. posters 테이블 upsert ─────────────────────────────
-    const summaryShort = normalizeSummary(postWithStoredImages);
-    const summaryLong = cleanSummaryText(postWithStoredImages.content) || posterImageInsight?.posterTextSummary || null;
-    const embedding = await embedPosterText({ title: post.title, summaryShort, summaryLong });
+    const readableInfo = buildReadableNoticeInfo(postWithStoredImages);
+    const summaryShort = readableInfo.summaryShort;
+    const summaryLong = readableInfo.summaryLong || posterImageInsight?.posterTextSummary || null;
+    const posterFieldVerification = mergeReadableNoticeIntoFieldVerification(fieldVerification, postWithStoredImages, readableInfo);
+    const embedding = await embedPosterText({ title: readableInfo.title, summaryShort, summaryLong });
 
     const posterRecord = sanitizeForPostgrest({
-      title: (post.title || "제목 없음").substring(0, 200),
+      title: readableInfo.title,
       source_org_name: verifiedOrgName || null,
       summary_short: summaryShort,
       summary_long: summaryLong,
@@ -1515,7 +1627,7 @@ async function uploadToSupabase(filePath) {
         ? (() => { try { return new Date(finalDeadline).toISOString(); } catch { return null; } })()
         : null,
       thumbnail_url: storedImages[0] ?? null,
-      field_verification: fieldVerification,
+      field_verification: posterFieldVerification,
       embedding: embeddingToPgVector(embedding),
     });
     if (isInvalidCrawlerTitle(posterRecord.title)) {
