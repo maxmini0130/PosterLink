@@ -262,6 +262,10 @@ const RUN_SUMMARY_LABELS: Record<string, string> = {
   no_poster_image: "이미지없음",
   image_rule_rejected: "이미지규칙제외",
   verification_rejected: "AI검증제외",
+  attachment_analyzed: "첨부분석",
+  attachment_text_extracted: "첨부본문",
+  attachment_unsupported: "첨부미지원",
+  attachment_failed: "첨부실패",
   external_original_attempted: "원문추적",
   external_original_resolved: "원문확인",
   external_original_failed: "원문실패",
@@ -310,7 +314,7 @@ function formatRunReasonLabel(key: string) {
 function getRunDetail(run: CollectionSourceRun) {
   const metadata = run.metadata_json;
   if (!metadata || typeof metadata !== "object") {
-    return { summaryItems: [], reasonItems: [], sampleItems: [], siteItems: [], originalItems: [] };
+    return { summaryItems: [], reasonItems: [], sampleItems: [], siteItems: [], originalItems: [], attachmentItems: [] };
   }
 
   const totals = getRunSummaryTotals(metadata);
@@ -355,6 +359,20 @@ function getRunDetail(run: CollectionSourceRun) {
       viaUrl: typeof sample.viaUrl === "string" ? sample.viaUrl : null,
     }));
 
+  const attachmentItems = (Array.isArray(metadata.attachment_samples) ? metadata.attachment_samples : [])
+    .filter((sample: any) => sample && typeof sample === "object")
+    .slice(0, 8)
+    .map((sample: any, index: number) => ({
+      id: `attachment-${index}`,
+      title: String(sample.title ?? "제목 없음"),
+      name: String(sample.name ?? "첨부파일"),
+      kind: String(sample.kind ?? ""),
+      status: String(sample.status ?? ""),
+      reason: String(sample.reason ?? ""),
+      textLength: Number(sample.textLength ?? 0),
+      url: typeof sample.url === "string" ? sample.url : null,
+    }));
+
   const siteItems = getMetadataSites(metadata)
     .filter((site: any) => site && typeof site === "object")
     .map((site: any) => ({
@@ -363,7 +381,7 @@ function getRunDetail(run: CollectionSourceRun) {
       summary: site.summary && typeof site.summary === "object" ? site.summary : {},
     }));
 
-  return { summaryItems, reasonItems, sampleItems, siteItems, originalItems };
+  return { summaryItems, reasonItems, sampleItems, siteItems, originalItems, attachmentItems };
 }
 
 function getRunDiagnostic(run: CollectionSourceRun) {
@@ -381,6 +399,8 @@ function getRunDiagnostic(run: CollectionSourceRun) {
   if ((totals.no_poster_image ?? 0) > 0) parts.push(`이미지없음 ${formatNumber(totals.no_poster_image)}건`);
   if ((totals.image_rule_rejected ?? 0) > 0) parts.push(`이미지규칙제외 ${formatNumber(totals.image_rule_rejected)}건`);
   if ((totals.verification_rejected ?? 0) > 0) parts.push(`AI검증제외 ${formatNumber(totals.verification_rejected)}건`);
+  if ((totals.attachment_text_extracted ?? 0) > 0) parts.push(`첨부본문 ${formatNumber(totals.attachment_text_extracted)}건`);
+  if ((totals.attachment_failed ?? 0) > 0) parts.push(`첨부실패 ${formatNumber(totals.attachment_failed)}건`);
   if ((totals.external_original_resolved ?? 0) > 0) parts.push(`원문추적 ${formatNumber(totals.external_original_resolved)}건`);
   if ((totals.external_original_failed ?? 0) > 0) parts.push(`원문실패 ${formatNumber(totals.external_original_failed)}건`);
   if ((totals.skipped_seen ?? 0) > 0) parts.push(`이미확인 ${formatNumber(totals.skipped_seen)}건`);
@@ -548,6 +568,15 @@ function diagnoseSource(source: CollectionSource, runs: CollectionSourceRun[]): 
   }
   if ((latestTotals.image_rule_rejected ?? 0) > 0 || (latestTotals.verification_rejected ?? 0) > 0) {
     actions.push("이미지 규칙이나 AI 검증에서 제외됐습니다. 대표 이미지 셀렉터와 웹접근성/배너 제외 규칙을 확인하세요.");
+  }
+  if ((latestTotals.attachment_text_extracted ?? 0) > 0 && latestRun?.valid_count === 0) {
+    actions.push("첨부 본문은 읽혔지만 유효 공고로 이어지지 않았습니다. 제목·본문 제외 규칙이나 이미지 후보 처리 기준을 확인하세요.");
+  }
+  if ((latestTotals.attachment_unsupported ?? 0) > 0) {
+    actions.push("구버전 HWP 등 미지원 첨부가 있습니다. HWPX/PDF 원문 제공 여부 또는 별도 변환 파이프라인을 검토하세요.");
+  }
+  if ((latestTotals.attachment_failed ?? 0) > 0) {
+    actions.push("첨부 다운로드 또는 본문 추출 실패가 있습니다. 파일 다운로드 URL, 로그인 필요 여부, 파일 크기 제한을 확인하세요.");
   }
   if ((latestTotals.external_original_failed ?? 0) > 0) {
     actions.push("원문 추적 실패가 있습니다. externalOriginal 링크 신호와 제외 호스트 설정을 확인하세요.");
@@ -1157,6 +1186,37 @@ export default function AdminCollectionSourcesPage() {
                                         {[sample.label, sample.reason].filter(Boolean).join(" · ")}
                                       </p>
                                     )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {detail.attachmentItems.length > 0 && (
+                            <div className="mt-5">
+                              <p className="text-xs font-black uppercase tracking-widest text-gray-400">첨부 분석 샘플</p>
+                              <div className="mt-3 grid gap-2 lg:grid-cols-2">
+                                {detail.attachmentItems.map((sample) => (
+                                  <div key={sample.id} className="rounded-lg border border-gray-100 p-3 text-xs dark:border-slate-800">
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div>
+                                        <p className="line-clamp-2 font-black text-gray-800 dark:text-slate-100">{sample.title}</p>
+                                        <p className="mt-1 line-clamp-1 font-bold text-gray-500 dark:text-slate-400">{sample.name}</p>
+                                      </div>
+                                      {sample.url && (
+                                        <a href={sample.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-indigo-500 hover:text-indigo-700" title="첨부파일">
+                                          <ExternalLink size={13} />
+                                        </a>
+                                      )}
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                      <span className="rounded-full bg-indigo-50 px-2.5 py-1 font-black text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-200">{sample.kind || "unknown"}</span>
+                                      <span className={sample.status === "extracted" ? "rounded-full bg-emerald-50 px-2.5 py-1 font-black text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-200" : sample.status === "unsupported" ? "rounded-full bg-amber-50 px-2.5 py-1 font-black text-amber-600 dark:bg-amber-500/10 dark:text-amber-200" : "rounded-full bg-rose-50 px-2.5 py-1 font-black text-rose-600 dark:bg-rose-500/10 dark:text-rose-200"}>
+                                        {sample.status || "unknown"}
+                                      </span>
+                                      {sample.textLength > 0 && <span className="rounded-full bg-gray-100 px-2.5 py-1 font-black text-gray-500 dark:bg-slate-800 dark:text-slate-300">본문 {formatNumber(sample.textLength)}자</span>}
+                                    </div>
+                                    {sample.reason && <p className="mt-2 line-clamp-2 font-bold text-gray-400">{sample.reason}</p>}
                                   </div>
                                 ))}
                               </div>

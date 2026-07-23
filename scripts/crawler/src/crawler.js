@@ -11,6 +11,7 @@ import { classifyPosterImage } from "./poster-image-classifier.js";
 import { verifyPosterMatchesNotice } from "./poster-content-verifier.js";
 import { getPostExclusionReason } from "./post-candidate-filter.js";
 import { selectBestPosterImage } from "./poster-image-rules.js";
+import { analyzePostAttachments } from "./attachment-text-extractor.js";
 
 // ── Logger ──────────────────────────────────────
 export const logger = createLogger({
@@ -251,6 +252,10 @@ function createCrawlStats() {
     imageRuleRejected: 0,
     verificationRejected: 0,
     textNoticeCollected: 0,
+    attachmentAnalyzed: 0,
+    attachmentTextExtracted: 0,
+    attachmentUnsupported: 0,
+    attachmentFailed: 0,
     externalOriginalAttempted: 0,
     externalOriginalResolved: 0,
     externalOriginalFailed: 0,
@@ -259,6 +264,7 @@ function createCrawlStats() {
     boardFailed: 0,
     skipReasons: {},
     skipSamples: [],
+    attachmentSamples: [],
     externalOriginalSamples: [],
     latestPostFoundAt: null,
   };
@@ -302,6 +308,28 @@ function rememberExternalOriginal(stats, post, trace) {
     originalUrl: trace.originalUrl ?? null,
     viaUrl: trace.viaUrl ?? post?.url ?? post?.sourceUrl ?? null,
   });
+}
+
+function rememberAttachmentAnalysis(stats, post, analysis) {
+  if (!analysis?.checked) return;
+
+  stats.attachmentAnalyzed += Number(analysis.checked ?? 0);
+  stats.attachmentTextExtracted += Number(analysis.extracted ?? 0);
+  stats.attachmentUnsupported += Number(analysis.unsupported ?? 0);
+  stats.attachmentFailed += Number(analysis.failed ?? 0);
+
+  for (const source of analysis.sources ?? []) {
+    if (stats.attachmentSamples.length >= 20) return;
+    stats.attachmentSamples.push({
+      title: String(post?.title ?? "").slice(0, 160),
+      name: String(source.name ?? "").slice(0, 160),
+      url: source.url ?? null,
+      kind: String(source.kind ?? "").slice(0, 40),
+      status: String(source.status ?? "").slice(0, 40),
+      reason: String(source.reason ?? "").slice(0, 240),
+      textLength: Number(source.textLength ?? 0),
+    });
+  }
 }
 
 function attachCrawlStats(posts, stats) {
@@ -498,6 +526,18 @@ export async function crawlSite(site, adapter, options = {}) {
               seen.add(post.url);
               logger.info(`  Skip (detail filter: ${detailExclusion.rule}): ${post.title} - ${detailExclusion.reason}`);
               continue;
+            }
+
+            const attachmentAnalysis = await analyzePostAttachments(fullPost);
+            rememberAttachmentAnalysis(stats, fullPost, attachmentAnalysis);
+            if (attachmentAnalysis.contentAdded) {
+              fullPost.content = [fullPost.content, attachmentAnalysis.addedText].filter(Boolean).join("\n\n");
+              fullPost.attachmentAnalysis = attachmentAnalysis;
+              if (!fullPost.deadline && attachmentAnalysis.suggestedDeadline) {
+                fullPost.deadline = attachmentAnalysis.suggestedDeadline;
+              }
+            } else if (attachmentAnalysis.checked > 0) {
+              fullPost.attachmentAnalysis = attachmentAnalysis;
             }
 
             const staleReason = getStaleNoticeReason(fullPost);

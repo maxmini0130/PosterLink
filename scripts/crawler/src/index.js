@@ -47,6 +47,10 @@ function buildCrawlRunMetadata(site, stats = {}) {
         image_rule_rejected: Number(stats.imageRuleRejected ?? 0),
         verification_rejected: Number(stats.verificationRejected ?? 0),
         text_notice_collected: Number(stats.textNoticeCollected ?? 0),
+        attachment_analyzed: Number(stats.attachmentAnalyzed ?? 0),
+        attachment_text_extracted: Number(stats.attachmentTextExtracted ?? 0),
+        attachment_unsupported: Number(stats.attachmentUnsupported ?? 0),
+        attachment_failed: Number(stats.attachmentFailed ?? 0),
         external_original_attempted: Number(stats.externalOriginalAttempted ?? 0),
         external_original_resolved: Number(stats.externalOriginalResolved ?? 0),
         external_original_failed: Number(stats.externalOriginalFailed ?? 0),
@@ -56,10 +60,12 @@ function buildCrawlRunMetadata(site, stats = {}) {
       },
       skip_reasons: stats.skipReasons ?? {},
       skip_samples: stats.skipSamples ?? [],
+      attachment_samples: stats.attachmentSamples ?? [],
       external_original_samples: stats.externalOriginalSamples ?? [],
     }],
     skip_reasons: stats.skipReasons ?? {},
     skip_samples: stats.skipSamples ?? [],
+    attachment_samples: stats.attachmentSamples ?? [],
     external_original_samples: stats.externalOriginalSamples ?? [],
   };
 }
