@@ -931,6 +931,7 @@ export default function AdminCollectionSourcesPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [healthFilter, setHealthFilter] = useState("all");
   const [query, setQuery] = useState("");
+  const [urlParamsReady, setUrlParamsReady] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [runningSourceId, setRunningSourceId] = useState<string | null>(null);
   const [runResult, setRunResult] = useState<RunResult | null>(null);
@@ -962,9 +963,22 @@ export default function AdminCollectionSourcesPage() {
   };
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const initialQuery = (params.get("source") ?? params.get("q") ?? "").trim();
+    const initialStatus = params.get("status");
+    const initialHealth = params.get("health");
+
+    if (initialQuery) setQuery(initialQuery);
+    if (initialStatus) setStatusFilter(initialStatus);
+    if (initialHealth) setHealthFilter(initialHealth);
+    setUrlParamsReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!urlParamsReady) return;
     void loadSources();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter]);
+  }, [statusFilter, urlParamsReady]);
 
   const filteredSources = useMemo(() => {
     return [...sources]

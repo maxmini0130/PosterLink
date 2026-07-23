@@ -465,30 +465,80 @@ function shouldPromoteToActive(source) {
   return !PROTECTED_STATUSES.has(source.status);
 }
 
-function shouldAlertForRunStatus(runStatus) {
-  return runStatus === "error" || runStatus === "partial" || runStatus === "empty";
-}
-
 function alertCooldownHours() {
   const value = Number(process.env.CRAWLER_COLLECTION_ALERT_COOLDOWN_HOURS ?? "24");
   return Number.isFinite(value) && value > 0 ? value : 24;
 }
 
-function buildCollectionSourceAlertMessage(source, stats, runStatus, patch) {
-  const title = `[PosterLink] 수집 점검 필요: ${source.name ?? source.source_slug}`;
-  const reason = patch.last_error_message
-    || (runStatus === "empty" ? "목록에서 수집 대상이 발견되지 않았습니다." : "수집 결과를 확인해야 합니다.");
-  const body = [
-    `${source.name ?? source.source_slug} 수집원이 ${runStatus} 상태로 종료되었습니다.`,
-    `확인 ${stats.checked}, 신규 ${stats.created}, 유효 ${stats.valid}, 중복 ${stats.duplicate}, 제외 ${stats.rejected}, 실패 ${stats.failed}`,
-    `사유: ${reason}`,
-    "관리자 > 수집 기관 관리에서 최근 수집 이력과 자동 진단을 확인하세요.",
-  ].join("\n");
+function diagnoseCollectionSourceRun(stats, runStatus, patch) {
+  const checked = Number(stats.checked ?? 0);
+  const valid = Number(stats.valid ?? 0);
+  const failed = Number(stats.failed ?? 0);
+  const missingRequired = Number(stats.missingRequired ?? 0);
+  const validRate = percentage(valid, checked);
+  const missingRate = percentage(missingRequired, checked);
+  const errorReason = patch.last_error_message || stats.errors?.find(Boolean) || "";
 
-  return { title, body, reason };
+  if (runStatus === "error") {
+    return {
+      key: "runtime_error",
+      severity: "critical",
+      label: "실행 오류",
+      reason: errorReason || "수집 실행 중 오류가 발생했고 유효 공고가 저장되지 않았습니다.",
+    };
+  }
+  if (runStatus === "partial") {
+    return {
+      key: "partial_failure",
+      severity: "warning",
+      label: "부분 실패",
+      reason: errorReason || `일부 항목 수집에 실패했습니다. 실패 ${failed}건`,
+    };
+  }
+  if (runStatus === "empty") {
+    return {
+      key: "empty_result",
+      severity: "warning",
+      label: "수집 결과 없음",
+      reason: "목록에서 수집 대상이 발견되지 않았습니다. 게시판 구조 변경 또는 신규 공고 없음 여부를 확인하세요.",
+    };
+  }
+  if (checked >= 5 && validRate < 40) {
+    return {
+      key: "low_valid_rate",
+      severity: validRate < 20 ? "critical" : "warning",
+      label: "유효 공고 비율 낮음",
+      reason: `확인 ${checked}건 중 유효 ${valid}건입니다. 필터 규칙이나 포스터 판정 기준을 점검하세요.`,
+    };
+  }
+  if (checked >= 5 && missingRate >= 30) {
+    return {
+      key: "missing_required_fields",
+      severity: "warning",
+      label: "필수 정보 누락 많음",
+      reason: `필수 정보 누락률이 ${Math.round(missingRate)}%입니다. 날짜, 기관명, 신청 정보 추출 규칙을 점검하세요.`,
+    };
+  }
+
+  return null;
 }
 
-async function hasRecentCollectionSourceAlert(supabase, sourceId, runStatus) {
+function buildCollectionSourceAlertMessage(source, stats, diagnosis, patch) {
+  const title = `[PosterLink] 수집 점검 필요: ${source.name ?? source.source_slug}`;
+  const reason = diagnosis.reason || patch.last_error_message || "수집 결과를 확인해야 합니다.";
+  const adminPath = `/admin/collection-sources?source=${encodeURIComponent(source.source_slug)}`;
+  const body = [
+    `${source.name ?? source.source_slug} 수집원에 점검이 필요합니다.`,
+    `진단: ${diagnosis.label} (${diagnosis.key})`,
+    `확인 ${stats.checked}, 신규 ${stats.created}, 유효 ${stats.valid}, 중복 ${stats.duplicate}, 제외 ${stats.rejected}, 실패 ${stats.failed}`,
+    `사유: ${reason}`,
+    `관리 링크: ${adminPath}`,
+  ].join("\n");
+
+  return { title, body, reason, adminPath };
+}
+
+async function hasRecentCollectionSourceAlert(supabase, sourceId, alertKey) {
   const since = new Date(Date.now() - alertCooldownHours() * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
     .from("admin_actions")
@@ -499,7 +549,7 @@ async function hasRecentCollectionSourceAlert(supabase, sourceId, runStatus) {
     .gte("created_at", since)
     .contains("metadata_json", {
       kind: "collection_source_alert",
-      run_status: runStatus,
+      alert_key: alertKey,
     })
     .limit(1);
 
@@ -517,12 +567,13 @@ async function loadAdminUserIds(supabase) {
 }
 
 async function notifyCollectionSourceAlert(supabase, source, stats, runStatus, patch, options = {}) {
-  if (!shouldAlertForRunStatus(runStatus)) return false;
+  const diagnosis = diagnoseCollectionSourceRun(stats, runStatus, patch);
+  if (!diagnosis) return false;
   if (source.collection_method === "manual" || PROTECTED_STATUSES.has(source.status)) return false;
-  if (await hasRecentCollectionSourceAlert(supabase, source.id, runStatus)) return false;
+  if (await hasRecentCollectionSourceAlert(supabase, source.id, diagnosis.key)) return false;
 
   const logger = options.logger ?? console;
-  const { title, body, reason } = buildCollectionSourceAlertMessage(source, stats, runStatus, patch);
+  const { title, body, reason, adminPath } = buildCollectionSourceAlertMessage(source, stats, diagnosis, patch);
 
   try {
     const userIds = await loadAdminUserIds(supabase);
@@ -544,15 +595,22 @@ async function notifyCollectionSourceAlert(supabase, source, stats, runStatus, p
       action_reason: reason,
       metadata_json: {
         kind: "collection_source_alert",
+        alert_key: diagnosis.key,
+        severity: diagnosis.severity,
+        label: diagnosis.label,
         run_status: runStatus,
         source_slug: source.source_slug,
+        admin_path: adminPath,
         checked: stats.checked,
         valid: stats.valid,
+        created: stats.created,
+        duplicate: stats.duplicate,
+        rejected: stats.rejected,
         failed: stats.failed,
       },
     });
 
-    logger.warn?.(`[collection-sources] Alert created for ${source.source_slug}: ${runStatus}`);
+    logger.warn?.(`[collection-sources] Alert created for ${source.source_slug}: ${diagnosis.key}`);
     return true;
   } catch (error) {
     if (!didWarnCollectionSourceAlerts) {
