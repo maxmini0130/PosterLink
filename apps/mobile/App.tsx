@@ -25,6 +25,9 @@ Notifications.setNotificationHandler({
 });
 
 const HOME_URL = 'https://www.posterlink.kr';
+const APP_TRACKING_QUERY = 'utm_source=posterlink_app&utm_medium=app&utm_campaign=mobile_app&app=1';
+const APP_HOME_URL = `${HOME_URL}/?${APP_TRACKING_QUERY}`;
+const APP_USER_AGENT_SUFFIX = `PosterLinkApp/${Constants.expoConfig?.version ?? '0.1.0'}`;
 const SB_PROJECT = 'zxndgzsfrgwahwsdbjdj';
 const MOBILE_OAUTH_REDIRECT_URI = ExpoLinking.createURL('auth-callback');
 const LEGACY_MOBILE_OAUTH_REDIRECT_URI = 'com.maxmini.posterlink://auth-callback';
@@ -44,6 +47,20 @@ function RequestFabIcon() {
       <Text style={styles.requestIconPlus}>+</Text>
     </View>
   );
+}
+
+function withAppTracking(url: string) {
+  try {
+    const nextUrl = new URL(url);
+    if (nextUrl.hostname.replace(/^www\./, '') !== 'posterlink.kr') return url;
+    if (!nextUrl.searchParams.has('utm_source')) nextUrl.searchParams.set('utm_source', 'posterlink_app');
+    if (!nextUrl.searchParams.has('utm_medium')) nextUrl.searchParams.set('utm_medium', 'app');
+    if (!nextUrl.searchParams.has('utm_campaign')) nextUrl.searchParams.set('utm_campaign', 'mobile_app');
+    nextUrl.searchParams.set('app', '1');
+    return nextUrl.toString();
+  } catch {
+    return url;
+  }
 }
 
 // 웹앱 Supabase 세션을 2초마다 체크해서 네이티브로 전달
@@ -111,7 +128,7 @@ type AppView = 'browse' | 'chooser' | 'camera' | 'preview';
 
 export default function App() {
   const [view, setView] = useState<AppView>('browse');
-  const [browseUrl, setBrowseUrl] = useState(HOME_URL);
+  const [browseUrl, setBrowseUrl] = useState(APP_HOME_URL);
   const [user, setUser] = useState<any>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [webAuthenticated, setWebAuthenticated] = useState(false);
@@ -683,6 +700,7 @@ export default function App() {
         ref={webViewRef}
         source={{ uri: browseUrl }}
         style={{ flex: 1 }}
+        applicationNameForUserAgent={APP_USER_AGENT_SUFFIX}
         startInLoadingState
         scalesPageToFit={false}
         injectedJavaScriptBeforeContentLoaded={`
@@ -746,7 +764,7 @@ export default function App() {
           <TouchableOpacity
             style={[styles.fab, styles.fabRequest]}
             onPress={() => {
-              setBrowseUrl(`${HOME_URL}/posters/request`);
+              setBrowseUrl(withAppTracking(`${HOME_URL}/posters/request`));
               setView('browse');
             }}
             onLongPress={handleLogout}

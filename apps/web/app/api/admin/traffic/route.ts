@@ -37,6 +37,11 @@ type OverviewRow = {
   today_pageviews: number;
 };
 
+type ClientPlatform = {
+  key: "app" | "mobile_web" | "tablet_web" | "desktop_web" | "bot" | "unknown";
+  label: string;
+};
+
 function createAdminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -112,6 +117,45 @@ function getVisitorId(row: VisitRow, index: number) {
 
 function getPath(row: VisitRow) {
   return row.path || "/";
+}
+
+function getQueryParams(row: VisitRow) {
+  const query = row.query_string;
+  if (!query) return new URLSearchParams();
+  return new URLSearchParams(query.startsWith("?") ? query.slice(1) : query);
+}
+
+function getClientPlatform(row: VisitRow): ClientPlatform {
+  const ua = (row.user_agent ?? "").toLowerCase();
+  const query = getQueryParams(row);
+  const utmSource = (row.utm_source ?? query.get("utm_source") ?? "").toLowerCase();
+  const utmMedium = (row.utm_medium ?? query.get("utm_medium") ?? "").toLowerCase();
+  const appParam = (query.get("app") ?? "").toLowerCase();
+
+  if (
+    ua.includes("posterlinkapp") ||
+    utmSource === "posterlink_app" ||
+    utmMedium === "app" ||
+    appParam === "1" ||
+    appParam === "true"
+  ) {
+    return { key: "app", label: "앱" };
+  }
+
+  if (/bot|crawler|spider|slurp|facebookexternalhit|kakaotalk-scrap|naverbot|googlebot/i.test(ua)) {
+    return { key: "bot", label: "봇/크롤러" };
+  }
+
+  if (/ipad|tablet|kindle|silk|playbook/i.test(ua)) {
+    return { key: "tablet_web", label: "태블릿 웹" };
+  }
+
+  if (/mobi|iphone|ipod|android.*mobile|windows phone|blackberry/i.test(ua)) {
+    return { key: "mobile_web", label: "모바일 웹" };
+  }
+
+  if (ua) return { key: "desktop_web", label: "데스크톱 웹" };
+  return { key: "unknown", label: "알 수 없음" };
 }
 
 function formatDateKey(value: string) {
@@ -254,6 +298,7 @@ export async function GET(request: NextRequest) {
   const sessions = new Map<string, VisitRow>();
   const sessionPageviews = new Map<string, number>();
   const sourceMap = new Map<string, { visitors: Set<string>; sessions: Set<string>; pageviews: number; detail: string | null }>();
+  const platformMap = new Map<string, { label: string; visitors: Set<string>; sessions: Set<string>; pageviews: number }>();
   const landingMap = new Map<string, { visitors: Set<string>; sessions: Set<string>; pageviews: number }>();
   const pageMap = new Map<string, { visitors: Set<string>; sessions: Set<string>; pageviews: number }>();
   const dailyMap = new Map<string, { visitors: Set<string>; sessions: Set<string>; pageviews: number }>();
@@ -268,7 +313,19 @@ export async function GET(request: NextRequest) {
     const sessionId = getSessionId(row, index);
     const path = getPath(row);
     const dateKey = formatDateKey(row.created_at);
+    const platform = getClientPlatform(row);
     sessionPageviews.set(sessionId, (sessionPageviews.get(sessionId) ?? 0) + 1);
+
+    const platformBucket = platformMap.get(platform.key) ?? {
+      label: platform.label,
+      visitors: new Set<string>(),
+      sessions: new Set<string>(),
+      pageviews: 0,
+    };
+    platformBucket.visitors.add(visitorId);
+    platformBucket.sessions.add(sessionId);
+    platformBucket.pageviews += 1;
+    platformMap.set(platform.key, platformBucket);
 
     const pageBucket = pageMap.get(path) ?? { visitors: new Set<string>(), sessions: new Set<string>(), pageviews: 0 };
     pageBucket.visitors.add(visitorId);
@@ -319,6 +376,14 @@ export async function GET(request: NextRequest) {
     pageviews: value.pageviews ?? 0,
   })).slice(0, 20);
 
+  const clientPlatforms = toCountList(Array.from(platformMap.entries()), (key, value) => ({
+    key,
+    label: value.label,
+    visitors: value.visitors?.size ?? 0,
+    sessions: value.sessions?.size ?? 0,
+    pageviews: value.pageviews ?? 0,
+  }));
+
   const landingPages = toCountList(Array.from(landingMap.entries()), (path, value) => ({
     path,
     visitors: value.visitors?.size ?? 0,
@@ -346,6 +411,7 @@ export async function GET(request: NextRequest) {
     path: getPath(row),
     query_string: row.query_string,
     source: getSourceLabel(row, ownHosts),
+    client_platform: getClientPlatform(row),
     referrer_host: row.referrer_host,
     referrer_url: row.referrer_url,
     utm_source: row.utm_source,
@@ -388,6 +454,7 @@ export async function GET(request: NextRequest) {
     generatedAt: new Date().toISOString(),
     overview,
     sources,
+    clientPlatforms,
     landingPages,
     topPages,
     daily,

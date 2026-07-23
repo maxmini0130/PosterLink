@@ -48,11 +48,23 @@ type DailyRow = {
   pageviews: number;
 };
 
+type ClientPlatformRow = {
+  key: string;
+  label: string;
+  visitors: number;
+  sessions: number;
+  pageviews: number;
+};
+
 type RecentVisit = {
   created_at: string;
   path: string;
   query_string: string | null;
   source: string;
+  client_platform?: {
+    key: string;
+    label: string;
+  } | null;
   referrer_host: string | null;
   referrer_url: string | null;
   utm_source: string | null;
@@ -74,6 +86,7 @@ type TrafficData = {
   message?: string;
   overview?: Overview;
   sources?: SourceRow[];
+  clientPlatforms?: ClientPlatformRow[];
   landingPages?: PathRow[];
   topPages?: PathRow[];
   daily?: DailyRow[];
@@ -85,6 +98,11 @@ const numberFormatter = new Intl.NumberFormat("ko-KR");
 
 function formatNumber(value: number | undefined) {
   return numberFormatter.format(value ?? 0);
+}
+
+function formatPercent(value: number | undefined, total: number | undefined) {
+  if (!value || !total) return "0%";
+  return `${Math.round((value / total) * 100)}%`;
 }
 
 function formatDateTime(value: string) {
@@ -127,6 +145,14 @@ function sourceTone(source: string) {
     return "bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-500/10 dark:text-fuchsia-200";
   }
   if (source.includes("직접")) return "bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-slate-200";
+  return "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200";
+}
+
+function platformTone(key?: string | null) {
+  if (key === "app") return "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-200";
+  if (key === "mobile_web") return "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200";
+  if (key === "tablet_web") return "bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-200";
+  if (key === "desktop_web") return "bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-slate-200";
   return "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200";
 }
 
@@ -226,6 +252,10 @@ export default function AdminTrafficPage() {
     () => Math.max(1, ...(data?.sources ?? []).map((row) => row.sessions)),
     [data?.sources]
   );
+  const maxPlatformSessions = useMemo(
+    () => Math.max(1, ...(data?.clientPlatforms ?? []).map((row) => row.sessions)),
+    [data?.clientPlatforms]
+  );
   const maxTopPageViews = useMemo(
     () => Math.max(1, ...(data?.topPages ?? []).map((row) => row.pageviews ?? 0)),
     [data?.topPages]
@@ -233,6 +263,9 @@ export default function AdminTrafficPage() {
 
   const overview = data?.overview;
   const recentVisits = data?.recentVisits ?? [];
+  const clientPlatforms = data?.clientPlatforms ?? [];
+  const mobileWebSessions = clientPlatforms.find((row) => row.key === "mobile_web")?.sessions ?? 0;
+  const appSessions = clientPlatforms.find((row) => row.key === "app")?.sessions ?? 0;
 
   return (
     <div className="space-y-8">
@@ -309,6 +342,56 @@ export default function AdminTrafficPage() {
             <MetricCard icon={Activity} label={`${days}일 방문자`} value={overview?.period_visitors} subLabel="선택 기간 중복 제외" />
             <MetricCard icon={MousePointerClick} label={`${days}일 세션`} value={overview?.period_sessions} subLabel="브라우저 세션 기준" />
             <MetricCard icon={BarChart3} label={`${days}일 페이지뷰`} value={overview?.period_pageviews} subLabel="전체 페이지 이동 수" />
+          </section>
+
+          <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <SectionTitle icon={Globe2} title="방문 환경" subtitle="앱, 모바일 웹, 데스크톱 웹 비중" />
+            {clientPlatforms.length > 0 ? (
+              <div className="grid gap-5 xl:grid-cols-[0.7fr_1.3fr]">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-lg bg-gray-50 p-4 dark:bg-slate-800">
+                    <p className="text-xs font-black text-gray-400">모바일 웹 비중</p>
+                    <p className="mt-2 text-2xl font-black text-gray-950 dark:text-white">
+                      {formatPercent(mobileWebSessions, overview?.period_sessions)}
+                    </p>
+                    <p className="mt-1 text-xs font-bold text-gray-400">{formatNumber(mobileWebSessions)}세션</p>
+                  </div>
+                  <div className="rounded-lg bg-gray-50 p-4 dark:bg-slate-800">
+                    <p className="text-xs font-black text-gray-400">앱 비중</p>
+                    <p className="mt-2 text-2xl font-black text-gray-950 dark:text-white">
+                      {formatPercent(appSessions, overview?.period_sessions)}
+                    </p>
+                    <p className="mt-1 text-xs font-bold text-gray-400">{formatNumber(appSessions)}세션</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {clientPlatforms.map((row) => (
+                    <div key={row.key}>
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ${platformTone(row.key)}`}>
+                          {row.label}
+                        </span>
+                        <p className="text-xs font-black text-gray-500 dark:text-slate-300">
+                          {formatNumber(row.sessions)}세션 · {formatPercent(row.sessions, overview?.period_sessions)}
+                        </p>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800">
+                        <div
+                          className="h-full rounded-full bg-indigo-500"
+                          style={{ width: `${Math.max(5, (row.sessions / maxPlatformSessions) * 100)}%` }}
+                        />
+                      </div>
+                      <p className="mt-1 text-xs font-bold text-gray-400">
+                        방문자 {formatNumber(row.visitors)}명 · 페이지뷰 {formatNumber(row.pageviews)}건
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <EmptyBlock text="방문 환경 데이터가 없습니다." />
+            )}
           </section>
 
           <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
@@ -447,6 +530,7 @@ export default function AdminTrafficPage() {
                       <th className="py-3 pr-4">시간</th>
                       <th className="py-3 pr-4">페이지</th>
                       <th className="py-3 pr-4">유입</th>
+                      <th className="py-3 pr-4">환경</th>
                       <th className="py-3 pr-4">UTM</th>
                       <th className="py-3 pr-4">방문자</th>
                       <th className="py-3 pr-4">세션</th>
@@ -474,6 +558,11 @@ export default function AdminTrafficPage() {
                           {row.referrer_host && (
                             <span className="mt-1 block text-xs font-bold text-gray-400">{row.referrer_host}</span>
                           )}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ${platformTone(row.client_platform?.key)}`}>
+                            {row.client_platform?.label ?? "알 수 없음"}
+                          </span>
                         </td>
                         <td className="py-3 pr-4 text-xs font-bold text-gray-400">
                           {[row.utm_source, row.utm_medium, row.utm_campaign].filter(Boolean).join(" / ") || "-"}
