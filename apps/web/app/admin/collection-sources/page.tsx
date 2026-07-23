@@ -809,6 +809,7 @@ function diagnoseSource(source: CollectionSource, runs: CollectionSourceRun[]): 
   const health = getSourceHealth(source);
   const config = sourceConfig(source);
   const latestRun = runs[0] ?? null;
+  const latestRunIsStale = latestRun ? isStaleRunningRun(latestRun) : false;
   const latestTotals = latestRun?.metadata_json ? getRunSummaryTotals(latestRun.metadata_json) : {};
   const reasonItems = getReasonItemsForRuns(runs);
   const actions: string[] = [];
@@ -821,6 +822,9 @@ function diagnoseSource(source: CollectionSource, runs: CollectionSourceRun[]): 
   }
   if (source.consecutive_error_count > 0 || latestRun?.run_status === "error") {
     actions.push("목록 URL 접근과 GitHub Actions 로그의 오류 메시지를 먼저 확인하세요.");
+  }
+  if (latestRunIsStale) {
+    actions.push("백그라운드 실행이 오래 완료되지 않았습니다. GitHub Actions에서 워크플로 상태와 환경변수를 먼저 확인하세요.");
   }
   if (latestRun && latestRun.checked_count === 0) {
     actions.push("목록에서 0건만 발견했습니다. listItem/listLink 셀렉터 또는 페이지네이션 규칙을 점검하세요.");
@@ -860,7 +864,7 @@ function diagnoseSource(source: CollectionSource, runs: CollectionSourceRun[]): 
     actions.push(health.level === "healthy" ? "현재 특별한 조치가 필요 없습니다." : health.reasons[0] ?? "상태를 확인하세요.");
   }
 
-  const isCritical = health.level === "attention" || source.consecutive_error_count > 0 || latestRun?.run_status === "error";
+  const isCritical = health.level === "attention" || source.consecutive_error_count > 0 || latestRun?.run_status === "error" || latestRunIsStale;
   const isWarning = health.level === "watch" || source.status === "planned" || latestRun?.checked_count === 0;
 
   return {
@@ -1091,6 +1095,18 @@ export default function AdminCollectionSourcesPage() {
     () => sourceDiagnostics.filter((item) => item.diagnosis.level !== "ok").slice(0, 5),
     [sourceDiagnostics]
   );
+
+  const runHealthSummary = useMemo(() => {
+    const runningRuns = recentRuns.filter((run) => run.run_status === "running");
+    const staleRunningRuns = runningRuns.filter(isStaleRunningRun);
+    const staleSources = new Set(staleRunningRuns.map((run) => run.source_id ?? run.source_slug));
+
+    return {
+      running: runningRuns.length,
+      staleRunning: staleRunningRuns.length,
+      staleSources: staleSources.size,
+    };
+  }, [recentRuns]);
 
   useEffect(() => {
     const availableIds = new Set(sources.map((source) => source.id));
@@ -1580,11 +1596,19 @@ export default function AdminCollectionSourcesPage() {
         </section>
       )}
 
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-7">
         <MetricCard icon={Building2} label="관리 기관" value={summary?.total ?? 0} sub="등록된 기관/게시판" />
         <MetricCard icon={CheckCircle2} label="자동수집" value={summary?.automated ?? 0} sub="수동 제외 수집원" />
         <MetricCard icon={Database} label="월 예상 공고" value={summary?.monthly_expected_posts ?? 0} sub="계획 수립용 가정" />
         <MetricCard icon={AlertTriangle} label="오류 기관" value={summary?.errors ?? 0} sub="점검 필요 상태" />
+        <MetricCard
+          icon={Clock}
+          label="실행 지연"
+          value={runHealthSummary.staleRunning}
+          sub={runHealthSummary.staleRunning > 0
+            ? `영향 ${formatNumber(runHealthSummary.staleSources)}곳 · 실행 중 ${formatNumber(runHealthSummary.running)}건`
+            : "현재 지연 없음"}
+        />
         <MetricCard icon={Search} label="점검 필요" value={summary?.needs_attention ?? 0} sub="오류·장기 미수집·저품질" />
         <MetricCard icon={Clock} label="예정 기관" value={summary?.planned ?? 0} sub="아직 연결 전" />
       </section>
