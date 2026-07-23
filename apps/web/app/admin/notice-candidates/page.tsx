@@ -189,6 +189,10 @@ function statusLabel(status: string) {
   return STATUS_OPTIONS.find(([value]) => value === status)?.[1] ?? status;
 }
 
+function isCandidateStatusFilter(value: string | null): value is CandidateStatus | "all" {
+  return Boolean(value && STATUS_OPTIONS.some(([status]) => status === value));
+}
+
 function toDateTimeLocalValue(value?: string | null) {
   if (!value) return "";
   const date = new Date(value);
@@ -672,6 +676,7 @@ function EmptyBlock({ text }: { text: string }) {
 export default function AdminNoticeCandidatesPage() {
   const [status, setStatus] = useState<CandidateStatus | "all">("pending");
   const [query, setQuery] = useState("");
+  const [urlParamsReady, setUrlParamsReady] = useState(false);
   const [data, setData] = useState<ApiPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -711,9 +716,20 @@ export default function AdminNoticeCandidatesPage() {
   };
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const initialQuery = (params.get("q") ?? params.get("source") ?? "").trim();
+    const initialStatus = params.get("status");
+
+    if (initialQuery) setQuery(initialQuery);
+    if (isCandidateStatusFilter(initialStatus)) setStatus(initialStatus);
+    setUrlParamsReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!urlParamsReady) return;
     void loadCandidates();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, [status, urlParamsReady]);
 
   const summary = data?.summary;
   const duplicateCandidateCount = useMemo(() => {

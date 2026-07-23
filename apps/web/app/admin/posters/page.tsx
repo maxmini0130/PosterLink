@@ -50,6 +50,10 @@ function isPosterStatus(value: string | null): value is PosterStatus {
   return Boolean(value && POSTER_STATUS_VALUES.has(value as PosterStatus));
 }
 
+function isPosterMediaFilter(value: string | null): value is Exclude<PosterMediaFilter, ""> {
+  return value === "poster_image" || value === "text_notice";
+}
+
 function normalizeSearchValue(value: string) {
   return value.trim().replace(/[,()]/g, " ").replace(/\s+/g, " ");
 }
@@ -432,6 +436,7 @@ export default function AdminPostersPage() {
   const [posters, setPosters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentFilter, setCurrentFilter] = useState<PosterStatus>("review");
+  const [urlParamsReady, setUrlParamsReady] = useState(false);
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [rejectModal, setRejectModal] = useState<{ id: string; title: string } | null>(null);
@@ -505,7 +510,7 @@ export default function AdminPostersPage() {
     const org = normalizeSearchValue(filters.org);
 
     if (text) {
-      query = query.or(`title.ilike.%${text}%,summary_short.ilike.%${text}%,summary_long.ilike.%${text}%`);
+      query = query.or(`title.ilike.%${text}%,summary_short.ilike.%${text}%,summary_long.ilike.%${text}%,source_org_name.ilike.%${text}%,source_key.ilike.%${text}%`);
     }
     if (org) {
       query = query.ilike("source_org_name", `%${org}%`);
@@ -540,16 +545,25 @@ export default function AdminPostersPage() {
   }, [regions]);
 
   useEffect(() => {
+    if (!urlParamsReady) return;
     void fetchPosters(currentFilter, page, appliedFilters);
-  }, [appliedFilters, currentFilter, fetchPosters, page]);
+  }, [appliedFilters, currentFilter, fetchPosters, page, urlParamsReady]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const posterId = params.get("posterId");
     const statusParam = params.get("status");
+    const textParam = (params.get("q") ?? params.get("source") ?? "").trim();
+    const mediaParam = params.get("media");
+    const initialFilters: PosterSearchFilters = { ...EMPTY_FILTERS };
 
     if (isPosterStatus(statusParam)) setCurrentFilter(statusParam);
+    if (textParam) initialFilters.text = textParam;
+    if (isPosterMediaFilter(mediaParam)) initialFilters.media = mediaParam;
+    setDraftFilters(initialFilters);
+    setAppliedFilters(initialFilters);
     if (posterId) setFocusedPosterId(posterId);
+    setUrlParamsReady(true);
   }, []);
 
   useEffect(() => {

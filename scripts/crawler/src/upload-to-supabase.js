@@ -39,8 +39,8 @@ import {
   normalizeSourceUrl,
 } from "./poster-duplicate-detector.js";
 
-const SUPABASE_URL = process.env.SUPABASE_URL?.trim();
-const SUPABASE_KEY = process.env.SUPABASE_KEY?.trim();
+const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)?.trim();
+const SUPABASE_KEY = (process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)?.trim();
 const CRAWLER_USER_ID = process.env.CRAWLER_USER_ID?.trim() || null;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {

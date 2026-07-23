@@ -9,6 +9,8 @@ import {
   Clock,
   Database,
   ExternalLink,
+  FileCheck,
+  FileText,
   Loader2,
   PencilLine,
   PlayCircle,
@@ -1511,8 +1513,23 @@ export default function AdminCollectionSourcesPage() {
                                 {run.run_phase} · {runStatusLabel(run.run_status)} · {formatDate(run.created_at)}
                               </p>
                             </div>
-                            {runSource && (
-                              <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-wrap gap-2">
+                              <a
+                                href={`/admin/notice-candidates?status=pending&q=${encodeURIComponent(run.source_slug)}`}
+                                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-black text-gray-600 transition-colors hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
+                              >
+                                <FileText size={14} />
+                                후보 보기
+                              </a>
+                              <a
+                                href={`/admin/posters?status=review&q=${encodeURIComponent(run.source_name || run.source_slug)}`}
+                                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-black text-gray-600 transition-colors hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
+                              >
+                                <FileCheck size={14} />
+                                검수 보기
+                              </a>
+                              {runSource && (
+                                <>
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -1532,8 +1549,9 @@ export default function AdminCollectionSourcesPage() {
                                   <Search size={14} />
                                   기관 진단 보기
                                 </button>
-                              </div>
-                            )}
+                                </>
+                              )}
+                            </div>
                           </div>
 
                           <div className="mb-5">
