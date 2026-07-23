@@ -200,7 +200,7 @@ export const sites = [
     id: "mapo-labor",
     name: "마포구노동자종합지원센터",
     domain: "https://mapolabor.org",
-    adapter: "generic-board",
+    adapter: "mapo-labor",
     boards: [
       {
         name: "공지사항",

@@ -13,6 +13,7 @@ import jobAlio from "./job-alio.js";
 import kesco from "./kesco.js";
 import mapoEmploy from "./mapo-employ.js";
 import ccfsm from "./ccfsm.js";
+import mapoLabor from "./mapo-labor.js";
 
 const adapters = {
   "generic-board": genericBoard,
@@ -29,6 +30,7 @@ const adapters = {
   "kesco": kesco,
   "mapo-employ": mapoEmploy,
   "ccfsm": ccfsm,
+  "mapo-labor": mapoLabor,
 
   "seoul-city": genericBoard,
   "mfmc": genericBoard,
