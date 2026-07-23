@@ -338,6 +338,12 @@ function mergeMetadata(current = {}, next = {}) {
       ...(Array.isArray(next.skip_samples) ? next.skip_samples : []),
     ].slice(0, 30);
   }
+  if (current.external_original_samples || next.external_original_samples) {
+    merged.external_original_samples = [
+      ...(Array.isArray(current.external_original_samples) ? current.external_original_samples : []),
+      ...(Array.isArray(next.external_original_samples) ? next.external_original_samples : []),
+    ].slice(0, 30);
+  }
   return merged;
 }
 

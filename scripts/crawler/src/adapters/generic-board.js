@@ -1,5 +1,5 @@
 import { fetchPage } from "../crawler.js";
-import { resolveExternalOriginalDetail } from "../external-original-resolver.js";
+import { resolveExternalOriginalDetailWithTrace } from "../external-original-resolver.js";
 import { filterAndOrderPosterImages } from "../poster-image-rules.js";
 
 const DEFAULT_SELECTORS = {
@@ -557,8 +557,8 @@ export default {
     const deadline = extractDeadline(content);
     const rawImages = collectDetailImages($, postUrl, selectors);
     const attachments = collectAttachments($, postUrl, selectors);
-    const externalDetail = isExternalOriginalEnabled(config)
-      ? await resolveExternalOriginalDetail($, postUrl, title, {
+    const externalOriginalResult = isExternalOriginalEnabled(config)
+      ? await resolveExternalOriginalDetailWithTrace($, postUrl, title, {
           ...config.externalOriginal,
           scopeSelector: config.externalOriginal.scopeSelector
             ?? config.externalOriginal.scope_selector
@@ -568,6 +568,7 @@ export default {
             ?? `${site.name} \uACBD\uC720 \uCD9C\uCC98`,
         })
       : null;
+    const externalDetail = externalOriginalResult?.detail ?? null;
 
     if (externalDetail?.images?.length) {
       rawImages.unshift(...externalDetail.images.filter((imageUrl) => !rawImages.includes(imageUrl)));
@@ -602,6 +603,7 @@ export default {
       attachments: finalAttachments,
       links,
       sourceUrl,
+      externalOriginal: externalOriginalResult?.trace?.attempted ? externalOriginalResult.trace : undefined,
     };
   },
 };

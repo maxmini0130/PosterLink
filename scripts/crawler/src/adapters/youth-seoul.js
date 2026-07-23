@@ -3,7 +3,7 @@ import {
   addImage,
   cleanText,
   extractDateRange,
-  resolveExternalOriginalDetail,
+  resolveExternalOriginalDetailWithTrace,
   resolveUrl,
 } from "../external-original-resolver.js";
 import { filterAndOrderPosterImages } from "../poster-image-rules.js";
@@ -149,10 +149,11 @@ export default {
       if (href && name) attachments.push({ name, url: resolveUrl(postUrl, href) });
     });
 
-    const externalDetail = await resolveExternalOriginalDetail($, postUrl, title, {
+    const externalOriginalResult = await resolveExternalOriginalDetailWithTrace($, postUrl, title, {
       scopeSelector: ".feed-view",
       viaLinkTitle: "\uCCAD\uB144\uBABD\uB545\uC815\uBCF4\uD1B5 \uACBD\uC720 \uCD9C\uCC98",
     });
+    const externalDetail = externalOriginalResult.detail;
 
     const baseContent = isMeaningfulContent(detailText)
       ? detailText
@@ -195,6 +196,7 @@ export default {
       attachments,
       links: sourceLinks,
       sourceUrl,
+      externalOriginal: externalOriginalResult.trace?.attempted ? externalOriginalResult.trace : undefined,
     };
   },
 };

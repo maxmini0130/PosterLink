@@ -251,6 +251,9 @@ const RUN_SUMMARY_LABELS: Record<string, string> = {
   no_poster_image: "이미지없음",
   image_rule_rejected: "이미지규칙제외",
   verification_rejected: "AI검증제외",
+  external_original_attempted: "원문추적",
+  external_original_resolved: "원문확인",
+  external_original_failed: "원문실패",
   skipped_seen: "이미확인",
   detail_failed: "상세실패",
   board_failed: "목록실패",
@@ -296,7 +299,7 @@ function formatRunReasonLabel(key: string) {
 function getRunDetail(run: CollectionSourceRun) {
   const metadata = run.metadata_json;
   if (!metadata || typeof metadata !== "object") {
-    return { summaryItems: [], reasonItems: [], sampleItems: [], siteItems: [] };
+    return { summaryItems: [], reasonItems: [], sampleItems: [], siteItems: [], originalItems: [] };
   }
 
   const totals = getRunSummaryTotals(metadata);
@@ -328,6 +331,19 @@ function getRunDetail(run: CollectionSourceRun) {
       url: typeof sample.url === "string" ? sample.url : null,
     }));
 
+  const originalItems = (Array.isArray(metadata.external_original_samples) ? metadata.external_original_samples : [])
+    .filter((sample: any) => sample && typeof sample === "object")
+    .slice(0, 8)
+    .map((sample: any, index: number) => ({
+      id: `external-original-${index}`,
+      title: String(sample.title ?? "제목 없음"),
+      resolved: Boolean(sample.resolved),
+      reason: String(sample.reason ?? ""),
+      label: String(sample.label ?? ""),
+      originalUrl: typeof sample.originalUrl === "string" ? sample.originalUrl : null,
+      viaUrl: typeof sample.viaUrl === "string" ? sample.viaUrl : null,
+    }));
+
   const siteItems = getMetadataSites(metadata)
     .filter((site: any) => site && typeof site === "object")
     .map((site: any) => ({
@@ -336,7 +352,7 @@ function getRunDetail(run: CollectionSourceRun) {
       summary: site.summary && typeof site.summary === "object" ? site.summary : {},
     }));
 
-  return { summaryItems, reasonItems, sampleItems, siteItems };
+  return { summaryItems, reasonItems, sampleItems, siteItems, originalItems };
 }
 
 function getRunDiagnostic(run: CollectionSourceRun) {
@@ -354,6 +370,8 @@ function getRunDiagnostic(run: CollectionSourceRun) {
   if ((totals.no_poster_image ?? 0) > 0) parts.push(`이미지없음 ${formatNumber(totals.no_poster_image)}건`);
   if ((totals.image_rule_rejected ?? 0) > 0) parts.push(`이미지규칙제외 ${formatNumber(totals.image_rule_rejected)}건`);
   if ((totals.verification_rejected ?? 0) > 0) parts.push(`AI검증제외 ${formatNumber(totals.verification_rejected)}건`);
+  if ((totals.external_original_resolved ?? 0) > 0) parts.push(`원문추적 ${formatNumber(totals.external_original_resolved)}건`);
+  if ((totals.external_original_failed ?? 0) > 0) parts.push(`원문실패 ${formatNumber(totals.external_original_failed)}건`);
   if ((totals.skipped_seen ?? 0) > 0) parts.push(`이미확인 ${formatNumber(totals.skipped_seen)}건`);
   if ((totals.detail_failed ?? 0) + (totals.board_failed ?? 0) > 0) {
     parts.push(`파싱실패 ${formatNumber((totals.detail_failed ?? 0) + (totals.board_failed ?? 0))}건`);
@@ -876,6 +894,43 @@ export default function AdminCollectionSourcesPage() {
                               )}
                             </div>
                           </div>
+
+                          {detail.originalItems.length > 0 && (
+                            <div className="mt-5">
+                              <p className="text-xs font-black uppercase tracking-widest text-gray-400">원문 추적 샘플</p>
+                              <div className="mt-3 grid gap-2 lg:grid-cols-2">
+                                {detail.originalItems.map((sample) => (
+                                  <div key={sample.id} className="rounded-lg border border-gray-100 p-3 text-xs dark:border-slate-800">
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div>
+                                        <p className="line-clamp-2 font-black text-gray-800 dark:text-slate-100">{sample.title}</p>
+                                        <p className={sample.resolved ? "mt-1 font-black text-emerald-600" : "mt-1 font-black text-rose-500"}>
+                                          {sample.resolved ? "최종 원문 확인" : "원문 추적 실패"}
+                                        </p>
+                                      </div>
+                                      <div className="flex shrink-0 gap-2">
+                                        {sample.viaUrl && (
+                                          <a href={sample.viaUrl} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-indigo-600" title="경유 페이지">
+                                            <ExternalLink size={13} />
+                                          </a>
+                                        )}
+                                        {sample.originalUrl && (
+                                          <a href={sample.originalUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:text-indigo-700" title="최종 원문">
+                                            <ExternalLink size={13} />
+                                          </a>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {(sample.label || sample.reason) && (
+                                      <p className="mt-2 line-clamp-2 font-bold text-gray-400">
+                                        {[sample.label, sample.reason].filter(Boolean).join(" · ")}
+                                      </p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </td>
                     </tr>

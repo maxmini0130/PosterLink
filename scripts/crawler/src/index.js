@@ -47,15 +47,20 @@ function buildCrawlRunMetadata(site, stats = {}) {
         image_rule_rejected: Number(stats.imageRuleRejected ?? 0),
         verification_rejected: Number(stats.verificationRejected ?? 0),
         text_notice_collected: Number(stats.textNoticeCollected ?? 0),
+        external_original_attempted: Number(stats.externalOriginalAttempted ?? 0),
+        external_original_resolved: Number(stats.externalOriginalResolved ?? 0),
+        external_original_failed: Number(stats.externalOriginalFailed ?? 0),
         skipped_seen: Number(stats.skippedSeen ?? 0),
         detail_failed: Number(stats.detailFailed ?? 0),
         board_failed: Number(stats.boardFailed ?? 0),
       },
       skip_reasons: stats.skipReasons ?? {},
       skip_samples: stats.skipSamples ?? [],
+      external_original_samples: stats.externalOriginalSamples ?? [],
     }],
     skip_reasons: stats.skipReasons ?? {},
     skip_samples: stats.skipSamples ?? [],
+    external_original_samples: stats.externalOriginalSamples ?? [],
   };
 }
 

@@ -251,11 +251,15 @@ function createCrawlStats() {
     imageRuleRejected: 0,
     verificationRejected: 0,
     textNoticeCollected: 0,
+    externalOriginalAttempted: 0,
+    externalOriginalResolved: 0,
+    externalOriginalFailed: 0,
     skippedSeen: 0,
     detailFailed: 0,
     boardFailed: 0,
     skipReasons: {},
     skipSamples: [],
+    externalOriginalSamples: [],
     latestPostFoundAt: null,
   };
 }
@@ -277,6 +281,26 @@ function rememberSkip(stats, bucket, post, reason) {
     title: String(post?.title ?? "").slice(0, 160),
     url: post?.url ?? post?.sourceUrl ?? null,
     reason: String(reason ?? "").slice(0, 300),
+  });
+}
+
+function rememberExternalOriginal(stats, post, trace) {
+  if (!trace?.attempted) return;
+  stats.externalOriginalAttempted += 1;
+  if (trace.resolved) {
+    stats.externalOriginalResolved += 1;
+  } else {
+    stats.externalOriginalFailed += 1;
+  }
+
+  if (stats.externalOriginalSamples.length >= 20) return;
+  stats.externalOriginalSamples.push({
+    title: String(post?.title ?? "").slice(0, 160),
+    resolved: Boolean(trace.resolved),
+    reason: String(trace.reason ?? "").slice(0, 120),
+    label: String(trace.label ?? "").slice(0, 120),
+    originalUrl: trace.originalUrl ?? null,
+    viaUrl: trace.viaUrl ?? post?.url ?? post?.sourceUrl ?? null,
   });
 }
 
@@ -452,6 +476,7 @@ export async function crawlSite(site, adapter, options = {}) {
 
           try {
             const detail = await adapter.parseDetail(post.url, site, board);
+            rememberExternalOriginal(stats, post, detail.externalOriginal);
             const images = pickImagesByPriority(detail.images, post.images);
             const usesDetailImages = Array.isArray(detail.images) && detail.images.length > 0;
             const fullPost = {

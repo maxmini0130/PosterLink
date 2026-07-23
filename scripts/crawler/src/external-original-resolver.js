@@ -277,19 +277,76 @@ export async function parseExternalOriginalDetail(originalUrl, fallbackTitle = "
 }
 
 export async function resolveExternalOriginalDetail($, postUrl, fallbackTitle = "", options = {}) {
+  const result = await resolveExternalOriginalDetailWithTrace($, postUrl, fallbackTitle, options);
+  return result.detail;
+}
+
+export async function resolveExternalOriginalDetailWithTrace($, postUrl, fallbackTitle = "", options = {}) {
   const originalLink = extractExternalOriginalLink($, postUrl, options);
-  if (!originalLink) return null;
+  if (!originalLink) {
+    return {
+      detail: null,
+      trace: {
+        attempted: false,
+        resolved: false,
+        reason: "no_external_original_link",
+      },
+    };
+  }
 
-  const detail = await parseExternalOriginalDetail(originalLink.url, fallbackTitle, options);
-  if (!detail || (!detail.content && detail.images.length === 0)) return null;
+  try {
+    const detail = await parseExternalOriginalDetail(originalLink.url, fallbackTitle, options);
+    if (!detail || (!detail.content && detail.images.length === 0)) {
+      return {
+        detail: null,
+        trace: {
+          attempted: true,
+          resolved: false,
+          reason: "empty_external_original_detail",
+          originalUrl: originalLink.url,
+          viaUrl: postUrl,
+          label: originalLink.label,
+          host: getHost(originalLink.url),
+        },
+      };
+    }
 
-  return {
-    ...detail,
-    originalLink,
-    viaLink: {
-      link_type: "other",
-      title: options.viaLinkTitle ?? options.via_link_title ?? "\uACBD\uC720 \uCD9C\uCC98",
-      url: postUrl,
-    },
-  };
+    const trace = {
+      attempted: true,
+      resolved: true,
+      reason: "resolved",
+      originalUrl: originalLink.url,
+      viaUrl: postUrl,
+      label: originalLink.label,
+      host: getHost(originalLink.url),
+    };
+
+    return {
+      detail: {
+        ...detail,
+        originalLink,
+        externalOriginal: trace,
+        viaLink: {
+          link_type: "other",
+          title: options.viaLinkTitle ?? options.via_link_title ?? "\uACBD\uC720 \uCD9C\uCC98",
+          url: postUrl,
+        },
+      },
+      trace,
+    };
+  } catch (error) {
+    return {
+      detail: null,
+      trace: {
+        attempted: true,
+        resolved: false,
+        reason: "external_original_fetch_failed",
+        error: String(error?.message ?? error).slice(0, 300),
+        originalUrl: originalLink.url,
+        viaUrl: postUrl,
+        label: originalLink.label,
+        host: getHost(originalLink.url),
+      },
+    };
+  }
 }
