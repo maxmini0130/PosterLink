@@ -149,6 +149,45 @@ function getGeneratedPosterInfo(poster: any) {
   };
 }
 
+function getPosterImageOcrInfo(poster: any) {
+  const verification = poster?.field_verification;
+  if (!verification || typeof verification !== "object" || Array.isArray(verification)) return null;
+  const ocr = verification.posterImageOcr;
+  if (!ocr || typeof ocr !== "object" || Array.isArray(ocr)) return null;
+
+  const posterTextSummary = normalizeOrgDisplayValue(ocr.posterTextSummary);
+  const contentMatch = ocr.contentMatch && typeof ocr.contentMatch === "object" ? ocr.contentMatch : null;
+  const imageClassification = ocr.imageClassification && typeof ocr.imageClassification === "object" ? ocr.imageClassification : null;
+  if (!posterTextSummary && !contentMatch && !imageClassification) return null;
+
+  const confidence = typeof contentMatch?.confidence === "number"
+    ? Math.round(contentMatch.confidence * 100)
+    : null;
+  const imageConfidence = typeof imageClassification?.confidence === "number"
+    ? Math.round(imageClassification.confidence * 100)
+    : null;
+  const matchedFields = Array.isArray(contentMatch?.matchedFields)
+    ? contentMatch.matchedFields.filter(Boolean).slice(0, 6)
+    : [];
+  const mismatchedFields = Array.isArray(contentMatch?.mismatchedFields)
+    ? contentMatch.mismatchedFields.filter(Boolean).slice(0, 6)
+    : [];
+
+  return {
+    posterTextSummary,
+    contentDecision: normalizeOrgDisplayValue(contentMatch?.decision),
+    contentReason: normalizeOrgDisplayValue(contentMatch?.reason),
+    confidence,
+    matchedFields,
+    mismatchedFields,
+    isSameNotice: Boolean(contentMatch?.isSameNotice),
+    imageIsPoster: Boolean(imageClassification?.isPoster),
+    imageConfidence,
+    visualType: normalizeOrgDisplayValue(imageClassification?.visualType),
+    imageReason: normalizeOrgDisplayValue(imageClassification?.reason),
+  };
+}
+
 function getOrganizationVerification(poster: any) {
   const organization = poster?.field_verification?.organization;
   if (!organization || typeof organization !== "object") return null;
@@ -692,6 +731,7 @@ export default function AdminPostersPage() {
   const previewImageSrc = previewPoster ? getPosterImageSrc(previewPoster) : null;
   const previewIsTextNotice = previewPoster ? isTextNoticePoster(previewPoster) : false;
   const previewGeneratedPosterInfo = previewPoster ? getGeneratedPosterInfo(previewPoster) : null;
+  const previewPosterImageOcrInfo = previewPoster ? getPosterImageOcrInfo(previewPoster) : null;
   const previewApprovalChecks = previewPoster ? getApprovalChecklist(previewPoster) : [];
 
   const applySearchFilters = () => {
@@ -1582,6 +1622,56 @@ export default function AdminPostersPage() {
                     {(previewGeneratedPosterInfo.assignedCategoryCodes.length > 0 || previewGeneratedPosterInfo.assignedRegionCodes.length > 0) && (
                       <p className="mt-3 text-[11px] font-bold leading-5 text-emerald-700/80 dark:text-emerald-300/80">
                         분류 코드: {[...previewGeneratedPosterInfo.assignedCategoryCodes, ...previewGeneratedPosterInfo.assignedRegionCodes].join(", ")}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {previewPosterImageOcrInfo && (
+                  <div className="rounded-2xl border border-violet-100 bg-violet-50/70 p-4 dark:border-violet-900 dark:bg-violet-950/30">
+                    <p className="mb-3 flex items-center gap-1.5 text-xs font-black text-violet-700 dark:text-violet-300">
+                      <FileText size={13} />
+                      포스터 이미지 문구
+                    </p>
+                    <div className="flex flex-wrap gap-2 text-[11px] font-black">
+                      {previewPosterImageOcrInfo.confidence !== null && (
+                        <span className={previewPosterImageOcrInfo.isSameNotice ? "rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200" : "rounded-full bg-amber-100 px-2.5 py-1 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200"}>
+                          원문 매칭 {previewPosterImageOcrInfo.confidence}%
+                        </span>
+                      )}
+                      {previewPosterImageOcrInfo.imageConfidence !== null && (
+                        <span className={previewPosterImageOcrInfo.imageIsPoster ? "rounded-full bg-indigo-100 px-2.5 py-1 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-200" : "rounded-full bg-rose-100 px-2.5 py-1 text-rose-700 dark:bg-rose-500/10 dark:text-rose-200"}>
+                          포스터 판정 {previewPosterImageOcrInfo.imageConfidence}%
+                        </span>
+                      )}
+                      {previewPosterImageOcrInfo.visualType && (
+                        <span className="rounded-full bg-white px-2.5 py-1 text-violet-600 dark:bg-slate-950/40 dark:text-violet-200">
+                          {previewPosterImageOcrInfo.visualType}
+                        </span>
+                      )}
+                    </div>
+                    {previewPosterImageOcrInfo.posterTextSummary && (
+                      <p className="mt-3 whitespace-pre-wrap rounded-xl bg-white/80 px-3 py-2 text-xs font-bold leading-5 text-gray-800 dark:bg-slate-950/30 dark:text-slate-100">
+                        {previewPosterImageOcrInfo.posterTextSummary}
+                      </p>
+                    )}
+                    {(previewPosterImageOcrInfo.matchedFields.length > 0 || previewPosterImageOcrInfo.mismatchedFields.length > 0) && (
+                      <div className="mt-3 grid gap-2 text-[11px] sm:grid-cols-2">
+                        {previewPosterImageOcrInfo.matchedFields.length > 0 && (
+                          <p className="font-bold text-emerald-700 dark:text-emerald-200">
+                            일치: {previewPosterImageOcrInfo.matchedFields.join(", ")}
+                          </p>
+                        )}
+                        {previewPosterImageOcrInfo.mismatchedFields.length > 0 && (
+                          <p className="font-bold text-amber-700 dark:text-amber-200">
+                            확인: {previewPosterImageOcrInfo.mismatchedFields.join(", ")}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {(previewPosterImageOcrInfo.contentReason || previewPosterImageOcrInfo.imageReason) && (
+                      <p className="mt-3 text-[11px] font-bold leading-5 text-violet-700/80 dark:text-violet-200/80">
+                        {[previewPosterImageOcrInfo.contentReason, previewPosterImageOcrInfo.imageReason].filter(Boolean).join(" · ")}
                       </p>
                     )}
                   </div>

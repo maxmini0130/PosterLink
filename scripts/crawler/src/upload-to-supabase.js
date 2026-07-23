@@ -528,6 +528,60 @@ function cleanSummaryText(value) {
     .trim();
 }
 
+function cleanOcrText(value, maxLength = 1200) {
+  const text = cleanSummaryText(value);
+  return text ? Array.from(text).slice(0, maxLength).join("") : "";
+}
+
+function getPosterImageInsight(post = {}) {
+  const contentVerification = post.posterContentVerification ?? post.posterImageCheck?.content ?? null;
+  const imageClassification = post.imageClassification ?? post.posterImageCheck?.model ?? null;
+  const posterTextSummary = cleanOcrText(contentVerification?.posterTextSummary ?? "");
+  if (!posterTextSummary && !contentVerification && !imageClassification) return null;
+
+  return {
+    posterTextSummary: posterTextSummary || null,
+    contentMatch: contentVerification
+      ? {
+          isSameNotice: Boolean(contentVerification.isSameNotice),
+          confidence: typeof contentVerification.confidence === "number" ? contentVerification.confidence : null,
+          decision: contentVerification.decision ?? null,
+          reason: contentVerification.reason ? String(contentVerification.reason).slice(0, 500) : null,
+          matchedFields: Array.isArray(contentVerification.matchedFields) ? contentVerification.matchedFields.slice(0, 12) : [],
+          mismatchedFields: Array.isArray(contentVerification.mismatchedFields) ? contentVerification.mismatchedFields.slice(0, 12) : [],
+          model: contentVerification.model ?? null,
+          checkedAt: contentVerification.checkedAt ?? null,
+        }
+      : null,
+    imageClassification: imageClassification
+      ? {
+          isPoster: Boolean(imageClassification.isPoster),
+          confidence: typeof imageClassification.confidence === "number" ? imageClassification.confidence : null,
+          visualType: imageClassification.visualType ?? null,
+          reason: imageClassification.reason ? String(imageClassification.reason).slice(0, 500) : null,
+          model: imageClassification.model ?? null,
+          checkedAt: imageClassification.checkedAt ?? null,
+        }
+      : null,
+  };
+}
+
+function buildAiContentWithPosterImageText(post = {}, posterImageInsight = null) {
+  const posterTextSummary = cleanOcrText(posterImageInsight?.posterTextSummary ?? "");
+  return [
+    post.content,
+    posterTextSummary ? `Poster image OCR/vision text summary:\n${posterTextSummary}` : "",
+  ].filter(Boolean).join("\n\n");
+}
+
+function mergePosterImageInsightIntoFieldVerification(verification = {}, posterImageInsight = null) {
+  if (!posterImageInsight) return verification;
+  return {
+    ...verification,
+    posterImageOcr: posterImageInsight,
+  };
+}
+
 function looksMojibake(value) {
   const text = String(value ?? "");
   if (!text) return false;
@@ -1320,7 +1374,15 @@ async function uploadToSupabase(filePath) {
 
     const sourceImages = normalizePostImages(post, sourceUrl);
     const linkEntries = buildPosterLinkEntries(post, sourceUrl);
-    const classification = inferPosterClassification({ ...post, sourceUrl, source_key: sourceKey });
+    const posterImageInsight = getPosterImageInsight(post);
+    const aiContent = buildAiContentWithPosterImageText(post, posterImageInsight);
+    const aiPost = {
+      ...post,
+      content: aiContent || post.content,
+      sourceUrl,
+      source_key: sourceKey,
+    };
+    const classification = inferPosterClassification(aiPost);
     const quality = evaluatePosterQuality({ ...post, images: sourceImages }, {
       sourceKey,
       images: sourceImages,
@@ -1377,14 +1439,17 @@ async function uploadToSupabase(filePath) {
 
     const fieldVerificationResult = enrichOrganizationVerification(await verifyPosterFields({
       title: post.title,
-      content: post.content,
+      content: aiContent || post.content,
       site: post.site,
       sourceUrl,
       extractedDeadline: post.deadline ?? null,
       extractedOrgName: post.site ?? null,
     }), post, sourceUrl);
     const { deadline: verifiedDeadline, orgName: verifiedOrgName } = applyFieldVerification(post, fieldVerificationResult);
-    const finalDateQuality = evaluatePosterDateQuality(post, {
+    const finalDateQuality = evaluatePosterDateQuality({
+      ...post,
+      content: aiContent || post.content,
+    }, {
       extractedDeadline: verifiedDeadline ?? post.deadline ?? null,
     });
     const finalDeadline = chooseDeadlineForStorage(verifiedDeadline ?? post.deadline ?? null, finalDateQuality);
@@ -1393,6 +1458,7 @@ async function uploadToSupabase(filePath) {
     });
     fieldVerification = mergeClassificationIntoFieldVerification(fieldVerification, classification);
     fieldVerification = mergeQualityIssuesIntoFieldVerification(fieldVerification, quality);
+    fieldVerification = mergePosterImageInsightIntoFieldVerification(fieldVerification, posterImageInsight);
     if (shouldReviewDuplicate) {
       fieldVerification = mergeDuplicateIssueIntoFieldVerification(fieldVerification, duplicateIssue);
     }
@@ -1434,7 +1500,7 @@ async function uploadToSupabase(filePath) {
 
     // ── 1. posters 테이블 upsert ─────────────────────────────
     const summaryShort = normalizeSummary(postWithStoredImages);
-    const summaryLong = cleanSummaryText(postWithStoredImages.content) || null;
+    const summaryLong = cleanSummaryText(postWithStoredImages.content) || posterImageInsight?.posterTextSummary || null;
     const embedding = await embedPosterText({ title: post.title, summaryShort, summaryLong });
 
     const posterRecord = sanitizeForPostgrest({
@@ -1518,10 +1584,13 @@ async function uploadToSupabase(filePath) {
       const existingHasReviewIssues = hasReviewIssues(existingPoster.field_verification);
       const nextHasClassification = Boolean(posterRecord.field_verification?.classification);
       const existingHasClassification = Boolean(existingPoster.field_verification?.classification);
+      const nextHasPosterImageOcr = Boolean(posterRecord.field_verification?.posterImageOcr?.posterTextSummary);
+      const existingHasPosterImageOcr = Boolean(existingPoster.field_verification?.posterImageOcr?.posterTextSummary);
       if (
         !existingPoster.field_verification ||
         (nextHasReviewIssues && !existingHasReviewIssues) ||
-        (nextHasClassification && !existingHasClassification)
+        (nextHasClassification && !existingHasClassification) ||
+        (nextHasPosterImageOcr && !existingHasPosterImageOcr)
       ) {
         updates.field_verification = posterRecord.field_verification;
       }
