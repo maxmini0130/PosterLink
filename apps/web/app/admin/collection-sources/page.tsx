@@ -934,6 +934,9 @@ export default function AdminCollectionSourcesPage() {
   const [urlParamsReady, setUrlParamsReady] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [runningSourceId, setRunningSourceId] = useState<string | null>(null);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
+  const [bulkRunProgress, setBulkRunProgress] = useState<{ currentName: string; done: number; total: number } | null>(null);
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
   const [expandedSourceId, setExpandedSourceId] = useState<string | null>(null);
@@ -993,6 +996,21 @@ export default function AdminCollectionSourcesPage() {
       });
   }, [healthFilter, sources]);
 
+  const visibleSourceIds = useMemo(() => filteredSources.map((source) => source.id), [filteredSources]);
+  const selectedVisibleSources = useMemo(
+    () => filteredSources.filter((source) => selectedSourceIds.includes(source.id)),
+    [filteredSources, selectedSourceIds]
+  );
+  const attentionVisibleSources = useMemo(
+    () => filteredSources.filter((source) => {
+      const health = getSourceHealth(source);
+      return source.status === "active" && (health.level === "attention" || health.level === "watch");
+    }),
+    [filteredSources]
+  );
+  const allVisibleSelected = visibleSourceIds.length > 0
+    && visibleSourceIds.every((id) => selectedSourceIds.includes(id));
+
   const sourceDiagnostics = useMemo(() => {
     return sources
       .map((source) => {
@@ -1012,6 +1030,11 @@ export default function AdminCollectionSourcesPage() {
     () => sourceDiagnostics.filter((item) => item.diagnosis.level !== "ok").slice(0, 5),
     [sourceDiagnostics]
   );
+
+  useEffect(() => {
+    const availableIds = new Set(sources.map((source) => source.id));
+    setSelectedSourceIds((ids) => ids.filter((id) => availableIds.has(id)));
+  }, [sources]);
 
   const createSource = async () => {
     if (!form.source_slug.trim() || !form.name.trim() || !form.list_url.trim()) {
@@ -1127,6 +1150,104 @@ export default function AdminCollectionSourcesPage() {
       toast.error(err instanceof Error ? err.message : "기관 설정을 저장하지 못했습니다.");
     } finally {
       setEditSaving(false);
+    }
+  };
+
+  const toggleSourceSelection = (sourceId: string) => {
+    setSelectedSourceIds((ids) => (
+      ids.includes(sourceId)
+        ? ids.filter((id) => id !== sourceId)
+        : [...ids, sourceId]
+    ));
+  };
+
+  const toggleAllVisibleSources = () => {
+    setSelectedSourceIds((ids) => {
+      if (allVisibleSelected) {
+        const visible = new Set(visibleSourceIds);
+        return ids.filter((id) => !visible.has(id));
+      }
+
+      return [...new Set([...ids, ...visibleSourceIds])];
+    });
+  };
+
+  const selectAttentionSources = () => {
+    setSelectedSourceIds((ids) => [...new Set([...ids, ...attentionVisibleSources.map((source) => source.id)])]);
+  };
+
+  const clearSelectedSources = () => {
+    setSelectedSourceIds([]);
+  };
+
+  const dispatchSelectedSource = async (source: CollectionSource) => {
+    const res = await fetch("/api/admin/crawler/dispatch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: source.source_slug, upload: true }),
+    });
+    const payload = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(payload?.error ?? "Crawler dispatch failed.");
+    return payload;
+  };
+
+  const runSelectedSources = async () => {
+    if (selectedVisibleSources.length === 0) {
+      toast.error("실행할 수집 기관을 선택해주세요.");
+      return;
+    }
+
+    if (!confirm(`${selectedVisibleSources.length}개 수집 기관을 GitHub Actions에서 순차 실행할까요?`)) return;
+
+    setBulkRunning(true);
+    setRunResult(null);
+    const logs: string[] = [];
+    let success = 0;
+    let failed = 0;
+
+    try {
+      for (let index = 0; index < selectedVisibleSources.length; index += 1) {
+        const source = selectedVisibleSources[index];
+        setRunningSourceId(source.id);
+        setBulkRunProgress({ currentName: source.name, done: index, total: selectedVisibleSources.length });
+
+        try {
+          const payload = await dispatchSelectedSource(source);
+          success += 1;
+          logs.push(`[${index + 1}/${selectedVisibleSources.length}] OK ${source.name} (${source.source_slug})${payload?.workflowUrl ? ` - ${payload.workflowUrl}` : ""}`);
+        } catch (err) {
+          failed += 1;
+          logs.push(`[${index + 1}/${selectedVisibleSources.length}] FAIL ${source.name} (${source.source_slug}) - ${err instanceof Error ? err.message : String(err)}`);
+        }
+
+        if (index < selectedVisibleSources.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 800));
+        }
+      }
+
+      setBulkRunProgress({
+        currentName: success > 0 ? "실행 요청 완료" : "실행 실패",
+        done: selectedVisibleSources.length,
+        total: selectedVisibleSources.length,
+      });
+      setRunResult({
+        sourceName: `선택 ${selectedVisibleSources.length}개 수집 기관`,
+        logs: [
+          `GitHub Actions dispatch summary: success ${success}, failed ${failed}`,
+          ...logs,
+          "",
+          "워크플로가 끝난 뒤 기관 이력을 새로고침하면 결과를 확인할 수 있습니다.",
+        ].join("\n"),
+        resultFile: null,
+        uploaded: false,
+        workflowUrl: null,
+      });
+      if (failed > 0) toast.error(`${failed}개 수집 기관 실행 요청이 실패했습니다.`);
+      else toast.success(`${success}개 수집 기관 실행을 시작했습니다.`);
+      await loadSources();
+    } finally {
+      setRunningSourceId(null);
+      setBulkRunning(false);
     }
   };
 
@@ -1846,6 +1967,54 @@ export default function AdminCollectionSourcesPage() {
           </div>
         </div>
 
+        <div className="mb-4 flex flex-col gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-slate-800 dark:bg-slate-950 md:flex-row md:items-center md:justify-between">
+          <div className="text-xs font-bold text-gray-500 dark:text-slate-400">
+            <span className="font-black text-gray-950 dark:text-white">선택 {formatNumber(selectedVisibleSources.length)}개</span>
+            <span className="mx-2 text-gray-300">/</span>
+            <span>화면 {formatNumber(filteredSources.length)}개</span>
+            {bulkRunProgress && (
+              <span className="ml-3 text-indigo-600 dark:text-indigo-300">
+                {bulkRunProgress.currentName} · {formatNumber(bulkRunProgress.done)}/{formatNumber(bulkRunProgress.total)}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={toggleAllVisibleSources}
+              disabled={filteredSources.length === 0 || bulkRunning}
+              className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-xs font-black text-gray-600 shadow-sm disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+            >
+              {allVisibleSelected ? "화면 선택 해제" : "화면 전체 선택"}
+            </button>
+            <button
+              type="button"
+              onClick={selectAttentionSources}
+              disabled={attentionVisibleSources.length === 0 || bulkRunning}
+              className="h-9 rounded-lg border border-amber-200 bg-amber-50 px-3 text-xs font-black text-amber-700 disabled:opacity-50 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200"
+            >
+              점검 필요 선택 {formatNumber(attentionVisibleSources.length)}
+            </button>
+            <button
+              type="button"
+              onClick={clearSelectedSources}
+              disabled={selectedSourceIds.length === 0 || bulkRunning}
+              className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-xs font-black text-gray-500 shadow-sm disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+            >
+              선택 해제
+            </button>
+            <button
+              type="button"
+              onClick={() => void runSelectedSources()}
+              disabled={selectedVisibleSources.length === 0 || bulkRunning || Boolean(runningSourceId)}
+              className="inline-flex h-9 items-center gap-2 rounded-lg bg-indigo-600 px-3 text-xs font-black text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {bulkRunning ? <Loader2 size={14} className="animate-spin" /> : <PlayCircle size={14} />}
+              선택 실행
+            </button>
+          </div>
+        </div>
+
         {loading ? (
           <div className="flex min-h-64 items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
@@ -1855,6 +2024,16 @@ export default function AdminCollectionSourcesPage() {
             <table className="w-full min-w-[1280px] text-left text-sm">
               <thead>
                 <tr className="border-b border-gray-100 text-xs font-black uppercase tracking-widest text-gray-400 dark:border-slate-800">
+                  <th className="w-10 py-3 pr-4">
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      onChange={toggleAllVisibleSources}
+                      disabled={filteredSources.length === 0 || bulkRunning}
+                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      aria-label="화면에 보이는 수집 기관 전체 선택"
+                    />
+                  </th>
                   <th className="py-3 pr-4">기관</th>
                   <th className="py-3 pr-4">분류</th>
                   <th className="py-3 pr-4">방식</th>
@@ -1877,6 +2056,16 @@ export default function AdminCollectionSourcesPage() {
                   return (
                   <Fragment key={source.id}>
                   <tr className="align-top">
+                    <td className="py-3 pr-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedSourceIds.includes(source.id)}
+                        onChange={() => toggleSourceSelection(source.id)}
+                        disabled={bulkRunning}
+                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        aria-label={`${source.name} 선택`}
+                      />
+                    </td>
                     <td className="max-w-[260px] py-3 pr-4">
                       <p className="font-black text-gray-950 dark:text-white">{source.name}</p>
                       <p className="mt-1 truncate text-xs font-bold text-gray-400">{source.source_slug} · {source.region_name ?? source.region_scope}</p>
@@ -1999,7 +2188,7 @@ export default function AdminCollectionSourcesPage() {
                   </tr>
                   {expanded && (
                     <tr>
-                      <td colSpan={11} className="bg-gray-50/70 p-4 dark:bg-slate-950/60">
+                      <td colSpan={12} className="bg-gray-50/70 p-4 dark:bg-slate-950/60">
                         <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
                           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                             <div>
