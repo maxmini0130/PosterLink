@@ -203,6 +203,17 @@ type SourceHealth = {
   weight: number;
 };
 
+type SourceDiagnosisLevel = "critical" | "warning" | "ok";
+
+type SourceDiagnosis = {
+  level: SourceDiagnosisLevel;
+  label: string;
+  tone: string;
+  actions: string[];
+  reasonItems: Array<{ key: string; label: string; value: number }>;
+  configItems: Array<{ label: string; value: string; tone?: string }>;
+};
+
 const HEALTH_FILTER_OPTIONS = [
   ["all", "전체 건강도"],
   ["attention", "점검 필요"],
@@ -418,6 +429,157 @@ function formatConfigJson(value: Record<string, any> | null | undefined) {
   return JSON.stringify(value && typeof value === "object" ? value : {}, null, 2);
 }
 
+function isPlainObject(value: unknown): value is Record<string, any> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function sourceConfig(source: CollectionSource) {
+  return isPlainObject(source.config_json) ? source.config_json : {};
+}
+
+function getConfiguredBoards(source: CollectionSource) {
+  const config = sourceConfig(source);
+  if (Array.isArray(config.boards) && config.boards.length > 0) return config.boards;
+  return [{ name: config.board_name || config.boardName || source.name, url: source.list_url }];
+}
+
+function getConfigValue(config: Record<string, any>, key: string, snakeKey?: string) {
+  return config[key] ?? (snakeKey ? config[snakeKey] : undefined);
+}
+
+function getSourceRuns(source: CollectionSource, runs: CollectionSourceRun[]) {
+  return runs
+    .filter((run) => run.source_id === source.id || run.source_slug === source.source_slug)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+}
+
+function getReasonItemsForRuns(runs: CollectionSourceRun[]) {
+  const counts: Record<string, number> = {};
+
+  for (const run of runs) {
+    const metadata = run.metadata_json;
+    if (metadata?.skip_reasons && typeof metadata.skip_reasons === "object") {
+      for (const [key, value] of Object.entries(metadata.skip_reasons)) {
+        const count = Number(value ?? 0);
+        if (Number.isFinite(count)) counts[key] = (counts[key] ?? 0) + count;
+      }
+    }
+    if (run.error_message) counts.runtime_error = (counts.runtime_error ?? 0) + 1;
+  }
+
+  return Object.entries(counts)
+    .map(([key, value]) => ({
+      key,
+      label: key === "runtime_error" ? "실행 오류" : formatRunReasonLabel(key),
+      value,
+    }))
+    .filter((item) => item.value > 0)
+    .sort((a, b) => b.value - a.value);
+}
+
+function buildConfigItems(source: CollectionSource) {
+  const config = sourceConfig(source);
+  const boards = getConfiguredBoards(source);
+  const selectors = isPlainObject(config.selectors) ? config.selectors : {};
+  const firstBoard = isPlainObject(boards[0]) ? boards[0] : {};
+  const firstBoardSelectors = isPlainObject(firstBoard.selectors) ? firstBoard.selectors : {};
+  const externalOriginal = getConfigValue(config, "externalOriginal", "external_original");
+  const hasExternalOriginal = isPlainObject(externalOriginal) && Boolean(externalOriginal.enabled ?? externalOriginal.follow);
+  const detailSelectorCount = [
+    selectors.detailTitle,
+    selectors.detailContent,
+    selectors.detailImages,
+    firstBoardSelectors.detailTitle,
+    firstBoardSelectors.detailContent,
+    firstBoardSelectors.detailImages,
+  ].filter(Boolean).length;
+  const urlFilterConfig = getConfigValue(config, "urlFilters", "url_filters") ?? firstBoard.urlFilters ?? firstBoard.url_filters;
+
+  return [
+    { label: "어댑터", value: String(config.adapter || "generic-board") },
+    { label: "게시판", value: `${boards.length}개` },
+    { label: "최대 페이지", value: String(config.maxPages ?? config.max_pages ?? firstBoard.maxPages ?? firstBoard.max_pages ?? "기본") },
+    {
+      label: "상세 셀렉터",
+      value: detailSelectorCount > 0 ? `${detailSelectorCount}개 설정` : "기본값",
+      tone: detailSelectorCount > 0 ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700",
+    },
+    {
+      label: "URL 필터",
+      value: isPlainObject(urlFilterConfig) ? "설정됨" : "기본값",
+      tone: isPlainObject(urlFilterConfig) ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600",
+    },
+    {
+      label: "원문 추적",
+      value: hasExternalOriginal ? "사용" : "미사용",
+      tone: hasExternalOriginal ? "bg-indigo-50 text-indigo-700" : "bg-gray-100 text-gray-600",
+    },
+  ];
+}
+
+function diagnoseSource(source: CollectionSource, runs: CollectionSourceRun[]): SourceDiagnosis {
+  const health = getSourceHealth(source);
+  const config = sourceConfig(source);
+  const latestRun = runs[0] ?? null;
+  const latestTotals = latestRun?.metadata_json ? getRunSummaryTotals(latestRun.metadata_json) : {};
+  const reasonItems = getReasonItemsForRuns(runs);
+  const actions: string[] = [];
+
+  if (source.collection_method !== "manual" && source.status === "planned") {
+    actions.push("상태를 정상으로 바꾸고 단일 수집을 먼저 실행하세요.");
+  }
+  if (source.collection_method !== "manual" && !latestRun) {
+    actions.push("아직 실행 이력이 없습니다. 실행 버튼으로 첫 수집 결과를 확인하세요.");
+  }
+  if (source.consecutive_error_count > 0 || latestRun?.run_status === "error") {
+    actions.push("목록 URL 접근과 GitHub Actions 로그의 오류 메시지를 먼저 확인하세요.");
+  }
+  if (latestRun && latestRun.checked_count === 0) {
+    actions.push("목록에서 0건만 발견했습니다. listItem/listLink 셀렉터 또는 페이지네이션 규칙을 점검하세요.");
+  }
+  if ((latestTotals.board_failed ?? 0) > 0) {
+    actions.push("목록 페이지 파싱 실패가 있습니다. 게시판 URL, 차단 여부, 목록 셀렉터를 확인하세요.");
+  }
+  if ((latestTotals.detail_failed ?? 0) > 0) {
+    actions.push("상세 페이지 파싱 실패가 있습니다. 상세 URL 규칙과 detailContent 셀렉터를 조정하세요.");
+  }
+  if ((latestTotals.no_poster_image ?? 0) > 0 || (latestTotals.text_notice_collected ?? 0) > 0) {
+    actions.push("이미지 없는 공고가 있습니다. 후보 화면에서 텍스트 공고 전환 또는 제외를 처리하세요.");
+  }
+  if ((latestTotals.image_rule_rejected ?? 0) > 0 || (latestTotals.verification_rejected ?? 0) > 0) {
+    actions.push("이미지 규칙이나 AI 검증에서 제외됐습니다. 대표 이미지 셀렉터와 웹접근성/배너 제외 규칙을 확인하세요.");
+  }
+  if ((latestTotals.external_original_failed ?? 0) > 0) {
+    actions.push("원문 추적 실패가 있습니다. externalOriginal 링크 신호와 제외 호스트 설정을 확인하세요.");
+  }
+  if (latestRun && latestRun.checked_count >= 5 && latestRun.valid_count === 0) {
+    actions.push("확인 건수는 있는데 유효 공고가 없습니다. 제목 제외어와 상세 제외 조건이 과한지 확인하세요.");
+  }
+  if (Object.keys(config).length === 0 && source.collection_method !== "manual") {
+    actions.push("고급 설정이 비어 있습니다. 최소 adapter, selectors, pagination을 점검용으로 채우는 것이 좋습니다.");
+  }
+
+  if (actions.length === 0) {
+    actions.push(health.level === "healthy" ? "현재 특별한 조치가 필요 없습니다." : health.reasons[0] ?? "상태를 확인하세요.");
+  }
+
+  const isCritical = health.level === "attention" || source.consecutive_error_count > 0 || latestRun?.run_status === "error";
+  const isWarning = health.level === "watch" || source.status === "planned" || latestRun?.checked_count === 0;
+
+  return {
+    level: isCritical ? "critical" : isWarning ? "warning" : "ok",
+    label: isCritical ? "즉시 점검" : isWarning ? "확인 필요" : "정상",
+    tone: isCritical
+      ? "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-200"
+      : isWarning
+        ? "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200"
+        : "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200",
+    actions: [...new Set(actions)].slice(0, 6),
+    reasonItems: reasonItems.slice(0, 8),
+    configItems: buildConfigItems(source),
+  };
+}
+
 function getSourceHealth(source: CollectionSource): SourceHealth {
   if (source.status === "planned" || source.collection_method === "manual") {
     return {
@@ -533,6 +695,7 @@ export default function AdminCollectionSourcesPage() {
   const [runningSourceId, setRunningSourceId] = useState<string | null>(null);
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
+  const [expandedSourceId, setExpandedSourceId] = useState<string | null>(null);
 
   const loadSources = async () => {
     setLoading(true);
@@ -572,6 +735,26 @@ export default function AdminCollectionSourcesPage() {
         return b.priority - a.priority;
       });
   }, [healthFilter, sources]);
+
+  const sourceDiagnostics = useMemo(() => {
+    return sources
+      .map((source) => {
+        const runs = getSourceRuns(source, recentRuns);
+        const diagnosis = diagnoseSource(source, runs);
+        return { source, runs, diagnosis };
+      })
+      .sort((a, b) => {
+        const severity = { critical: 3, warning: 2, ok: 1 };
+        const severityDiff = severity[b.diagnosis.level] - severity[a.diagnosis.level];
+        if (severityDiff !== 0) return severityDiff;
+        return b.source.priority - a.source.priority;
+      });
+  }, [recentRuns, sources]);
+
+  const priorityDiagnostics = useMemo(
+    () => sourceDiagnostics.filter((item) => item.diagnosis.level !== "ok").slice(0, 5),
+    [sourceDiagnostics]
+  );
 
   const createSource = async () => {
     if (!form.source_slug.trim() || !form.name.trim() || !form.list_url.trim()) {
@@ -747,6 +930,54 @@ export default function AdminCollectionSourcesPage() {
         <MetricCard icon={AlertTriangle} label="오류 기관" value={summary?.errors ?? 0} sub="점검 필요 상태" />
         <MetricCard icon={Search} label="점검 필요" value={summary?.needs_attention ?? 0} sub="오류·장기 미수집·저품질" />
         <MetricCard icon={Clock} label="예정 기관" value={summary?.planned ?? 0} sub="아직 연결 전" />
+      </section>
+
+      <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={18} className="text-indigo-500" />
+            <h2 className="text-lg font-black text-gray-950 dark:text-white">자동 진단</h2>
+          </div>
+          <span className="text-xs font-black text-gray-400">우선 점검 대상 {formatNumber(priorityDiagnostics.length)}건</span>
+        </div>
+
+        {priorityDiagnostics.length > 0 ? (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {priorityDiagnostics.map(({ source, diagnosis, runs }) => (
+              <div key={source.id} className="rounded-lg border border-gray-100 p-4 dark:border-slate-800">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black text-gray-950 dark:text-white">{source.name}</p>
+                    <p className="mt-1 text-xs font-bold text-gray-400">
+                      {source.source_slug} · 최근 실행 {runs[0] ? formatDate(runs[0].created_at) : "없음"}
+                    </p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${diagnosis.tone}`}>
+                    {diagnosis.label}
+                  </span>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {diagnosis.actions.slice(0, 3).map((action) => (
+                    <p key={action} className="rounded-lg bg-gray-50 px-3 py-2 text-xs font-bold text-gray-600 dark:bg-slate-950 dark:text-slate-300">
+                      {action}
+                    </p>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setExpandedSourceId(source.id)}
+                  className="mt-3 text-xs font-black text-indigo-600 hover:text-indigo-800 dark:text-indigo-300"
+                >
+                  이 기관 진단 보기
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-dashed border-gray-200 py-8 text-center text-sm font-bold text-gray-400 dark:border-slate-800">
+            현재 우선 점검 대상이 없습니다.
+          </div>
+        )}
       </section>
 
       <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -1086,8 +1317,12 @@ export default function AdminCollectionSourcesPage() {
               <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
                 {filteredSources.map((source) => {
                   const health = getSourceHealth(source);
+                  const runs = getSourceRuns(source, recentRuns);
+                  const diagnosis = diagnoseSource(source, runs);
+                  const expanded = expandedSourceId === source.id;
                   return (
-                  <tr key={source.id} className="align-top">
+                  <Fragment key={source.id}>
+                  <tr className="align-top">
                     <td className="max-w-[260px] py-3 pr-4">
                       <p className="font-black text-gray-950 dark:text-white">{source.name}</p>
                       <p className="mt-1 truncate text-xs font-bold text-gray-400">{source.source_slug} · {source.region_name ?? source.region_scope}</p>
@@ -1175,6 +1410,14 @@ export default function AdminCollectionSourcesPage() {
                         </button>
                         <button
                           type="button"
+                          onClick={() => setExpandedSourceId(expanded ? null : source.id)}
+                          title="자동 진단"
+                          className="rounded-lg p-2 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/10"
+                        >
+                          <Search size={15} />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => void runSource(source)}
                           disabled={Boolean(runningSourceId)}
                           title="GitHub Actions 백그라운드 수집 실행"
@@ -1192,6 +1435,93 @@ export default function AdminCollectionSourcesPage() {
                       </div>
                     </td>
                   </tr>
+                  {expanded && (
+                    <tr>
+                      <td colSpan={11} className="bg-gray-50/70 p-4 dark:bg-slate-950/60">
+                        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-widest text-gray-400">기관 자동 진단</p>
+                              <h3 className="mt-1 text-base font-black text-gray-950 dark:text-white">{source.name}</h3>
+                              <p className="mt-1 text-xs font-bold text-gray-400">
+                                {source.source_slug} · {source.list_url}
+                              </p>
+                            </div>
+                            <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${diagnosis.tone}`}>
+                              {diagnosis.label}
+                            </span>
+                          </div>
+
+                          <div className="mt-5 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-widest text-gray-400">권장 조치</p>
+                              <div className="mt-3 space-y-2">
+                                {diagnosis.actions.map((action) => (
+                                  <div key={action} className="rounded-lg bg-gray-50 px-3 py-2 text-xs font-bold text-gray-600 dark:bg-slate-950 dark:text-slate-300">
+                                    {action}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-widest text-gray-400">설정 요약</p>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {diagnosis.configItems.map((item) => (
+                                  <span key={`${item.label}-${item.value}`} className={`rounded-full px-3 py-1.5 text-xs font-black ${item.tone ?? "bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-200"}`}>
+                                    {item.label}: {item.value}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-5 grid gap-4 xl:grid-cols-2">
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-widest text-gray-400">최근 제외 사유</p>
+                              {diagnosis.reasonItems.length > 0 ? (
+                                <div className="mt-3 space-y-2">
+                                  {diagnosis.reasonItems.map((item) => (
+                                    <div key={item.key} className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2 text-xs font-bold dark:bg-slate-950">
+                                      <span className="text-gray-600 dark:text-slate-300">{item.label}</span>
+                                      <span className="font-black text-gray-950 dark:text-white">{formatNumber(item.value)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="mt-3 text-xs font-bold text-gray-400">최근 제외 사유가 없습니다.</p>
+                              )}
+                            </div>
+
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-widest text-gray-400">최근 실행</p>
+                              {runs.length > 0 ? (
+                                <div className="mt-3 space-y-2">
+                                  {runs.slice(0, 5).map((run) => (
+                                    <div key={run.id} className="rounded-lg border border-gray-100 px-3 py-2 text-xs dark:border-slate-800">
+                                      <div className="flex items-center justify-between gap-3">
+                                        <span className={`rounded-full px-2.5 py-1 font-black ${runStatusTone(run.run_status)}`}>
+                                          {runStatusLabel(run.run_status)}
+                                        </span>
+                                        <span className="font-bold text-gray-400">{formatDate(run.created_at)} · {formatDuration(run.duration_ms)}</span>
+                                      </div>
+                                      <p className="mt-2 font-bold text-gray-500 dark:text-slate-300">
+                                        확인 {formatNumber(run.checked_count)} · 신규 {formatNumber(run.new_count)} · 유효 {formatNumber(run.valid_count)} · 제외 {formatNumber(run.rejected_count)} · 실패 {formatNumber(run.failed_count)}
+                                      </p>
+                                      {run.error_message && <p className="mt-1 line-clamp-2 font-bold text-rose-500">{run.error_message}</p>}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="mt-3 text-xs font-bold text-gray-400">아직 실행 이력이 없습니다.</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                   );
                 })}
               </tbody>
