@@ -599,6 +599,14 @@ function getSourceRuns(source: CollectionSource, runs: CollectionSourceRun[]) {
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 }
 
+function matchesSourceFocus(source: CollectionSource, value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return false;
+  return [source.id, source.source_slug, source.name]
+    .filter(Boolean)
+    .some((candidate) => candidate.toLowerCase() === normalized);
+}
+
 function getReasonItemsForRuns(runs: CollectionSourceRun[]) {
   const counts: Record<string, number> = {};
 
@@ -931,6 +939,7 @@ export default function AdminCollectionSourcesPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [healthFilter, setHealthFilter] = useState("all");
   const [query, setQuery] = useState("");
+  const [focusedSourceSlug, setFocusedSourceSlug] = useState("");
   const [urlParamsReady, setUrlParamsReady] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [runningSourceId, setRunningSourceId] = useState<string | null>(null);
@@ -967,10 +976,12 @@ export default function AdminCollectionSourcesPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const initialQuery = (params.get("source") ?? params.get("q") ?? "").trim();
+    const initialSource = (params.get("source") ?? "").trim();
+    const initialQuery = (initialSource || params.get("q") || "").trim();
     const initialStatus = params.get("status");
     const initialHealth = params.get("health");
 
+    if (initialSource) setFocusedSourceSlug(initialSource);
     if (initialQuery) setQuery(initialQuery);
     if (initialStatus) setStatusFilter(initialStatus);
     if (initialHealth) setHealthFilter(initialHealth);
@@ -1035,6 +1046,21 @@ export default function AdminCollectionSourcesPage() {
     const availableIds = new Set(sources.map((source) => source.id));
     setSelectedSourceIds((ids) => ids.filter((id) => availableIds.has(id)));
   }, [sources]);
+
+  useEffect(() => {
+    if (!focusedSourceSlug || loading) return;
+    const source = sources.find((item) => matchesSourceFocus(item, focusedSourceSlug));
+    if (!source) return;
+
+    setExpandedSourceId(source.id);
+    setSelectedSourceIds((ids) => ids.includes(source.id) ? ids : [...ids, source.id]);
+    window.requestAnimationFrame(() => {
+      document.getElementById(`collection-source-${source.id}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+  }, [focusedSourceSlug, loading, sources]);
 
   const createSource = async () => {
     if (!form.source_slug.trim() || !form.name.trim() || !form.list_url.trim()) {
@@ -2053,9 +2079,13 @@ export default function AdminCollectionSourcesPage() {
                   const runs = getSourceRuns(source, recentRuns);
                   const diagnosis = diagnoseSource(source, runs);
                   const expanded = expandedSourceId === source.id;
+                  const focused = matchesSourceFocus(source, focusedSourceSlug);
                   return (
                   <Fragment key={source.id}>
-                  <tr className="align-top">
+                  <tr
+                    id={`collection-source-${source.id}`}
+                    className={`align-top transition-colors ${focused ? "bg-indigo-50/70 dark:bg-indigo-500/10" : ""}`}
+                  >
                     <td className="py-3 pr-4">
                       <input
                         type="checkbox"
