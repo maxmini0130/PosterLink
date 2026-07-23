@@ -176,6 +176,7 @@ const EMPTY_FORM = {
 };
 
 const numberFormatter = new Intl.NumberFormat("ko-KR");
+const STALE_RUNNING_MINUTES = 45;
 
 function formatNumber(value: number | undefined | null) {
   return numberFormatter.format(value ?? 0);
@@ -189,6 +190,13 @@ function formatDate(value: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function minutesSince(value: string | null) {
+  if (!value) return null;
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return null;
+  return Math.max(0, Math.round((Date.now() - timestamp) / 60_000));
 }
 
 function statusTone(status: string) {
@@ -268,6 +276,40 @@ function runStatusLabel(value: string) {
   if (value === "error") return "오류";
   if (value === "empty") return "비어 있음";
   return value;
+}
+
+function getRunStartedAt(run: CollectionSourceRun) {
+  return run.started_at ?? run.created_at;
+}
+
+function isStaleRunningRun(run: CollectionSourceRun) {
+  const elapsed = minutesSince(getRunStartedAt(run));
+  return run.run_status === "running" && elapsed !== null && elapsed >= STALE_RUNNING_MINUTES;
+}
+
+function getRunStatusTone(run: CollectionSourceRun) {
+  if (isStaleRunningRun(run)) return "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200";
+  return runStatusTone(run.run_status);
+}
+
+function getRunStatusLabel(run: CollectionSourceRun) {
+  if (isStaleRunningRun(run)) return "완료 지연";
+  return runStatusLabel(run.run_status);
+}
+
+function formatRunElapsed(run: CollectionSourceRun) {
+  const minutes = minutesSince(getRunStartedAt(run));
+  if (minutes === null) return formatDuration(run.duration_ms);
+  if (run.run_status !== "running" && run.duration_ms !== null) return formatDuration(run.duration_ms);
+  if (minutes < 60) return `${minutes}분`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes ? `${hours}시간 ${remainingMinutes}분` : `${hours}시간`;
+}
+
+function getRunWorkflowUrl(run: CollectionSourceRun) {
+  const url = run.metadata_json?.workflow_url;
+  return typeof url === "string" && url.startsWith("https://github.com/") ? url : null;
 }
 
 function formatDuration(ms: number | null) {
@@ -457,6 +499,14 @@ function getRunTuningHints(run: CollectionSourceRun, detail: ReturnType<typeof g
     if (hints.some((hint) => hint.title === title)) return;
     hints.push({ title, detail: hintDetail, tone });
   };
+
+  if (isStaleRunningRun(run)) {
+    addHint(
+      "GitHub Actions 완료 확인",
+      "백그라운드 수집이 오래 running 상태입니다. 워크플로가 실패했는지, 큐에 멈췄는지, 환경변수가 빠졌는지 먼저 확인하세요.",
+      "border-amber-100 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200"
+    );
+  }
 
   if (run.run_status === "empty" || run.checked_count === 0) {
     addHint(
@@ -1618,6 +1668,8 @@ export default function AdminCollectionSourcesPage() {
                   const expanded = expandedRunId === run.id;
                   const runSource = findSourceForRun(run, sources);
                   const tuningHints = getRunTuningHints(run, detail);
+                  const staleRun = isStaleRunningRun(run);
+                  const workflowUrl = getRunWorkflowUrl(run);
 
                   return (
                     <Fragment key={run.id}>
@@ -1632,18 +1684,22 @@ export default function AdminCollectionSourcesPage() {
                       </span>
                     </td>
                     <td className="py-3 pr-4">
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-black ${runStatusTone(run.run_status)}`}>
-                        {runStatusLabel(run.run_status)}
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-black ${getRunStatusTone(run)}`}>
+                        {getRunStatusLabel(run)}
                       </span>
                     </td>
                     <td className="py-3 pr-4 text-xs font-bold text-gray-500">
                       <p>확인 {formatNumber(run.checked_count)} · 신규 {formatNumber(run.new_count)} · 유효 {formatNumber(run.valid_count)}</p>
                       <p className="mt-1 text-gray-400">중복 {formatNumber(run.duplicate_count)} · 제외 {formatNumber(run.rejected_count)} · 실패 {formatNumber(run.failed_count)}</p>
                     </td>
-                    <td className="whitespace-nowrap py-3 pr-4 text-xs font-bold text-gray-500">{formatDuration(run.duration_ms)}</td>
+                    <td className="whitespace-nowrap py-3 pr-4 text-xs font-bold text-gray-500">{formatRunElapsed(run)}</td>
                     <td className="whitespace-nowrap py-3 pr-4 text-xs font-bold text-gray-500">{formatDate(run.created_at)}</td>
                     <td className="max-w-[260px] py-3 pr-4 text-xs font-bold text-gray-400">
-                      {run.error_message ? (
+                      {staleRun ? (
+                        <p className="line-clamp-3 text-amber-600 dark:text-amber-200">
+                          GitHub Actions 완료가 {formatRunElapsed(run)}째 확인되지 않았습니다.
+                        </p>
+                      ) : run.error_message ? (
                         <p className="line-clamp-2 text-rose-500">{run.error_message}</p>
                       ) : diagnostic ? (
                         <p className="line-clamp-3">{diagnostic}</p>
@@ -1671,10 +1727,21 @@ export default function AdminCollectionSourcesPage() {
                               <p className="text-xs font-black uppercase tracking-widest text-gray-400">운영 튜닝</p>
                               <h3 className="mt-1 text-base font-black text-gray-950 dark:text-white">{run.source_name || run.source_slug}</h3>
                               <p className="mt-1 text-xs font-bold text-gray-400">
-                                {run.run_phase} · {runStatusLabel(run.run_status)} · {formatDate(run.created_at)}
+                                {run.run_phase} · {getRunStatusLabel(run)} · {formatDate(run.created_at)}
                               </p>
                             </div>
                             <div className="flex flex-wrap gap-2">
+                              {workflowUrl && (
+                                <a
+                                  href={workflowUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 text-xs font-black text-indigo-700 transition-colors hover:bg-indigo-100 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-200"
+                                >
+                                  <ExternalLink size={14} />
+                                  GitHub Actions
+                                </a>
+                              )}
                               <a
                                 href={`/admin/notice-candidates?status=pending&q=${encodeURIComponent(run.source_slug)}`}
                                 className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-black text-gray-600 transition-colors hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
@@ -2296,20 +2363,36 @@ export default function AdminCollectionSourcesPage() {
                               <p className="text-xs font-black uppercase tracking-widest text-gray-400">최근 실행</p>
                               {runs.length > 0 ? (
                                 <div className="mt-3 space-y-2">
-                                  {runs.slice(0, 5).map((run) => (
-                                    <div key={run.id} className="rounded-lg border border-gray-100 px-3 py-2 text-xs dark:border-slate-800">
-                                      <div className="flex items-center justify-between gap-3">
-                                        <span className={`rounded-full px-2.5 py-1 font-black ${runStatusTone(run.run_status)}`}>
-                                          {runStatusLabel(run.run_status)}
-                                        </span>
-                                        <span className="font-bold text-gray-400">{formatDate(run.created_at)} · {formatDuration(run.duration_ms)}</span>
+                                  {runs.slice(0, 5).map((run) => {
+                                    const staleRun = isStaleRunningRun(run);
+                                    const workflowUrl = getRunWorkflowUrl(run);
+
+                                    return (
+                                      <div key={run.id} className="rounded-lg border border-gray-100 px-3 py-2 text-xs dark:border-slate-800">
+                                        <div className="flex items-center justify-between gap-3">
+                                          <span className={`rounded-full px-2.5 py-1 font-black ${getRunStatusTone(run)}`}>
+                                            {getRunStatusLabel(run)}
+                                          </span>
+                                          <span className="font-bold text-gray-400">{formatDate(run.created_at)} · {formatRunElapsed(run)}</span>
+                                        </div>
+                                        <p className="mt-2 font-bold text-gray-500 dark:text-slate-300">
+                                          확인 {formatNumber(run.checked_count)} · 신규 {formatNumber(run.new_count)} · 유효 {formatNumber(run.valid_count)} · 제외 {formatNumber(run.rejected_count)} · 실패 {formatNumber(run.failed_count)}
+                                        </p>
+                                        {staleRun && (
+                                          <p className="mt-1 font-bold text-amber-600 dark:text-amber-200">
+                                            실행 완료가 지연 중입니다. GitHub Actions 실행 상태를 확인하세요.
+                                          </p>
+                                        )}
+                                        {run.error_message && <p className="mt-1 line-clamp-2 font-bold text-rose-500">{run.error_message}</p>}
+                                        {workflowUrl && (
+                                          <a href={workflowUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1.5 font-black text-indigo-600 hover:text-indigo-800 dark:text-indigo-300">
+                                            <ExternalLink size={13} />
+                                            GitHub Actions 확인
+                                          </a>
+                                        )}
                                       </div>
-                                      <p className="mt-2 font-bold text-gray-500 dark:text-slate-300">
-                                        확인 {formatNumber(run.checked_count)} · 신규 {formatNumber(run.new_count)} · 유효 {formatNumber(run.valid_count)} · 제외 {formatNumber(run.rejected_count)} · 실패 {formatNumber(run.failed_count)}
-                                      </p>
-                                      {run.error_message && <p className="mt-1 line-clamp-2 font-bold text-rose-500">{run.error_message}</p>}
-                                    </div>
-                                  ))}
+                                    );
+                                  })}
                                 </div>
                               ) : (
                                 <p className="mt-3 text-xs font-bold text-gray-400">아직 실행 이력이 없습니다.</p>
