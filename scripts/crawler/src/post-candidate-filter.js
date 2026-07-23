@@ -35,6 +35,21 @@ const TITLE_EXCLUDE_RULES = [
     reason: "facility schedule, timetable, homepage, or parking-control notice is not a poster notice",
   },
   {
+    name: "resident-registration-administrative-notice",
+    pattern: /(?:\uC8FC\uBBFC\uB4F1\uB85D|\uAC70\uC8FC\uBD88\uBA85|\uBB34\uB2E8\uC804\uCD9C|\uD589\uC815\uC0C1\s*\uAD00\uB9AC\uC8FC\uC18C).*(?:\uACF5\uACE0|\uC9C1\uAD8C\uC870\uCE58|\uCD5C\uACE0|\uC0AC\uC2E4\uC870\uC0AC|\uC774\uC804)|(?:\uC9C1\uAD8C\uC870\uCE58|\uCD5C\uACE0\s*\uACF5\uACE0|\uC0AC\uC2E4\uC870\uC0AC).*(?:\uC8FC\uBBFC\uB4F1\uB85D|\uAC70\uC8FC\uBD88\uBA85|\uBB34\uB2E8\uC804\uCD9C|\uD589\uC815\uC0C1\s*\uAD00\uB9AC\uC8FC\uC18C)/i,
+    reason: "resident-registration administrative notice is not a poster notice",
+  },
+  {
+    name: "civil-defense-or-shelter-guide",
+    pattern: /(?:\uBBFC\uBC29\uC704\s*\uB300\uD53C\uC2DC\uC124|\uC9C0\uC9C4\s*\uC625\uC678\uB300\uD53C\uC18C|\uBE44\uC0C1\uC2DC\s*\uAD6D\uBBFC\uD589\uB3D9\uC694\uB839|\uB300\uD53C\uC18C\s*\uC548\uB0B4)/i,
+    reason: "civil defense or shelter guide is not a poster notice",
+  },
+  {
+    name: "local-waste-disposal-guide",
+    pattern: /(?:\uC0DD\uD65C\s*\uC4F0\uB808\uAE30|\uC4F0\uB808\uAE30).*(?:\uC218\uAC70\s*\uC911\uB2E8|\uBC30\uCD9C\s*\uC77C\uC815|\uBC30\uCD9C\s*\uC548\uB0B4|\uC218\uAC70|\uAC10\uB7C9)|(?:\uC218\uAC70\s*\uC911\uB2E8|\uBC30\uCD9C\s*\uC77C\uC815|\uBC30\uCD9C\s*\uC548\uB0B4).*(?:\uC0DD\uD65C\s*\uC4F0\uB808\uAE30|\uC4F0\uB808\uAE30)/i,
+    reason: "local waste disposal guide is not a poster notice",
+  },
+  {
     name: "partial-operation-or-public-holiday",
     pattern: /(?:\uBD80\uBD84\s*\uC6B4\uC601\uC77C|\uBD80\uBD84\uC6B4\uC601\uC77C|\uBC95\uC815\s*\uACF5\uD734\uC77C|\uACF5\uD734\uC77C\s*\uC6B4\uC601|\uC774\uC6A9\s*\uC2DC\uAC04\s*\uC548\uB0B4).*(?:\uC548\uB0B4|\uC6B4\uC601|\uC774\uC6A9)|(?:\uC548\uB0B4|\uC6B4\uC601|\uC774\uC6A9).*(?:\uBD80\uBD84\s*\uC6B4\uC601\uC77C|\uBC95\uC815\s*\uACF5\uD734\uC77C|\uACF5\uD734\uC77C\s*\uC6B4\uC601|\uC774\uC6A9\s*\uC2DC\uAC04)/i,
     reason: "partial operation or public-holiday facility notice is not a poster notice",
