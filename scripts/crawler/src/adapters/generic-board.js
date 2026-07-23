@@ -1,4 +1,5 @@
 import { fetchPage } from "../crawler.js";
+import { resolveExternalOriginalDetail } from "../external-original-resolver.js";
 import { filterAndOrderPosterImages } from "../poster-image-rules.js";
 
 const DEFAULT_SELECTORS = {
@@ -140,10 +141,12 @@ function buildConfig(site = {}, board = {}) {
   const selectors = { ...DEFAULT_SELECTORS, ...siteSelectors, ...boardSelectors };
   const pagination = mergeObjects(site.pagination, board.pagination);
   const urlFilters = mergeObjects(site.urlFilters, board.urlFilters);
+  const externalOriginal = mergeObjects(site.externalOriginal ?? site.external_original, board.externalOriginal ?? board.external_original);
 
   return {
     selectors,
     pagination,
+    externalOriginal,
     sameHostOnly: Boolean(board.sameHostOnly ?? site.sameHostOnly ?? urlFilters.sameHostOnly ?? false),
     includeUrlPatterns: [
       ...toArray(site.includeUrlPatterns ?? urlFilters.include),
@@ -365,6 +368,24 @@ function extractListItem($, row, pageUrl, site, config) {
   return null;
 }
 
+function isExternalOriginalEnabled(config) {
+  return Boolean(config.externalOriginal?.enabled ?? config.externalOriginal?.follow ?? false);
+}
+
+function uniqueByUrl(items = []) {
+  const seen = new Set();
+  const result = [];
+
+  for (const item of items) {
+    const key = item?.url ?? item;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+
+  return result;
+}
+
 function buildPageUrl(boardUrl, page, pagination = {}) {
   const firstPage = Number(pagination.firstPage ?? pagination.first_page ?? 1);
   const pageValue = Number(pagination.startAt ?? pagination.start_at ?? firstPage) + page - 1;
@@ -536,24 +557,51 @@ export default {
     const deadline = extractDeadline(content);
     const rawImages = collectDetailImages($, postUrl, selectors);
     const attachments = collectAttachments($, postUrl, selectors);
+    const externalDetail = isExternalOriginalEnabled(config)
+      ? await resolveExternalOriginalDetail($, postUrl, title, {
+          ...config.externalOriginal,
+          scopeSelector: config.externalOriginal.scopeSelector
+            ?? config.externalOriginal.scope_selector
+            ?? rootSelector,
+          viaLinkTitle: config.externalOriginal.viaLinkTitle
+            ?? config.externalOriginal.via_link_title
+            ?? `${site.name} \uACBD\uC720 \uCD9C\uCC98`,
+        })
+      : null;
+
+    if (externalDetail?.images?.length) {
+      rawImages.unshift(...externalDetail.images.filter((imageUrl) => !rawImages.includes(imageUrl)));
+    }
+
+    const finalTitle = externalDetail?.title || title;
+    const finalContent = externalDetail?.content && externalDetail.content.length > content.length
+      ? externalDetail.content
+      : content;
+    const finalAttachments = externalDetail?.attachments?.length
+      ? uniqueByUrl([...attachments, ...externalDetail.attachments])
+      : attachments;
+    const sourceUrl = externalDetail?.url ?? postUrl;
+    const links = externalDetail?.viaLink ? [externalDetail.viaLink] : [];
 
     const posterImages = await filterAndOrderPosterImages(rawImages, {
-      title,
-      content,
+      title: finalTitle,
+      content: finalContent,
       site: site.name,
-      sourceUrl: postUrl,
+      sourceUrl,
+      preferredImageUrls: externalDetail?.images ?? [],
     });
 
     return {
-      title: title || undefined,
-      content: content || undefined,
+      title: finalTitle || undefined,
+      content: finalContent || undefined,
       date,
-      deadline,
+      deadline: externalDetail?.deadline ?? deadline,
       images: posterImages.images,
       posterImageRule: posterImages.posterImageRule,
       posterImageCandidates: posterImages.posterImageCandidates,
-      attachments,
-      sourceUrl: postUrl,
+      attachments: finalAttachments,
+      links,
+      sourceUrl,
     };
   },
 };

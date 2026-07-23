@@ -1,28 +1,17 @@
-import * as cheerio from "cheerio";
 import { fetchPage } from "../crawler.js";
+import {
+  addImage,
+  cleanText,
+  extractDateRange,
+  resolveExternalOriginalDetail,
+  resolveUrl,
+} from "../external-original-resolver.js";
 import { filterAndOrderPosterImages } from "../poster-image-rules.js";
 
 const BASE_URL = "https://youth.seoul.go.kr";
 const IMAGE_ONLY_CONTENT =
   "\uC0C1\uC138 \uB0B4\uC6A9\uC740 \uC774\uBBF8\uC9C0\uB85C \uC81C\uACF5\uB429\uB2C8\uB2E4. " +
   "\uC774\uBBF8\uC9C0 \uAC24\uB7EC\uB9AC\uC5D0\uC11C \uC804\uCCB4 \uC548\uB0B4\uB97C \uD655\uC778\uD558\uC138\uC694.";
-
-function resolveUrl(base, relative) {
-  try {
-    return new URL(relative, base).href;
-  } catch {
-    return relative;
-  }
-}
-
-function cleanText(value) {
-  if (!value) return "";
-  let text = String(value).replace(/\s+/g, " ").trim();
-  for (let i = 0; i < 2; i += 1) {
-    text = cheerio.load(`<span>${text}</span>`)("span").text().replace(/\s+/g, " ").trim();
-  }
-  return text.replace(/\.{2,}\d+$/, "").trim();
-}
 
 function isMeaningfulContent(value) {
   const text = cleanText(value);
@@ -82,205 +71,6 @@ function inferSpecificTitle(title, content, attachments = []) {
   }
 
   return title;
-}
-
-function extractDateRange(text) {
-  const match = text.match(/(\d{4}-\d{2}-\d{2})\s*~\s*(\d{4}-\d{2}-\d{2})/);
-  return {
-    start: match?.[1] ?? null,
-    end: match?.[2] ?? null,
-  };
-}
-
-function addImage(images, baseUrl, src) {
-  if (!src) return;
-  if (/\s/.test(String(src).trim()) || /^img\s+src/i.test(String(src).trim())) return;
-  if (/logo|btn_|gnb_|lnb_|ico_|banner|accessibility|web_access|webaccess|wa[_-]?mark|wamark|wa-logo|cert/i.test(src)) return;
-  const imageUrl = resolveUrl(baseUrl, src);
-  if (imageUrl && !images.includes(imageUrl)) images.push(imageUrl);
-}
-
-function uniqueValues(values) {
-  return [...new Set(values.filter(Boolean))];
-}
-
-function getHost(value) {
-  try {
-    return new URL(value).hostname.replace(/^www\./, "").toLowerCase();
-  } catch {
-    return "";
-  }
-}
-
-function isYouthSeoulUrl(value) {
-  return getHost(value) === "youth.seoul.go.kr";
-}
-
-function isExternalOriginalUrl(value) {
-  const host = getHost(value);
-  return Boolean(host) && !isYouthSeoulUrl(value);
-}
-
-function extractExternalOriginalLink($, postUrl) {
-  const candidates = [];
-
-  $(".feed-view a[href]").each((_, link) => {
-    const href = $(link).attr("href");
-    if (!href || /^javascript:|^#|^mailto:|^tel:/i.test(href)) return;
-
-    const url = resolveUrl(postUrl, href);
-    if (!/^https?:\/\//i.test(url) || !isExternalOriginalUrl(url)) return;
-
-    const label = cleanText($(link).text() || $(link).attr("title"));
-    const context = cleanText($(link).closest("li, tr, dl, div, p").text());
-    const signal = `${label} ${context} ${url}`;
-    let score = 0;
-
-    if (/담당기관\s*바로가기|원문|상세|자세히|홈페이지/i.test(signal)) score += 10;
-    if (/programDetail|detail|view|bbs|board/i.test(url)) score += 4;
-    if (/신청|접수|프로그램/i.test(signal)) score += 2;
-    if (/login|logout|siteMap|mainB\.do/i.test(url)) score -= 20;
-
-    if (score > 0) candidates.push({ url, label, score });
-  });
-
-  return candidates.sort((a, b) => b.score - a.score)[0] ?? null;
-}
-
-function selectExternalRoot($) {
-  const selectors = [
-    ".sub_cont",
-    "#skip_contents",
-    "#contents",
-    "#content",
-    ".contents",
-    ".content",
-    "main",
-    "article",
-  ];
-
-  for (const selector of selectors) {
-    const roots = $(selector).toArray()
-      .map((element) => $(element))
-      .filter(($root) => cleanText($root.text()).length >= 80);
-    if (roots.length > 0) return roots[0];
-  }
-
-  return $("body");
-}
-
-function findLabeledValue($, $root, labelPattern) {
-  let result = "";
-
-  $root.find("tr").each((_, row) => {
-    if (result) return;
-    const cells = $(row).children("th, td")
-      .map((__, cell) => cleanText($(cell).text()))
-      .get()
-      .filter(Boolean);
-
-    for (let index = 0; index < cells.length - 1; index += 1) {
-      if (labelPattern.test(cells[index])) {
-        result = cells[index + 1];
-        return;
-      }
-    }
-  });
-
-  return result;
-}
-
-function extractTableLines($, $root) {
-  const lines = [];
-
-  $root.find("tr").each((_, row) => {
-    const cells = $(row).children("th, td")
-      .map((__, cell) => cleanText($(cell).text()))
-      .get()
-      .filter(Boolean);
-
-    if (cells.length < 2) return;
-    for (let index = 0; index < cells.length - 1; index += 2) {
-      const label = cells[index].replace(/[:：]\s*$/, "");
-      const value = cells[index + 1];
-      if (!label || !value || label.length > 30 || value === label) continue;
-      lines.push(`${label}: ${value}`);
-    }
-  });
-
-  return uniqueValues(lines);
-}
-
-function extractExternalTitle($, $root, fallbackTitle) {
-  return findLabeledValue($, $root, /^(강좌명|프로그램명|행사명|제목|공고명)$/)
-    || cleanText($root.find("h1, h2, h3, h4, .tit, .title, .subject").first().text())
-    || fallbackTitle;
-}
-
-function trimExternalContent(value) {
-  let text = cleanText(value);
-  const stopPatterns = [
-    /\s+강사소개\s+강좌신청승인조건/i,
-    /\s+강좌신청승인조건/i,
-    /\s+개인정보\s*수집\s*및\s*이용/i,
-  ];
-
-  for (const pattern of stopPatterns) {
-    const match = text.match(pattern);
-    if (match?.index && match.index > 100) {
-      text = text.slice(0, match.index).trim();
-    }
-  }
-
-  return text;
-}
-
-function extractExternalAttachments($, $root, originalUrl) {
-  const attachments = [];
-
-  $root.find("a[href]").each((_, link) => {
-    const href = $(link).attr("href");
-    const name = cleanText($(link).text() || $(link).attr("title"));
-    if (!href || !name || /^javascript:|^#/i.test(href)) return;
-    const url = resolveUrl(originalUrl, href);
-    if (!/^https?:\/\//i.test(url) && !/^mailto:|^tel:/i.test(url)) return;
-    attachments.push({ name, url });
-  });
-
-  return attachments;
-}
-
-async function parseExternalOriginalDetail(originalUrl, fallbackTitle) {
-  const $ = await fetchPage(originalUrl);
-  if (!$) return null;
-
-  const $root = selectExternalRoot($);
-  const tableLines = extractTableLines($, $root);
-  const $textRoot = $root.clone();
-  $textRoot.find("script, style, noscript, caption, table").remove();
-  const rootText = cleanText($textRoot.text());
-  const content = trimExternalContent(uniqueValues([...tableLines, rootText]).join(" ")).slice(0, 8000);
-  const images = [];
-
-  $root.find("img").each((_, img) => {
-    const src = $(img).attr("src") || $(img).attr("data-src") || $(img).attr("data-original");
-    addImage(images, originalUrl, src);
-  });
-
-  $("meta[property='og:image'], meta[name='twitter:image']").each((_, el) => {
-    addImage(images, originalUrl, $(el).attr("content"));
-  });
-
-  const { end } = extractDateRange(content);
-
-  return {
-    url: originalUrl,
-    title: extractExternalTitle($, $root, fallbackTitle),
-    content,
-    deadline: end,
-    images,
-    attachments: extractExternalAttachments($, $root, originalUrl),
-  };
 }
 
 export default {
@@ -359,10 +149,10 @@ export default {
       if (href && name) attachments.push({ name, url: resolveUrl(postUrl, href) });
     });
 
-    const externalOriginalLink = extractExternalOriginalLink($, postUrl);
-    const externalDetail = externalOriginalLink
-      ? await parseExternalOriginalDetail(externalOriginalLink.url, title)
-      : null;
+    const externalDetail = await resolveExternalOriginalDetail($, postUrl, title, {
+      scopeSelector: ".feed-view",
+      viaLinkTitle: "\uCCAD\uB144\uBABD\uB545\uC815\uBCF4\uD1B5 \uACBD\uC720 \uCD9C\uCC98",
+    });
 
     const baseContent = isMeaningfulContent(detailText)
       ? detailText
@@ -385,9 +175,7 @@ export default {
       ? externalDetail.content
       : baseContent;
     const sourceUrl = externalDetail?.url ?? postUrl;
-    const sourceLinks = externalDetail
-      ? [{ link_type: "other", title: "\uCCAD\uB144\uBABD\uB545\uC815\uBCF4\uD1B5 \uACBD\uC720 \uCD9C\uCC98", url: postUrl }]
-      : [];
+    const sourceLinks = externalDetail?.viaLink ? [externalDetail.viaLink] : [];
     const inferredTitle = inferSpecificTitle(externalDetail?.title || title, content, attachments);
 
     const posterImages = await filterAndOrderPosterImages(images, {
