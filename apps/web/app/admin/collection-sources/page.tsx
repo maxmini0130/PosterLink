@@ -997,6 +997,7 @@ export default function AdminCollectionSourcesPage() {
   const [urlParamsReady, setUrlParamsReady] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [runningSourceId, setRunningSourceId] = useState<string | null>(null);
+  const [closingRunId, setClosingRunId] = useState<string | null>(null);
   const [bulkRunning, setBulkRunning] = useState(false);
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
   const [bulkRunProgress, setBulkRunProgress] = useState<{ currentName: string; done: number; total: number } | null>(null);
@@ -1374,6 +1375,34 @@ export default function AdminCollectionSourcesPage() {
       toast.error(err instanceof Error ? err.message : "수집 실행에 실패했습니다.");
     } finally {
       setRunningSourceId(null);
+    }
+  };
+
+  const closeStaleRun = async (run: CollectionSourceRun) => {
+    if (!isStaleRunningRun(run)) {
+      toast.error("지연된 실행 이력만 종료 처리할 수 있습니다.");
+      return;
+    }
+    if (!confirm(`${run.source_name || run.source_slug} 실행 이력을 오류 상태로 종료 처리할까요?`)) return;
+
+    setClosingRunId(run.id);
+    try {
+      const res = await fetch(`/api/admin/collection-source-runs/${run.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "mark_timeout",
+          reason: "GitHub Actions background crawler run did not finish within the expected time.",
+        }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(payload?.error ?? "실행 이력을 종료 처리하지 못했습니다.");
+      toast.success("지연 실행 이력을 종료 처리했습니다.");
+      await loadSources();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "실행 이력을 종료 처리하지 못했습니다.");
+    } finally {
+      setClosingRunId(null);
     }
   };
 
@@ -1765,6 +1794,17 @@ export default function AdminCollectionSourcesPage() {
                                   <ExternalLink size={14} />
                                   GitHub Actions
                                 </a>
+                              )}
+                              {staleRun && (
+                                <button
+                                  type="button"
+                                  onClick={() => void closeStaleRun(run)}
+                                  disabled={closingRunId === run.id}
+                                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 text-xs font-black text-amber-700 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200"
+                                >
+                                  {closingRunId === run.id ? <Loader2 size={14} className="animate-spin" /> : <AlertTriangle size={14} />}
+                                  지연 종료 처리
+                                </button>
                               )}
                               <a
                                 href={`/admin/notice-candidates?status=pending&q=${encodeURIComponent(run.source_slug)}`}
@@ -2408,11 +2448,26 @@ export default function AdminCollectionSourcesPage() {
                                           </p>
                                         )}
                                         {run.error_message && <p className="mt-1 line-clamp-2 font-bold text-rose-500">{run.error_message}</p>}
-                                        {workflowUrl && (
-                                          <a href={workflowUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1.5 font-black text-indigo-600 hover:text-indigo-800 dark:text-indigo-300">
-                                            <ExternalLink size={13} />
-                                            GitHub Actions 확인
-                                          </a>
+                                        {(workflowUrl || staleRun) && (
+                                          <div className="mt-2 flex flex-wrap gap-3">
+                                            {workflowUrl && (
+                                              <a href={workflowUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 font-black text-indigo-600 hover:text-indigo-800 dark:text-indigo-300">
+                                                <ExternalLink size={13} />
+                                                GitHub Actions 확인
+                                              </a>
+                                            )}
+                                            {staleRun && (
+                                              <button
+                                                type="button"
+                                                onClick={() => void closeStaleRun(run)}
+                                                disabled={closingRunId === run.id}
+                                                className="inline-flex items-center gap-1.5 font-black text-amber-600 hover:text-amber-800 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-200"
+                                              >
+                                                {closingRunId === run.id ? <Loader2 size={13} className="animate-spin" /> : <AlertTriangle size={13} />}
+                                                지연 종료 처리
+                                              </button>
+                                            )}
+                                          </div>
                                         )}
                                       </div>
                                     );
