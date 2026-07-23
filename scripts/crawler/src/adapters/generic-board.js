@@ -545,13 +545,17 @@ export default {
     if (!title) title = cleanTitleCandidate($("title").first().text(), site);
 
     let content = "";
+    let foundScopedMediaContent = false;
     for (const selector of toArray(selectors.detailContent)) {
       const $content = $(selector).first();
       if ($content.length === 0) continue;
+      if ($content.find("img, picture, video, iframe, a[href]").length > 0) {
+        foundScopedMediaContent = true;
+      }
       content = extractReadableText($, $content, selectors.removeBeforeText);
       if (content) break;
     }
-    if (!content) content = extractReadableText($, $root, selectors.removeBeforeText);
+    if (!content && !foundScopedMediaContent) content = extractReadableText($, $root, selectors.removeBeforeText);
 
     const date = normalizeDate(firstText($, null, selectors.detailDate, selectors.removeBeforeText) || content);
     const deadline = extractDeadline(content);

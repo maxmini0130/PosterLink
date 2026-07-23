@@ -218,10 +218,18 @@ export const sites = [
     name: "구립망원청소년문화센터",
     domain: "http://www.mwyouth.org",
     adapter: "generic-board",
+    maxPages: 1,
+    selectors: {
+      detailTitle: [".top_area h1"],
+      detailContent: [".rd_body .xe_content"],
+      detailDate: [".top_area .date"],
+      detailImages: [".rd_body .xe_content img"],
+      detailAttachments: [".rd_file a[href*='procFileDownload']", "a[href*='download']"],
+    },
     boards: [
       {
         name: "공지사항",
-        url: "http://www.mwyouth.org/bbs/board.php?bo_table=notice",
+        url: "http://www.mwyouth.org/board_facility",
         category: "청소년",
       },
     ],
@@ -235,10 +243,17 @@ export const sites = [
     name: "구립도화청소년문화의집",
     domain: "http://www.dhyouth.or.kr",
     adapter: "generic-board",
+    selectors: {
+      detailTitle: [".notice_list .tit"],
+      detailContent: ["#bo_v_con"],
+      detailDate: [".notice_list .date"],
+      detailImages: ["#bo_v_con img"],
+      detailAttachments: [".notice_view_cont a[href*='download']", ".notice_view_cont a[href*='file']"],
+    },
     boards: [
       {
         name: "공지사항",
-        url: "http://www.dhyouth.or.kr/new2024/board/notice",
+        url: "http://www.dhyouth.or.kr/bbs/board.php?bo_table=notice",
         category: "청소년",
       },
     ],
@@ -352,12 +367,13 @@ export const sites = [
   {
     id: "mapo-kids-meal",
     name: "마포구어린이급식관리지원센터",
-    domain: "https://ccfsm.foodnara.go.kr",
+    domain: "https://dietary4u.mfds.go.kr",
     adapter: "ccfsm",
+    maxPages: 1,
     boards: [
       {
         name: "공지사항",
-        url: "https://ccfsm.foodnara.go.kr/mapo/",
+        url: "https://dietary4u.mfds.go.kr/board.es?mid=at0501000000&bid=AT07",
         category: "급식",
       },
     ],
