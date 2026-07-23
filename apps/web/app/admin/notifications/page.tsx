@@ -27,7 +27,7 @@ type AdminNotification = {
 
 type CollectionAlert = {
   id: string;
-  target_id: string;
+  target_id: string | null;
   action_reason: string | null;
   metadata_json: Record<string, any> | null;
   created_at: string;
@@ -61,7 +61,7 @@ function getAdminPath(alert: CollectionAlert) {
 }
 
 function extractAdminPathFromBody(body: string) {
-  return body.match(/관리 링크:\s*(\/admin\/[^\s]+)/)?.[1] ?? "";
+  return body.match(/\/admin\/[^\s)]+/)?.[0] ?? "";
 }
 
 export default function AdminNotificationsPage() {

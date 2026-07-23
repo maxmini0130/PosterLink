@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "../../../../lib/supabase-server";
 
 const ADMIN_ROLES = new Set(["admin", "super_admin"]);
+const DEFAULT_STALE_RUNNING_MINUTES = 45;
 
 function adminClient() {
   return createClient(
@@ -66,13 +67,78 @@ function groupNotifications(rows: any[]) {
   ));
 }
 
+function staleRunningMinutes() {
+  const value = Number(process.env.CRAWLER_STALE_RUNNING_MINUTES ?? DEFAULT_STALE_RUNNING_MINUTES);
+  return Number.isFinite(value) && value > 0 ? value : DEFAULT_STALE_RUNNING_MINUTES;
+}
+
+function isMissingRunHistoryError(error: any) {
+  return error?.code === "42P01" || String(error?.message ?? "").includes("collection_source_runs");
+}
+
+function minutesSince(value: string) {
+  const startedAt = new Date(value).getTime();
+  if (!Number.isFinite(startedAt)) return 0;
+  return Math.max(0, Math.round((Date.now() - startedAt) / 60_000));
+}
+
+function buildStaleRunningAlerts(rows: any[]) {
+  return rows.map((row) => {
+    const sourceSlug = row.source_slug ?? "all";
+    const startedAt = row.started_at ?? row.created_at ?? new Date().toISOString();
+    const runningMinutes = minutesSince(startedAt);
+    const adminPath = sourceSlug === "all"
+      ? "/admin/collection-sources"
+      : `/admin/collection-sources?source=${encodeURIComponent(sourceSlug)}`;
+
+    return {
+      id: `stale-running-${row.id}`,
+      target_type: "collection_source",
+      target_id: row.source_id ?? null,
+      action_type: "update",
+      action_reason: `${row.source_name ?? sourceSlug} 수집 실행이 ${runningMinutes}분째 완료 상태로 바뀌지 않았습니다. GitHub Actions 실행 결과와 환경변수를 확인하세요.`,
+      metadata_json: {
+        kind: "collection_source_alert",
+        alert_key: "stale_running_workflow",
+        severity: "warning",
+        label: "실행 완료 지연",
+        run_status: "running",
+        run_phase: row.run_phase,
+        source_slug: sourceSlug,
+        admin_path: adminPath,
+        checked: 0,
+        valid: 0,
+        created: 0,
+        duplicate: 0,
+        rejected: 0,
+        failed: 0,
+        started_at: startedAt,
+        minutes_running: runningMinutes,
+        workflow_url: row.metadata_json?.workflow_url ?? null,
+      },
+      created_at: startedAt,
+    };
+  });
+}
+
+function mergeCollectionAlerts(alertRows: any[], staleRunningRows: any[]) {
+  return [...buildStaleRunningAlerts(staleRunningRows), ...alertRows]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 80);
+}
+
 export async function GET() {
   if (!(await requireAdmin())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const admin = adminClient();
-  const [{ data: notificationRows, error: notificationError }, { data: alertRows, error: alertError }] = await Promise.all([
+  const staleThreshold = new Date(Date.now() - staleRunningMinutes() * 60_000).toISOString();
+  const [
+    { data: notificationRows, error: notificationError },
+    { data: alertRows, error: alertError },
+    { data: staleRunningRows, error: staleRunningError },
+  ] = await Promise.all([
     admin
       .from("notifications")
       .select("id,user_id,type,title,body,target_type,target_id,is_read,created_at")
@@ -87,6 +153,13 @@ export async function GET() {
       .contains("metadata_json", { kind: "collection_source_alert" })
       .order("created_at", { ascending: false })
       .limit(60),
+    admin
+      .from("collection_source_runs")
+      .select("id,source_id,source_slug,source_name,run_phase,run_status,started_at,created_at,metadata_json")
+      .eq("run_status", "running")
+      .lt("started_at", staleThreshold)
+      .order("started_at", { ascending: false })
+      .limit(30),
   ]);
 
   if (notificationError) {
@@ -95,10 +168,13 @@ export async function GET() {
   if (alertError) {
     return NextResponse.json({ error: alertError.message }, { status: 500 });
   }
+  if (staleRunningError && !isMissingRunHistoryError(staleRunningError)) {
+    return NextResponse.json({ error: staleRunningError.message }, { status: 500 });
+  }
 
   return NextResponse.json({
     notifications: groupNotifications(notificationRows ?? []),
-    collection_alerts: alertRows ?? [],
+    collection_alerts: mergeCollectionAlerts(alertRows ?? [], staleRunningError ? [] : (staleRunningRows ?? [])),
   });
 }
 
