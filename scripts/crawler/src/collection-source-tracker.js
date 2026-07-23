@@ -18,6 +18,7 @@ const SOURCE_SELECT = [
 
 const PROTECTED_STATUSES = new Set(["paused", "retired"]);
 let didWarnMissingRunHistory = false;
+let didWarnCollectionSourceAlerts = false;
 
 function getCredentials() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -464,6 +465,104 @@ function shouldPromoteToActive(source) {
   return !PROTECTED_STATUSES.has(source.status);
 }
 
+function shouldAlertForRunStatus(runStatus) {
+  return runStatus === "error" || runStatus === "partial" || runStatus === "empty";
+}
+
+function alertCooldownHours() {
+  const value = Number(process.env.CRAWLER_COLLECTION_ALERT_COOLDOWN_HOURS ?? "24");
+  return Number.isFinite(value) && value > 0 ? value : 24;
+}
+
+function buildCollectionSourceAlertMessage(source, stats, runStatus, patch) {
+  const title = `[PosterLink] 수집 점검 필요: ${source.name ?? source.source_slug}`;
+  const reason = patch.last_error_message
+    || (runStatus === "empty" ? "목록에서 수집 대상이 발견되지 않았습니다." : "수집 결과를 확인해야 합니다.");
+  const body = [
+    `${source.name ?? source.source_slug} 수집원이 ${runStatus} 상태로 종료되었습니다.`,
+    `확인 ${stats.checked}, 신규 ${stats.created}, 유효 ${stats.valid}, 중복 ${stats.duplicate}, 제외 ${stats.rejected}, 실패 ${stats.failed}`,
+    `사유: ${reason}`,
+    "관리자 > 수집 기관 관리에서 최근 수집 이력과 자동 진단을 확인하세요.",
+  ].join("\n");
+
+  return { title, body, reason };
+}
+
+async function hasRecentCollectionSourceAlert(supabase, sourceId, runStatus) {
+  const since = new Date(Date.now() - alertCooldownHours() * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("admin_actions")
+    .select("id")
+    .eq("target_type", "collection_source")
+    .eq("target_id", sourceId)
+    .eq("action_type", "update")
+    .gte("created_at", since)
+    .contains("metadata_json", {
+      kind: "collection_source_alert",
+      run_status: runStatus,
+    })
+    .limit(1);
+
+  if (error) return false;
+  return Boolean(data?.length);
+}
+
+async function loadAdminUserIds(supabase) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id,role")
+    .in("role", ["admin", "super_admin"]);
+  if (error) throw error;
+  return (data ?? []).map((profile) => profile.id).filter(Boolean);
+}
+
+async function notifyCollectionSourceAlert(supabase, source, stats, runStatus, patch, options = {}) {
+  if (!shouldAlertForRunStatus(runStatus)) return false;
+  if (source.collection_method === "manual" || PROTECTED_STATUSES.has(source.status)) return false;
+  if (await hasRecentCollectionSourceAlert(supabase, source.id, runStatus)) return false;
+
+  const logger = options.logger ?? console;
+  const { title, body, reason } = buildCollectionSourceAlertMessage(source, stats, runStatus, patch);
+
+  try {
+    const userIds = await loadAdminUserIds(supabase);
+    if (userIds.length > 0) {
+      const { error: notificationError } = await supabase.from("notifications").insert(userIds.map((userId) => ({
+        user_id: userId,
+        type: "system_notice",
+        title,
+        body,
+        target_type: "system",
+      })));
+      if (notificationError) throw notificationError;
+    }
+
+    await supabase.from("admin_actions").insert({
+      target_type: "collection_source",
+      target_id: source.id,
+      action_type: "update",
+      action_reason: reason,
+      metadata_json: {
+        kind: "collection_source_alert",
+        run_status: runStatus,
+        source_slug: source.source_slug,
+        checked: stats.checked,
+        valid: stats.valid,
+        failed: stats.failed,
+      },
+    });
+
+    logger.warn?.(`[collection-sources] Alert created for ${source.source_slug}: ${runStatus}`);
+    return true;
+  } catch (error) {
+    if (!didWarnCollectionSourceAlerts) {
+      didWarnCollectionSourceAlerts = true;
+      logger.warn?.(`[collection-sources] Failed to create collection source alert: ${error.message}`);
+    }
+    return false;
+  }
+}
+
 async function insertCollectionSourceRun(supabase, source, stats, patch, runStatus, options = {}) {
   const finishedAt = options.finishedAt ?? new Date().toISOString();
   const startedAt = stats.startedAt ?? finishedAt;
@@ -588,6 +687,7 @@ export async function flushCollectionSourceStats(supabase, tracker, options = {}
       })) {
         historyInserted += 1;
       }
+      await notifyCollectionSourceAlert(supabase, source, stats, runStatus, patch, { ...options, logger });
     }
   }
 

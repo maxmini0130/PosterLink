@@ -2,13 +2,20 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import iconv from "iconv-lite";
 import zlib from "zlib";
+import { execFile } from "node:child_process";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
 import { evaluatePosterDateQuality } from "./poster-date-quality.js";
 
+const execFileAsync = promisify(execFile);
 const DEFAULT_ATTACHMENT_LIMIT = 2;
 const DEFAULT_MAX_BYTES = 2_500_000;
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_MAX_TOTAL_TEXT = 8_000;
 const DEFAULT_MAX_TEXT_PER_ATTACHMENT = 4_000;
+const DEFAULT_HWP_TIMEOUT_MS = 20_000;
 
 const TEXT_KINDS = new Set(["pdf", "hwpx", "docx", "txt", "html", "xml", "json", "csv"]);
 const UNSUPPORTED_BINARY_KINDS = new Set(["hwp", "image", "archive", "unknown"]);
@@ -384,7 +391,77 @@ function extractPdfText(buffer) {
   return cleanExtractedText(parts.join("\n"), DEFAULT_MAX_TEXT_PER_ATTACHMENT);
 }
 
-function extractAttachmentText(buffer, kind, contentType) {
+function splitCommandLine(value) {
+  const tokens = [];
+  let current = "";
+  let quote = null;
+  for (const char of String(value ?? "")) {
+    if ((char === "\"" || char === "'") && !quote) {
+      quote = char;
+      continue;
+    }
+    if (char === quote) {
+      quote = null;
+      continue;
+    }
+    if (/\s/.test(char) && !quote) {
+      if (current) tokens.push(current);
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  if (current) tokens.push(current);
+  return tokens;
+}
+
+async function extractLegacyHwpText(buffer) {
+  const commandLine = process.env.CRAWLER_HWP_TEXT_EXTRACTOR_COMMAND?.trim();
+  if (!commandLine) {
+    return {
+      status: "unsupported",
+      reason: "legacy hwp requires CRAWLER_HWP_TEXT_EXTRACTOR_COMMAND",
+      text: "",
+    };
+  }
+
+  const parts = splitCommandLine(commandLine);
+  const command = parts.shift();
+  if (!command) {
+    return { status: "unsupported", reason: "invalid hwp extractor command", text: "" };
+  }
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "posterlink-hwp-"));
+  const tempPath = path.join(tempDir, "attachment.hwp");
+  try {
+    await fs.writeFile(tempPath, buffer);
+    const args = parts.length > 0
+      ? parts.map((part) => part.replace(/\{file\}/g, tempPath))
+      : [tempPath];
+    if (!args.some((arg) => arg.includes(tempPath))) args.push(tempPath);
+
+    const { stdout, stderr } = await execFileAsync(command, args, {
+      timeout: readPositiveInt("CRAWLER_HWP_TEXT_EXTRACTOR_TIMEOUT_MS", DEFAULT_HWP_TIMEOUT_MS),
+      maxBuffer: readPositiveInt("CRAWLER_HWP_TEXT_EXTRACTOR_MAX_BUFFER", 4_000_000),
+      windowsHide: true,
+    });
+    const text = cleanExtractedText(stdout, DEFAULT_MAX_TEXT_PER_ATTACHMENT);
+    if (!text || text.length < 20) {
+      return {
+        status: "failed",
+        reason: cleanExtractedText(stderr || "hwp extractor returned no readable text", 240),
+        text: "",
+      };
+    }
+    return { status: "extracted", reason: "", text };
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+async function extractAttachmentText(buffer, kind, contentType) {
+  if (kind === "hwp") return extractLegacyHwpText(buffer);
+
   if (UNSUPPORTED_BINARY_KINDS.has(kind)) {
     return {
       status: "unsupported",
@@ -418,7 +495,7 @@ async function analyzeAttachment(candidate, maxBytes) {
   }
 
   const kind = guessKind(candidate, contentType);
-  const extracted = extractAttachmentText(buffer, kind, contentType);
+  const extracted = await extractAttachmentText(buffer, kind, contentType);
   const text = cleanExtractedText(extracted.text ?? "");
   if (extracted.status === "unsupported") {
     return {

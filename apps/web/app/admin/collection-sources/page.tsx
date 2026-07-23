@@ -10,12 +10,15 @@ import {
   Database,
   ExternalLink,
   Loader2,
+  PencilLine,
   PlayCircle,
   Plus,
   RefreshCcw,
+  Save,
   Search,
   Settings2,
   Trash2,
+  X,
 } from "lucide-react";
 
 type CollectionSource = {
@@ -212,6 +215,26 @@ type SourceDiagnosis = {
   actions: string[];
   reasonItems: Array<{ key: string; label: string; value: number }>;
   configItems: Array<{ label: string; value: string; tone?: string }>;
+  ruleItems: Array<{ label: string; value: string; status: "ok" | "warning" | "missing"; detail?: string }>;
+};
+
+type SourceEditForm = {
+  source_slug: string;
+  name: string;
+  source_type: string;
+  region_scope: string;
+  region_name: string;
+  homepage_url: string;
+  list_url: string;
+  collection_method: string;
+  collection_interval_minutes: number;
+  priority: number;
+  status: string;
+  reliability: string;
+  monthly_expected_posts: number;
+  manager_contact: string;
+  notes: string;
+  config_json: string;
 };
 
 const HEALTH_FILTER_OPTIONS = [
@@ -449,6 +472,27 @@ function formatConfigJson(value: Record<string, any> | null | undefined) {
   return JSON.stringify(value && typeof value === "object" ? value : {}, null, 2);
 }
 
+function sourceToEditForm(source: CollectionSource): SourceEditForm {
+  return {
+    source_slug: source.source_slug ?? "",
+    name: source.name ?? "",
+    source_type: source.source_type ?? "other",
+    region_scope: source.region_scope ?? "",
+    region_name: source.region_name ?? "",
+    homepage_url: source.homepage_url ?? "",
+    list_url: source.list_url ?? "",
+    collection_method: source.collection_method ?? "html",
+    collection_interval_minutes: Number(source.collection_interval_minutes ?? 720),
+    priority: Number(source.priority ?? 50),
+    status: source.status ?? "planned",
+    reliability: source.reliability ?? "medium",
+    monthly_expected_posts: Number(source.monthly_expected_posts ?? 0),
+    manager_contact: source.manager_contact ?? "",
+    notes: source.notes ?? "",
+    config_json: formatConfigJson(source.config_json),
+  };
+}
+
 function isPlainObject(value: unknown): value is Record<string, any> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
@@ -495,6 +539,90 @@ function getReasonItemsForRuns(runs: CollectionSourceRun[]) {
     }))
     .filter((item) => item.value > 0)
     .sort((a, b) => b.value - a.value);
+}
+
+function hasValue(value: unknown) {
+  if (Array.isArray(value)) return value.length > 0;
+  if (isPlainObject(value)) return Object.keys(value).length > 0;
+  return Boolean(String(value ?? "").trim());
+}
+
+function compactRuleValue(value: unknown) {
+  if (Array.isArray(value)) return value.filter(Boolean).slice(0, 3).join(", ") || "-";
+  if (isPlainObject(value)) return Object.keys(value).slice(0, 4).join(", ") || "-";
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  return text ? text.slice(0, 120) : "-";
+}
+
+function ruleStatusTone(status: "ok" | "warning" | "missing") {
+  if (status === "ok") return "border-emerald-100 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200";
+  if (status === "warning") return "border-amber-100 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200";
+  return "border-gray-200 bg-gray-50 text-gray-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400";
+}
+
+function buildRuleAuditItems(source: CollectionSource) {
+  const config = sourceConfig(source);
+  const boards = getConfiguredBoards(source);
+  const selectors = isPlainObject(config.selectors) ? config.selectors : {};
+  const firstBoard = isPlainObject(boards[0]) ? boards[0] : {};
+  const boardSelectors = isPlainObject(firstBoard.selectors) ? firstBoard.selectors : {};
+  const mergedSelectors = { ...selectors, ...boardSelectors };
+  const pagination = getConfigValue(config, "pagination") ?? firstBoard.pagination;
+  const urlFilters = getConfigValue(config, "urlFilters", "url_filters") ?? firstBoard.urlFilters ?? firstBoard.url_filters;
+  const externalOriginal = getConfigValue(config, "externalOriginal", "external_original") ?? firstBoard.externalOriginal ?? firstBoard.external_original;
+  const attachmentSelectors = mergedSelectors.detailAttachments ?? mergedSelectors.attachments ?? firstBoard.attachmentSelector;
+  const imageSelectors = mergedSelectors.detailImages ?? mergedSelectors.images ?? mergedSelectors.posterImages;
+
+  return [
+    {
+      label: "어댑터",
+      value: compactRuleValue(config.adapter || "generic-board"),
+      status: hasValue(config.adapter) ? "ok" : "warning",
+      detail: hasValue(config.adapter) ? "명시 어댑터를 사용합니다." : "기본 generic-board로 처리됩니다.",
+    },
+    {
+      label: "목록 셀렉터",
+      value: compactRuleValue(mergedSelectors.listItem ?? mergedSelectors.listLink),
+      status: hasValue(mergedSelectors.listItem) && hasValue(mergedSelectors.listLink) ? "ok" : "warning",
+      detail: "listItem과 listLink가 모두 있으면 목록 구조 변경 감지가 쉬워집니다.",
+    },
+    {
+      label: "상세 본문",
+      value: compactRuleValue(mergedSelectors.detailContent),
+      status: hasValue(mergedSelectors.detailContent) ? "ok" : "warning",
+      detail: "상세 본문 셀렉터는 제목/기간/대상 추출 품질에 직접 영향을 줍니다.",
+    },
+    {
+      label: "대표 이미지",
+      value: compactRuleValue(imageSelectors),
+      status: hasValue(imageSelectors) ? "ok" : "warning",
+      detail: "웹접근성 마크나 배너가 섞이면 제외 규칙과 함께 조정해야 합니다.",
+    },
+    {
+      label: "첨부파일",
+      value: compactRuleValue(attachmentSelectors),
+      status: hasValue(attachmentSelectors) ? "ok" : "missing",
+      detail: "PDF/HWPX/DOCX 본문 분석을 쓰려면 첨부 링크 수집이 필요합니다.",
+    },
+    {
+      label: "페이지 이동",
+      value: compactRuleValue(pagination ?? { maxPages: config.maxPages ?? config.max_pages }),
+      status: hasValue(pagination) || hasValue(config.maxPages ?? config.max_pages) ? "ok" : "warning",
+      detail: "페이지네이션이 없으면 첫 페이지 공고만 수집될 수 있습니다.",
+    },
+    {
+      label: "URL 필터",
+      value: compactRuleValue(urlFilters),
+      status: hasValue(urlFilters) ? "ok" : "missing",
+      detail: "결과/선정/기부/시설 안내 링크를 줄이는 데 필요합니다.",
+    },
+    {
+      label: "최종 원문 추적",
+      value: compactRuleValue(externalOriginal),
+      status: isPlainObject(externalOriginal) && Boolean(externalOriginal.enabled ?? externalOriginal.follow) ? "ok" : "missing",
+      detail: "청년몽땅정보통처럼 경유 페이지가 많은 출처에서 원문 품질을 높입니다.",
+    },
+  ] as Array<{ label: string; value: string; status: "ok" | "warning" | "missing"; detail?: string }>;
 }
 
 function buildConfigItems(source: CollectionSource) {
@@ -606,6 +734,7 @@ function diagnoseSource(source: CollectionSource, runs: CollectionSourceRun[]): 
     actions: [...new Set(actions)].slice(0, 6),
     reasonItems: reasonItems.slice(0, 8),
     configItems: buildConfigItems(source),
+    ruleItems: buildRuleAuditItems(source),
   };
 }
 
@@ -725,6 +854,9 @@ export default function AdminCollectionSourcesPage() {
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
   const [expandedSourceId, setExpandedSourceId] = useState<string | null>(null);
+  const [editingSource, setEditingSource] = useState<CollectionSource | null>(null);
+  const [editForm, setEditForm] = useState<SourceEditForm | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
 
   const loadSources = async () => {
     setLoading(true);
@@ -842,6 +974,66 @@ export default function AdminCollectionSourcesPage() {
     }
   };
 
+  const openEditSource = (source: CollectionSource) => {
+    setEditingSource(source);
+    setEditForm(sourceToEditForm(source));
+  };
+
+  const closeEditSource = () => {
+    setEditingSource(null);
+    setEditForm(null);
+  };
+
+  const updateEditField = <K extends keyof SourceEditForm>(key: K, value: SourceEditForm[K]) => {
+    setEditForm((current) => current ? { ...current, [key]: value } : current);
+  };
+
+  const saveEditSource = async () => {
+    if (!editingSource || !editForm) return;
+    if (!editForm.source_slug.trim() || !editForm.name.trim() || !editForm.list_url.trim()) {
+      toast.error("기관 코드, 기관명, 게시판 URL은 필수입니다.");
+      return;
+    }
+
+    setEditSaving(true);
+    try {
+      const configJson = parseConfigJsonInput(editForm.config_json);
+      const patch = {
+        source_slug: editForm.source_slug.trim(),
+        name: editForm.name.trim(),
+        source_type: editForm.source_type,
+        region_scope: editForm.region_scope.trim() || null,
+        region_name: editForm.region_name.trim() || null,
+        homepage_url: editForm.homepage_url.trim() || null,
+        list_url: editForm.list_url.trim(),
+        collection_method: editForm.collection_method,
+        collection_interval_minutes: Number(editForm.collection_interval_minutes || 720),
+        priority: Number(editForm.priority || 50),
+        status: editForm.status,
+        reliability: editForm.reliability,
+        monthly_expected_posts: Number(editForm.monthly_expected_posts || 0),
+        manager_contact: editForm.manager_contact.trim() || null,
+        notes: editForm.notes.trim() || null,
+        config_json: configJson,
+      };
+
+      const res = await fetch("/api/admin/collection-sources", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editingSource.id, ...patch }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(payload?.error ?? "저장하지 못했습니다.");
+      toast.success("기관 설정을 저장했습니다.");
+      closeEditSource();
+      await loadSources();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "기관 설정을 저장하지 못했습니다.");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const runSource = async (source: CollectionSource) => {
     setRunningSourceId(source.id);
     setRunResult(null);
@@ -949,6 +1141,149 @@ export default function AdminCollectionSourcesPage() {
               {runResult.logs.slice(-8000)}
             </pre>
           )}
+        </section>
+      )}
+
+      {editingSource && editForm && (
+        <section className="rounded-lg border border-indigo-200 bg-white p-5 shadow-sm dark:border-indigo-500/30 dark:bg-slate-900">
+          <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest text-indigo-500">Edit Collection Source</p>
+              <h2 className="mt-1 text-xl font-black text-gray-950 dark:text-white">{editingSource.name}</h2>
+              <p className="mt-1 text-xs font-bold text-gray-400">기본 정보와 수집 규칙 JSON을 저장합니다.</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={saveEditSource}
+                disabled={editSaving}
+                className="inline-flex h-10 items-center gap-2 rounded-lg bg-indigo-600 px-4 text-xs font-black text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {editSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                저장
+              </button>
+              <button
+                type="button"
+                onClick={closeEditSource}
+                className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 text-xs font-black text-gray-600 transition-colors hover:bg-gray-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300"
+              >
+                <X size={15} />
+                닫기
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <input
+              value={editForm.source_slug}
+              onChange={(event) => updateEditField("source_slug", event.target.value)}
+              placeholder="기관 코드"
+              className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-bold outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950"
+            />
+            <input
+              value={editForm.name}
+              onChange={(event) => updateEditField("name", event.target.value)}
+              placeholder="기관명"
+              className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-bold outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950"
+            />
+            <select
+              value={editForm.source_type}
+              onChange={(event) => updateEditField("source_type", event.target.value)}
+              className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-bold outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950"
+            >
+              {TYPE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+            <select
+              value={editForm.status}
+              onChange={(event) => updateEditField("status", event.target.value)}
+              className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-bold outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950"
+            >
+              {STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+            <input
+              value={editForm.region_scope}
+              onChange={(event) => updateEditField("region_scope", event.target.value)}
+              placeholder="지역 범위"
+              className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-bold outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950"
+            />
+            <input
+              value={editForm.region_name}
+              onChange={(event) => updateEditField("region_name", event.target.value)}
+              placeholder="지역명"
+              className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-bold outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950"
+            />
+            <select
+              value={editForm.collection_method}
+              onChange={(event) => updateEditField("collection_method", event.target.value)}
+              className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-bold outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950"
+            >
+              {METHOD_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+            <select
+              value={editForm.reliability}
+              onChange={(event) => updateEditField("reliability", event.target.value)}
+              className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-bold outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950"
+            >
+              {RELIABILITY_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+            <input
+              value={editForm.homepage_url}
+              onChange={(event) => updateEditField("homepage_url", event.target.value)}
+              placeholder="홈페이지 URL"
+              className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-bold outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 md:col-span-2"
+            />
+            <input
+              value={editForm.list_url}
+              onChange={(event) => updateEditField("list_url", event.target.value)}
+              placeholder="목록 URL"
+              className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-bold outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 md:col-span-2"
+            />
+            <input
+              type="number"
+              min={30}
+              value={editForm.collection_interval_minutes}
+              onChange={(event) => updateEditField("collection_interval_minutes", Number(event.target.value))}
+              placeholder="수집 주기(분)"
+              className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-bold outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950"
+            />
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={editForm.priority}
+              onChange={(event) => updateEditField("priority", Number(event.target.value))}
+              placeholder="우선순위"
+              className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-bold outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950"
+            />
+            <input
+              type="number"
+              min={0}
+              value={editForm.monthly_expected_posts}
+              onChange={(event) => updateEditField("monthly_expected_posts", Number(event.target.value))}
+              placeholder="월 예상 공고"
+              className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-bold outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950"
+            />
+            <input
+              value={editForm.manager_contact}
+              onChange={(event) => updateEditField("manager_contact", event.target.value)}
+              placeholder="담당자/연락처"
+              className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-bold outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950"
+            />
+            <textarea
+              value={editForm.notes}
+              onChange={(event) => updateEditField("notes", event.target.value)}
+              placeholder="운영 메모"
+              rows={3}
+              className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-bold outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 md:col-span-2"
+            />
+            <textarea
+              value={editForm.config_json}
+              onChange={(event) => updateEditField("config_json", event.target.value)}
+              placeholder="수집 설정 JSON"
+              rows={12}
+              className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 font-mono text-xs font-bold outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 md:col-span-2"
+            />
+          </div>
         </section>
       )}
 
@@ -1462,6 +1797,14 @@ export default function AdminCollectionSourcesPage() {
                       <div className="flex gap-2">
                         <button
                           type="button"
+                          onClick={() => openEditSource(source)}
+                          title="기관 설정 편집"
+                          className="rounded-lg p-2 text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10"
+                        >
+                          <PencilLine size={15} />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => void updateSourceConfig(source)}
                           title="고급 설정 JSON 수정"
                           className="rounded-lg p-2 text-gray-400 hover:bg-gray-50 hover:text-gray-900 dark:hover:bg-slate-800 dark:hover:text-white"
@@ -1533,6 +1876,24 @@ export default function AdminCollectionSourcesPage() {
                                   </span>
                                 ))}
                               </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-5">
+                            <p className="text-xs font-black uppercase tracking-widest text-gray-400">규칙 점검</p>
+                            <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                              {diagnosis.ruleItems.map((item) => (
+                                <div key={item.label} className={`rounded-lg border p-3 ${ruleStatusTone(item.status)}`}>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="text-xs font-black">{item.label}</p>
+                                    <span className="rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-black uppercase dark:bg-slate-950/50">
+                                      {item.status === "ok" ? "OK" : item.status === "warning" ? "확인" : "누락"}
+                                    </span>
+                                  </div>
+                                  <p className="mt-2 line-clamp-2 text-xs font-bold">{item.value}</p>
+                                  {item.detail && <p className="mt-2 line-clamp-2 text-[11px] font-bold opacity-80">{item.detail}</p>}
+                                </div>
+                              ))}
                             </div>
                           </div>
 
