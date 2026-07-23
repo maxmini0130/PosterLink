@@ -751,19 +751,65 @@ function buildReadableNoticeInfo(post = {}) {
   };
 }
 
-function mergeReadableNoticeIntoFieldVerification(verification = {}, post = {}, readableInfo = null) {
-  const info = readableInfo ?? buildReadableNoticeInfo(post);
-  if (!info.summaryShort && Object.keys(info.facts ?? {}).length === 0) return verification;
+function buildAttachmentAnalysisSummary(analysis = null) {
+  if (!analysis || typeof analysis !== "object" || !Number(analysis.checked ?? 0)) return null;
+
+  const sources = Array.isArray(analysis.sources)
+    ? analysis.sources
+      .slice(0, 8)
+      .map((source) => ({
+        name: String(source?.name ?? "").slice(0, 160),
+        url: normalizeCrawlerLinkUrl(source?.url, null),
+        kind: String(source?.kind ?? "unknown").slice(0, 40),
+        status: String(source?.status ?? "unknown").slice(0, 40),
+        reason: String(source?.reason ?? "").slice(0, 240),
+        textLength: Number(source?.textLength ?? 0),
+      }))
+    : [];
 
   return {
-    ...verification,
-    readableNotice: {
+    checked: Number(analysis.checked ?? 0),
+    extracted: Number(analysis.extracted ?? 0),
+    unsupported: Number(analysis.unsupported ?? 0),
+    failed: Number(analysis.failed ?? 0),
+    contentAdded: Boolean(analysis.contentAdded),
+    suggestedDeadline: analysis.suggestedDeadline ?? null,
+    sources,
+  };
+}
+
+function buildExternalOriginalSummary(trace = null) {
+  if (!trace || typeof trace !== "object" || !trace.attempted) return null;
+
+  return {
+    attempted: true,
+    resolved: Boolean(trace.resolved),
+    reason: String(trace.reason ?? "").slice(0, 160),
+    label: String(trace.label ?? "").slice(0, 160),
+    host: String(trace.host ?? "").slice(0, 120),
+    originalUrl: normalizeCrawlerLinkUrl(trace.originalUrl, trace.viaUrl ?? null),
+    viaUrl: normalizeCrawlerLinkUrl(trace.viaUrl, null),
+  };
+}
+
+function mergeReadableNoticeIntoFieldVerification(verification = {}, post = {}, readableInfo = null) {
+  const info = readableInfo ?? buildReadableNoticeInfo(post);
+  const attachmentAnalysis = buildAttachmentAnalysisSummary(post.attachmentAnalysis);
+  const externalOriginal = buildExternalOriginalSummary(post.externalOriginal);
+  const next = { ...verification };
+
+  if (info.summaryShort || Object.keys(info.facts ?? {}).length > 0) {
+    next.readableNotice = {
       source: "crawler-normalizer",
       title: info.title,
       summaryShort: info.summaryShort,
       facts: info.facts ?? {},
-    },
-  };
+    };
+  }
+  if (attachmentAnalysis) next.attachmentAnalysis = attachmentAnalysis;
+  if (externalOriginal) next.externalOriginal = externalOriginal;
+
+  return next;
 }
 
 function normalizeImageUrl(imageUrl, sourceUrl) {

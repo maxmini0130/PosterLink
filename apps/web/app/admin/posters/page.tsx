@@ -106,6 +106,48 @@ function normalizeOrgDisplayValue(value: any) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
+function asPlainObject(value: any): Record<string, any> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+}
+
+function toCount(value: any) {
+  const count = Number(value ?? 0);
+  return Number.isFinite(count) ? count : 0;
+}
+
+function getAttachmentAnalysisInfo(poster: any) {
+  const info = asPlainObject(poster?.field_verification?.attachmentAnalysis);
+  if (!info || toCount(info.checked) === 0) return null;
+
+  const sources = Array.isArray(info.sources)
+    ? info.sources.map((source) => asPlainObject(source)).filter(Boolean).slice(0, 6)
+    : [];
+
+  return {
+    checked: toCount(info.checked),
+    extracted: toCount(info.extracted),
+    unsupported: toCount(info.unsupported),
+    failed: toCount(info.failed),
+    contentAdded: Boolean(info.contentAdded),
+    suggestedDeadline: normalizeOrgDisplayValue(info.suggestedDeadline),
+    sources,
+  };
+}
+
+function getExternalOriginalInfo(poster: any) {
+  const info = asPlainObject(poster?.field_verification?.externalOriginal);
+  if (!info || (!info.attempted && !info.originalUrl && !info.viaUrl)) return null;
+
+  return {
+    resolved: Boolean(info.resolved),
+    reason: normalizeOrgDisplayValue(info.reason),
+    label: normalizeOrgDisplayValue(info.label),
+    host: normalizeOrgDisplayValue(info.host),
+    originalUrl: normalizeOrgDisplayValue(info.originalUrl),
+    viaUrl: normalizeOrgDisplayValue(info.viaUrl),
+  };
+}
+
 const READABLE_FACT_LABELS: Array<[string, string]> = [
   ["target", "대상"],
   ["period", "기간"],
@@ -333,6 +375,8 @@ function getApprovalChecklist(poster: any): ApprovalCheck[] {
   const classificationIssues = getClassificationVerificationIssues(poster);
   const imageSrc = getPosterImageSrc(poster);
   const isTextNotice = isTextNoticePoster(poster);
+  const externalOriginal = getExternalOriginalInfo(poster);
+  const attachmentInfo = getAttachmentAnalysisInfo(poster);
   const deadlineTime = poster?.application_end_at ? new Date(poster.application_end_at).getTime() : null;
   const deadlineInvalid = Boolean(poster?.application_end_at && Number.isNaN(deadlineTime));
   const deadlineExpired = typeof deadlineTime === "number" && !Number.isNaN(deadlineTime) && deadlineTime < Date.now();
@@ -356,6 +400,16 @@ function getApprovalChecklist(poster: any): ApprovalCheck[] {
     isValidHttpUrl(poster?.source_key) ? "pass" : "block",
     isValidHttpUrl(poster?.source_key) ? "원문 URL이 있습니다." : "원문 URL이 없거나 올바르지 않습니다."
   ));
+  if (externalOriginal) {
+    checks.push(createApprovalCheck(
+      "external-original",
+      "최종 원문",
+      externalOriginal.resolved ? "pass" : "warning",
+      externalOriginal.resolved
+        ? `최종 원문 추적 성공${externalOriginal.host ? `: ${externalOriginal.host}` : ""}`
+        : `원문 추적 확인 필요${externalOriginal.reason ? `: ${externalOriginal.reason}` : ""}`
+    ));
+  }
   checks.push(createApprovalCheck(
     "media",
     "이미지/텍스트",
@@ -398,6 +452,14 @@ function getApprovalChecklist(poster: any): ApprovalCheck[] {
     hasSummary ? "pass" : "warning",
     hasSummary ? "요약이 있습니다." : "요약이 없어 상세 확인이 필요합니다."
   ));
+  if (attachmentInfo) {
+    checks.push(createApprovalCheck(
+      "attachments",
+      "첨부 분석",
+      attachmentInfo.failed > 0 && attachmentInfo.extracted === 0 ? "warning" : "pass",
+      `첨부 ${attachmentInfo.checked}개 확인, ${attachmentInfo.extracted}개 텍스트 추출`
+    ));
+  }
 
   const reviewIssueCount = dateIssues.length + duplicateIssues.length + qualityIssues.length + classificationIssues.length;
   checks.push(createApprovalCheck(
@@ -778,6 +840,8 @@ export default function AdminPostersPage() {
   const previewPosterImageOcrInfo = previewPoster ? getPosterImageOcrInfo(previewPoster) : null;
   const previewApprovalChecks = previewPoster ? getApprovalChecklist(previewPoster) : [];
   const previewReadableFacts = previewPoster ? getReadableNoticeFacts(previewPoster) : [];
+  const previewAttachmentInfo = previewPoster ? getAttachmentAnalysisInfo(previewPoster) : null;
+  const previewExternalOriginalInfo = previewPoster ? getExternalOriginalInfo(previewPoster) : null;
 
   const applySearchFilters = () => {
     setPage(0);
@@ -1786,6 +1850,61 @@ export default function AdminPostersPage() {
                         </>
                       );
                     })()}
+                  </div>
+                )}
+
+                {previewExternalOriginalInfo && (
+                  <div className={previewExternalOriginalInfo.resolved ? "rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 dark:border-emerald-900 dark:bg-emerald-950/30" : "rounded-2xl border border-amber-100 bg-amber-50/70 p-4 dark:border-amber-900 dark:bg-amber-950/30"}>
+                    <p className={previewExternalOriginalInfo.resolved ? "mb-2 text-xs font-black text-emerald-700 dark:text-emerald-300" : "mb-2 text-xs font-black text-amber-700 dark:text-amber-300"}>
+                      최종 원문 추적 {previewExternalOriginalInfo.resolved ? "성공" : "확인 필요"}
+                    </p>
+                    <div className="flex flex-wrap gap-2 text-xs font-bold">
+                      {previewExternalOriginalInfo.originalUrl && (
+                        <a href={previewExternalOriginalInfo.originalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-indigo-600 underline-offset-2 hover:underline dark:text-indigo-300">
+                          <ExternalLink size={12} />
+                          최종 원문
+                        </a>
+                      )}
+                      {previewExternalOriginalInfo.viaUrl && (
+                        <a href={previewExternalOriginalInfo.viaUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-gray-500 underline-offset-2 hover:underline dark:text-slate-300">
+                          <ExternalLink size={12} />
+                          경유 페이지
+                        </a>
+                      )}
+                      <span className="text-gray-600 dark:text-slate-200">
+                        {[previewExternalOriginalInfo.host, previewExternalOriginalInfo.label, previewExternalOriginalInfo.reason].filter(Boolean).join(" · ")}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {previewAttachmentInfo && (
+                  <div className="rounded-2xl border border-sky-100 bg-sky-50/70 p-4 dark:border-sky-900 dark:bg-sky-950/30">
+                    <p className="mb-2 text-xs font-black text-sky-700 dark:text-sky-300">
+                      첨부파일 분석 · 확인 {previewAttachmentInfo.checked} · 추출 {previewAttachmentInfo.extracted} · 미지원 {previewAttachmentInfo.unsupported} · 실패 {previewAttachmentInfo.failed}
+                    </p>
+                    {previewAttachmentInfo.suggestedDeadline && (
+                      <p className="mb-2 text-xs font-bold text-sky-700/80 dark:text-sky-200/80">첨부 추정 마감일: {previewAttachmentInfo.suggestedDeadline}</p>
+                    )}
+                    {previewAttachmentInfo.sources.length > 0 && (
+                      <div className="space-y-1">
+                        {previewAttachmentInfo.sources.map((source, index) => (
+                          <div key={`${source?.url ?? source?.name ?? "attachment"}-${index}`} className="flex flex-wrap items-center gap-2 rounded-xl bg-white/70 px-3 py-2 text-xs font-bold text-sky-900 dark:bg-slate-950/40 dark:text-sky-100">
+                            {source?.url ? (
+                              <a href={String(source.url)} target="_blank" rel="noopener noreferrer" className="inline-flex min-w-0 items-center gap-1 underline-offset-2 hover:underline">
+                                <ExternalLink size={12} />
+                                <span className="truncate">{normalizeOrgDisplayValue(source?.name) || "첨부파일"}</span>
+                              </a>
+                            ) : (
+                              <span className="truncate">{normalizeOrgDisplayValue(source?.name) || "첨부파일"}</span>
+                            )}
+                            <span className="text-sky-700/70 dark:text-sky-200/70">
+                              {[source?.kind, source?.status, source?.textLength ? `${source.textLength}자` : "", source?.reason].filter(Boolean).join(" · ")}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
