@@ -260,7 +260,7 @@ export async function scorePosterImageCandidate(imageUrl, context = {}) {
   }
 
   if (probe?.contentType) {
-    if (!probe.contentType.startsWith("image/")) {
+    if (!probe.contentType.startsWith("image/") && !probe.dimensions) {
       return {
         passes: false,
         score: 0,
@@ -269,6 +269,11 @@ export async function scorePosterImageCandidate(imageUrl, context = {}) {
         signals,
         contentType: probe.contentType,
       };
+    }
+
+    if (!probe.contentType.startsWith("image/") && probe.dimensions) {
+      score += 8;
+      signals.push(`image bytes with generic content type (${probe.contentType})`);
     }
 
     if (probe.contentType === "image/svg+xml") {

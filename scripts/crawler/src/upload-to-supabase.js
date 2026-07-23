@@ -386,6 +386,15 @@ function normalizeSourceKey(sourceUrl) {
 }
 
 const APPLICATION_LINK_LABEL_PATTERN = /신청|접수|지원|응모|등록|apply|application/i;
+const POSTER_LINK_TYPES = new Set([
+  "official_notice",
+  "official_apply",
+  "official_homepage",
+  "reference_blog",
+  "reference_news",
+  "reference_video",
+  "other",
+]);
 
 function normalizeCrawlerLinkUrl(value, baseUrl) {
   const text = String(value ?? "").trim();
@@ -443,19 +452,30 @@ function buildPosterLinkEntries(post, sourceUrl) {
   const addLink = (linkType, url, title, isPrimary = false) => {
     const normalizedUrl = normalizeCrawlerLinkUrl(url, sourceUrl);
     if (!normalizedUrl) return;
-    const key = `${linkType}:${linkIdentity(normalizedUrl)}`;
+    const normalizedLinkType = POSTER_LINK_TYPES.has(linkType) ? linkType : "other";
+    const key = `${normalizedLinkType}:${linkIdentity(normalizedUrl)}`;
     if (linkMap.has(key)) {
       const existing = linkMap.get(key);
       existing.is_primary = Boolean(existing.is_primary || isPrimary);
       return;
     }
     linkMap.set(key, {
-      link_type: linkType,
+      link_type: normalizedLinkType,
       url: normalizedUrl,
       title,
       is_primary: isPrimary,
     });
   };
+
+  for (const entry of post.links ?? post.poster_links ?? []) {
+    const label = getAttachmentLabel(entry) || "참고 링크";
+    const url = normalizeCrawlerLinkUrl(entry?.url, sourceUrl);
+    const linkType = POSTER_LINK_TYPES.has(entry?.link_type) ? entry.link_type : "other";
+    if (!url) continue;
+    if (linkType === "official_apply" && !isUsableApplicationLink(url, sourceUrl)) continue;
+    if (linkType === "official_notice" && linkIdentity(url) === linkIdentity(sourceUrl)) continue;
+    addLink(linkType, url, label, Boolean(entry?.is_primary));
+  }
 
   for (const attachment of post.attachments ?? []) {
     const label = getAttachmentLabel(attachment);

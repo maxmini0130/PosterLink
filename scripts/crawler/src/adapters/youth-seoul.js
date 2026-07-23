@@ -94,9 +94,193 @@ function extractDateRange(text) {
 
 function addImage(images, baseUrl, src) {
   if (!src) return;
+  if (/\s/.test(String(src).trim()) || /^img\s+src/i.test(String(src).trim())) return;
   if (/logo|btn_|gnb_|lnb_|ico_|banner|accessibility|web_access|webaccess|wa[_-]?mark|wamark|wa-logo|cert/i.test(src)) return;
   const imageUrl = resolveUrl(baseUrl, src);
   if (imageUrl && !images.includes(imageUrl)) images.push(imageUrl);
+}
+
+function uniqueValues(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function getHost(value) {
+  try {
+    return new URL(value).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function isYouthSeoulUrl(value) {
+  return getHost(value) === "youth.seoul.go.kr";
+}
+
+function isExternalOriginalUrl(value) {
+  const host = getHost(value);
+  return Boolean(host) && !isYouthSeoulUrl(value);
+}
+
+function extractExternalOriginalLink($, postUrl) {
+  const candidates = [];
+
+  $(".feed-view a[href]").each((_, link) => {
+    const href = $(link).attr("href");
+    if (!href || /^javascript:|^#|^mailto:|^tel:/i.test(href)) return;
+
+    const url = resolveUrl(postUrl, href);
+    if (!/^https?:\/\//i.test(url) || !isExternalOriginalUrl(url)) return;
+
+    const label = cleanText($(link).text() || $(link).attr("title"));
+    const context = cleanText($(link).closest("li, tr, dl, div, p").text());
+    const signal = `${label} ${context} ${url}`;
+    let score = 0;
+
+    if (/담당기관\s*바로가기|원문|상세|자세히|홈페이지/i.test(signal)) score += 10;
+    if (/programDetail|detail|view|bbs|board/i.test(url)) score += 4;
+    if (/신청|접수|프로그램/i.test(signal)) score += 2;
+    if (/login|logout|siteMap|mainB\.do/i.test(url)) score -= 20;
+
+    if (score > 0) candidates.push({ url, label, score });
+  });
+
+  return candidates.sort((a, b) => b.score - a.score)[0] ?? null;
+}
+
+function selectExternalRoot($) {
+  const selectors = [
+    ".sub_cont",
+    "#skip_contents",
+    "#contents",
+    "#content",
+    ".contents",
+    ".content",
+    "main",
+    "article",
+  ];
+
+  for (const selector of selectors) {
+    const roots = $(selector).toArray()
+      .map((element) => $(element))
+      .filter(($root) => cleanText($root.text()).length >= 80);
+    if (roots.length > 0) return roots[0];
+  }
+
+  return $("body");
+}
+
+function findLabeledValue($, $root, labelPattern) {
+  let result = "";
+
+  $root.find("tr").each((_, row) => {
+    if (result) return;
+    const cells = $(row).children("th, td")
+      .map((__, cell) => cleanText($(cell).text()))
+      .get()
+      .filter(Boolean);
+
+    for (let index = 0; index < cells.length - 1; index += 1) {
+      if (labelPattern.test(cells[index])) {
+        result = cells[index + 1];
+        return;
+      }
+    }
+  });
+
+  return result;
+}
+
+function extractTableLines($, $root) {
+  const lines = [];
+
+  $root.find("tr").each((_, row) => {
+    const cells = $(row).children("th, td")
+      .map((__, cell) => cleanText($(cell).text()))
+      .get()
+      .filter(Boolean);
+
+    if (cells.length < 2) return;
+    for (let index = 0; index < cells.length - 1; index += 2) {
+      const label = cells[index].replace(/[:：]\s*$/, "");
+      const value = cells[index + 1];
+      if (!label || !value || label.length > 30 || value === label) continue;
+      lines.push(`${label}: ${value}`);
+    }
+  });
+
+  return uniqueValues(lines);
+}
+
+function extractExternalTitle($, $root, fallbackTitle) {
+  return findLabeledValue($, $root, /^(강좌명|프로그램명|행사명|제목|공고명)$/)
+    || cleanText($root.find("h1, h2, h3, h4, .tit, .title, .subject").first().text())
+    || fallbackTitle;
+}
+
+function trimExternalContent(value) {
+  let text = cleanText(value);
+  const stopPatterns = [
+    /\s+강사소개\s+강좌신청승인조건/i,
+    /\s+강좌신청승인조건/i,
+    /\s+개인정보\s*수집\s*및\s*이용/i,
+  ];
+
+  for (const pattern of stopPatterns) {
+    const match = text.match(pattern);
+    if (match?.index && match.index > 100) {
+      text = text.slice(0, match.index).trim();
+    }
+  }
+
+  return text;
+}
+
+function extractExternalAttachments($, $root, originalUrl) {
+  const attachments = [];
+
+  $root.find("a[href]").each((_, link) => {
+    const href = $(link).attr("href");
+    const name = cleanText($(link).text() || $(link).attr("title"));
+    if (!href || !name || /^javascript:|^#/i.test(href)) return;
+    const url = resolveUrl(originalUrl, href);
+    if (!/^https?:\/\//i.test(url) && !/^mailto:|^tel:/i.test(url)) return;
+    attachments.push({ name, url });
+  });
+
+  return attachments;
+}
+
+async function parseExternalOriginalDetail(originalUrl, fallbackTitle) {
+  const $ = await fetchPage(originalUrl);
+  if (!$) return null;
+
+  const $root = selectExternalRoot($);
+  const tableLines = extractTableLines($, $root);
+  const $textRoot = $root.clone();
+  $textRoot.find("script, style, noscript, caption, table").remove();
+  const rootText = cleanText($textRoot.text());
+  const content = trimExternalContent(uniqueValues([...tableLines, rootText]).join(" ")).slice(0, 8000);
+  const images = [];
+
+  $root.find("img").each((_, img) => {
+    const src = $(img).attr("src") || $(img).attr("data-src") || $(img).attr("data-original");
+    addImage(images, originalUrl, src);
+  });
+
+  $("meta[property='og:image'], meta[name='twitter:image']").each((_, el) => {
+    addImage(images, originalUrl, $(el).attr("content"));
+  });
+
+  const { end } = extractDateRange(content);
+
+  return {
+    url: originalUrl,
+    title: extractExternalTitle($, $root, fallbackTitle),
+    content,
+    deadline: end,
+    images,
+    attachments: extractExternalAttachments($, $root, originalUrl),
+  };
 }
 
 export default {
@@ -175,7 +359,12 @@ export default {
       if (href && name) attachments.push({ name, url: resolveUrl(postUrl, href) });
     });
 
-    const content = isMeaningfulContent(detailText)
+    const externalOriginalLink = extractExternalOriginalLink($, postUrl);
+    const externalDetail = externalOriginalLink
+      ? await parseExternalOriginalDetail(externalOriginalLink.url, title)
+      : null;
+
+    const baseContent = isMeaningfulContent(detailText)
       ? detailText
       : isMeaningfulContent(overviewText)
         ? overviewText
@@ -183,24 +372,41 @@ export default {
           ? IMAGE_ONLY_CONTENT
           : "";
 
-    const inferredTitle = inferSpecificTitle(title, content, attachments);
+    if (externalDetail?.images?.length) {
+      images.unshift(...externalDetail.images.filter((imageUrl) => !images.includes(imageUrl)));
+      detailImages.unshift(...externalDetail.images.filter((imageUrl) => !detailImages.includes(imageUrl)));
+    }
+
+    if (externalDetail?.attachments?.length) {
+      attachments.push(...externalDetail.attachments);
+    }
+
+    const content = externalDetail?.content && externalDetail.content.length > baseContent.length
+      ? externalDetail.content
+      : baseContent;
+    const sourceUrl = externalDetail?.url ?? postUrl;
+    const sourceLinks = externalDetail
+      ? [{ link_type: "other", title: "\uCCAD\uB144\uBABD\uB545\uC815\uBCF4\uD1B5 \uACBD\uC720 \uCD9C\uCC98", url: postUrl }]
+      : [];
+    const inferredTitle = inferSpecificTitle(externalDetail?.title || title, content, attachments);
 
     const posterImages = await filterAndOrderPosterImages(images, {
       title: inferredTitle,
       content,
       site: "\uCCAD\uB144\uBABD\uB545\uC815\uBCF4\uD1B5",
-      sourceUrl: postUrl,
+      sourceUrl,
       preferredImageUrls: detailImages,
     });
     return {
       title: inferredTitle || undefined,
       content: content || undefined,
-      deadline: end,
+      deadline: externalDetail?.deadline ?? end,
       images: posterImages.images,
       posterImageRule: posterImages.posterImageRule,
       posterImageCandidates: posterImages.posterImageCandidates,
       attachments,
-      sourceUrl: postUrl,
+      links: sourceLinks,
+      sourceUrl,
     };
   },
 };
