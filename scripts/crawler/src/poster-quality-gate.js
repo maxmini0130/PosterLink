@@ -66,6 +66,22 @@ const TEXT_RULES = [
     reason: "administrative recruitment document is not a poster",
   },
   {
+    code: "employment-recruitment-notice",
+    severity: "high",
+    decision: "reject",
+    scope: "title",
+    pattern: /(?:채용\s*(?:재|연장)?공고|직원\s*채용|계약직\s*(?:직원|사회복지사|매니저)?\s*채용|청년도전\s*매니저\s*채용|강사\s*모집|통장\s*모집\s*공고)/i,
+    reason: "employment or administrative recruitment notice is not a poster",
+  },
+  {
+    code: "administrative-campaign-attachment",
+    severity: "high",
+    decision: "reject",
+    scope: "title",
+    pattern: /(?:삼일절|3\s*·?\s*1절|광복절|제헌절|한글날|국군의\s*날).*(?:나라사랑\s*)?태극기\s*달기\s*운동|(?:나라사랑\s*)?태극기\s*달기\s*운동/i,
+    reason: "administrative campaign attachment is not a program/event poster",
+  },
+  {
     code: "known-source-title-risk",
     severity: "medium",
     decision: "review",
@@ -118,6 +134,8 @@ const REJECT_CODES = new Set([
   "election-facility",
   "monthly-schedule",
   "public-workfare-doc",
+  "employment-recruitment-notice",
+  "administrative-campaign-attachment",
   "image-not-poster",
   "image-content-mismatch",
 ]);

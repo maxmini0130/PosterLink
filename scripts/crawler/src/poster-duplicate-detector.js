@@ -13,6 +13,25 @@ const TITLE_GENERIC_WORDS = [
   "연장",
 ];
 
+// These modifiers describe a run/session of the same program rather than its
+// identity. Keep years and edition numbers so genuinely different annual
+// programs do not collapse into one record.
+const TITLE_SCHEDULE_MODIFIER_PATTERNS = [
+  // normalizeText removes range punctuation and brackets before these run.
+  /\d{1,2}\s+\d{1,2}\s*월\s*매주\s*(?:월|화|수|목|금|토|일)요일/gu,
+  /\(\s*\d{1,2}\s*[~～\-]\s*\d{1,2}\s*월\s*매주\s*(?:월|화|수|목|금|토|일)요일\s*\)/gu,
+  /<\s*\d{1,2}\s*[~～\-]\s*\d{1,2}\s*월\s*매주\s*(?:월|화|수|목|금|토|일)요일\s*>/gu,
+  /\b\d{1,2}\s*[~～\-]\s*\d{1,2}\s*월\s*매주\s*(?:월|화|수|목|금|토|일)요일\b/gu,
+  /매주\s*(?:월|화|수|목|금|토|일)요일/gu,
+  /(?:^|\s)\d{1,2}\s*월(?:\s|$)/gu,
+];
+
+const TITLE_VARIANT_WORDS = [
+  "신규",
+  "프로그램",
+  "안내",
+];
+
 function compact(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
@@ -42,6 +61,14 @@ export function normalizePosterTitle(value, orgName = "") {
 
   for (const word of TITLE_GENERIC_WORDS) {
     title = title.replace(new RegExp(escapeRegExp(normalizeText(word)), "gi"), " ");
+  }
+
+  for (const pattern of TITLE_SCHEDULE_MODIFIER_PATTERNS) {
+    title = title.replace(pattern, " ");
+  }
+
+  for (const word of TITLE_VARIANT_WORDS) {
+    title = title.replace(new RegExp(`(?:^|\\s)${escapeRegExp(normalizeText(word))}(?=\\s|$)`, "giu"), " ");
   }
 
   return title.replace(/\s+/g, " ").trim();
@@ -235,6 +262,7 @@ export function scorePosterDuplicate(candidate = {}, existing = {}) {
 
   const canMerge =
     score >= 90 ||
+    (titleSimilarity === 1 && candidateFp.title.length >= 8 && orgSimilarity >= 0.9) ||
     (score >= 85 && titleSimilarity >= 0.72 && (orgSimilarity >= 0.65 || matched.includes("deadline"))) ||
     (imageMatched && titleSimilarity >= 0.45);
   const needsReview = !canMerge && score >= 65 && titleSimilarity >= 0.55;
