@@ -84,6 +84,56 @@ test("OCR text is converted into structured notice facts", () => {
   assert.ok(result.facts.period);
 });
 
+test("leading '상세정보' tab label is stripped from the summary", () => {
+  const result = buildReadableNoticeInfo({
+    title: "청년 프로그램 안내",
+    content: "상세정보 안녕하세요 서울청년센터 양천입니다. 다시 꿈꾸는 시간을 함께합니다.",
+  });
+  assert.ok(!(result.summaryLong ?? "").startsWith("상세정보"));
+  assert.ok(!(result.summaryShort ?? "").startsWith("상세정보"));
+});
+
+test("content that is only the '상세정보' tab label produces no junk summary", () => {
+  const result = buildReadableNoticeInfo({ title: "행사 안내", content: "상세정보" });
+  assert.ok(!(result.summaryShort ?? "").includes("상세정보"));
+  assert.ok(!(result.summaryLong ?? "").includes("상세정보"));
+});
+
+test("'대상으로' mid-sentence is not mis-captured as a 대상 field", () => {
+  const result = buildReadableNoticeInfo({
+    title: "AI 실무 교육",
+    content: "본 과정은 만 19~39세 청년을 대상으로 AI 직무 교육을 운영합니다.",
+  });
+  assert.equal(result.facts.target, undefined);
+  assert.ok(!(result.summaryShort ?? "").includes("대상: 으로"));
+});
+
+test("'내용은' mid-sentence is not mis-captured as a 내용 field", () => {
+  const result = buildReadableNoticeInfo({
+    title: "블로그 안내",
+    content: "자세한 내용은 아래 블로그를 참조해 주시기 바랍니다.",
+  });
+  assert.equal(result.facts.content, undefined);
+  assert.ok(!(result.summaryShort ?? "").includes("내용: 은"));
+});
+
+test("genuine colon-delimited 대상/문의 labels are still captured", () => {
+  const result = buildReadableNoticeInfo({
+    title: "모집 공고",
+    content: "대상: 만 19~39세 청년\n문의: 02-111-2222",
+  });
+  assert.equal(result.facts.target, "만 19~39세 청년");
+  assert.equal(result.facts.contact, "02-111-2222");
+});
+
+test("space-delimited label at line start is still captured", () => {
+  const result = buildReadableNoticeInfo({
+    title: "모집 공고",
+    content: "대상  마포구 거주 청년 30명",
+  });
+  assert.equal(result.facts.target, "마포구 거주 청년 30명");
+});
+
 test("attachment failure reasons are standardized", () => {
   assert.equal(
     getAttachmentFailureCode({ kind: "hwp", status: "unsupported", reason: "legacy hwp requires converter" }),
