@@ -88,7 +88,9 @@ jobs:
           fi
 
           echo "Running crawler with args: ${ARGS[*]:-(all)}"
-          if [ -n "$CRAWLER_SOURCE" ] || [ -n "$CRAWLER_SITE" ]; then
+          if [ "$CRAWLER_SOURCE" = "youth-seoul" ] || [ "$CRAWLER_SITE" = "youth-seoul" ]; then
+            RUN_TIMEOUT="${CRAWLER_YOUTH_SEOUL_TIMEOUT:-45m}"
+          elif [ -n "$CRAWLER_SOURCE" ] || [ -n "$CRAWLER_SITE" ]; then
             RUN_TIMEOUT="${CRAWLER_SINGLE_RUN_TIMEOUT:-25m}"
           else
             RUN_TIMEOUT="${CRAWLER_ALL_RUN_TIMEOUT:-150m}"
@@ -110,6 +112,7 @@ jobs:
           POSTER_IMAGE_RULE_MIN_SCORE: "45"
           OPENAI_REQUEST_TIMEOUT_MS: "45000"
           CRAWLER_SINGLE_RUN_TIMEOUT: "25m"
+          CRAWLER_YOUTH_SEOUL_TIMEOUT: "45m"
           CRAWLER_ALL_RUN_TIMEOUT: "150m"
 
       - name: Upload to Supabase

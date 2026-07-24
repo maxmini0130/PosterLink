@@ -33,6 +33,11 @@ function getLatestPostDate(posts) {
 }
 
 function buildCrawlRunMetadata(site, stats = {}) {
+  const skipSamples = (stats.skipSamples ?? []).map((sample) => ({
+    ...sample,
+    site_id: site.id,
+    site_name: site.name,
+  }));
   return {
     sites: [{
       site_id: site.id,
@@ -59,12 +64,12 @@ function buildCrawlRunMetadata(site, stats = {}) {
         board_failed: Number(stats.boardFailed ?? 0),
       },
       skip_reasons: stats.skipReasons ?? {},
-      skip_samples: stats.skipSamples ?? [],
+      skip_samples: skipSamples,
       attachment_samples: stats.attachmentSamples ?? [],
       external_original_samples: stats.externalOriginalSamples ?? [],
     }],
     skip_reasons: stats.skipReasons ?? {},
-    skip_samples: stats.skipSamples ?? [],
+    skip_samples: skipSamples,
     attachment_samples: stats.attachmentSamples ?? [],
     external_original_samples: stats.externalOriginalSamples ?? [],
   };

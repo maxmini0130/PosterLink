@@ -402,6 +402,10 @@ function getRunDetail(run: CollectionSourceRun) {
     .filter((item) => Number.isFinite(item.value) && item.value > 0)
     .sort((a, b) => b.value - a.value);
 
+  const metadataSites = getMetadataSites(metadata);
+  const fallbackSiteName = metadataSites.length === 1
+    ? String(metadataSites[0]?.site_name ?? metadataSites[0]?.site_id ?? "")
+    : "";
   const sampleItems = (Array.isArray(metadata.skip_samples) ? metadata.skip_samples : [])
     .filter((sample: any) => sample && typeof sample === "object")
     .slice(0, 8)
@@ -411,6 +415,7 @@ function getRunDetail(run: CollectionSourceRun) {
       label: formatRunReasonLabel(String(sample.bucket ?? "")),
       title: String(sample.title ?? "제목 없음"),
       reason: String(sample.reason ?? ""),
+      organization: String(sample.site_name ?? sample.site_id ?? fallbackSiteName),
       url: typeof sample.url === "string" ? sample.url : null,
     }));
 
@@ -1914,7 +1919,14 @@ export default function AdminCollectionSourcesPage() {
                                           </a>
                                         )}
                                       </div>
-                                      <p className="mt-1 font-bold text-indigo-500">{sample.label}</p>
+                                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                        {sample.organization && (
+                                          <span className="rounded-full bg-gray-100 px-2 py-0.5 font-black text-gray-500 dark:bg-slate-800 dark:text-slate-300">
+                                            {sample.organization}
+                                          </span>
+                                        )}
+                                        <span className="font-bold text-indigo-500">{sample.label}</span>
+                                      </div>
                                       {sample.reason && <p className="mt-1 line-clamp-2 font-bold text-gray-400">{sample.reason}</p>}
                                     </div>
                                   ))}
