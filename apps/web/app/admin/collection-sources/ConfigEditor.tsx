@@ -32,6 +32,27 @@ const inputClass =
   "w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-semibold outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950";
 const labelClass = "mb-1 block text-xs font-bold text-gray-500 dark:text-slate-400";
 
+const ADAPTER_OPTIONS = [
+  { value: "generic-board", label: "범용 게시판", detail: "CSS 선택자로 일반 게시판을 수집합니다." },
+  { value: "mapo-gu", label: "마포구청", detail: "마포구청 게시판 구조" },
+  { value: "mapo-dong", label: "마포구 동주민센터", detail: "마포구청 계열 동 게시판 구조" },
+  { value: "seoul-city", label: "서울시", detail: "서울시 게시판용 범용 설정" },
+  { value: "youth-seoul", label: "청년몽땅정보통", detail: "서울 청년정책 상세페이지 구조" },
+  { value: "youthcenter", label: "온통청년", detail: "청년정책 통합 사이트 구조" },
+  { value: "maposc-yeyak", label: "마포구 체육시설 예약", detail: "마포구민체육센터 예약 게시판" },
+  { value: "mfac", label: "마포문화재단", detail: "마포문화재단 공지 구조" },
+  { value: "bizinfo", label: "기업마당", detail: "기업 지원사업 공고 구조" },
+  { value: "k-startup", label: "K-Startup", detail: "창업지원포털 공고 구조" },
+  { value: "job-alio", label: "잡알리오", detail: "공공기관 채용정보 구조" },
+  { value: "kesco", label: "한국전기안전공사", detail: "전기안전공사 게시판 구조" },
+  { value: "mapo-employ", label: "마포구고용복지지원센터", detail: "고용복지지원센터 공지 구조" },
+  { value: "ccfsm", label: "중앙가족센터", detail: "가족센터 계열 게시판 구조" },
+  { value: "mapo-labor", label: "마포구 노동자종합지원센터", detail: "노동자지원센터 게시판 구조" },
+  { value: "mfmc", label: "마포구시설관리공단", detail: "범용 게시판 호환 설정" },
+  { value: "mapo-welfare", label: "마포복지재단", detail: "범용 게시판 호환 설정" },
+  { value: "mapowf", label: "마포여성동행센터", detail: "범용 게시판 호환 설정" },
+] as const;
+
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return <span className={labelClass}>{children}</span>;
 }
@@ -66,6 +87,7 @@ export default function ConfigEditor({ value, onChange }: ConfigEditorProps) {
   }, [value]);
 
   const validation = useMemo(() => validateCollectionConfig(jsonText), [jsonText]);
+  const selectedAdapter = ADAPTER_OPTIONS.find((option) => option.value === form.adapter);
 
   function emit(next: string) {
     lastEmitted.current = next;
@@ -160,12 +182,23 @@ export default function ConfigEditor({ value, onChange }: ConfigEditorProps) {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <label className="sm:col-span-1">
               <FieldLabel>어댑터</FieldLabel>
-              <input
+              <select
                 value={form.adapter}
                 onChange={(event) => updateForm((prev) => ({ ...prev, adapter: event.target.value }))}
-                placeholder="generic-board"
                 className={inputClass}
-              />
+              >
+                {!selectedAdapter && form.adapter ? (
+                  <option value={form.adapter}>현재 사용자 지정값: {form.adapter}</option>
+                ) : null}
+                {ADAPTER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label} ({option.value})
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-[11px] font-medium text-gray-400 dark:text-slate-500">
+                {selectedAdapter?.detail ?? "등록되지 않은 값입니다. 고급(JSON)에서 직접 수정할 수 있습니다."}
+              </span>
             </label>
             <label>
               <FieldLabel>최대 페이지</FieldLabel>
