@@ -1577,7 +1577,11 @@ async function uploadToSupabase(filePath) {
     }
     if (shouldReviewDuplicate) {
       quality.issues.push(duplicateIssue);
-      quality.decision = "review";
+      // Duplicate uncertainty must never revive a candidate that already failed
+      // a stronger quality rule (for example, an employment notice).
+      if (quality.decision !== "reject") {
+        quality.decision = "review";
+      }
       quality.issue_score += duplicateIssue.severity === "high" ? 5 : 3;
     }
     if (quality.decision === "reject") {

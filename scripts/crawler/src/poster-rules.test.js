@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { scorePosterDuplicate } from "./poster-duplicate-detector.js";
 import { evaluatePosterQuality } from "./poster-quality-gate.js";
+import { getPostExclusionReason } from "./post-candidate-filter.js";
 
 const org = "금천구";
 
@@ -52,4 +53,29 @@ test("reject Taegeukgi administrative campaign attachment", () => {
   });
   assert.equal(result.decision, "reject");
   assert.ok(result.issues.some((issue) => issue.code === "administrative-campaign-attachment"));
+});
+
+test("do not reject a recruitment title because shared detail text contains an event schedule", () => {
+  const result = getPostExclusionReason({
+    title: "2026 마포구민 노래자랑 참가신청 공고",
+    content: "문화원 공통 메뉴 상상마당 밴드존 행사 일정 8.1 ~ 8.31",
+    collectionSourceSlug: "mapo-culture",
+  });
+  assert.equal(result, null);
+});
+
+test("reject a street event schedule when the schedule is the title itself", () => {
+  const result = getPostExclusionReason({
+    title: "상상마당 밴드존 행사 일정 8.1 ~ 8.31",
+    collectionSourceSlug: "mapo-culture",
+  });
+  assert.equal(result?.rule, "street-event-schedule");
+});
+
+test("reject recruitment screening schedule follow-up notices", () => {
+  const result = getPostExclusionReason({
+    title: "2026년 마포구립예술단 단원 추가모집 심사 일정 공고",
+    collectionSourceSlug: "mfac",
+  });
+  assert.equal(result?.rule, "recruitment-screening-schedule");
 });

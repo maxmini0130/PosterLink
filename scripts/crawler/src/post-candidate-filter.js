@@ -13,6 +13,13 @@ const TITLE_EXCLUDE_RULES = [
     name: "street-event-schedule",
     pattern: /(?:\uC0C1\uC0C1\uB9C8\uB2F9|\uBC34\uB4DC\uC874|\uD589\uC0AC).*(?:\uD589\uC0AC\s*\uC77C\uC815|\d{1,2}\.\d{1,2}\s*[~.-]\s*\d{1,2}\.\d{1,2})|(?:\uD589\uC0AC\s*\uC77C\uC815).*(?:\uC0C1\uC0C1\uB9C8\uB2F9|\uBC34\uB4DC\uC874)/i,
     reason: "street/facility event schedule, not an individual poster",
+    titleOnly: true,
+  },
+  {
+    name: "recruitment-screening-schedule",
+    pattern: /\uBAA8\uC9D1.*\uC2EC\uC0AC\s*\uC77C\uC815(?:\s*\uACF5\uACE0|\s*\uC548\uB0B4)?|\uC2EC\uC0AC\s*\uC77C\uC815.*\uBAA8\uC9D1/i,
+    reason: "recruitment screening schedule is an administrative follow-up, not a recruitment poster",
+    titleOnly: true,
   },
   {
     name: "breadcrumb-title",
@@ -316,7 +323,9 @@ export function getPostExclusionReason(post = {}) {
   ].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
   if (!text) return null;
 
-  const matchedRule = TITLE_EXCLUDE_RULES.find((rule) => rule.pattern.test(title) || rule.pattern.test(text));
+  const matchedRule = TITLE_EXCLUDE_RULES.find((rule) => (
+    rule.pattern.test(title) || (!rule.titleOnly && rule.pattern.test(text))
+  ));
   if (!matchedRule) return null;
   if (isCentralTextNoticeFalsePositive(post, matchedRule, `${title} ${text}`)) {
     return null;
