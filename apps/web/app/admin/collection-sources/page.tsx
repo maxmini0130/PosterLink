@@ -376,6 +376,7 @@ function formatRunReasonLabel(key: string) {
   if (RUN_REASON_LABELS[key]) return RUN_REASON_LABELS[key];
   if (key.startsWith("post_filter:")) return `제목 제외: ${key.replace("post_filter:", "")}`;
   if (key.startsWith("detail_filter:")) return `상세 제외: ${key.replace("detail_filter:", "")}`;
+  if (key.startsWith("attachment_failure:")) return `첨부 실패: ${key.replace("attachment_failure:", "")}`;
   return key.replace(/[_:]/g, " ");
 }
 
@@ -390,9 +391,14 @@ function getRunDetail(run: CollectionSourceRun) {
     .map(([key, label]) => ({ key, label, value: Number(totals[key] ?? 0) }))
     .filter((item) => item.value > 0);
 
-  const reasonSource = metadata.skip_reasons && typeof metadata.skip_reasons === "object"
-    ? metadata.skip_reasons
-    : {};
+  const reasonSource = {
+    ...(metadata.skip_reasons && typeof metadata.skip_reasons === "object" ? metadata.skip_reasons : {}),
+    ...Object.fromEntries(Object.entries(
+      metadata.attachment_failure_counts && typeof metadata.attachment_failure_counts === "object"
+        ? metadata.attachment_failure_counts
+        : {}
+    ).map(([key, value]) => [`attachment_failure:${key}`, value])),
+  };
   const reasonItems = Object.entries(reasonSource)
     .map(([key, value]) => ({
       key,
@@ -442,6 +448,7 @@ function getRunDetail(run: CollectionSourceRun) {
       kind: String(sample.kind ?? ""),
       status: String(sample.status ?? ""),
       reason: String(sample.reason ?? ""),
+      failureCode: String(sample.failureCode ?? ""),
       textLength: Number(sample.textLength ?? 0),
       url: typeof sample.url === "string" ? sample.url : null,
     }));
@@ -1996,6 +2003,7 @@ export default function AdminCollectionSourcesPage() {
                                       <span className={sample.status === "extracted" ? "rounded-full bg-emerald-50 px-2.5 py-1 font-black text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-200" : sample.status === "unsupported" ? "rounded-full bg-amber-50 px-2.5 py-1 font-black text-amber-600 dark:bg-amber-500/10 dark:text-amber-200" : "rounded-full bg-rose-50 px-2.5 py-1 font-black text-rose-600 dark:bg-rose-500/10 dark:text-rose-200"}>
                                         {sample.status || "unknown"}
                                       </span>
+                                      {sample.failureCode && <span className="rounded-full bg-rose-50 px-2.5 py-1 font-mono font-black text-rose-600 dark:bg-rose-500/10 dark:text-rose-200">{sample.failureCode}</span>}
                                       {sample.textLength > 0 && <span className="rounded-full bg-gray-100 px-2.5 py-1 font-black text-gray-500 dark:bg-slate-800 dark:text-slate-300">본문 {formatNumber(sample.textLength)}자</span>}
                                     </div>
                                     {sample.reason && <p className="mt-2 line-clamp-2 font-bold text-gray-400">{sample.reason}</p>}

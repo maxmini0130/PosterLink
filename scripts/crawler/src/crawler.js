@@ -263,6 +263,7 @@ function createCrawlStats() {
     detailFailed: 0,
     boardFailed: 0,
     skipReasons: {},
+    attachmentFailureCodes: {},
     skipSamples: [],
     attachmentSamples: [],
     externalOriginalSamples: [],
@@ -319,6 +320,9 @@ function rememberAttachmentAnalysis(stats, post, analysis) {
   stats.attachmentFailed += Number(analysis.failed ?? 0);
 
   for (const source of analysis.sources ?? []) {
+    if (source.failureCode) {
+      stats.attachmentFailureCodes[source.failureCode] = (stats.attachmentFailureCodes[source.failureCode] ?? 0) + 1;
+    }
     if (stats.attachmentSamples.length >= 20) return;
     stats.attachmentSamples.push({
       title: String(post?.title ?? "").slice(0, 160),
@@ -327,6 +331,7 @@ function rememberAttachmentAnalysis(stats, post, analysis) {
       kind: String(source.kind ?? "").slice(0, 40),
       status: String(source.status ?? "").slice(0, 40),
       reason: String(source.reason ?? "").slice(0, 240),
+      failureCode: String(source.failureCode ?? "").slice(0, 80) || null,
       textLength: Number(source.textLength ?? 0),
     });
   }

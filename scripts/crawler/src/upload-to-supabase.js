@@ -772,6 +772,7 @@ function buildAttachmentAnalysisSummary(analysis = null) {
         reason: String(source?.reason ?? "").slice(0, 240),
         textLength: Number(source?.textLength ?? 0),
         contentHash: String(source?.contentHash ?? "").slice(0, 64) || null,
+        failureCode: String(source?.failureCode ?? "").slice(0, 80) || null,
       }))
     : [];
 

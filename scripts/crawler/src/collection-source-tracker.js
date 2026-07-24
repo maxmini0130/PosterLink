@@ -327,6 +327,12 @@ function mergeMetadata(current = {}, next = {}) {
   if (current.skip_reasons || next.skip_reasons) {
     merged.skip_reasons = mergeCountObjects(current.skip_reasons, next.skip_reasons);
   }
+  if (current.attachment_failure_counts || next.attachment_failure_counts) {
+    merged.attachment_failure_counts = mergeCountObjects(
+      current.attachment_failure_counts,
+      next.attachment_failure_counts,
+    );
+  }
   if (current.sites || next.sites) {
     merged.sites = [
       ...(Array.isArray(current.sites) ? current.sites : []),

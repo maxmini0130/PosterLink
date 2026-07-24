@@ -532,6 +532,18 @@ async function analyzeAttachment(candidate, maxBytes) {
   };
 }
 
+export function getAttachmentFailureCode(source = {}) {
+  if (source.status === "extracted") return null;
+  const reason = String(source.reason ?? "").toLowerCase();
+  if (source.kind === "hwp" && source.status === "unsupported") return "legacy_hwp_converter_missing";
+  if (source.status === "unsupported") return "unsupported_attachment_type";
+  if (/exceeds|maxcontentlength|maxbodylength|too large/.test(reason)) return "attachment_too_large";
+  if (/timeout|timed out|etimedout/.test(reason)) return "download_timeout";
+  if (/no readable text|returned no readable text/.test(reason)) return "no_readable_text";
+  if (/status code|network|socket|enotfound|econn/.test(reason)) return "download_failed";
+  return "extraction_failed";
+}
+
 function publicSourceSummary(source) {
   return {
     source: source.source,
@@ -542,6 +554,7 @@ function publicSourceSummary(source) {
     reason: source.reason ?? "",
     textLength: source.textLength ?? 0,
     contentHash: source.contentHash ?? null,
+    failureCode: getAttachmentFailureCode(source),
   };
 }
 

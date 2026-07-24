@@ -5,6 +5,7 @@ import { scorePosterDuplicate } from "./poster-duplicate-detector.js";
 import { evaluatePosterQuality } from "./poster-quality-gate.js";
 import { getPostExclusionReason } from "./post-candidate-filter.js";
 import { buildReadableNoticeInfo } from "./upload-to-supabase.js";
+import { getAttachmentFailureCode } from "./attachment-text-extractor.js";
 
 const org = "금천구";
 
@@ -80,6 +81,22 @@ test("OCR text is converted into structured notice facts", () => {
   assert.equal(result.facts.application, "온라인 신청");
   assert.equal(result.facts.contact, "02-1234-5678");
   assert.ok(result.facts.period);
+});
+
+test("attachment failure reasons are standardized", () => {
+  assert.equal(
+    getAttachmentFailureCode({ kind: "hwp", status: "unsupported", reason: "legacy hwp requires converter" }),
+    "legacy_hwp_converter_missing",
+  );
+  assert.equal(
+    getAttachmentFailureCode({ kind: "pdf", status: "failed", reason: "no readable text extracted" }),
+    "no_readable_text",
+  );
+  assert.equal(
+    getAttachmentFailureCode({ kind: "hwpx", status: "failed", reason: "timeout of 15000ms exceeded" }),
+    "download_timeout",
+  );
+  assert.equal(getAttachmentFailureCode({ kind: "docx", status: "extracted" }), null);
 });
 
 for (const title of [
