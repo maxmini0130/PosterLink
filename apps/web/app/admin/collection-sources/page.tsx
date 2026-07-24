@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import ConfigEditor, { validateCollectionConfig } from "./ConfigEditor";
 import {
   AlertTriangle,
   Building2,
@@ -1135,6 +1136,12 @@ export default function AdminCollectionSourcesPage() {
       return;
     }
 
+    const validation = validateCollectionConfig(form.config_json);
+    if (validation.level === "error") {
+      toast.error(validation.issues[0]?.message ?? "수집 설정을 확인하세요.");
+      return;
+    }
+
     setSaving(true);
     try {
       const configJson = parseConfigJsonInput(form.config_json);
@@ -1152,18 +1159,6 @@ export default function AdminCollectionSourcesPage() {
       toast.error(err instanceof Error ? err.message : "기관을 등록하지 못했습니다.");
     } finally {
       setSaving(false);
-    }
-  };
-
-  const updateSourceConfig = async (source: CollectionSource) => {
-    const nextConfig = prompt("고급 설정 JSON", formatConfigJson(source.config_json));
-    if (nextConfig === null) return;
-
-    try {
-      const configJson = parseConfigJsonInput(nextConfig);
-      await updateSource(source, { config_json: configJson } as Partial<CollectionSource>);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "설정 JSON을 해석하지 못했습니다.");
     }
   };
 
@@ -1204,6 +1199,12 @@ export default function AdminCollectionSourcesPage() {
     if (!editingSource || !editForm) return;
     if (!editForm.source_slug.trim() || !editForm.name.trim() || !editForm.list_url.trim()) {
       toast.error("기관 코드, 기관명, 게시판 URL은 필수입니다.");
+      return;
+    }
+
+    const validation = validateCollectionConfig(editForm.config_json);
+    if (validation.level === "error") {
+      toast.error(validation.issues[0]?.message ?? "수집 설정을 확인하세요.");
       return;
     }
 
@@ -1614,12 +1615,9 @@ export default function AdminCollectionSourcesPage() {
               rows={3}
               className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-bold outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 md:col-span-2"
             />
-            <textarea
+            <ConfigEditor
               value={editForm.config_json}
-              onChange={(event) => updateEditField("config_json", event.target.value)}
-              placeholder="수집 설정 JSON"
-              rows={12}
-              className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 font-mono text-xs font-bold outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 md:col-span-2"
+              onChange={(next) => updateEditField("config_json", next)}
             />
           </div>
         </section>
@@ -2061,13 +2059,12 @@ export default function AdminCollectionSourcesPage() {
           >
             {METHOD_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
-          <textarea
-            value={form.config_json}
-            onChange={(event) => setForm((prev) => ({ ...prev, config_json: event.target.value }))}
-            placeholder="고급 설정 JSON"
-            rows={5}
-            className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 font-mono text-xs font-bold outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 md:col-span-2 xl:col-span-3"
-          />
+          <div className="md:col-span-2 xl:col-span-3">
+            <ConfigEditor
+              value={form.config_json}
+              onChange={(next) => setForm((prev) => ({ ...prev, config_json: next }))}
+            />
+          </div>
           <button
             type="button"
             onClick={createSource}
@@ -2311,14 +2308,6 @@ export default function AdminCollectionSourcesPage() {
                           className="rounded-lg p-2 text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10"
                         >
                           <PencilLine size={15} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void updateSourceConfig(source)}
-                          title="고급 설정 JSON 수정"
-                          className="rounded-lg p-2 text-gray-400 hover:bg-gray-50 hover:text-gray-900 dark:hover:bg-slate-800 dark:hover:text-white"
-                        >
-                          <Settings2 size={15} />
                         </button>
                         <button
                           type="button"

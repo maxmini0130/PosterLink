@@ -167,6 +167,54 @@ function buildPayload(body: Record<string, unknown>) {
   return payload;
 }
 
+// config_json 의 기본 형태를 서버에서도 방어적으로 검증한다(클라이언트 우회 방지).
+// 클라이언트 UI 의 validateCollectionConfig 와 동일한 규칙을 따른다.
+function validateConfigJson(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    return "config_json must be an object";
+  }
+
+  const config = value as Record<string, unknown>;
+
+  if (config.maxPages !== undefined && config.maxPages !== null && config.maxPages !== "") {
+    const maxPages = Number(config.maxPages);
+    if (!Number.isInteger(maxPages) || maxPages < 1) {
+      return "config_json.maxPages must be a positive integer";
+    }
+  }
+
+  if (config.boards !== undefined) {
+    if (!Array.isArray(config.boards)) return "config_json.boards must be an array";
+    for (let index = 0; index < config.boards.length; index += 1) {
+      const board = config.boards[index];
+      if (!board || typeof board !== "object" || Array.isArray(board)) {
+        return `config_json.boards[${index}] must be an object`;
+      }
+      const url = String((board as Record<string, unknown>).url ?? "").trim();
+      if (url) {
+        try {
+          const parsed = new URL(url);
+          if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+            return `config_json.boards[${index}].url must be http/https`;
+          }
+        } catch {
+          return `config_json.boards[${index}].url is not a valid URL`;
+        }
+      }
+    }
+  }
+
+  for (const key of ["urlFilters", "pagination", "selectors", "externalOriginal"]) {
+    const nested = config[key];
+    if (nested !== undefined && (typeof nested !== "object" || nested === null || Array.isArray(nested))) {
+      return `config_json.${key} must be an object`;
+    }
+  }
+
+  return null;
+}
+
 function summarize(rows: any[]) {
   const statusCounts: Record<string, number> = {};
   const typeCounts: Record<string, number> = {};
@@ -316,6 +364,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "source_slug, name, list_url are required" }, { status: 400 });
   }
 
+  const configError = validateConfigJson(payload.config_json);
+  if (configError) return NextResponse.json({ error: configError }, { status: 400 });
+
   const admin = adminClient();
   const { data, error } = await admin
     .from("collection_sources")
@@ -353,6 +404,11 @@ export async function PATCH(request: NextRequest) {
   delete payload.id;
   if (Object.keys(payload).length === 0) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
+  }
+
+  if ("config_json" in payload) {
+    const configError = validateConfigJson(payload.config_json);
+    if (configError) return NextResponse.json({ error: configError }, { status: 400 });
   }
 
   const admin = adminClient();
