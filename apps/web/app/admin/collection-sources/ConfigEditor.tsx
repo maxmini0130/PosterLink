@@ -44,8 +44,15 @@ type ConfigEditorProps = {
 };
 
 export default function ConfigEditor({ value, onChange }: ConfigEditorProps) {
+  const boardSeq = useRef(0);
+  // parseToForm 결과의 각 게시판에 안정적인 클라이언트 id 를 부여한다(리스트 key 용).
+  const withBoardIds = (next: ConfigForm): ConfigForm => ({
+    ...next,
+    boards: next.boards.map((board) => (board.id ? board : { ...board, id: `b${boardSeq.current++}` })),
+  });
+
   const [mode, setMode] = useState<"form" | "json">("form");
-  const [form, setForm] = useState<ConfigForm>(() => parseToForm(value));
+  const [form, setForm] = useState<ConfigForm>(() => withBoardIds(parseToForm(value)));
   const [jsonText, setJsonText] = useState<string>(value);
   const lastEmitted = useRef<string>(value);
 
@@ -53,7 +60,7 @@ export default function ConfigEditor({ value, onChange }: ConfigEditorProps) {
   useEffect(() => {
     if (value !== lastEmitted.current) {
       lastEmitted.current = value;
-      setForm(parseToForm(value));
+      setForm(withBoardIds(parseToForm(value)));
       setJsonText(value);
     }
   }, [value]);
@@ -80,7 +87,7 @@ export default function ConfigEditor({ value, onChange }: ConfigEditorProps) {
     emit(text);
     try {
       const parsed = JSON.parse(text || "{}");
-      if (isPlainObject(parsed)) setForm(parseToForm(text));
+      if (isPlainObject(parsed)) setForm(withBoardIds(parseToForm(text)));
     } catch {
       // JSON 편집 중에는 폼 동기화를 건너뛴다
     }
@@ -92,7 +99,7 @@ export default function ConfigEditor({ value, onChange }: ConfigEditorProps) {
     } catch {
       return; // 유효하지 않으면 전환 차단 (검증 배지가 오류를 안내)
     }
-    setForm(parseToForm(jsonText));
+    setForm(withBoardIds(parseToForm(jsonText)));
     setMode("form");
   }
 
@@ -106,7 +113,10 @@ export default function ConfigEditor({ value, onChange }: ConfigEditorProps) {
     }));
 
   const addBoard = () =>
-    updateForm((prev) => ({ ...prev, boards: [...prev.boards, { name: "", url: "", category: "" }] }));
+    updateForm((prev) => ({
+      ...prev,
+      boards: [...prev.boards, { id: `b${boardSeq.current++}`, name: "", url: "", category: "" }],
+    }));
 
   const removeBoard = (index: number) =>
     updateForm((prev) => ({ ...prev, boards: prev.boards.filter((_, i) => i !== index) }));
@@ -198,7 +208,7 @@ export default function ConfigEditor({ value, onChange }: ConfigEditorProps) {
             ) : (
               <div className="space-y-2">
                 {form.boards.map((board, index) => (
-                  <div key={index} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <div key={board.id ?? index} className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <input
                       value={board.name}
                       onChange={(event) => updateBoard(index, { name: event.target.value })}

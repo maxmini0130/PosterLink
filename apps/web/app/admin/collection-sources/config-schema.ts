@@ -16,7 +16,9 @@ export const KNOWN_SELECTOR_KEYS: ReadonlyArray<readonly [string, string, string
   ["detailAttachments", "첨부파일", "a[href*=download], .file_list a"],
 ];
 
-export type BoardRow = { name: string; url: string; category: string };
+// id 는 React 리스트 key 안정화를 위한 클라이언트 전용 필드다.
+// parseToForm 은 부여하지 않고(순수 유지), serializeForm 은 무시한다(직렬화 제외).
+export type BoardRow = { id?: string; name: string; url: string; category: string };
 
 export type ConfigForm = {
   adapter: string;
