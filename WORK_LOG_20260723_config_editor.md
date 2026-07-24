@@ -1,5 +1,9 @@
 # PosterLink 작업 정리 - 2026-07-23 (수집 설정 구조화 에디터)
 
+> 2026-07-24 후속 확인: 에디터 본체는 PR #2로 `main`에 병합됐습니다.
+> 라운드트립·검증 테스트 13건과 게시판 행 key 안정화 수정도 로컬 `main`에
+> 추가됐습니다. 최신 상태는 `WORK_LOG_20260724.md`를 기준으로 합니다.
+
 브랜치: `feat/collection-config-editor` (main 에서 분기)
 관련 커밋:
 - `3e1bc6a` feat: structure collection source config editor
