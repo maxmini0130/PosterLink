@@ -7,8 +7,37 @@ import { getPostExclusionReason } from "./post-candidate-filter.js";
 import { buildReadableNoticeInfo } from "./upload-to-supabase.js";
 import { getAttachmentFailureCode } from "./attachment-text-extractor.js";
 import { choosePreferredDetailTitle } from "./adapters/youth-seoul.js";
+import { extractOrgFromTitle, resolveSourceOrgName } from "./poster-org.js";
 
 const org = "금천구";
+
+test("extractOrgFromTitle pulls the host org before the program bracket", () => {
+  assert.equal(extractOrgFromTitle("관악구 <2026년 여름 청년행정체험단 모집> 안내"), "관악구");
+  assert.equal(extractOrgFromTitle("서울청년센터 강동 <든든캠퍼스 3기> 참여자 모집"), "서울청년센터 강동");
+});
+
+test("extractOrgFromTitle returns null when no clean org prefix exists", () => {
+  assert.equal(extractOrgFromTitle("렛유인에듀 안내"), null); // '<' 없음
+  assert.equal(
+    extractOrgFromTitle("서울청년센터 관악 신림동쓰리룸 2026 렛츠 크루 - 커넥팅 리더 진행 <반려견>"),
+    null,
+  ); // 앞부분이 너무 긺(프로그램 설명 섞임)
+});
+
+test("resolveSourceOrgName replaces portal name with the title org", () => {
+  assert.equal(
+    resolveSourceOrgName("강동구보건소 <청년 액티브 챌린지> 참여자 모집", "청년몽땅정보통"),
+    "강동구보건소",
+  );
+});
+
+test("resolveSourceOrgName keeps a real org name unchanged", () => {
+  assert.equal(resolveSourceOrgName("마포문화재단 공지", "마포문화재단"), "마포문화재단");
+});
+
+test("resolveSourceOrgName keeps the portal name when the title is not extractable", () => {
+  assert.equal(resolveSourceOrgName("렛유인에듀 안내", "청년몽땅정보통"), "청년몽땅정보통");
+});
 
 test("weekday variants of the same futsal program merge", () => {
   const result = scorePosterDuplicate(
