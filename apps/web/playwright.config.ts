@@ -2,6 +2,8 @@ import { defineConfig, devices } from "@playwright/test";
 import path from "path";
 
 const authDir = path.join(__dirname, "e2e/.auth");
+const baseURL = process.env.E2E_BASE_URL || "http://localhost:4000";
+const usesRemoteServer = /^https?:\/\//i.test(process.env.E2E_BASE_URL || "");
 
 export default defineConfig({
   testDir: "./e2e",
@@ -9,7 +11,7 @@ export default defineConfig({
   retries: 0,
   globalSetup: "./e2e/global-setup.ts",
   use: {
-    baseURL: "http://localhost:4000",
+    baseURL,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
@@ -48,9 +50,11 @@ export default defineConfig({
       },
     },
   ],
-  webServer: {
-    command: "pnpm dev",
-    url: "http://localhost:4000",
-    reuseExistingServer: true,
-  },
+  webServer: usesRemoteServer
+    ? undefined
+    : {
+        command: "pnpm dev",
+        url: baseURL,
+        reuseExistingServer: true,
+      },
 });

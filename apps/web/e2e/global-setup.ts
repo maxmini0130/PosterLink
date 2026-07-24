@@ -2,7 +2,7 @@ import { chromium, FullConfig } from "@playwright/test";
 import fs from "fs";
 import path from "path";
 
-const BASE_URL = "http://localhost:4000";
+const BASE_URL = process.env.E2E_BASE_URL || "http://localhost:4000";
 const AUTH_DIR = path.join(__dirname, ".auth");
 const LOCAL_ENV_PATH = path.join(__dirname, "../.env.local");
 
@@ -42,7 +42,7 @@ async function loginAs(email: string, password: string, storageStatePath: string
   const page = await context.newPage();
 
   await page.goto(`${BASE_URL}/login`);
-  await page.waitForLoadState("networkidle");
+  await page.waitForLoadState("domcontentloaded");
 
   await page.fill('input[name="email"]', email);
   await page.fill('input[name="password"]', password);

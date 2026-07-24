@@ -10,6 +10,7 @@ const candidates = [
   path.resolve(cwd, "apps/web/.env.local"),
   path.resolve(cwd, "../apps/web/.env.local"),
   path.resolve(cwd, "../../apps/web/.env.local"),
+  path.resolve(cwd, "../../.env.local"),
 ].filter(Boolean);
 
 for (const filePath of candidates) {
