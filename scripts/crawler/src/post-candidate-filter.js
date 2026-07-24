@@ -3,6 +3,13 @@ const TITLE_EXCLUDE_RULES = [
     name: "selected-list-or-award-list",
     pattern: /\uCD5C\uC885\s*\uC120\uBC1C\s*\uBA85\uB2E8|\uC120\uBC1C\s*\uBA85\uB2E8|\uCC38\uAC00\uC0C1\s*\uBA85\uB2E8|\uC218\uC0C1(?:\uC790)?\s*\uBA85\uB2E8|\uBCF8\uC120\s*\uC9C4\uCD9C(?:\uC790|\s*\uB300\uC0C1\uC790)?\s*(?:\uACF5\uC9C0|\uC548\uB0B4)?/i,
     reason: "selected/result list announcement",
+    titleOnly: true,
+  },
+  {
+    name: "event-change-notice",
+    pattern: /(?:\uD589\uC0AC|\uC2DC\uC0C1|\uC6B4\uC601|\uC77C\uC815|\uB0B4\uC6A9).*(?:\uBCC0\uACBD\s*\uC548\uB0B4|\uBCC0\uACBD\s*\uACF5\uC9C0)|(?:\uBCC0\uACBD\s*\uC548\uB0B4|\uBCC0\uACBD\s*\uACF5\uC9C0).*(?:\uD589\uC0AC|\uC2DC\uC0C1|\uC6B4\uC601|\uC77C\uC815|\uB0B4\uC6A9)/i,
+    reason: "event change notice is an administrative follow-up",
+    titleOnly: true,
   },
   {
     name: "event-cancellation-notice",
@@ -72,6 +79,7 @@ const TITLE_EXCLUDE_RULES = [
     name: "monthly-calendar-or-schedule-image",
     pattern: /(?:\d{1,2}\s*\uC6D4|[0-9]{2}\s*\uC6D4).*(?:\uC6D4\s*\uD504\uB85C\uADF8\uB7A8\s*\uC548\uB0B4|\uD504\uB85C\uADF8\uB7A8\s*\uC548\uB0B4|\uCE98\uB9B0\uB354|\uB2EC\uB825|\uC2A4\uCF00\uC904|\uC2DC\uAC04\uD45C|\uC77C\uC815\uD45C)|(?:\uC6D4\s*\uD504\uB85C\uADF8\uB7A8\s*\uC548\uB0B4|\uCE98\uB9B0\uB354|\uB2EC\uB825|\uC2A4\uCF00\uC904|\uC2DC\uAC04\uD45C|\uC77C\uC815\uD45C).*(?:\d{1,2}\s*\uC6D4|[0-9]{2}\s*\uC6D4)/i,
     reason: "monthly calendar/schedule image, not an individual poster",
+    titleOnly: true,
   },
   {
     name: "gangbuk-anc-monthly-craft-class-schedule",
