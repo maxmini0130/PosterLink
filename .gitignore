@@ -43,3 +43,6 @@ apps/web/e2e/.auth/
 
 # Crawler local run output (logs, audits, downloaded images)
 data/
+
+# Backfill backups (generated when running backfill scripts with --apply)
+scripts/crawler/*-backup-*.json
