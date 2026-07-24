@@ -12,6 +12,8 @@
 import "./load-env.js";
 import crypto from "node:crypto";
 import fs from "fs/promises";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import WebSocket from "ws";
 import { inferPosterClassification } from "./poster-classifier.js";
@@ -575,7 +577,7 @@ function cleanOcrText(value, maxLength = 1200) {
 function getPosterImageInsight(post = {}) {
   const contentVerification = post.posterContentVerification ?? post.posterImageCheck?.content ?? null;
   const imageClassification = post.imageClassification ?? post.posterImageCheck?.model ?? null;
-  const posterTextSummary = cleanOcrText(contentVerification?.posterTextSummary ?? "");
+  const posterTextSummary = cleanLongSummaryText(contentVerification?.posterTextSummary ?? "", 1200);
   if (!posterTextSummary && !contentVerification && !imageClassification) return null;
 
   return {
@@ -699,9 +701,10 @@ function normalizeSummary(post) {
   return buildReadableNoticeInfo(post).summaryShort;
 }
 
-function buildReadableNoticeInfo(post = {}) {
+export function buildReadableNoticeInfo(post = {}) {
   const title = normalizeStorageTitle(post);
-  const contentLines = splitReadableLines(post.content);
+  const posterImageText = getPosterImageInsight(post)?.posterTextSummary ?? "";
+  const contentLines = splitReadableLines([post.content, posterImageText].filter(Boolean).join("\n"));
   const content = contentLines.join("\n");
   if (!content && !title) {
     return { title: "제목 없음", summaryShort: null, summaryLong: null, facts: {} };
@@ -709,16 +712,19 @@ function buildReadableNoticeInfo(post = {}) {
 
   const source = `${title}\n${content}`;
   const parts = [];
-  const period = pickDateRange(source);
+  const period = pickField(source, ["신청기간", "접수기간", "모집기간", "운영기간", "교육기간", "기간"])
+    ?? pickDateRange(source);
   const target = pickField(source, ["대상", "지원대상", "모집대상", "참여대상", "신청대상"]);
   const benefit = pickField(source, ["내용", "지원내용", "주요내용", "사업내용", "교육내용", "프로그램", "모집내용"]);
   const application = pickField(source, ["신청방법", "접수방법", "신청", "접수", "지원방법"]);
-  const contact = pickField(source, ["문의", "문의처", "연락처"]);
+  const contact = pickField(source, ["문의처", "연락처", "문의"]);
+  const location = pickField(source, ["장소", "교육장소", "행사장소", "진행장소", "주소"]);
 
   if (target) parts.push(`대상: ${target}`);
   if (period) parts.push(`기간: ${period}`);
   if (benefit) parts.push(`내용: ${benefit}`);
   if (application) parts.push(`신청: ${application}`);
+  if (location) parts.push(`장소: ${location}`);
   if (contact) parts.push(`문의: ${contact}`);
 
   const facts = Object.fromEntries(Object.entries({
@@ -726,6 +732,7 @@ function buildReadableNoticeInfo(post = {}) {
     period,
     content: benefit,
     application,
+    location,
     contact,
   }).filter(([, value]) => Boolean(value)));
 
@@ -1874,13 +1881,18 @@ async function uploadToSupabase(filePath) {
   console.log(`\n👉 /admin/posters 에서 검수 후 승인하세요.\n`);
 }
 
-const filePath = process.argv[2];
-if (!filePath) {
-  console.error("사용법: node src/upload-to-supabase.js <결과파일.json>");
-  process.exit(1);
-}
+const isDirectExecution = Boolean(
+  process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url
+);
+if (isDirectExecution) {
+  const filePath = process.argv[2];
+  if (!filePath) {
+    console.error("사용법: node src/upload-to-supabase.js <결과파일.json>");
+    process.exit(1);
+  }
 
-uploadToSupabase(filePath).catch((err) => {
-  console.error("Fatal:", err.message);
-  process.exit(1);
-});
+  uploadToSupabase(filePath).catch((err) => {
+    console.error("Fatal:", err.message);
+    process.exit(1);
+  });
+}

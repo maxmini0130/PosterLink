@@ -4,6 +4,7 @@ import test from "node:test";
 import { scorePosterDuplicate } from "./poster-duplicate-detector.js";
 import { evaluatePosterQuality } from "./poster-quality-gate.js";
 import { getPostExclusionReason } from "./post-candidate-filter.js";
+import { buildReadableNoticeInfo } from "./upload-to-supabase.js";
 
 const org = "금천구";
 
@@ -57,6 +58,28 @@ test("matching official application URLs participate in duplicate detection", ()
   );
   assert.equal(result.decision, "merge");
   assert.ok(result.matched.includes("application-url"));
+});
+
+test("OCR text is converted into structured notice facts", () => {
+  const result = buildReadableNoticeInfo({
+    title: "청년 창업 특강",
+    content: "프로그램 소개",
+    posterContentVerification: {
+      posterTextSummary: [
+        "대상: 마포구 거주 청년 30명",
+        "기간: 2026. 8. 10. ~ 2026. 8. 20.",
+        "장소: 마포청년나루 2층",
+        "신청방법: 온라인 신청",
+        "문의처: 02-1234-5678",
+      ].join("\n"),
+    },
+  });
+
+  assert.equal(result.facts.target, "마포구 거주 청년 30명");
+  assert.equal(result.facts.location, "마포청년나루 2층");
+  assert.equal(result.facts.application, "온라인 신청");
+  assert.equal(result.facts.contact, "02-1234-5678");
+  assert.ok(result.facts.period);
 });
 
 for (const title of [
