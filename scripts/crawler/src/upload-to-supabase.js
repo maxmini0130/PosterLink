@@ -522,12 +522,16 @@ async function insertPosterLinks(posterId, links) {
 }
 
 const SUMMARY_NOISE_LINE_PATTERNS = [
-  /^(목록|공유|첨부파일|이전글|다음글|조회수|작성자|관리자|번호|제목|공지사항|등록일|담당부서|담당자)$/i,
+  /^(목록|공유|첨부파일|이전글|다음글|조회수|작성자|관리자|번호|제목|공지사항|등록일|담당부서|담당자|상세정보|상세보기|상세내용|본문보기)$/i,
   /^첨부파일\s*[:：]?/i,
   /^이전글|^다음글|^목록\s*보기/i,
   /^(facebook|twitter|kakaotalk|url\s*copy|rss)$/i,
   /^청년정책\s*>\s*청년정책검색\s*>\s*청년지원정보/i,
 ];
+
+// 게시판 상세 페이지의 탭/섹션 라벨이 본문 첫 줄 앞에 그대로 붙는 경우가 있다
+// (예: "상세정보 안녕하세요 ..."). 본문 시작의 이 라벨을 제거한다.
+const TAB_LABEL_PREFIX = /^(?:상세정보|상세보기|상세내용|본문보기|본문)\s+/;
 
 function decodeHtmlEntities(value) {
   return String(value ?? "")
@@ -547,10 +551,13 @@ function splitReadableLines(value) {
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n");
 
+  const lines = raw.split(/\n+/).map((line) => line.replace(/\s+/g, " ").trim());
+  // 본문 첫 줄 앞에 붙은 탭 라벨("상세정보" 등) 제거
+  const firstIndex = lines.findIndex((line) => line);
+  if (firstIndex >= 0) lines[firstIndex] = lines[firstIndex].replace(TAB_LABEL_PREFIX, "").trim();
+
   const seen = new Set();
-  return raw
-    .split(/\n+/)
-    .map((line) => line.replace(/\s+/g, " ").trim())
+  return lines
     .filter((line) => line && !SUMMARY_NOISE_LINE_PATTERNS.some((pattern) => pattern.test(line)))
     .filter((line) => {
       const key = line.toLowerCase();
@@ -671,11 +678,14 @@ function normalizeStorageTitle(post = {}) {
 function pickField(text, labels) {
   const lines = splitReadableLines(text);
   for (const label of labels) {
-    const linePattern = new RegExp(`^${escapeRegExp(label)}\\s*[:：]?\\s*(.{4,140})$`, "i");
+    // 줄 시작 라벨: 라벨 뒤에 콜론 또는 공백(실제 구분자)이 있어야 값으로 인정한다.
+    // "내용은 ...", "대상으로 ..." 처럼 라벨이 단어 일부인 경우를 배제한다.
+    const linePattern = new RegExp(`^${escapeRegExp(label)}(?:\\s*[:：]\\s*|\\s+)(.{4,140})$`, "i");
     const lineMatch = lines.map((line) => line.match(linePattern)).find(Boolean);
     if (lineMatch?.[1]) return lineMatch[1].replace(/\s+/g, " ").trim();
 
-    const pattern = new RegExp(`${escapeRegExp(label)}\\s*[:：]?\\s*([^\\n。.!?]{4,120})`, "i");
+    // 줄 중간 라벨: 콜론(:／：)이 반드시 있어야 라벨로 인정한다("... 대상으로 ..." 오매칭 방지).
+    const pattern = new RegExp(`${escapeRegExp(label)}\\s*[:：]\\s*([^\\n。.!?]{4,120})`, "i");
     const match = String(text ?? "").match(pattern);
     if (match?.[1]) return match[1].replace(/\s+/g, " ").trim();
   }
