@@ -9,6 +9,7 @@
     "dev:mobile": "pnpm --filter @posterlink/mobile start",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
+    "test": "tsx --test \"apps/web/app/admin/collection-sources/config-schema.test.ts\"",
     "collect": "tsx scripts/collect-posters.ts",
     "collect:youth": "tsx scripts/collect-posters.ts youth",
     "collect:central": "tsx scripts/collect-posters.ts central",
