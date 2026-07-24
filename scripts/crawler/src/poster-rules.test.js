@@ -23,6 +23,42 @@ test("month/new-program variants of the same badminton lesson merge", () => {
   assert.equal(result.decision, "merge");
 });
 
+test("matching attachment hashes strengthen duplicate detection", () => {
+  const hash = "a".repeat(64);
+  const result = scorePosterDuplicate(
+    {
+      title: "2026 청소년 여름 미술교실 참가자 모집",
+      source_org_name: "마포문화센터",
+      attachmentAnalysis: { sources: [{ contentHash: hash }] },
+    },
+    {
+      title: "청소년 여름 미술교실 참여자 모집 안내",
+      source_org_name: "마포문화센터",
+      field_verification: { attachmentAnalysis: { sources: [{ contentHash: hash }] } },
+    },
+  );
+  assert.equal(result.decision, "merge");
+  assert.ok(result.matched.includes("attachment-hash"));
+});
+
+test("matching official application URLs participate in duplicate detection", () => {
+  const applyUrl = "https://apply.example.test/program/2026-summer";
+  const result = scorePosterDuplicate(
+    {
+      title: "2026 여름 청년 창업학교 참가자 모집",
+      source_org_name: "마포창업센터",
+      poster_links: [{ link_type: "official_apply", url: applyUrl }],
+    },
+    {
+      title: "여름 청년 창업학교 참여자 모집 안내",
+      source_org_name: "마포창업센터",
+      poster_links: [{ link_type: "official_apply", url: applyUrl }],
+    },
+  );
+  assert.equal(result.decision, "merge");
+  assert.ok(result.matched.includes("application-url"));
+});
+
 for (const title of [
   "[마포구가족센터] 공고 제 2026-5호 마포구가족센터 직원 채용공고",
   "마포구가족센터 - 건강관리 교육 및 근력운동 프로그램 강사 모집(안내)",

@@ -1,5 +1,6 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
+import crypto from "node:crypto";
 import iconv from "iconv-lite";
 import zlib from "zlib";
 import { execFile } from "node:child_process";
@@ -485,9 +486,11 @@ async function analyzeAttachment(candidate, maxBytes) {
   const response = await attachmentClient.get(candidate.url);
   const contentType = response.headers?.["content-type"] ?? "";
   const buffer = Buffer.from(response.data);
+  const contentHash = crypto.createHash("sha256").update(buffer).digest("hex");
   if (buffer.length > maxBytes) {
     return {
       ...candidate,
+      contentHash,
       status: "failed",
       reason: `attachment exceeds ${maxBytes} bytes`,
       textLength: 0,
@@ -501,6 +504,7 @@ async function analyzeAttachment(candidate, maxBytes) {
     return {
       ...candidate,
       kind,
+      contentHash,
       status: "unsupported",
       reason: extracted.reason,
       textLength: 0,
@@ -510,6 +514,7 @@ async function analyzeAttachment(candidate, maxBytes) {
     return {
       ...candidate,
       kind,
+      contentHash,
       status: "failed",
       reason: "no readable text extracted",
       textLength: 0,
@@ -519,6 +524,7 @@ async function analyzeAttachment(candidate, maxBytes) {
   return {
     ...candidate,
     kind,
+    contentHash,
     status: "extracted",
     reason: "",
     text,
@@ -535,6 +541,7 @@ function publicSourceSummary(source) {
     status: source.status,
     reason: source.reason ?? "",
     textLength: source.textLength ?? 0,
+    contentHash: source.contentHash ?? null,
   };
 }
 

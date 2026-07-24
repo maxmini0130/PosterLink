@@ -191,15 +191,42 @@ function getImages(row = {}) {
 
 function getSourceUrls(row = {}) {
   const links = Array.isArray(row.poster_links)
-    ? row.poster_links.map((link) => link.url)
+    ? row.poster_links
+      .filter((link) => !link?.link_type || link.link_type === "official_notice")
+      .map((link) => link.url)
     : [];
   return [row.source_key, row.sourceUrl, row.url, ...links].filter(Boolean);
+}
+
+function getApplicationUrls(row = {}) {
+  const links = Array.isArray(row.poster_links)
+    ? row.poster_links
+      .filter((link) => link?.link_type === "official_apply")
+      .map((link) => link.url)
+    : [];
+  return [row.application_url, row.applicationUrl, row.applyUrl, ...links].filter(Boolean);
+}
+
+function getAttachmentHashes(row = {}) {
+  const directSources = Array.isArray(row.attachmentAnalysis?.sources)
+    ? row.attachmentAnalysis.sources
+    : [];
+  const verifiedSources = Array.isArray(row.field_verification?.attachmentAnalysis?.sources)
+    ? row.field_verification.attachmentAnalysis.sources
+    : [];
+  const attachments = Array.isArray(row.attachments) ? row.attachments : [];
+  return [...directSources, ...verifiedSources, ...attachments]
+    .map((source) => source?.contentHash ?? source?.content_hash ?? source?.sha256 ?? source?.hash)
+    .filter((hash) => /^[a-f0-9]{64}$/i.test(String(hash ?? "")))
+    .map((hash) => String(hash).toLowerCase());
 }
 
 export function buildDuplicateFingerprint(row = {}) {
   const org = normalizePosterOrg(row.source_org_name ?? row.org ?? row.site);
   const title = normalizePosterTitle(row.title, org);
   const sourceUrls = new Set(getSourceUrls(row).map(normalizeSourceUrl).filter(Boolean));
+  const applicationUrls = new Set(getApplicationUrls(row).map(normalizeSourceUrl).filter(Boolean));
+  const attachmentHashes = new Set(getAttachmentHashes(row));
   const images = new Set(getImages(row).map(normalizeImageIdentity).filter(Boolean));
   const deadline = normalizeDateKey(row.application_end_at ?? row.deadline);
 
@@ -210,6 +237,8 @@ export function buildDuplicateFingerprint(row = {}) {
     org,
     deadline,
     sourceUrls,
+    applicationUrls,
+    attachmentHashes,
     images,
   };
 }
@@ -260,11 +289,27 @@ export function scorePosterDuplicate(candidate = {}, existing = {}) {
     matched.push("deadline");
   }
 
+  const attachmentMatched = [...candidateFp.attachmentHashes]
+    .some((hash) => existingFp.attachmentHashes.has(hash));
+  if (attachmentMatched) {
+    score += 70;
+    matched.push("attachment-hash");
+  }
+
+  const applicationUrlMatched = [...candidateFp.applicationUrls]
+    .some((url) => existingFp.applicationUrls.has(url));
+  if (applicationUrlMatched) {
+    score += 55;
+    matched.push("application-url");
+  }
+
   const canMerge =
     score >= 90 ||
     (titleSimilarity === 1 && candidateFp.title.length >= 8 && orgSimilarity >= 0.9) ||
     (score >= 85 && titleSimilarity >= 0.72 && (orgSimilarity >= 0.65 || matched.includes("deadline"))) ||
-    (imageMatched && titleSimilarity >= 0.45);
+    (imageMatched && titleSimilarity >= 0.45) ||
+    (attachmentMatched && titleSimilarity >= 0.45) ||
+    (applicationUrlMatched && titleSimilarity >= 0.72 && orgSimilarity >= 0.65);
   const needsReview = !canMerge && score >= 65 && titleSimilarity >= 0.55;
 
   return {

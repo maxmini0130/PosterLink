@@ -764,6 +764,7 @@ function buildAttachmentAnalysisSummary(analysis = null) {
         status: String(source?.status ?? "unknown").slice(0, 40),
         reason: String(source?.reason ?? "").slice(0, 240),
         textLength: Number(source?.textLength ?? 0),
+        contentHash: String(source?.contentHash ?? "").slice(0, 64) || null,
       }))
     : [];
 
@@ -1363,7 +1364,7 @@ function mergeDuplicateIssueIntoFieldVerification(verification = {}, issue) {
   };
 }
 
-function addDuplicateCandidate(candidates, posterId, posterRecord, post, sourceUrl, storedImages) {
+function addDuplicateCandidate(candidates, posterId, posterRecord, post, sourceUrl, storedImages, linkEntries = []) {
   if (!posterId) return;
   candidates.unshift({
     id: posterId,
@@ -1375,10 +1376,12 @@ function addDuplicateCandidate(candidates, posterId, posterRecord, post, sourceU
     source_key: posterRecord.source_key,
     summary_short: posterRecord.summary_short,
     summary_long: posterRecord.summary_long,
+    attachmentAnalysis: post.attachmentAnalysis ?? null,
     images: storedImages,
     poster_images: storedImages.map((storagePath) => ({ storage_path: storagePath })),
-    poster_links: sourceUrl
-      ? [{
+    poster_links: linkEntries.length > 0
+      ? linkEntries
+      : sourceUrl ? [{
           url: sourceUrl,
           title: "\uACF5\uC2DD \uACF5\uACE0 \uC6D0\uBB38",
           link_type: "official_notice",
@@ -1557,6 +1560,7 @@ async function uploadToSupabase(filePath) {
       sourceUrl,
       url: sourceUrl,
       images: sourceImages,
+      poster_links: linkEntries,
       application_end_at: post.deadline ?? null,
     }, duplicateSearchCandidates);
     const duplicateIssue = duplicateIssueFromMatch(duplicateMatch);
@@ -1795,7 +1799,7 @@ async function uploadToSupabase(filePath) {
     await assignPosterCategories(posterId, post, categoryMap, classification);
     await assignPosterRegions(posterId, post, regionMap, classification);
     await assignPosterAudiences(posterId, classification, audienceMap);
-    addDuplicateCandidate(duplicateCandidates, posterId, posterRecord, post, sourceUrl, storedImages);
+    addDuplicateCandidate(duplicateCandidates, posterId, posterRecord, post, sourceUrl, storedImages, linkEntries);
 
     success++;
     collectionStats.recordCreated(post);
