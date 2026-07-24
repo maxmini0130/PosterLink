@@ -6,6 +6,7 @@ import { evaluatePosterQuality } from "./poster-quality-gate.js";
 import { getPostExclusionReason } from "./post-candidate-filter.js";
 import { buildReadableNoticeInfo } from "./upload-to-supabase.js";
 import { getAttachmentFailureCode } from "./attachment-text-extractor.js";
+import { choosePreferredDetailTitle } from "./adapters/youth-seoul.js";
 
 const org = "금천구";
 
@@ -110,6 +111,16 @@ test("reject a provider-only title captured from a youth notice", () => {
 
   assert.equal(result.decision, "reject");
   assert.ok(result.issues.some((issue) => issue.code === "generic-title"));
+});
+
+test("keep the specific Youth Seoul title over a generic external page title", () => {
+  assert.equal(
+    choosePreferredDetailTitle(
+      "\uC11C\uC6B8\uCCAD\uB144\uC13C\uD130 \uC591\uCC9C <\uC601\uD14C\uD06C \uD074\uB798\uC2A4> \uBAA8\uC9D1",
+      "\uC11C\uC6B8\uCCAD\uB144\uC13C\uD130 \uC591\uCC9C \uBAA8\uC9D1",
+    ),
+    "\uC11C\uC6B8\uCCAD\uB144\uC13C\uD130 \uC591\uCC9C <\uC601\uD14C\uD06C \uD074\uB798\uC2A4> \uBAA8\uC9D1",
+  );
 });
 
 for (const title of [

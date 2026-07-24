@@ -33,6 +33,22 @@ function isInvalidDetailTitle(value) {
   );
 }
 
+export function choosePreferredDetailTitle(youthTitle, externalTitle) {
+  const youth = cleanText(youthTitle);
+  const external = cleanText(externalTitle);
+
+  if (!youth) return external;
+  if (!external) return youth;
+
+  // Youth Seoul often exposes the full program name inside angle brackets while
+  // the linked application page only returns an organization/menu title.
+  if (/<[^<>]{2,}>/.test(youth) && !/<[^<>]{2,}>/.test(external)) {
+    return youth;
+  }
+
+  return external;
+}
+
 function inferSpecificTitle(title, content, attachments = []) {
   const text = [title, content, ...attachments.map((attachment) => attachment?.name)]
     .filter(Boolean)
@@ -177,7 +193,8 @@ export default {
       : baseContent;
     const sourceUrl = externalDetail?.url ?? postUrl;
     const sourceLinks = externalDetail?.viaLink ? [externalDetail.viaLink] : [];
-    const inferredTitle = inferSpecificTitle(externalDetail?.title || title, content, attachments);
+    const preferredTitle = choosePreferredDetailTitle(title, externalDetail?.title);
+    const inferredTitle = inferSpecificTitle(preferredTitle, content, attachments);
 
     const posterImages = await filterAndOrderPosterImages(images, {
       title: inferredTitle,
