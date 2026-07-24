@@ -10,6 +10,29 @@ const POINTS_PER_APPROVAL = 50;
 
 type RequestStatus = "pending" | "approved" | "rejected";
 
+const REQUEST_TYPE_LABELS: Record<string, string> = {
+  poster: "새 공고",
+  organization: "누락 기관",
+  deadline_error: "마감 오류",
+  duplicate: "중복 공고",
+};
+
+function getTaggedValue(description: string, label: string) {
+  return description.match(new RegExp(`^\\[${label}:\\s*(.+?)\\]$`, "m"))?.[1]?.trim() ?? "";
+}
+
+function getRequestDetails(description: string) {
+  const requestType = getTaggedValue(description, "제보유형") || "poster";
+  return {
+    requestType,
+    typeLabel: REQUEST_TYPE_LABELS[requestType] ?? requestType,
+    sourceUrl: getTaggedValue(description, "공고URL"),
+    organizationName: getTaggedValue(description, "기관명"),
+    reportedDeadline: getTaggedValue(description, "제보마감일"),
+    body: description.replace(/^\[(?:제보유형|공고URL|기관명|제보마감일):[^\]]*\]\s*$/gm, "").trim(),
+  };
+}
+
 export default function AdminRequestsPage() {
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -186,6 +209,9 @@ export default function AdminRequestsPage() {
       ) : (
         <div className="space-y-4">
           {requests.map((req) => (
+            (() => {
+              const details = getRequestDetails(req.description ?? "");
+              return (
             <div
               key={req.id}
               className="bg-white dark:bg-slate-800 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden"
@@ -212,12 +238,17 @@ export default function AdminRequestsPage() {
                 {/* 내용 */}
                 <div className="flex-1 p-5">
                   <div className="flex items-start justify-between gap-4 mb-3">
-                    <div className="flex items-center gap-2 text-xs text-gray-400 font-bold">
-                      <User size={13} />
-                      <span>{req.profiles?.nickname ?? "알 수 없음"}</span>
-                      <span className="text-gray-300 dark:text-gray-600">|</span>
-                      <Clock size={13} />
-                      <span>{new Date(req.created_at).toLocaleDateString()}</span>
+                    <div>
+                      <span className="inline-flex rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-black text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-200">
+                        {details.typeLabel}
+                      </span>
+                      <div className="mt-2 flex items-center gap-2 text-xs text-gray-400 font-bold">
+                        <User size={13} />
+                        <span>{req.profiles?.nickname ?? "알 수 없음"}</span>
+                        <span className="text-gray-300 dark:text-gray-600">|</span>
+                        <Clock size={13} />
+                        <span>{new Date(req.created_at).toLocaleDateString()}</span>
+                      </div>
                     </div>
                     {filter === "approved" && (
                       <span className="flex items-center gap-1 text-xs font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 px-2 py-1 rounded-lg">
@@ -233,9 +264,21 @@ export default function AdminRequestsPage() {
                     </div>
                   )}
 
+                  {(details.organizationName || details.reportedDeadline || details.sourceUrl) && (
+                    <div className="mb-3 flex flex-wrap gap-2 text-xs font-bold">
+                      {details.organizationName && <span className="rounded-lg bg-gray-50 px-2.5 py-1.5 text-gray-600 dark:bg-slate-700 dark:text-gray-200">기관: {details.organizationName}</span>}
+                      {details.reportedDeadline && <span className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200">마감: {details.reportedDeadline}</span>}
+                      {details.sourceUrl && (
+                        <a href={details.sourceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-2.5 py-1.5 text-blue-700 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-200">
+                          <ExternalLink size={12} /> 공고 원문
+                        </a>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex items-start gap-1.5 text-sm text-gray-700 dark:text-gray-200 font-bold mb-4">
                     <FileText size={14} className="text-gray-400 shrink-0 mt-0.5" />
-                    <p className="line-clamp-3">{req.description}</p>
+                    <p className="line-clamp-3">{details.body}</p>
                   </div>
 
                   {req.rejection_reason && (
@@ -266,6 +309,8 @@ export default function AdminRequestsPage() {
                 </div>
               </div>
             </div>
+              );
+            })()
           ))}
         </div>
       )}

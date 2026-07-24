@@ -5,8 +5,16 @@ import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { Header } from "../../components/Header";
 import { BottomNav } from "../../components/BottomNav";
-import { Camera, ChevronLeft, Loader2, MapPin, FileText, Star } from "lucide-react";
+import { Camera, ChevronLeft, Loader2, MapPin, FileText, Star, Link2, Building2, CalendarClock, Copy } from "lucide-react";
 import toast from "react-hot-toast";
+
+const REQUEST_TYPES = [
+  { value: "poster", label: "새 공고", description: "빠진 공고나 포스터", icon: FileText },
+  { value: "organization", label: "누락 기관", description: "추가할 기관·센터", icon: Building2 },
+  { value: "deadline_error", label: "마감 오류", description: "잘못된 기간·마감일", icon: CalendarClock },
+  { value: "duplicate", label: "중복 공고", description: "같은 공고가 여러 개", icon: Copy },
+] as const;
+type RequestType = typeof REQUEST_TYPES[number]["value"];
 
 export default function PosterRequestPage() {
   const router = useRouter();
@@ -16,8 +24,16 @@ export default function PosterRequestPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
+  const [requestType, setRequestType] = useState<RequestType>("poster");
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [organizationName, setOrganizationName] = useState("");
+  const [reportedDeadline, setReportedDeadline] = useState("");
 
   useEffect(() => {
+    const requestedType = new URLSearchParams(window.location.search).get("type");
+    if (REQUEST_TYPES.some((item) => item.value === requestedType)) {
+      setRequestType(requestedType as RequestType);
+    }
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session?.user) {
         toast.error("로그인이 필요합니다.");
@@ -57,11 +73,20 @@ export default function PosterRequestPage() {
         imageUrl = publicUrl;
       }
 
+      const structuredDescription = [
+        `[제보유형: ${requestType}]`,
+        sourceUrl.trim() ? `[공고URL: ${sourceUrl.trim()}]` : "",
+        organizationName.trim() ? `[기관명: ${organizationName.trim()}]` : "",
+        reportedDeadline ? `[제보마감일: ${reportedDeadline}]` : "",
+        "",
+        description.trim(),
+      ].filter((line, index, lines) => line || (index > 0 && lines[index - 1])).join("\n").trim();
+
       const { error } = await supabase.from("poster_requests").insert({
         requester_id: user.id,
         image_url: imageUrl,
         location: location.trim() || null,
-        description: description.trim(),
+        description: structuredDescription,
         status: "pending",
       });
       if (error) throw error;
@@ -84,7 +109,7 @@ export default function PosterRequestPage() {
             <ChevronLeft size={24} />
           </button>
           <div>
-            <h1 className="text-2xl font-black text-gray-900 dark:text-white">포스터 등록 요청</h1>
+            <h1 className="text-2xl font-black text-gray-900 dark:text-white">통합 제보</h1>
             <p className="text-sm text-gray-400 font-bold mt-0.5">승인 시 <span className="text-blue-600 dark:text-blue-400">50포인트</span> 적립</p>
           </div>
         </div>
@@ -98,6 +123,63 @@ export default function PosterRequestPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
+          <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {REQUEST_TYPES.map((item) => {
+              const Icon = item.icon;
+              const selected = requestType === item.value;
+              return (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() => setRequestType(item.value)}
+                  className={`rounded-2xl border p-3 text-left transition ${
+                    selected
+                      ? "border-blue-600 bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200"
+                      : "border-gray-100 bg-white text-gray-500 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-300"
+                  }`}
+                >
+                  <Icon size={18} />
+                  <p className="mt-2 text-sm font-black">{item.label}</p>
+                  <p className="mt-1 text-[11px] font-bold opacity-70">{item.description}</p>
+                </button>
+              );
+            })}
+          </section>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+              <span className="mb-2 flex items-center gap-1.5 text-xs font-black text-gray-400"><Link2 size={13} /> 공고 URL</span>
+              <input
+                type="url"
+                value={sourceUrl}
+                onChange={(event) => setSourceUrl(event.target.value)}
+                placeholder="https://..."
+                className="w-full bg-transparent text-sm font-bold text-gray-900 outline-none dark:text-white"
+              />
+            </label>
+            <label className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+              <span className="mb-2 flex items-center gap-1.5 text-xs font-black text-gray-400"><Building2 size={13} /> 기관명</span>
+              <input
+                value={organizationName}
+                onChange={(event) => setOrganizationName(event.target.value)}
+                placeholder="기관 또는 센터 이름"
+                className="w-full bg-transparent text-sm font-bold text-gray-900 outline-none dark:text-white"
+              />
+            </label>
+          </div>
+
+          {requestType === "deadline_error" && (
+            <label className="block rounded-2xl border border-gray-100 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+              <span className="mb-2 flex items-center gap-1.5 text-xs font-black text-gray-400"><CalendarClock size={13} /> 올바른 마감일</span>
+              <input
+                type="date"
+                value={reportedDeadline}
+                onChange={(event) => setReportedDeadline(event.target.value)}
+                className="bg-transparent text-sm font-bold text-gray-900 outline-none dark:text-white"
+              />
+            </label>
+          )}
+
           {/* 사진 업로드 */}
           <section className="bg-white dark:bg-slate-800 rounded-[2rem] border-2 border-dashed border-gray-100 dark:border-slate-700 hover:border-blue-200 dark:hover:border-blue-700 transition-all overflow-hidden">
             <input
