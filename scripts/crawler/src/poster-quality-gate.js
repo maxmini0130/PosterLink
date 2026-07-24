@@ -116,6 +116,7 @@ const GENERIC_TITLE_PATTERNS = [
   /^@\uCCAD\uB144\uBABD\uB545\uC815\uBCF4\uD1B5$/i,
   /^\uB3D9\uC544\uC77C\uBCF4$/i,
   /^\(\uC8FC\)\uC5D0\uB4C0\uC70C$/i,
+  /^\uD37C\uC2A4\uD2B8\uC778\uC7A1\s*\(\uC8FC\)$/i,
   /^\uC5D0\uC774\uBE14\uB7F0(?:\s*\uC548\uB0B4)?$/i,
   /^\uC11C\uC6B8\uD2B9\uBCC4\uC2DC\s+\S+\uAD6C$/i,
 ];

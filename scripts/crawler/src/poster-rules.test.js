@@ -99,6 +99,19 @@ test("attachment failure reasons are standardized", () => {
   assert.equal(getAttachmentFailureCode({ kind: "docx", status: "extracted" }), null);
 });
 
+test("reject a provider-only title captured from a youth notice", () => {
+  const result = evaluatePosterQuality({
+    title: "\uD37C\uC2A4\uD2B8\uC778\uC7A1(\uC8FC)",
+    source_org_name: "\uCCAD\uB144\uBABD\uB545\uC815\uBCF4\uD1B5",
+    summary_short: "\uCCAD\uB144 \uC9C0\uC6D0 \uD504\uB85C\uADF8\uB7A8\uC758 \uADFC\uBB34\uC870\uAC74\uACFC \uC2E0\uCCAD \uBC29\uBC95\uC744 \uC548\uB0B4\uD569\uB2C8\uB2E4.",
+    source_key: "https://youth.seoul.go.kr/example",
+    images: ["https://example.test/poster.jpg"],
+  });
+
+  assert.equal(result.decision, "reject");
+  assert.ok(result.issues.some((issue) => issue.code === "generic-title"));
+});
+
 for (const title of [
   "[마포구가족센터] 공고 제 2026-5호 마포구가족센터 직원 채용공고",
   "마포구가족센터 - 건강관리 교육 및 근력운동 프로그램 강사 모집(안내)",
