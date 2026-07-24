@@ -79,3 +79,22 @@ test("reject recruitment screening schedule follow-up notices", () => {
   });
   assert.equal(result?.rule, "recruitment-screening-schedule");
 });
+
+test("do not reject a participant recruitment because shared detail text contains a timetable", () => {
+  const result = getPostExclusionReason({
+    title: "2026 전통성년식 개최 및 참가 학생 모집",
+    content: "문화원 공통 메뉴 2026년 3분기 문화학교 시간표",
+    collectionSourceSlug: "mapo-culture",
+  });
+  assert.equal(result, null);
+});
+
+for (const title of [
+  "[2026 마포구민노래자랑] 본선 진출자 공지",
+  "2025 삼개시낭송경연대회 본선 진출 대상자 안내",
+  "2026 정월대보름 민속놀이 행사 취소 알림",
+]) {
+  test(`reject result or cancellation follow-up: ${title}`, () => {
+    assert.ok(getPostExclusionReason({ title, collectionSourceSlug: "mapo-culture" }));
+  });
+}

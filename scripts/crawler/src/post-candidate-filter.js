@@ -1,8 +1,14 @@
 const TITLE_EXCLUDE_RULES = [
   {
     name: "selected-list-or-award-list",
-    pattern: /\uCD5C\uC885\s*\uC120\uBC1C\s*\uBA85\uB2E8|\uC120\uBC1C\s*\uBA85\uB2E8|\uCC38\uAC00\uC0C1\s*\uBA85\uB2E8|\uC218\uC0C1(?:\uC790)?\s*\uBA85\uB2E8/i,
+    pattern: /\uCD5C\uC885\s*\uC120\uBC1C\s*\uBA85\uB2E8|\uC120\uBC1C\s*\uBA85\uB2E8|\uCC38\uAC00\uC0C1\s*\uBA85\uB2E8|\uC218\uC0C1(?:\uC790)?\s*\uBA85\uB2E8|\uBCF8\uC120\s*\uC9C4\uCD9C(?:\uC790|\s*\uB300\uC0C1\uC790)?\s*(?:\uACF5\uC9C0|\uC548\uB0B4)?/i,
     reason: "selected/result list announcement",
+  },
+  {
+    name: "event-cancellation-notice",
+    pattern: /\uD589\uC0AC\s*\uCDE8\uC18C(?:\s*\uC54C\uB9BC|\s*\uC548\uB0B4|\s*\uACF5\uC9C0)?/i,
+    reason: "event cancellation notice is not an active event poster",
+    titleOnly: true,
   },
   {
     name: "service-operation-end",
@@ -40,6 +46,7 @@ const TITLE_EXCLUDE_RULES = [
     name: "facility-schedule-or-parking-control",
     pattern: /(?:\uC2DC\uAC04\uD45C|\uC77C\uC815\uD45C|\uC77C\uC815\s*\uD45C|\uAD00\uB0B4\s*\uB300\uAD00\s*\uC77C\uC815|\uC6D4\s*\uAD00\uB0B4\s*\uB300\uAD00|\uBCFC\uB9C1\uC7A5\s*\uC2DC\uAC04\uD45C|\uC8FC\uCC28\uC7A5\s*\uC77C\uBD80\s*\uD1B5\uC81C|\uC8FC\uCC28\s*\uD1B5\uC81C|\uD648\uD398\uC774\uC9C0\s*\uC774\uC6A9|\uD68C\uC6D0\s*\uC811\uC218\s*\uBC0F\s*\uC774\uC6A9\s*\uC548\uB0B4)/i,
     reason: "facility schedule, timetable, homepage, or parking-control notice is not a poster notice",
+    titleOnly: true,
   },
   {
     name: "resident-registration-administrative-notice",
