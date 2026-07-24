@@ -1013,36 +1013,19 @@ export default function AdminPostersPage() {
     }
 
     setBulkProcessing(true);
-    const { data: { user } } = await supabase.auth.getUser();
     const ids = rejectedPosters.map((poster) => poster.id);
-    const deleteResults = await Promise.all(
-      ids.map(async (id) => {
-        const response = await fetch(`/api/posters/${id}?status=rejected`, { method: "DELETE" });
-        const result = await response.json().catch(() => ({}));
-        return { id, ok: response.ok, error: result.error as string | undefined };
-      })
-    );
-    const failedDelete = deleteResults.find((result) => !result.ok);
+    const response = await fetch("/api/posters/batch", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    const result = await response.json().catch(() => ({}));
 
-    if (failedDelete) {
-      toast.error(failedDelete.error ?? "Failed to delete poster.");
+    if (!response.ok) {
+      toast.error(result.error ?? "Failed to delete posters.");
       setBulkProcessing(false);
       return;
     }
-
-    await supabase.from("admin_actions").insert(rejectedPosters.map((poster) => ({
-      actor_user_id: user?.id ?? null,
-      target_type: "poster",
-      target_id: poster.id,
-      action_type: "delete",
-      action_reason: "rejected poster permanently deleted",
-      metadata_json: {
-        title: poster.title,
-        status: "rejected",
-        source_key: poster.source_key ?? null,
-        bulk: true,
-      },
-    })));
 
     toast.success(`반려 포스터 ${rejectedPosters.length}건을 완전 삭제했습니다.`);
     setSelectedIds([]);
