@@ -1,5 +1,17 @@
 const TITLE_EXCLUDE_RULES = [
   {
+    name: "news-operation-report",
+    pattern: /^\s*\[\uC18C\uC2DD\].*(?:\uC6B4\uC601|\uC9C4\uD589|\uAC1C\uCD5C).*\(\s*\d{4}\s*[.\-/]\s*\d{1,2}\s*[.\-/]\s*\d{1,2}\s*[.)]/i,
+    reason: "completed-program news report is not an active recruitment or event poster",
+    titleOnly: true,
+  },
+  {
+    name: "organization-head-recruitment",
+    pattern: /(?:\uBB38\uD654\uC6D0\uC7A5|\uC774\uC0AC\uC7A5|\uC13C\uD130\uC7A5)\s*\uBAA8\uC9D1\s*\uACF5\uACE0/i,
+    reason: "organization head recruitment is an administrative personnel notice",
+    titleOnly: true,
+  },
+  {
     name: "selected-list-or-award-list",
     pattern: /\uCD5C\uC885\s*\uC120\uBC1C\s*\uBA85\uB2E8|\uC120\uBC1C\s*\uBA85\uB2E8|\uCC38\uAC00\uC0C1\s*\uBA85\uB2E8|\uC218\uC0C1(?:\uC790)?\s*\uBA85\uB2E8|\uBCF8\uC120\s*\uC9C4\uCD9C(?:\uC790|\s*\uB300\uC0C1\uC790)?\s*(?:\uACF5\uC9C0|\uC548\uB0B4)?/i,
     reason: "selected/result list announcement",
@@ -337,6 +349,19 @@ export function getPostExclusionReason(post = {}) {
     ...(Array.isArray(post.images) ? post.images : []),
   ].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
   if (!text) return null;
+
+  const titleYear = Number(title.match(/^\s*(\d{4})\s*년?/)?.[1]);
+  if (
+    Number.isFinite(titleYear)
+    && titleYear < new Date().getFullYear()
+    && /경연대회|축제|행사|공연|체험/.test(title)
+    && !/모집|신청|접수/.test(title)
+  ) {
+    return {
+      rule: "stale-year-event-title",
+      reason: "past-year event title is not an active poster notice",
+    };
+  }
 
   const matchedRule = TITLE_EXCLUDE_RULES.find((rule) => (
     rule.pattern.test(title) || (!rule.titleOnly && rule.pattern.test(text))

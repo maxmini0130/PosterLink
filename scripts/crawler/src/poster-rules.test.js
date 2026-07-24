@@ -167,3 +167,18 @@ for (const title of [
     assert.ok(getPostExclusionReason({ title, collectionSourceSlug: "mapo-culture" }));
   });
 }
+
+test("reject a past-year event title without active recruitment wording", () => {
+  const result = getPostExclusionReason({ title: "2025 삼개시낭송경연대회" });
+  assert.equal(result?.rule, "stale-year-event-title");
+});
+
+for (const title of [
+  "[소식] 마포청소년문화의집, 사회정서프로그램 '마음CONNECT'운영(2026. 06. 13.)",
+  "[소식] 서울 마포청소년문화의집, AI부터 UAM까지… 미래기술 직업체험 운영(2026. 07. 06.)",
+  "제8대 마포문화원장 모집 공고",
+]) {
+  test(`reject administrative news or head recruitment: ${title}`, () => {
+    assert.ok(getPostExclusionReason({ title }));
+  });
+}
