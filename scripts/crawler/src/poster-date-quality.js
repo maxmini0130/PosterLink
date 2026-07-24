@@ -92,6 +92,7 @@ function extractFullDates(text) {
       raw,
       weekday: match[5] ?? null,
       index: (match.index ?? 0) + (match[1]?.length ?? 0),
+      endIndex: pattern.lastIndex,
     });
   }
 
@@ -121,14 +122,59 @@ function applicationSegments(text) {
   return segments;
 }
 
+const DEADLINE_KEYWORD_PATTERN = /까지|마감|종료|기한|선착순/;
+
+// 인접한 두 날짜 사이의 텍스트가 "실제 범위 연결어"인지 판단한다.
+// 요일 표기(월)와 시:분 토큰을 제거한 뒤, 남은 텍스트가 짧고 다른 숫자(=또 다른
+// 날짜/수치)가 없으며 범위 연결어를 포함해야 한다. 이렇게 하면 프로그램 일정 날짜와
+// 신청기간 날짜가 한 세그먼트에 섞여도 엉뚱하게 페어링되지 않는다.
+function isTightRange(between) {
+  const cleaned = between
+    .replace(/\d{1,2}\s*:\s*\d{2}/g, " ") // 09:00 같은 시각 토큰
+    .replace(/\([월화수목금토일]\)/g, " ") // (월) 같은 요일 표기
+    .trim();
+  if (cleaned.length > 12) return false;
+  if (/\d/.test(cleaned)) return false; // 사이에 다른 숫자가 있으면 별개 날짜가 낀 것
+  return RANGE_CONNECTOR_PATTERN.test(cleaned);
+}
+
+// 마감 키워드(까지/마감/종료/기한/선착순) 기준 30자 이내에서 가장 가까운 날짜를
+// 단일 마감일로 고른다. 키워드에서 멀리 떨어진 프로그램 일정 날짜를 마감으로
+// 오인하지 않는다.
+function pickDeadlineNearKeyword(segment, dates) {
+  const keyword = segment.match(DEADLINE_KEYWORD_PATTERN);
+  if (!keyword) return null;
+  const kwIndex = keyword.index ?? 0;
+
+  let best = null;
+  let bestDistance = Infinity;
+  for (const date of dates) {
+    const distance = date.endIndex <= kwIndex ? kwIndex - date.endIndex : date.index - kwIndex;
+    if (distance >= 0 && distance <= 30 && distance < bestDistance) {
+      best = date;
+      bestDistance = distance;
+    }
+  }
+
+  return best;
+}
+
 function findApplicationRange(text) {
   for (const segment of applicationSegments(text)) {
     const dates = extractFullDates(segment);
-    if (dates.length >= 2 && RANGE_CONNECTOR_PATTERN.test(segment)) {
-      return { start: dates[0], end: dates[1], segment };
+
+    // 1) 인접한 두 날짜가 실제 범위 연결어로 이어진 경우에만 start~end 범위로 인정
+    for (let i = 0; i + 1 < dates.length; i += 1) {
+      const between = segment.slice(dates[i].endIndex, dates[i + 1].index);
+      if (isTightRange(between)) {
+        return { start: dates[i], end: dates[i + 1], segment };
+      }
     }
-    if (dates.length === 1 && /까지|마감|종료|기한|선착순/.test(segment)) {
-      return { start: null, end: dates[0], segment };
+
+    // 2) 범위가 없으면 마감 키워드 근처의 단일 날짜만 마감일로 채택
+    if (DEADLINE_KEYWORD_PATTERN.test(segment)) {
+      const deadline = pickDeadlineNearKeyword(segment, dates);
+      if (deadline) return { start: null, end: deadline, segment };
     }
   }
 
