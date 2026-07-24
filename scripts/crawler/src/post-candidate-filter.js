@@ -12,6 +12,30 @@ const TITLE_EXCLUDE_RULES = [
     titleOnly: true,
   },
   {
+    name: "local-administrative-recruitment",
+    pattern: /(?:\d+\s*)?\uD1B5\uC7A5\s*\uBAA8\uC9D1(?:\s*\uC7AC\uACF5\uACE0|\s*\uACF5\uACE0)?|\uC9C0\uC5ED\uC0AC\uD68C\uBCF4\uC7A5\uD611\uC758\uCCB4\s*\uC704\uC6D0.*\uBAA8\uC9D1/i,
+    reason: "local administrative role recruitment is not a public program poster",
+    titleOnly: true,
+  },
+  {
+    name: "weekly-job-information",
+    pattern: /\uC81C?\s*\d+\s*\uD638\s*\uC8FC\uAC04\uAD6C\uC778\uC815\uBCF4/i,
+    reason: "weekly job-information bulletin is not an individual poster",
+    titleOnly: true,
+  },
+  {
+    name: "election-administrative-guide",
+    pattern: /\uAD6D\uC678\uBD80\uC7AC\uC790\uC2E0\uACE0|\uC120\uAC70\uC77C\s*\uD22C\uD45C\uC18C|\uC120\uAC70\uC77C\uD22C\uD45C\uC18C/i,
+    reason: "election administrative guide is not a program or event poster",
+    titleOnly: true,
+  },
+  {
+    name: "completed-activity-report",
+    pattern: /(?:\uC131\uB8CC|\uAC10\uC0AC\uD328\s*\uC218\uC0C1|\uC870\uAC74\s*TOP\s*5\s*\uC120\uC815|\uD504\uB85C\uC81D\uD2B8.*\uC131\uB8CC).*\(\s*\d{4}\s*[.\-/]\s*\d{1,2}\s*[.\-/]\s*\d{1,2}\s*[.)]/i,
+    reason: "completed activity report is not an active poster notice",
+    titleOnly: true,
+  },
+  {
     name: "selected-list-or-award-list",
     pattern: /\uCD5C\uC885\s*\uC120\uBC1C\s*\uBA85\uB2E8|\uC120\uBC1C\s*\uBA85\uB2E8|\uCC38\uAC00\uC0C1\s*\uBA85\uB2E8|\uC218\uC0C1(?:\uC790)?\s*\uBA85\uB2E8|\uBCF8\uC120\s*\uC9C4\uCD9C(?:\uC790|\s*\uB300\uC0C1\uC790)?\s*(?:\uACF5\uC9C0|\uC548\uB0B4)?/i,
     reason: "selected/result list announcement",
@@ -58,8 +82,9 @@ const TITLE_EXCLUDE_RULES = [
   },
   {
     name: "web-accessibility-mark",
-    pattern: /\uC6F9\s*\uC811\uADFC\uC131|\uD488\uC9C8\s*\uC778\uC99D\s*\uB9C8\uD06C|\uACFC\uD559\uAE30\uC220\uC815\uBCF4\uD1B5\uC2E0\uBD80|\bWA\b\s*(?:\uB9C8\uD06C|\uC778\uC99D)/i,
+    pattern: /\uC6F9\s*\uC811\uADFC\uC131|\uD488\uC9C8\s*\uC778\uC99D\s*\uB9C8\uD06C|\bWA\b\s*(?:\uB9C8\uD06C|\uC778\uC99D)/i,
     reason: "web accessibility mark/certification asset is not a poster",
+    titleOnly: true,
   },
   {
     name: "facility-schedule-or-parking-control",

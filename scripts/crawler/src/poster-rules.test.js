@@ -157,6 +157,15 @@ test("do not reject a participant recruitment because shared detail text contain
   assert.equal(result, null);
 });
 
+test("do not reject a recruitment title because shared detail text contains a web accessibility mark", () => {
+  const result = getPostExclusionReason({
+    title: "과학기술정보통신부 2026년 AI 글래스 개발자 아카데미 교육생 모집",
+    content: "하단 공통 영역 웹 접근성 품질 인증 마크",
+    collectionSourceSlug: "youth-seoul",
+  });
+  assert.equal(result, null);
+});
+
 for (const title of [
   "[2026 마포구민노래자랑] 본선 진출자 공지",
   "2025 삼개시낭송경연대회 본선 진출 대상자 안내",
@@ -177,6 +186,12 @@ for (const title of [
   "[소식] 마포청소년문화의집, 사회정서프로그램 '마음CONNECT'운영(2026. 06. 13.)",
   "[소식] 서울 마포청소년문화의집, AI부터 UAM까지… 미래기술 직업체험 운영(2026. 07. 06.)",
   "제8대 마포문화원장 모집 공고",
+  "통장 모집 공고(제11통, 제13통)",
+  "18통장 모집 공고",
+  "제1193호 주간구인정보",
+  "국민투표 국외부재자신고 접수 전자우편 주소 공고",
+  "전입신고에 따른 선거일투표소 안내",
+  "구립마포청소년문화의집, 보훈문화 확산 공로로 감사패 수상(2026.06.14.)",
 ]) {
   test(`reject administrative news or head recruitment: ${title}`, () => {
     assert.ok(getPostExclusionReason({ title }));
