@@ -301,6 +301,8 @@ f6ea238 feat: add institution coverage grading (Phase 4 엔지니어링)
 e93a211 docs: add detailed work log for SNS_INGESTION.md Phase 0-4 implementation
 e7c27e4 fix: dedupe shared-blog institutions in coverage measurement + batch ingest
 8ea9397 feat: seed 소상공인시장진흥공단/기술보증기금/신용보증재단중앙회
+22438f5 docs: update SNS ingestion work log with Phase 4 institution data progress
+138120e feat: seed 17개 시도 지역신용보증재단
 ```
 
 ## 7. 새로 생기거나 바뀐 파일 (전체 20개 + 후속 마이그레이션 3개)
@@ -343,16 +345,44 @@ e7c27e4 fix: dedupe shared-blog institutions in coverage measurement + batch ing
   휴리스틱만으로 판단해서 다소 거칠음).
 
 ### 8-2. Phase 4 기관 데이터 계속 채우기
+
+**⚠️ 2026-07-27 사용자 결정: OPENAI_API_KEY가 들어올 때까지 실제 블로그
+"수집"(`naver-blog-ingester.js` 실행, `--all-enabled` 포함)은 잠시 멈춘다.**
+이유: API 키 없이 수집하면 애매한 글이 전부 "소식"으로 기본값 처리되는데,
+실제로 `semas`(`marketagency`)·`kibo`(`techkibo`) 블로그를 수집해보니 진짜
+지원사업 모집 공고(예: "혁신 소상공인 AI 활용지원 사업 참여 소상공인 모집",
+"기보 제19기 기보벤처캠프 참여기업 모집")는 휴리스틱으로 잘 잡혔지만,
+"인천지역본부 전통시장 시니어 디지털 지원단"이라는 이름으로 올라온 개별
+전통시장 상점 홍보성 블로그 글 30여 건도 전부 "소식"으로 저장돼버렸다 —
+이건 진짜 판단이 아니라 API 키가 없어서 나온 안전 기본값이라, 포스터링크의
+취지("포스터를 모으는 사이트")와 안 맞는 노이즈가 계속 쌓이는 셈이었다.
+**기관 발굴/등록(홈페이지·게시판·블로그ID를 찾아서 collection_sources에
+넣는 것)은 분류를 거치지 않으므로 계속 진행해도 된다** — 멈추는 건 오직
+"실제 콘텐츠를 poster_notice_candidates에 적재하는" 단계다.
+`measure-institution-coverage.js`도 저장은 안 하고 등급 계산만 하므로 계속
+돌려도 안전하다.
+
+이미 실행된 결과(참고): `semas`·`kibo` 블로그에서 각 50건씩, 총 100건이
+`poster_notice_candidates`에 신규 생성됐다(현재 DB 전체:
+`poster_notice_candidates` 549건[공고 422/소식 127], `notice_sightings`
+171건). 키가 들어오면 이 127건의 "소식" 전체를 실제 LLM 라우터로 재분류하는
+일괄 재처리가 필요하다(raw는 그대로 있으니 재크롤 없이 가능 — Phase 2
+완료기준 그대로).
+
 - ~~소상공인시장진흥공단·기술보증기금·신용보증재단중앙회 목록/URL~~ → 완료.
-- 창조경제혁신센터 16개 지역(부산·대구 제외)의 facebook/instagram 계정 개별
-  확인(블로그는 19개 전부 공통값으로 이미 채움).
-- **신용보증재단 17개 시도 지역재단**(서울신보/경기신보 등, 각각 별도 법인·
-  별도 사이트) — 아직 하나도 확인 안 함. koreg.or.kr의 "신용보증재단 찾기"
-  메뉴에서 목록/링크를 얻을 수 있을 것으로 보임.
+- ~~신용보증재단 17개 시도 지역재단 목록/홈페이지~~ → 완료(koreg.or.kr
+  공식 페이지에서 이름-링크 정확히 매칭, 17개 전부 생존 확인). **단, 각
+  재단의 실제 공고 게시판 하위 경로·SNS 계정은 아직 개별 미확인**(지금은
+  홈페이지 URL을 임시로 넣어둠).
+- 창조경제혁신센터 16개 지역(부산·대구 제외)의 facebook/instagram 계정
+  개별 확인(블로그는 19개 전부 공통값으로 이미 채움) — 안전하게 계속
+  가능하지만 실용적 가치는 낮음(코드에서 아직 안 씀).
 - 광역/기초 지자체 경제·일자리과는 아직 손 안 댐 — beachhead 우선순위상
   가장 나중이어도 될 항목.
-- 새로 채워진 기관들(semas/kibo)에도 `measure-institution-coverage.js` 돌려서
-  등급 산정 → `sns_enabled` 세팅(지금은 신규 등록만 하고 아직 측정 안 돌림).
+- `semas`·`kibo`에 `measure-institution-coverage.js`를 실행해서 실제로
+  등급 산정함 — **둘 다 게시판 크롤 대상이 아니었는데 블로그에 최근 3개월
+  실제 공고가 있어서 정확히 "SNS-only" → `sns_enabled=true`로 판정됨**
+  (Phase 4 취지 그대로 실증). `mapo-gu`·19개 CCEI는 전부 "게시판완결".
 
 ### 8-3. 구조적으로 남은 것 (설계상 자연스러운 다음 단계)
 - **이미지 phash dedup 미구현**: `notice_sightings.image_phash` 컬럼은 있지만
