@@ -41,6 +41,9 @@ import {
   findBestPosterDuplicate,
   normalizeSourceUrl,
 } from "./poster-duplicate-detector.js";
+import { evaluateRelevanceHeuristic } from "./relevance-heuristic.js";
+import { routePosterRelevance } from "./poster-relevance-router.js";
+import { parseDeadlineText } from "./deadline-parser.js";
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)?.trim();
 const SUPABASE_KEY = (process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)?.trim();
@@ -1021,11 +1024,17 @@ async function upsertNoticeCandidate(post, {
   finalDeadline,
   fieldVerification,
   quality,
+  relevanceRoute,
+  deadlineParse,
 }) {
   const readableInfo = buildReadableNoticeInfo(post);
   const summaryShort = readableInfo.summaryShort;
   const summaryLong = readableInfo.summaryLong;
   const enrichedFieldVerification = mergeReadableNoticeIntoFieldVerification(fieldVerification ?? {}, post, readableInfo);
+  // SNS_INGESTION.md Phase 2 라우터/마감일 파서 출력 → poster_notice_candidates(=items) 신규 컬럼.
+  // deadlineParse.applyEnd가 있으면 기존 regex/필드검증 마감일(finalDeadline)보다 우선한다
+  // (라우터가 원문에서 다시 뽑은 deadline_text 기반이라 더 근거가 명확함).
+  const applyEndAt = deadlineParse?.applyEnd ?? finalDeadline ?? null;
   const record = sanitizeForPostgrest({
     source_key: sourceKey,
     source_url: sourceUrl,
@@ -1040,11 +1049,17 @@ async function upsertNoticeCandidate(post, {
     board_name: post.board ?? null,
     category_name: post.category ?? null,
     notice_date: toIsoOrNull(post.date ?? post.createdAt ?? post.publishedAt),
-    application_end_at: finalDeadline ? toIsoOrNull(finalDeadline) : null,
+    application_start_at: deadlineParse?.applyStart ? toIsoOrNull(deadlineParse.applyStart) : null,
+    application_end_at: applyEndAt ? toIsoOrNull(applyEndAt) : null,
     reason: "poster image missing; stored as notice candidate",
     quality_issues: quality?.issues ?? [],
     field_verification: enrichedFieldVerification,
     raw_payload: post,
+    content_type: relevanceRoute?.route === "소식" ? "소식" : "공고",
+    category: relevanceRoute?.category || null,
+    deadline_type: deadlineParse?.deadlineType ?? null,
+    target: relevanceRoute?.target || null,
+    support_scale: relevanceRoute?.supportScale || null,
   });
 
   const { data: existing, error: existingError } = await supabase
@@ -1527,6 +1542,7 @@ async function uploadToSupabase(filePath) {
   let fail = 0;
   let noticeCandidateSuccess = 0;
   let noticeCandidateDuplicate = 0;
+  let relevanceDiscarded = 0;
   const skippedSourceKeys = [];
   const qualityRejected = [];
   const qualityReview = [];
@@ -1647,6 +1663,44 @@ async function uploadToSupabase(filePath) {
     fieldVerification = mergeReadableNoticeIntoFieldVerification(fieldVerification, post);
 
     if (isTextNoticePost(post, sourceImages)) {
+      // SNS_INGESTION.md Phase 2 — 관련성 분류(Stage 1 휴리스틱 → 애매하면 Stage 4 LLM 라우터).
+      // 크롤 시점(crawler.js)에 이미 확정된 힌트가 있으면 재사용해 LLM 호출을 아낀다.
+      const heuristic = post.relevanceHeuristic ?? evaluateRelevanceHeuristic(post);
+      let relevanceRoute;
+      if (heuristic.route) {
+        relevanceRoute = {
+          route: heuristic.route,
+          category: null,
+          hasDeadline: null,
+          deadlineText: post.deadline ?? null,
+          target: null,
+          supportScale: null,
+          confidence: 1,
+          reason: `heuristic: ${heuristic.reason}`,
+          model: "heuristic",
+        };
+      } else {
+        relevanceRoute = await routePosterRelevance({
+          title: post.title,
+          body: aiContent || post.content,
+          ocrText: post.posterOcr?.ocrText ?? "",
+        });
+      }
+
+      if (relevanceRoute.route === "폐기") {
+        skip++;
+        relevanceDiscarded++;
+        collectionStats.recordRejected(post, `relevance_router:${relevanceRoute.reason}`);
+        process.stdout.write("d");
+        console.log(`\n  관련성 분류(폐기)로 업로드 건너뜀: ${post.title} - ${relevanceRoute.reason}`);
+        continue;
+      }
+
+      const deadlineParse = await parseDeadlineText(
+        relevanceRoute.deadlineText || post.deadline || "",
+        { postedAt: post.date ?? post.createdAt ?? post.publishedAt },
+      );
+
       try {
         const candidateResult = await upsertNoticeCandidate(post, {
           sourceUrl,
@@ -1655,6 +1709,8 @@ async function uploadToSupabase(filePath) {
           finalDeadline,
           fieldVerification,
           quality,
+          relevanceRoute,
+          deadlineParse,
         });
         addNoticeDuplicateCandidate(duplicateCandidates, candidateResult.id, post, sourceKey, sourceUrl, verifiedOrgName, finalDeadline, fieldVerification);
         if (candidateResult.created) {
@@ -1836,6 +1892,7 @@ async function uploadToSupabase(filePath) {
 
   console.log(`  이미지 없는 공고 후보 신규: ${noticeCandidateSuccess}건`);
   console.log(`  이미지 없는 공고 후보 중복: ${noticeCandidateDuplicate}건`);
+  console.log(`  관련성 분류(폐기)로 제외: ${relevanceDiscarded}건`);
 
   const qualityReportPath = await writeUploadQualityReport(filePath, {
     rejected: qualityRejected,

@@ -8,10 +8,13 @@ import PQueue from "p-queue";
 import fs from "fs/promises";
 import path from "path";
 import { classifyPosterImage } from "./poster-image-classifier.js";
+import { classifyPosterImageClip } from "./poster-clip-classifier.js";
+import { extractPosterOcrText } from "./poster-ocr.js";
 import { verifyPosterMatchesNotice } from "./poster-content-verifier.js";
 import { getPostExclusionReason } from "./post-candidate-filter.js";
 import { selectBestPosterImage } from "./poster-image-rules.js";
 import { analyzePostAttachments } from "./attachment-text-extractor.js";
+import { evaluateRelevanceHeuristic } from "./relevance-heuristic.js";
 
 // ── Logger ──────────────────────────────────────
 export const logger = createLogger({
@@ -401,10 +404,26 @@ async function selectVerifiedPosterImage(fullPost, imageSelection) {
   };
 
   for (const candidate of getVerificationCandidates(imageSelection)) {
-    const imageClassification = await classifyPosterImage(candidate.imageUrl, {
-      ...baseContext,
-      rule: candidate.rule,
-    });
+    // SNS_INGESTION.md Phase 2 Stage 2 — 로컬 CLIP으로 값싸게 1차 선별.
+    // CLIP이 "확실히 아니다"라고 판단한 경우에만 유료 GPT Vision 호출을 건너뛴다.
+    const clipTriage = await classifyPosterImageClip(candidate.imageUrl);
+
+    let imageClassification;
+    if (!clipTriage.isPosterLayout) {
+      imageClassification = {
+        isPoster: false,
+        confidence: clipTriage.confidence,
+        reason: `CLIP triage: ${clipTriage.reason}`,
+        visualType: clipTriage.bestLabel,
+        checkedAt: new Date().toISOString(),
+        model: `clip:${clipTriage.model}`,
+      };
+    } else {
+      imageClassification = await classifyPosterImage(candidate.imageUrl, {
+        ...baseContext,
+        rule: candidate.rule,
+      });
+    }
 
     let contentVerification = null;
     if (imageClassification.isPoster) {
@@ -554,6 +573,20 @@ export async function crawlSite(site, adapter, options = {}) {
               continue;
             }
 
+            // SNS_INGESTION.md Phase 2 Stage 1 — 휴리스틱 정규식 관련성 분류.
+            // 인사말/축하 등으로 확정되면 즉시 폐기하고, 그 외에는 Stage 4 LLM 라우터가
+            // 참고할 수 있도록 힌트만 붙여 계속 진행한다(휴리스틱은 여기서 공고를 확정할 뿐
+            // 폐기 외에는 파이프라인을 막지 않는다 — 이미지/업로드 단계는 기존과 동일하게 진행).
+            const relevanceHeuristic = evaluateRelevanceHeuristic(fullPost);
+            if (relevanceHeuristic.route === "폐기") {
+              stats.detailFiltered += 1;
+              rememberSkip(stats, `detail_filter:relevance_heuristic:${relevanceHeuristic.matchedRule}`, fullPost, relevanceHeuristic.reason);
+              seen.add(post.url);
+              logger.info(`  Skip (relevance heuristic: ${relevanceHeuristic.matchedRule}): ${post.title} - ${relevanceHeuristic.reason}`);
+              continue;
+            }
+            fullPost.relevanceHeuristic = relevanceHeuristic;
+
             if (!hasPosterImage(fullPost)) {
               if (isCollectableTextNotice(fullPost)) {
                 allPosts.push(buildTextNoticePost(
@@ -635,12 +668,16 @@ export async function crawlSite(site, adapter, options = {}) {
               continue;
             }
 
+            // SNS_INGESTION.md Phase 2 Stage 3 — 최종 선택된 대표 이미지 1장에 대해서만 OCR.
+            const ocrResult = await extractPosterOcrText(verifiedImage.selectedImageUrl);
+
             const verifiedPost = {
               ...fullPost,
               images: orderImagesWithSelected(fullPost.images, verifiedImage.selectedImageUrl),
               imageClassification: verifiedImage.imageClassification,
               posterContentVerification: verifiedImage.contentVerification,
               posterImageCheck,
+              posterOcr: ocrResult,
             };
 
             allPosts.push(verifiedPost);
