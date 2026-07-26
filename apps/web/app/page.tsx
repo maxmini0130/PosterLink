@@ -96,27 +96,38 @@ export default function Home() {
         const user = session?.user ?? null;
         const nowIso = new Date().toISOString();
 
-        let postersFetched = false;
-        if (user && hideClosedPosters) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("*, regions(name, full_name, level)")
-            .eq("id", user.id)
-            .single();
-          setUserProfile(profile);
+        // 메인 공고 목록 / 마감임박 목록 / 홈 요약 통계는 서로 의존관계가 없으므로
+        // 순차 await 대신 Promise.all로 동시에 실행한다(순차 실행 시 각 단계가
+        // 이전 단계를 기다리면서 전체 로딩 시간이 누적됨 — 홈페이지 체감 속도 저하 원인).
+        const fetchMainPosters = async () => {
+          if (user && hideClosedPosters) {
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("*, regions(name, full_name, level)")
+              .eq("id", user.id)
+              .single();
 
-          const { data: recommendedData, error: rpcError } = await supabase.rpc("get_recommended_posters_v2", {
-            p_user_id: user.id,
-            p_limit: 12,
-          });
+            const { data: recommendedData, error: rpcError } = await supabase.rpc("get_recommended_posters_v2", {
+              p_user_id: user.id,
+              p_limit: 12,
+            });
 
-          if (!rpcError && recommendedData && recommendedData.length > 0) {
-            setPosters(await attachPosterMeta(recommendedData));
-            postersFetched = true;
+            if (!rpcError && recommendedData && recommendedData.length > 0) {
+              return { profileFetched: true as const, profile, posters: await attachPosterMeta(recommendedData) };
+            }
+            // 추천 결과가 없으면 아래 공개 목록으로 폴백(profile은 이미 조회함)
+            const publicDataForUser = await fetchPublicPosters();
+            return { profileFetched: true as const, profile, posters: await attachPosterMeta(publicDataForUser) };
           }
-        }
 
-        if (!postersFetched) {
+          // 원본 로직: user가 없거나 hideClosedPosters가 꺼져 있으면 profile을 조회하지
+          // 않았고 userProfile 기존 값도 건드리지 않았다 — profileFetched=false로 표시해
+          // 아래에서 setUserProfile을 스킵한다(null로 덮어써서 지역 표시가 "전국"으로
+          // 바뀌는 걸 방지).
+          return { profileFetched: false as const, profile: null, posters: await attachPosterMeta(await fetchPublicPosters()) };
+        };
+
+        const fetchPublicPosters = async () => {
           let publicQuery = supabase
             .from("posters")
             .select("id, title, source_org_name, application_end_at, created_at, poster_status, thumbnail_url, source_key, summary_short")
@@ -131,38 +142,52 @@ export default function Home() {
             .limit(36);
 
           if (publicError) throw publicError;
-          setPosters(await attachPosterMeta(publicData ?? []));
+          return publicData ?? [];
+        };
+
+        const fetchUrgentPosters = async () => {
+          const sevenDaysLater = new Date();
+          sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
+
+          const { data: urgentData } = await supabase
+            .from("posters")
+            .select("id, title, source_org_name, application_end_at, created_at, poster_status, thumbnail_url, source_key, summary_short")
+            .eq("poster_status", "published")
+            .gte("application_end_at", nowIso)
+            .lte("application_end_at", sevenDaysLater.toISOString())
+            .order("application_end_at", { ascending: true })
+            .limit(8);
+
+          if (urgentData && urgentData.length > 0) {
+            return { urgentData, urgentPosters: await attachPosterMeta(urgentData) };
+          }
+          return { urgentData: [] as any[], urgentPosters: [] as any[] };
+        };
+
+        const fetchSummary = fetch("/api/home/summary", { cache: "no-store" })
+          .then(async (res) => {
+            if (!res.ok) throw new Error("summary request failed");
+            return (await res.json()) as HomeSummary;
+          })
+          .catch(() => null);
+
+        const [mainResult, urgentResult, summaryResult] = await Promise.all([
+          fetchMainPosters(),
+          fetchUrgentPosters(),
+          fetchSummary,
+        ]);
+
+        if (mainResult.profileFetched) {
+          setUserProfile(mainResult.profile);
         }
-
-        const sevenDaysLater = new Date();
-        sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
-
-        const { data: urgentData } = await supabase
-          .from("posters")
-          .select("id, title, source_org_name, application_end_at, created_at, poster_status, thumbnail_url, source_key, summary_short")
-          .eq("poster_status", "published")
-          .gte("application_end_at", nowIso)
-          .lte("application_end_at", sevenDaysLater.toISOString())
-          .order("application_end_at", { ascending: true })
-          .limit(8);
-
-        if (urgentData && urgentData.length > 0) {
-          setUrgentPosters(await attachPosterMeta(urgentData));
-        } else {
-          setUrgentPosters([]);
-        }
-
-        try {
-          const summaryRes = await fetch("/api/home/summary", { cache: "no-store" });
-          if (!summaryRes.ok) throw new Error("summary request failed");
-          setHomeSummary(await summaryRes.json());
-        } catch {
-          setHomeSummary((prev) => ({
-            ...prev,
-            activePosters: prev.activePosters,
-            dueThisWeek: urgentData?.length ?? 0,
-          }));
-        }
+        setPosters(mainResult.posters);
+        setUrgentPosters(urgentResult.urgentPosters);
+        setHomeSummary(
+          summaryResult ?? {
+            ...emptyHomeSummary,
+            dueThisWeek: urgentResult.urgentData.length,
+          },
+        );
       } catch (error) {
         console.error("Failed to load home data", error);
         setLoadError("공고 데이터를 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.");
