@@ -18,7 +18,8 @@
     "storage:orphans": "node src/cleanup-orphan-storage.js",
     "audit:current": "node src/audit-current-posters.js",
     "embed:backfill": "node src/backfill-poster-embeddings.js",
-    "ingest:naver-blog": "node src/naver-blog-ingester.js"
+    "ingest:naver-blog": "node src/naver-blog-ingester.js",
+    "measure:coverage": "node src/measure-institution-coverage.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.2",

@@ -25,7 +25,7 @@ import { findBestPosterDuplicate } from "./poster-duplicate-detector.js";
 
 const SOURCE_PRIORITY = { 게시판: 1, 네이버블로그: 2, 페이스북: 3, 인스타그램: 3 };
 
-function stripHtml(html) {
+export function stripHtml(html) {
   if (!html) return "";
   return cheerio.load(String(html)).text().replace(/\s+/g, " ").trim();
 }
@@ -282,6 +282,34 @@ export async function ingestNaverBlog(blogId, options = {}) {
   return stats;
 }
 
+// SNS_INGESTION.md Phase 4 완료 기준 — "sns_enabled 플래그가 커버리지 등급에 따라
+// 세팅되고, 블로그 인제스터가 이 플래그를 존중한다." collection_sources에서
+// sns_enabled=true & naver_blog_id 설정된 기관만 순회한다.
+export async function ingestAllEnabledNaverBlogs({ dryRun = false } = {}) {
+  const supabase = createOptionalCollectionSourceClient();
+  if (!supabase) throw new Error("Supabase client unavailable — check SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY env vars");
+
+  const { data: sources, error } = await supabase
+    .from("collection_sources")
+    .select("source_slug,name,naver_blog_id")
+    .eq("sns_enabled", true)
+    .not("naver_blog_id", "is", null);
+  if (error) throw new Error(`collection_sources_load:${error.message}`);
+
+  if (sources.length === 0) {
+    console.log("sns_enabled=true 이면서 naver_blog_id가 설정된 기관이 없습니다.");
+    return [];
+  }
+
+  const results = [];
+  for (const source of sources) {
+    console.log(`\n=== ${source.name} (${source.source_slug}) ===`);
+    const stats = await ingestNaverBlog(source.naver_blog_id, { sourceOrg: source.name, dryRun });
+    results.push({ slug: source.source_slug, name: source.name, ...stats });
+  }
+  return results;
+}
+
 const isDirectExecution = process.argv[1] && process.argv[1].endsWith("naver-blog-ingester.js");
 if (isDirectExecution) {
   const args = process.argv.slice(2);
@@ -293,14 +321,21 @@ if (isDirectExecution) {
   const blogId = getArg("--blog-id");
   const sourceOrg = getArg("--source-org") ?? null;
   const dryRun = args.includes("--dry-run");
+  const runAllEnabled = args.includes("--all-enabled");
 
-  if (!blogId) {
+  if (runAllEnabled) {
+    ingestAllEnabledNaverBlogs({ dryRun }).catch((err) => {
+      console.error("Fatal:", err.message);
+      process.exit(1);
+    });
+  } else if (!blogId) {
     console.error("사용법: node src/naver-blog-ingester.js --blog-id <blogId> [--source-org <기관명>] [--dry-run]");
+    console.error("      또는: node src/naver-blog-ingester.js --all-enabled [--dry-run]  (sns_enabled=true 기관 전체)");
     process.exit(1);
+  } else {
+    ingestNaverBlog(blogId, { sourceOrg, dryRun }).catch((err) => {
+      console.error("Fatal:", err.message);
+      process.exit(1);
+    });
   }
-
-  ingestNaverBlog(blogId, { sourceOrg, dryRun }).catch((err) => {
-    console.error("Fatal:", err.message);
-    process.exit(1);
-  });
 }
