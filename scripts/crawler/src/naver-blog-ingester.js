@@ -301,8 +301,17 @@ export async function ingestAllEnabledNaverBlogs({ dryRun = false } = {}) {
     return [];
   }
 
+  // 여러 기관이 같은 블로그를 공유하는 경우(예: 창조경제혁신센터 19곳의 통합 블로그)
+  // RSS를 중복으로 다시 받지 않도록 blogId 기준으로 한 번만 처리한다.
+  const seenBlogIds = new Set();
   const results = [];
   for (const source of sources) {
+    if (seenBlogIds.has(source.naver_blog_id)) {
+      console.log(`\n=== ${source.name} (${source.source_slug}) — 이미 처리된 블로그(${source.naver_blog_id}), 건너뜀 ===`);
+      continue;
+    }
+    seenBlogIds.add(source.naver_blog_id);
+
     console.log(`\n=== ${source.name} (${source.source_slug}) ===`);
     const stats = await ingestNaverBlog(source.naver_blog_id, { sourceOrg: source.name, dryRun });
     results.push({ slug: source.source_slug, name: source.name, ...stats });

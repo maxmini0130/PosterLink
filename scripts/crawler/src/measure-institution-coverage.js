@@ -46,6 +46,31 @@ async function countBoardAnnouncements(supabase, sourceName, sinceIso) {
   return (posterCount ?? 0) + (candidateCount ?? 0);
 }
 
+// 여러 기관(예: 창조경제혁신센터 19곳)이 통합 블로그 하나를 공유하는 경우가 실제로
+// 있다(ccei_forever). blogId당 RSS 수신+분류를 한 번만 하도록 캐시한다 — 겹침 계산은
+// 기관마다 source_org_name이 달라서 개별로 다시 하되, 비싼 fetch/classify는 재사용.
+const blogClassificationCache = new Map();
+
+async function getClassifiedBlogEntries(blogId) {
+  if (!blogClassificationCache.has(blogId)) {
+    blogClassificationCache.set(blogId, (async () => {
+      const entries = await fetchNaverBlogRss(blogId);
+      const recentEntries = entries.filter((entry) => {
+        const t = new Date(entry.pubDate).getTime();
+        return Number.isFinite(t) && Date.now() - t <= THREE_MONTHS_MS;
+      });
+
+      const routed = [];
+      for (const entry of recentEntries) {
+        const route = await classifyRoute(entry);
+        routed.push({ entry, route });
+      }
+      return routed;
+    })());
+  }
+  return blogClassificationCache.get(blogId);
+}
+
 async function measureSource(supabase, source, duplicateCandidates) {
   const sinceIso = new Date(Date.now() - THREE_MONTHS_MS).toISOString();
   const boardAnnouncementCount = await countBoardAnnouncements(supabase, source.name, sinceIso);
@@ -55,15 +80,10 @@ async function measureSource(supabase, source, duplicateCandidates) {
   let blogEntryCount = 0;
 
   if (source.naver_blog_id) {
-    const entries = await fetchNaverBlogRss(source.naver_blog_id);
-    const recentEntries = entries.filter((entry) => {
-      const t = new Date(entry.pubDate).getTime();
-      return Number.isFinite(t) && Date.now() - t <= THREE_MONTHS_MS;
-    });
-    blogEntryCount = recentEntries.length;
+    const routedEntries = await getClassifiedBlogEntries(source.naver_blog_id);
+    blogEntryCount = routedEntries.length;
 
-    for (const entry of recentEntries) {
-      const route = await classifyRoute(entry);
+    for (const { entry, route } of routedEntries) {
       if (route !== "공고") continue;
       blogAnnouncementCount += 1;
 
