@@ -1,17 +1,17 @@
 // SNS_INGESTION.md Phase 3-1 — 네이버 블로그 RSS 인제스터.
 //
-// RSS(https://blog.naver.com/rss/{blogId})는 인증 없이 무료로 접근 가능하다
+// RSS(https://rss.blog.naver.com/{blogId}.xml)는 인증 없이 무료로 접근 가능하다
 // (검색 API만 네이버 개발자센터 Client ID/Secret이 필요 — 그건 특정 기관 블로그가
 // 아니라 키워드로 여러 블로그를 검색할 때만 쓰므로 이 파일 범위 밖).
 //
 // 파이프라인: RSS raw 저장(무조건, 절대 안 버림) → Phase 2 분류(휴리스틱→LLM 라우터)
 // → 마감일 파서 → Phase 3 dedup/링킹(기존 poster-duplicate-detector.js 재사용).
 //
-// 알려진 한계: dedup은 poster_notice_candidates(=items)까지만 링크한다.
-// notice_sightings.candidate_id는 poster_notice_candidates(id)만 참조하도록
-// Phase 1에서 만들어졌기 때문에, 이미 이미지 검증까지 끝나 posters 테이블로
-// 승격된 공고와 매칭되는 경우는 여기서 자동 병합하지 못한다(로그만 남김).
-// 이 케이스를 자동 처리하려면 posters 테이블과의 연결 스키마를 별도로 확장해야 한다.
+// dedup 매칭 대상은 poster_notice_candidates(=items)와 posters(이미 이미지 검증까지
+// 끝나 승격된 공고) 둘 다다. 전자는 notice_sightings.candidate_id로, 후자는
+// notice_sightings.poster_id로 연결한다(20260726010000 마이그레이션). 필드 병합
+// 정책(3-4)은 poster_notice_candidates끼리 병합할 때만 적용 — posters는 이미 검증
+// 단계가 더 앞서 있으므로 블로그 값으로 덮어쓰지 않고 연결만 한다.
 
 import "./load-env.js";
 import axios from "axios";
@@ -139,8 +139,10 @@ async function linkOrCreateCandidate(supabase, entry, sourceUrl, relevanceRoute,
 
   if (match.decision === "merge" && match.row?.id) {
     if (match.row.duplicateTargetType === "poster") {
-      // 알려진 한계 — 위 파일 헤더 주석 참고. 자동 링크 대신 로그만 남긴다.
-      return { candidateId: null, created: false, note: `matched existing published poster ${match.row.id} (not auto-linked — schema limitation)` };
+      // notice_sightings.poster_id로 직접 연결(20260726010000 마이그레이션).
+      // posters는 poster_notice_candidates보다 검증 단계가 앞서 있으므로 필드 병합은
+      // 하지 않는다 — 이미지 검증까지 끝난 posters 쪽 값이 항상 더 신뢰도가 높다.
+      return { candidateId: null, posterId: match.row.id, created: false };
     }
 
     const { data: existingRow, error: fetchError } = await supabase
@@ -264,9 +266,15 @@ export async function ingestNaverBlog(blogId, options = {}) {
         stats.linked += 1;
         console.log(`  [기존 items에 병합] ${entry.title} -> candidate ${result.candidateId}`);
       }
-    } else {
+    } else if (result.posterId) {
+      const { error: linkError } = await supabase
+        .from("notice_sightings")
+        .update({ poster_id: result.posterId })
+        .eq("id", sighting.id);
+      if (linkError) throw new Error(`sighting_link:${linkError.message}`);
+
       stats.matchedPosterOnly += 1;
-      console.log(`  [참고] ${entry.title} - ${result.note}`);
+      console.log(`  [기존 posters에 연결] ${entry.title} -> poster ${result.posterId}`);
     }
   }
 

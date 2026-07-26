@@ -1017,6 +1017,50 @@ function mergeClassificationIntoFieldVerification(verification = {}, classificat
   };
 }
 
+// SNS_INGESTION.md Phase 3 — 게시판 크롤 결과도 notice_sightings(=sources)에 기록한다.
+// naver-blog-ingester.js는 블로그 쪽 sightings만 쓰고 있었는데, 게시판 쪽이 없으면
+// "공고 1건 : 출처 N건" 구조가 절반만 완성된다. 실패해도 본 업로드 파이프라인을
+// 막지 않도록 에러는 던지지 않고 경고만 남긴다(부가적인 기록이라 위상이 다름).
+export async function upsertBoardNoticeSighting(post, sourceUrl, { candidateId = null, posterId = null } = {}) {
+  try {
+    const { data: existing, error: lookupError } = await supabase
+      .from("notice_sightings")
+      .select("id")
+      .eq("surface_type", "게시판")
+      .eq("source_url", sourceUrl)
+      .maybeSingle();
+
+    if (lookupError) {
+      console.warn(`\n  notice_sighting 조회 실패: ${lookupError.message}`);
+      return;
+    }
+
+    const fields = sanitizeForPostgrest({
+      surface_type: "게시판",
+      source_url: sourceUrl,
+      source_org: post.site ?? null,
+      raw_title: post.title ?? null,
+      raw_body: post.content ?? null,
+      image_url: Array.isArray(post.images) ? post.images[0] ?? null : null,
+      source_priority: 1,
+      crawled_at: post.crawledAt ?? new Date().toISOString(),
+      candidate_id: candidateId,
+      poster_id: posterId,
+    });
+
+    if (existing?.id) {
+      const { error } = await supabase.from("notice_sightings").update(fields).eq("id", existing.id);
+      if (error) console.warn(`\n  notice_sighting 갱신 실패: ${error.message}`);
+      return;
+    }
+
+    const { error } = await supabase.from("notice_sightings").insert(fields);
+    if (error) console.warn(`\n  notice_sighting 생성 실패: ${error.message}`);
+  } catch (error) {
+    console.warn(`\n  notice_sighting 처리 중 오류: ${error.message}`);
+  }
+}
+
 async function upsertNoticeCandidate(post, {
   sourceUrl,
   sourceKey,
@@ -1610,6 +1654,7 @@ async function uploadToSupabase(filePath) {
       await assignPosterCategories(duplicateMatch.row.id, post, categoryMap, classification);
       await assignPosterRegions(duplicateMatch.row.id, post, regionMap, classification);
       await assignPosterAudiences(duplicateMatch.row.id, classification, audienceMap);
+      await upsertBoardNoticeSighting(post, sourceUrl, { posterId: duplicateMatch.row.id });
       process.stdout.write("=");
       console.log(`\n  Duplicate merged into existing poster ${duplicateMatch.row.id}: ${post.title} (${duplicateMatch.score})`);
       continue;
@@ -1713,6 +1758,7 @@ async function uploadToSupabase(filePath) {
           deadlineParse,
         });
         addNoticeDuplicateCandidate(duplicateCandidates, candidateResult.id, post, sourceKey, sourceUrl, verifiedOrgName, finalDeadline, fieldVerification);
+        await upsertBoardNoticeSighting(post, sourceUrl, { candidateId: candidateResult.id });
         if (candidateResult.created) {
           success++;
           noticeCandidateSuccess++;
@@ -1842,6 +1888,7 @@ async function uploadToSupabase(filePath) {
       await assignPosterCategories(existingPoster.id, post, categoryMap, classification);
       await assignPosterRegions(existingPoster.id, post, regionMap, classification);
       await assignPosterAudiences(existingPoster.id, classification, audienceMap);
+      await upsertBoardNoticeSighting(post, sourceUrl, { posterId: existingPoster.id });
       process.stdout.write("-");
       continue;
     }
@@ -1875,6 +1922,7 @@ async function uploadToSupabase(filePath) {
     await assignPosterRegions(posterId, post, regionMap, classification);
     await assignPosterAudiences(posterId, classification, audienceMap);
     addDuplicateCandidate(duplicateCandidates, posterId, posterRecord, post, sourceUrl, storedImages, linkEntries);
+    await upsertBoardNoticeSighting(post, sourceUrl, { posterId });
 
     success++;
     collectionStats.recordCreated(post);
