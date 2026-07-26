@@ -17,7 +17,8 @@
     "refresh:site": "node src/refresh-site-posters.js",
     "storage:orphans": "node src/cleanup-orphan-storage.js",
     "audit:current": "node src/audit-current-posters.js",
-    "embed:backfill": "node src/backfill-poster-embeddings.js"
+    "embed:backfill": "node src/backfill-poster-embeddings.js",
+    "ingest:naver-blog": "node src/naver-blog-ingester.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.2",

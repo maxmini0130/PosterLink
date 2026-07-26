@@ -367,7 +367,7 @@ const VOLATILE_SOURCE_PARAMS = new Set([
   "searchCondition",
 ]);
 
-function normalizeSourceKey(sourceUrl) {
+export function normalizeSourceKey(sourceUrl) {
   if (!sourceUrl) return null;
 
   try {
@@ -1272,7 +1272,7 @@ async function loadNoticeCandidateDuplicateCandidates(limit) {
   }));
 }
 
-async function loadDuplicateCandidates() {
+export async function loadDuplicateCandidates() {
   const limit = Number.isFinite(POSTER_DUPLICATE_LOOKUP_LIMIT)
     ? Math.max(0, POSTER_DUPLICATE_LOOKUP_LIMIT)
     : 5000;
