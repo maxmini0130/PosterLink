@@ -241,7 +241,7 @@ coalesce 방식으로 구현.
 실행 → **게시판 40건 vs 블로그 13건, 겹침 100%** → 정확히 "게시판완결" 등급 →
 `sns_enabled=false` → `--all-enabled` 실행 시 정확히 건너뛰는 것까지 확인.
 
-### 5-4. beachhead 기관 목록 적재 (일부만 완료)
+### 5-4. beachhead 기관 목록 적재
 문서가 요구한 목록: 소상공인시장진흥공단+지역본부, 광역/기초 지자체
 경제·일자리과, **창조경제혁신센터 17개**, 신보/기보 등.
 
@@ -251,21 +251,45 @@ coalesce 방식으로 구현.
   이름·URL을 확인했고, 게시판 URL 패턴(`/{지역}/custom/notice_list.do`)은
   서울센터를 직접 방문해서 확인한 뒤, 나머지 5곳(부산/제주/경북/포항/빛가람/
   세종)을 curl로 스팟체크해서 전부 실제 페이지(에러 아님)임을 확인하고 19개
-  전부에 적용했다. **서울센터만** SNS 계정까지 실제로 확인해서 채웠다
-  (`naver_blog_id='ccei_forever'`, 인스타 `seoul_ccei`, 페이스북
-  `seoulcenter`). **나머지 18개는 홈페이지/게시판 URL만 있고 SNS 계정은
-  비어있다** — 지역마다 계정이 달라서 하나씩 확인해야 함.
-- **아직 전혀 손 안 댐**: 소상공인시장진흥공단(본부+지역본부), 신용보증재단
-  (지역별), 기술보증기금. 이유: 실제 홈페이지/게시판/블로그 URL을 검증 없이
-  채워 넣으면 안 되는 프로덕션 데이터라서, 하나씩 웹검색+브라우저로 확인하는
-  중에 세션이 길어져서 중단.
+  전부에 적용했다.
+  - **중요 발견**: 서울/부산/대구 3개 지역을 실제로 방문해보니, 19개 센터가
+    **통합 네이버 블로그(`ccei_forever`) 하나를 공유**하고 있었다(facebook/
+    instagram만 지역마다 다름). 이 블로그의 RSS를 직접 조회해서 실재함을
+    확인(글 50건 존재)했지만, **가장 최근 글이 2026-02-05**로 최근 3개월
+    기준 활동이 없는 휴면 상태였다 — 그래서 커버리지 측정 시 19개 전부
+    "게시판완결"로 나오는데, 이건 버그가 아니라 "블로그가 최근에 안 올라와서
+    비교할 게 없다"는 실제 상태를 정확히 반영한 결과다.
+  - 이 발견 덕분에 **진짜 비효율 하나를 잡았다**: 여러 기관이 블로그를
+    공유하는 경우, `measure-institution-coverage.js`와
+    `naver-blog-ingester.js --all-enabled`가 같은 RSS를 기관 수만큼(19번)
+    반복해서 받고 분류(LLM 호출 포함)하고 있었다. → blogId 기준 캐시/스킵
+    로직을 추가해서 한 번만 처리하도록 고쳤다.
+  - 부산(`facebook=cceibusan`, `instagram=bccei`)·대구(`facebook=daeguccei`,
+    `instagram=daegu_ccei`)는 SNS 계정까지 실제로 확인해서 채웠다. 나머지
+    16개 지역은 블로그(공통)는 채워졌지만 facebook/instagram은 아직 미확인.
+- **소상공인시장진흥공단(semas.or.kr)**: 실사이트 방문 확인. "지역본부"·
+  "전국 소상공인지원센터"(60여 곳)는 전부 물리적 사무소 안내일 뿐 별도
+  웹사이트가 아니라 `semas.or.kr` 하나로 통합 운영되는 걸 확인해서, 지역본부
+  마다 따로 등록하지 않고 **중앙 포털 1건**으로 등록했다. 실제 "사업공고"
+  게시판 URL, `naver_blog_id='marketagency'`, facebook·instagram 전부
+  실사이트에서 확인.
+- **기술보증기금(kibo.or.kr)**: `kibo.or.kr`은 스플래시 페이지였고 실제
+  사이트는 `kibo.or.kr/main`. `naver_blog_id='techkibo'`(RSS 실재 확인),
+  instagram 확인.
+- **신용보증재단중앙회(koreg.or.kr)**: 실사이트 방문 확인 결과, 중앙회
+  자체는 공고 게시판도 SNS도 없고 "신용보증재단 찾기"로 지역 재단을
+  안내하는 역할만 한다. 낮은 우선순위 참고용 1건만 등록했고, **17개 시도
+  지역신용보증재단(서울신보/경기신보 등, 각각 별도 법인·별도 사이트)은
+  이번에 손 안 댐** — 개별 확인이 필요한 후속 작업으로 남긴다.
 
 ### 커밋
-`f6ea238` — 커버리지 측정 엔지니어링 / `2339861` — 창조경제혁신센터 19개 시드 데이터
+`f6ea238` 커버리지 측정 엔지니어링 / `2339861` 창조경제혁신센터 19개 시드 /
+`e7c27e4` 공유 블로그 중복처리 방지 수정 + 지역별 SNS 계정 보강 /
+`8ea9397` 소진공·기보·신보중앙회 시드
 
 ---
 
-## 6. 전체 커밋 목록 (오늘, `main`에 전부 push됨)
+## 6. 전체 커밋 목록 (`main`에 전부 push됨)
 
 ```
 449287b feat: add items/sources schema for SNS ingestion (Phase 1)
@@ -274,9 +298,12 @@ coalesce 방식으로 구현.
 3538b88 feat: link notice_sightings across board and blog surfaces (Phase 3 완성)
 f6ea238 feat: add institution coverage grading (Phase 4 엔지니어링)
 2339861 feat: seed 창조경제혁신센터 institutions into collection_sources (Phase 4 데이터)
+e93a211 docs: add detailed work log for SNS_INGESTION.md Phase 0-4 implementation
+e7c27e4 fix: dedupe shared-blog institutions in coverage measurement + batch ingest
+8ea9397 feat: seed 소상공인시장진흥공단/기술보증기금/신용보증재단중앙회
 ```
 
-## 7. 새로 생기거나 바뀐 파일 (전체 20개)
+## 7. 새로 생기거나 바뀐 파일 (전체 20개 + 후속 마이그레이션 3개)
 
 **신규 코드**
 - `scripts/crawler/src/relevance-heuristic.js` (Stage 1)
@@ -298,7 +325,10 @@ f6ea238 feat: add institution coverage grading (Phase 4 엔지니어링)
 - `20260726000000_add_items_sources_fields.sql` (Phase 1)
 - `20260726010000_add_notice_sightings_poster_link.sql` (Phase 3, poster_id 연결)
 - `20260726020000_add_collection_source_coverage_fields.sql` (Phase 4 스키마)
-- `20260726030000_seed_ccei_collection_sources.sql` (Phase 4 데이터, 19개)
+- `20260726030000_seed_ccei_collection_sources.sql` (Phase 4 데이터, 창조경제혁신센터 19개)
+- `20260726040000_update_ccei_sns_accounts.sql` (19개 공통 블로그 + 부산/대구 SNS 보강)
+- `20260726050000_seed_semas_collection_source.sql` (소상공인시장진흥공단)
+- `20260726060000_seed_kibo_koreg_collection_sources.sql` (기술보증기금/신용보증재단중앙회)
 
 ---
 
@@ -313,11 +343,16 @@ f6ea238 feat: add institution coverage grading (Phase 4 엔지니어링)
   휴리스틱만으로 판단해서 다소 거칠음).
 
 ### 8-2. Phase 4 기관 데이터 계속 채우기
-- 창조경제혁신센터 나머지 18개 SNS 계정(블로그/인스타/페이스북) 개별 확인.
-- 소상공인시장진흥공단 본부+지역본부 목록/URL 확인 후 적재.
-- 신용보증재단(지역별 별도 법인)·기술보증기금 목록/URL 확인 후 적재.
-- 각 신규 기관에 `measure-institution-coverage.js` 돌려서 등급 산정 →
-  `sns_enabled` 세팅.
+- ~~소상공인시장진흥공단·기술보증기금·신용보증재단중앙회 목록/URL~~ → 완료.
+- 창조경제혁신센터 16개 지역(부산·대구 제외)의 facebook/instagram 계정 개별
+  확인(블로그는 19개 전부 공통값으로 이미 채움).
+- **신용보증재단 17개 시도 지역재단**(서울신보/경기신보 등, 각각 별도 법인·
+  별도 사이트) — 아직 하나도 확인 안 함. koreg.or.kr의 "신용보증재단 찾기"
+  메뉴에서 목록/링크를 얻을 수 있을 것으로 보임.
+- 광역/기초 지자체 경제·일자리과는 아직 손 안 댐 — beachhead 우선순위상
+  가장 나중이어도 될 항목.
+- 새로 채워진 기관들(semas/kibo)에도 `measure-institution-coverage.js` 돌려서
+  등급 산정 → `sns_enabled` 세팅(지금은 신규 등록만 하고 아직 측정 안 돌림).
 
 ### 8-3. 구조적으로 남은 것 (설계상 자연스러운 다음 단계)
 - **이미지 phash dedup 미구현**: `notice_sightings.image_phash` 컬럼은 있지만
