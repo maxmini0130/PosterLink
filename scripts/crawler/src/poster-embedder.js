@@ -7,6 +7,16 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY?.trim();
 const EMBEDDER_MODE = (process.env.POSTER_EMBEDDER ?? "auto").trim().toLowerCase();
 const MODEL = process.env.OPENAI_EMBEDDING_MODEL?.trim() || "text-embedding-3-small";
 const MAX_INPUT_CHARS = Number(process.env.POSTER_EMBEDDING_INPUT_CHARS ?? "4000");
+const OPENAI_REQUEST_TIMEOUT_MS = Number(process.env.OPENAI_REQUEST_TIMEOUT_MS ?? "45000");
+
+function createOpenAiTimeoutSignal() {
+  const timeoutMs = Number.isFinite(OPENAI_REQUEST_TIMEOUT_MS) && OPENAI_REQUEST_TIMEOUT_MS > 0
+    ? OPENAI_REQUEST_TIMEOUT_MS
+    : 45000;
+  return typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
+    ? AbortSignal.timeout(timeoutMs)
+    : undefined;
+}
 
 function isAiModeEnabled() {
   return EMBEDDER_MODE !== "off" && Boolean(OPENAI_API_KEY);
@@ -52,6 +62,7 @@ export async function embedPosterText({ title, summaryShort, summaryLong }) {
   try {
     const response = await fetch("https://api.openai.com/v1/embeddings", {
       method: "POST",
+      signal: createOpenAiTimeoutSignal(),
       headers: {
         "Authorization": `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",

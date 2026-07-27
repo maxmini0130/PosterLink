@@ -10,6 +10,16 @@ const MIN_CONFIDENCE = Number(process.env.POSTER_FIELD_VERIFIER_MIN_CONFIDENCE ?
 const MAX_CONTEXT_CHARS = Number(process.env.POSTER_FIELD_CONTEXT_CHARS ?? "4500");
 const ALLOW_ON_ERROR = process.env.POSTER_FIELD_VERIFIER_ALLOW_ON_ERROR !== "0";
 const FIELD_VERIFICATION_SCHEMA_VERSION = 2;
+const OPENAI_REQUEST_TIMEOUT_MS = Number(process.env.OPENAI_REQUEST_TIMEOUT_MS ?? "45000");
+
+function createOpenAiTimeoutSignal() {
+  const timeoutMs = Number.isFinite(OPENAI_REQUEST_TIMEOUT_MS) && OPENAI_REQUEST_TIMEOUT_MS > 0
+    ? OPENAI_REQUEST_TIMEOUT_MS
+    : 45000;
+  return typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
+    ? AbortSignal.timeout(timeoutMs)
+    : undefined;
+}
 
 function isAiModeEnabled() {
   return VERIFIER_MODE !== "off" && Boolean(OPENAI_API_KEY);
@@ -169,6 +179,7 @@ export async function verifyPosterFields(context = {}) {
 
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
+      signal: createOpenAiTimeoutSignal(),
       headers: {
         "Authorization": `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",

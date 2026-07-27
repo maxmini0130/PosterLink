@@ -17,7 +17,17 @@ const MODEL = process.env.OPENAI_POSTER_ROUTER_MODEL?.trim() || "gpt-5-mini";
 const MIN_CONFIDENCE = Number(process.env.POSTER_RELEVANCE_ROUTER_MIN_CONFIDENCE ?? "0.6");
 const MAX_CONTEXT_CHARS = Number(process.env.POSTER_RELEVANCE_ROUTER_CONTEXT_CHARS ?? "4500");
 const ALLOW_ON_ERROR = process.env.POSTER_RELEVANCE_ROUTER_ALLOW_ON_ERROR !== "0";
+const OPENAI_REQUEST_TIMEOUT_MS = Number(process.env.OPENAI_REQUEST_TIMEOUT_MS ?? "45000");
 const ROUTER_SCHEMA_VERSION = 1;
+
+function createOpenAiTimeoutSignal() {
+  const timeoutMs = Number.isFinite(OPENAI_REQUEST_TIMEOUT_MS) && OPENAI_REQUEST_TIMEOUT_MS > 0
+    ? OPENAI_REQUEST_TIMEOUT_MS
+    : 45000;
+  return typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
+    ? AbortSignal.timeout(timeoutMs)
+    : undefined;
+}
 
 const VALID_ROUTES = ["공고", "소식", "폐기"];
 const VALID_CATEGORIES = [
@@ -149,6 +159,7 @@ export async function routePosterRelevance(context = {}) {
 
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
+      signal: createOpenAiTimeoutSignal(),
       headers: {
         "Authorization": `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",

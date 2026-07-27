@@ -11,6 +11,16 @@ const CACHE_PATH = "data/poster_category_classifications.json";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY?.trim();
 const MODE = (process.env.POSTER_CATEGORY_CLASSIFIER ?? "auto").trim().toLowerCase();
 const MODEL = process.env.OPENAI_POSTER_CATEGORY_MODEL?.trim() || "gpt-5-mini";
+const OPENAI_REQUEST_TIMEOUT_MS = Number(process.env.OPENAI_REQUEST_TIMEOUT_MS ?? "45000");
+
+function createOpenAiTimeoutSignal() {
+  const timeoutMs = Number.isFinite(OPENAI_REQUEST_TIMEOUT_MS) && OPENAI_REQUEST_TIMEOUT_MS > 0
+    ? OPENAI_REQUEST_TIMEOUT_MS
+    : 45000;
+  return typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
+    ? AbortSignal.timeout(timeoutMs)
+    : undefined;
+}
 
 const VALID_CATEGORIES = [
   "지원사업", "채용", "공모전", "교육강좌", "행사모집", "입찰",
@@ -72,6 +82,7 @@ export async function classifyPosterCategories(context) {
 
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
+      signal: createOpenAiTimeoutSignal(),
       headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: MODEL,

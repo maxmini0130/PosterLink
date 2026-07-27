@@ -12,6 +12,16 @@ const CACHE_PATH = "data/deadline_parse_llm_fallback.json";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY?.trim();
 const PARSER_MODE = (process.env.POSTER_DEADLINE_PARSER ?? "auto").trim().toLowerCase();
 const MODEL = process.env.OPENAI_POSTER_DEADLINE_MODEL?.trim() || "gpt-5-mini";
+const OPENAI_REQUEST_TIMEOUT_MS = Number(process.env.OPENAI_REQUEST_TIMEOUT_MS ?? "45000");
+
+function createOpenAiTimeoutSignal() {
+  const timeoutMs = Number.isFinite(OPENAI_REQUEST_TIMEOUT_MS) && OPENAI_REQUEST_TIMEOUT_MS > 0
+    ? OPENAI_REQUEST_TIMEOUT_MS
+    : 45000;
+  return typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
+    ? AbortSignal.timeout(timeoutMs)
+    : undefined;
+}
 
 const ONGOING_PATTERN = /상시(?:\s*모집|\s*접수)?|연중(?!무휴)/;
 const BUDGET_EXHAUSTED_PATTERN = /예산\s*소진\s*시|소진\s*시까지|소진\s*시\s*마감|조기\s*마감(?:될\s*수\s*있음)?/;
@@ -160,6 +170,7 @@ async function parseDeadlineTextWithLlm(text, postedAt) {
 
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
+      signal: createOpenAiTimeoutSignal(),
       headers: {
         "Authorization": `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
