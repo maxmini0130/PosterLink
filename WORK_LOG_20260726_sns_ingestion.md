@@ -410,13 +410,22 @@ $0이라 `insufficient_quota` 오류가 났다가, 크레딧을 충전한 뒤 �
   (Phase 4 취지 그대로 실증). `mapo-gu`·19개 CCEI는 전부 "게시판완결".
 
 ### 8-3. 구조적으로 남은 것 (설계상 자연스러운 다음 단계)
-- **이미지 phash dedup 미구현**: `notice_sightings.image_phash` 컬럼은 있지만
-  실제로 계산해서 채우는 로직이 없음(현재 dedup은 전부 텍스트/URL 기반).
-  블로그 글에 이미지가 있을 때 phash로 더 강하게 매칭하려면 추가 구현 필요.
-- **대표 이미지 자동 선정 미구현**: `items.representative_image`/
-  `poster_notice_candidates`의 대표이미지 갱신 로직이 아직 "여러 출처 중
-  해상도 큰 것 선택"까지는 안 감(현재는 board 우선순위로 필드만 병합, 이미지
-  해상도 비교는 없음).
+- ✅ **2026-07-27 완료: 이미지 phash 계산 + 저장.** `ml/image_phash.py`(Pillow만
+  사용하는 64비트 average hash, 새 의존성 없음) + `src/image-phash.js` 추가.
+  게시판(`upload-to-supabase.js`)·블로그(`naver-blog-ingester.js`) 양쪽에서
+  이미지를 다운받을 때마다 phash와 원본 해상도(`image_width`/`image_height`,
+  신규 마이그레이션)를 `notice_sightings`에 저장한다. 블로그 인제스터가
+  RSS `description`의 텍스트만 뽑고 이미지는 통째로 버리고 있던 것도 이번에
+  같이 고쳐서(`<img>` 첫 태그 추출) 블로그 쪽에도 이미지가 채워지게 됨.
+  **단, phash를 실제 중복판정 점수(`poster-duplicate-detector.js`)에 반영하는
+  것은 이번에 안 함** — 운영 중인 중복병합 로직을 건드리는 거라 별도 검토가
+  필요하다고 판단해 범위를 좁힘. 지금은 phash를 계산·저장만 하고 있음.
+- ✅ **2026-07-27 완료: 대표 이미지 자동 선정.** `upload-to-supabase.js`에
+  `refreshRepresentativeImage(candidateId)` 추가 — 게시판/블로그 등 어떤
+  출처든 sighting이 candidate에 연결될 때마다 호출되어, 그 candidate에 딸린
+  모든 sighting의 이미지 중 해상도(width×height)가 가장 큰 것을
+  `poster_notice_candidates.representative_image`에 반영한다(해상도 정보가
+  없으면 source_priority로 대체 비교).
 - **facebook/instagram 실제 구현 안 함** — 문서 방침대로 의도적으로 스텁만
   있음(운영권 확보나 정책 변경 전까지는 그대로 둘 것).
 - **네이버 검색 API(키워드 검색) 미구현** — RSS만 구현했고, "특정 기관
@@ -424,8 +433,17 @@ $0이라 `insufficient_quota` 오류가 났다가, 크레딧을 충전한 뒤 �
   언급됨, `NAVER_CLIENT_ID/SECRET` 발급 필요).
 
 ### 8-4. 검증/리뷰 관점에서 남은 것
-- 이 문서에 적힌 커밋들이 실제로 운영 크롤러(GitHub Actions 매일 크론)에서
-  에러 없이 도는지 다음 정기 실행 때 확인 필요(로컬에서는 개별 함수/일부
-  흐름만 테스트했고, 전체 크론 파이프라인을 실제로 통째로 돌려보지는 않음).
-- CI에 새로 추가한 Python/CLIP 설치 단계가 실제 GitHub Actions 러너에서
-  문제없이 도는지(로컬 venv에서만 확인, CI 환경 자체에서는 아직 미확인).
+- ✅ **2026-07-27 완료 + 실제 버그 발견/수정.** GitHub Actions 실행 이력을
+  확인해보니(run #118, 2026-07-27) 크론이 **크래시가 아니라 87분간 조용히
+  멈춰있다가** 150분 타임아웃(`exit 143`)으로 강제 종료되고 있었다. 원인:
+  이번 세션에서 새로 만든 `poster-relevance-router.js`·`deadline-parser.js`·
+  `poster-category-classifier.js` 3개가 OpenAI 호출에 타임아웃(AbortSignal)을
+  안 걸어뒀음 — 같은 스켈레톤을 쓰는 `poster-ocr.js` 등은 다 걸려있었는데
+  이 3개만 빠짐. 확인하는 김에 기존 파일 2개(`poster-field-verifier.js`,
+  `poster-embedder.js`)도 같은 문제가 있는 걸 발견 — 이건 더 오래된 버그인데
+  최근까지 `OPENAI_API_KEY`가 해당 스텝에 전달 안 돼서 드러나지 않았던 것.
+  5개 파일 전부 `OPENAI_REQUEST_TIMEOUT_MS`(기본 45초) 패턴으로 통일해서
+  고치고, `workflow_dispatch`로 dry-run 재실행해서 정상 완주(success)까지
+  확인함.
+- CI에 새로 추가한 Python/CLIP 설치 단계 자체는 실제 GitHub Actions 러너에서
+  문제없이 도는 것도 위 dry-run으로 같이 확인됨.
