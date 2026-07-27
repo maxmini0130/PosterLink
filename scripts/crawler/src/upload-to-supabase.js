@@ -44,6 +44,7 @@ import {
 import { evaluateRelevanceHeuristic } from "./relevance-heuristic.js";
 import { routePosterRelevance } from "./poster-relevance-router.js";
 import { parseDeadlineText } from "./deadline-parser.js";
+import { computeImagePhash, selectRepresentativeImage } from "./image-phash.js";
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)?.trim();
 const SUPABASE_KEY = (process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)?.trim();
@@ -1035,13 +1036,20 @@ export async function upsertBoardNoticeSighting(post, sourceUrl, { candidateId =
       return;
     }
 
+    const imageUrl = Array.isArray(post.images) ? post.images[0] ?? null : null;
+    // 로컬 계산(비용 0원)이라 실패해도 fail-open — phash 없이도 기존 텍스트/URL dedup은 그대로 동작.
+    const imagePhash = await computeImagePhash(imageUrl);
+
     const fields = sanitizeForPostgrest({
       surface_type: "게시판",
       source_url: sourceUrl,
       source_org: post.site ?? null,
       raw_title: post.title ?? null,
       raw_body: post.content ?? null,
-      image_url: Array.isArray(post.images) ? post.images[0] ?? null : null,
+      image_url: imageUrl,
+      image_phash: imagePhash?.phash ?? null,
+      image_width: imagePhash?.width ?? null,
+      image_height: imagePhash?.height ?? null,
       source_priority: 1,
       crawled_at: post.crawledAt ?? new Date().toISOString(),
       candidate_id: candidateId,
@@ -1051,13 +1059,51 @@ export async function upsertBoardNoticeSighting(post, sourceUrl, { candidateId =
     if (existing?.id) {
       const { error } = await supabase.from("notice_sightings").update(fields).eq("id", existing.id);
       if (error) console.warn(`\n  notice_sighting 갱신 실패: ${error.message}`);
-      return;
+    } else {
+      const { error } = await supabase.from("notice_sightings").insert(fields);
+      if (error) console.warn(`\n  notice_sighting 생성 실패: ${error.message}`);
     }
 
-    const { error } = await supabase.from("notice_sightings").insert(fields);
-    if (error) console.warn(`\n  notice_sighting 생성 실패: ${error.message}`);
+    if (candidateId) await refreshRepresentativeImage(candidateId);
   } catch (error) {
     console.warn(`\n  notice_sighting 처리 중 오류: ${error.message}`);
+  }
+}
+
+// SNS_INGESTION.md 8-3 후속 — 같은 후보(candidate)에 게시판/블로그 등 여러 출처의
+// 이미지가 쌓였을 때, 그중 해상도가 가장 큰 것을 poster_notice_candidates.representative_image로
+// 갱신한다. notice_sightings 저장 자체를 막으면 안 되므로 실패해도 경고만 남긴다.
+export async function refreshRepresentativeImage(candidateId) {
+  try {
+    const { data: sightings, error } = await supabase
+      .from("notice_sightings")
+      .select("image_url,image_width,image_height,source_priority")
+      .eq("candidate_id", candidateId)
+      .not("image_url", "is", null);
+
+    if (error) {
+      console.warn(`\n  대표이미지 후보 조회 실패: ${error.message}`);
+      return;
+    }
+    if (!sightings || sightings.length === 0) return;
+
+    const best = selectRepresentativeImage(
+      sightings.map((s) => ({
+        imageUrl: s.image_url,
+        imageWidth: s.image_width,
+        imageHeight: s.image_height,
+        sourcePriority: s.source_priority,
+      }))
+    );
+    if (!best) return;
+
+    const { error: updateError } = await supabase
+      .from("poster_notice_candidates")
+      .update({ representative_image: best })
+      .eq("id", candidateId);
+    if (updateError) console.warn(`\n  대표이미지 갱신 실패: ${updateError.message}`);
+  } catch (error) {
+    console.warn(`\n  대표이미지 처리 중 오류: ${error.message}`);
   }
 }
 

@@ -20,14 +20,24 @@ import { createOptionalCollectionSourceClient } from "./collection-source-tracke
 import { evaluateRelevanceHeuristic } from "./relevance-heuristic.js";
 import { routePosterRelevance } from "./poster-relevance-router.js";
 import { parseDeadlineText } from "./deadline-parser.js";
-import { normalizeSourceKey, loadDuplicateCandidates } from "./upload-to-supabase.js";
+import { normalizeSourceKey, loadDuplicateCandidates, refreshRepresentativeImage } from "./upload-to-supabase.js";
 import { findBestPosterDuplicate } from "./poster-duplicate-detector.js";
+import { computeImagePhash } from "./image-phash.js";
 
 const SOURCE_PRIORITY = { 게시판: 1, 네이버블로그: 2, 페이스북: 3, 인스타그램: 3 };
 
 export function stripHtml(html) {
   if (!html) return "";
   return cheerio.load(String(html)).text().replace(/\s+/g, " ").trim();
+}
+
+// 블로그 RSS의 description은 원문 HTML 그대로다 — 첫 번째 <img>를 대표 이미지 후보로 뽑는다
+// (본문에 여러 이미지가 있을 수 있지만, 포스터/공고문 이미지는 보통 글 맨 앞에 온다).
+function extractFirstImage(html) {
+  if (!html) return null;
+  const $ = cheerio.load(String(html));
+  const src = $("img").first().attr("src");
+  return src || null;
 }
 
 function toIsoOrNull(value) {
@@ -79,6 +89,9 @@ async function upsertNoticeSighting(supabase, entry, { sourceOrg }) {
   if (lookupError) throw new Error(`notice_sighting_lookup:${lookupError.message}`);
   if (existing) return { sighting: existing, isNew: false, sourceUrl };
 
+  const imageUrl = extractFirstImage(entry.description);
+  const imagePhash = await computeImagePhash(imageUrl);
+
   const { data: inserted, error } = await supabase
     .from("notice_sightings")
     .insert({
@@ -87,6 +100,10 @@ async function upsertNoticeSighting(supabase, entry, { sourceOrg }) {
       source_org: sourceOrg ?? null,
       raw_title: entry.title || null,
       raw_body: stripHtml(entry.description) || null,
+      image_url: imageUrl,
+      image_phash: imagePhash?.phash ?? null,
+      image_width: imagePhash?.width ?? null,
+      image_height: imagePhash?.height ?? null,
       source_priority: SOURCE_PRIORITY.네이버블로그,
       crawled_at: new Date().toISOString(),
     })
@@ -258,6 +275,7 @@ export async function ingestNaverBlog(blogId, options = {}) {
         .update({ candidate_id: result.candidateId })
         .eq("id", sighting.id);
       if (linkError) throw new Error(`sighting_link:${linkError.message}`);
+      await refreshRepresentativeImage(result.candidateId);
 
       if (result.created) {
         stats.created += 1;
