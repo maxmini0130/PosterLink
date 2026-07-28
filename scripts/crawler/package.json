@@ -23,6 +23,7 @@
     "kpi:measure": "node src/measure-ai-kpis.js",
     "embed:backfill": "node src/backfill-poster-embeddings.js",
     "verify:backfill": "node src/backfill-field-verification.js",
+    "verify:apply-corrections": "node src/apply-field-verification-corrections.js",
     "ingest:naver-blog": "node src/naver-blog-ingester.js",
     "measure:coverage": "node src/measure-institution-coverage.js"
   },

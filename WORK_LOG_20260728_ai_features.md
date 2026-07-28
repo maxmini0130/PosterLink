@@ -1093,3 +1093,41 @@ pnpm --filter posterlink-crawler kpi:measure -- --base-url=http://localhost:4000
 ### 검증
 - `pnpm --filter posterlink-crawler test` - 72/72 통과
 - `git diff --check` - 통과
+
+---
+
+## 24. 2026-07-28 field verification 보정값 실제 필드 반영 도구 추가
+
+AI field verification 백필 결과가 `field_verification` JSON에만 남아 있던 문제를 보완했다. 신뢰도 기준 이상인 `correctedDeadline`/`correctedOrgName`을 실제 `posters.application_end_at`, `posters.source_org_name`에 dry-run 후 적용할 수 있는 운영 스크립트를 추가했다.
+
+### 변경 사항
+- `scripts/crawler/src/apply-field-verification-corrections.js`
+  - published/review 포스터 중 `field_verification`이 있는 행을 스캔.
+  - 기본 `--min-confidence=0.85`.
+  - `deadlineMatches=false`이고 `correctedDeadline`이 명확한 경우 `application_end_at` 보정 후보로 기록.
+  - `orgNameMatches=false`이고 기관 신뢰도가 기준 이상인 경우 `source_org_name` 보정 후보로 기록.
+  - 기본은 dry-run, `--apply`가 있을 때만 실제 업데이트.
+  - 변경 전/후 값을 JSON 리포트로 저장.
+- `scripts/crawler/package.json`
+  - `verify:apply-corrections` 스크립트 추가.
+
+### 적용 결과
+- dry-run:
+  - `pnpm --filter posterlink-crawler verify:apply-corrections -- --limit=1000 --min-confidence=0.85 --output=data/results/field-verification-corrections-dryrun.json`
+  - scanned 140건, correction 후보 6건.
+- apply:
+  - `pnpm --filter posterlink-crawler verify:apply-corrections -- --limit=1000 --min-confidence=0.85 --apply --output=data/results/field-verification-corrections-apply.json`
+  - 6건 적용:
+    - 마감일 보정/추가 5건
+    - 기관명 보정 2건
+- 적용 후 재검사:
+  - `pnpm --filter posterlink-crawler verify:apply-corrections -- --limit=1000 --min-confidence=0.85 --output=data/results/field-verification-corrections-after-apply-dryrun.json`
+  - correction 후보 0건.
+
+### KPI 및 검증
+- `pnpm --filter posterlink-crawler kpi:measure -- --days=30 --output=data/baseline/ai_kpi_report_after_field_corrections.json`
+  - embedding coverage: 100%
+  - field verification coverage: 32.1%
+  - review queue: 4건
+  - review queue reject candidates: 0건
+- `pnpm --filter posterlink-crawler test` - 72/72 통과
