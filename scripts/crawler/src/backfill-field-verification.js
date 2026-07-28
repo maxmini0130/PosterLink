@@ -20,10 +20,11 @@ const args = Object.fromEntries(
 
 if (args.help || args.h) {
   console.log(`Usage:
-  node src/backfill-field-verification.js [--limit=25] [--output=data/results/field-verification-backfill.json] [--apply]
+  node src/backfill-field-verification.js [--limit=25] [--concurrency=1] [--output=data/results/field-verification-backfill.json] [--apply]
 
 Backfills posters.field_verification for published/review posters that do not
-yet have a verifier result. Without --apply, only writes a dry-run target report.`);
+yet have a verifier result. Without --apply, only writes a dry-run target report.
+Progress is logged to stderr and the report is checkpointed after every row.`);
   process.exit(0);
 }
 
@@ -90,62 +91,110 @@ async function main() {
   const supabase = createSupabase();
   const output = path.resolve(REPO_ROOT, args.output || DEFAULT_OUTPUT);
   const limit = Math.max(1, Number(args.limit || DEFAULT_LIMIT));
+  const concurrency = Math.max(1, Math.min(5, Number(args.concurrency || 1)));
   const apply = Boolean(args.apply);
   const rows = await fetchCandidates(supabase, limit);
   const results = [];
+  const startedAt = new Date().toISOString();
+  let writeChain = Promise.resolve();
 
-  for (const row of rows) {
+  async function writeReport() {
+    const report = {
+      generated_at: new Date().toISOString(),
+      started_at: startedAt,
+      mode: apply ? "apply" : "dry-run",
+      requested_limit: limit,
+      concurrency,
+      candidate_count: rows.length,
+      processed_count: results.length,
+      applied_count: apply ? results.filter((row) => row.status === "applied").length : 0,
+      failed_count: results.filter((row) => row.status === "failed").length,
+      rows: [...results].sort((a, b) => a.index - b.index),
+    };
+
+    await fs.mkdir(path.dirname(output), { recursive: true });
+    await fs.writeFile(output, JSON.stringify(report, null, 2), "utf-8");
+    return report;
+  }
+
+  function checkpointReport() {
+    writeChain = writeChain.then(writeReport, writeReport);
+    return writeChain;
+  }
+
+  async function processRow(row, index) {
+    const label = `${index + 1}/${rows.length}`;
+    console.error(`[verify:backfill] ${label} ${apply ? "applying" : "dry-run"}: ${row.title}`);
+
     const entry = {
+      index,
       id: row.id,
       title: row.title,
-      status: row.poster_status,
+      poster_status: row.poster_status,
       source_org_name: row.source_org_name,
       source_key: row.source_key,
       application_end_at: row.application_end_at,
       mode: apply ? "applied" : "dry-run",
+      status: apply ? "pending" : "dry-run",
+      started_at: new Date().toISOString(),
     };
 
-    if (apply) {
-      const verification = await verifyPosterFields(buildContext(row));
-      const fieldVerification = {
-        ...(row.field_verification ?? {}),
-        ...verification,
-        fieldVerifierBackfilledAt: new Date().toISOString(),
-      };
-      const { error } = await supabase
-        .from("posters")
-        .update({ field_verification: fieldVerification })
-        .eq("id", row.id);
-      if (error) throw error;
-      entry.decision = verification.decision;
-      entry.confidence = verification.confidence;
-      entry.reason = verification.reason;
+    try {
+      if (apply) {
+        const verification = await verifyPosterFields(buildContext(row));
+        const fieldVerification = {
+          ...(row.field_verification ?? {}),
+          ...verification,
+          fieldVerifierBackfilledAt: new Date().toISOString(),
+        };
+        const { error } = await supabase
+          .from("posters")
+          .update({ field_verification: fieldVerification })
+          .eq("id", row.id);
+        if (error) throw error;
+        entry.status = "applied";
+        entry.decision = verification.decision;
+        entry.confidence = verification.confidence;
+        entry.reason = verification.reason;
+      }
+    } catch (error) {
+      entry.status = "failed";
+      entry.error = error.message;
+      console.error(`[verify:backfill] ${label} failed: ${error.message}`);
+    } finally {
+      entry.finished_at = new Date().toISOString();
     }
 
     results.push(entry);
+    await checkpointReport();
+    console.error(`[verify:backfill] ${label} ${entry.status}`);
   }
 
-  const report = {
-    generated_at: new Date().toISOString(),
-    mode: apply ? "apply" : "dry-run",
-    requested_limit: limit,
-    candidate_count: rows.length,
-    applied_count: apply ? results.length : 0,
-    rows: results,
-  };
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(concurrency, rows.length) }, async () => {
+    while (nextIndex < rows.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      await processRow(rows[index], index);
+    }
+  });
 
-  await fs.mkdir(path.dirname(output), { recursive: true });
-  await fs.writeFile(output, JSON.stringify(report, null, 2), "utf-8");
+  await Promise.all(workers);
+  await writeChain;
+  const report = await writeReport();
 
   console.log(JSON.stringify({
     output,
     mode: report.mode,
     candidate_count: report.candidate_count,
     applied_count: report.applied_count,
+    failed_count: report.failed_count,
+    concurrency,
     sample: results.slice(0, 5).map((row) => ({
       title: row.title,
       decision: row.decision ?? null,
       confidence: row.confidence ?? null,
+      status: row.status,
     })),
   }, null, 2));
 }

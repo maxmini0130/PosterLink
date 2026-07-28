@@ -455,6 +455,75 @@ test("do not reject a recruitment title because shared detail text contains a we
   assert.equal(result, null);
 });
 
+test("do not reject active recruitment because shared detail text mentions homepage parking", () => {
+  const result = evaluatePosterQuality({
+    title: "\uCC38\uC5EC\uC790 \uBAA8\uC9D1 \uBBF8\uB514\uC5B4 \uAD50\uC721",
+    source_org_name: "\uAC15\uC11C\uB274\uBBF8\uB514\uC5B4\uC9C0\uC6D0\uC13C\uD130",
+    summary_short: "\uC120\uCC29\uC21C \uC2E0\uCCAD\uC73C\uB85C \uCC38\uC5EC\uC790\uB97C \uBAA8\uC9D1\uD558\uB294 \uBBF8\uB514\uC5B4 \uAD50\uC721 \uD504\uB85C\uADF8\uB7A8",
+    content: "\uD648\uD398\uC774\uC9C0 \uC8FC\uCC28\uC7A5 \uC774\uC6A9 \uC548\uB0B4",
+    source_key: "https://example.test/program",
+    images: ["https://example.test/poster.jpg"],
+  });
+
+  assert.notEqual(result.decision, "reject");
+  assert.equal(result.issues.some((issue) => issue.code === "parking-or-homepage"), false);
+});
+
+test("reject parking notices even when they are readable", () => {
+  const result = evaluatePosterQuality({
+    title: "\uC8FC\uCC28\uC7A5 \uC774\uC6A9 \uC81C\uD55C \uC548\uB0B4",
+    source_org_name: "\uB9C8\uD3EC\uAD6C\uCCB4\uC721\uC13C\uD130",
+    summary_short: "\uC2DC\uC124 \uC8FC\uCC28\uC7A5 \uC774\uC6A9 \uC81C\uD55C \uC548\uB0B4\uC785\uB2C8\uB2E4",
+    content: "\uD648\uD398\uC774\uC9C0 \uC8FC\uCC28\uC7A5 \uC774\uC6A9 \uC548\uB0B4",
+    source_key: "https://example.test/notice",
+    images: ["https://example.test/notice.jpg"],
+  });
+
+  assert.equal(result.decision, "reject");
+  assert.equal(result.issues.some((issue) => issue.code === "parking-or-homepage"), true);
+});
+
+test("do not reject job-linked education as an employment notice", () => {
+  const result = evaluatePosterQuality({
+    title: "\uD55C\uAD6D\uC18C\uD504\uD2B8\uC6E8\uC5B4\uAE30\uC220\uC9C4\uD765\uD611\uD68C <\uCC44\uC6A9\uC5F0\uACC4\uD615 2026\uB144\uB3C4 \uD558\uBC18\uAE30 SW\uD480\uC2A4\uD0DD \uAC1C\uBC1C\uC790 \uAD50\uC721\uC0DD> \uBAA8\uC9D1",
+    source_org_name: "\uD55C\uAD6D\uC18C\uD504\uD2B8\uC6E8\uC5B4\uAE30\uC220\uC9C4\uD765\uD611\uD68C",
+    summary_short: "\uAD6C\uC9C1\uC790 \uB300\uC0C1 SW \uAC1C\uBC1C\uC790 \uAD50\uC721\uC0DD \uBAA8\uC9D1 \uD504\uB85C\uADF8\uB7A8",
+    source_key: "https://example.test/sw-course",
+    images: ["https://example.test/sw-course.jpg"],
+  });
+
+  assert.notEqual(result.decision, "reject");
+  assert.equal(result.issues.some((issue) => issue.code === "employment-recruitment-notice"), false);
+});
+
+test("do not reject job coaching programs because details mention hiring staff", () => {
+  const result = evaluatePosterQuality({
+    title: "\uB3D9\uB300\uBB38\uAD6C\uCCAD <2026 \uB3D9\uB300\uBB38\uAD6C \uCDE8\uCC3D\uC5C5\uC544\uCE74\uB370\uBBF8 - \uCDE8\uC5C5\uD2B9\uAC15 & \uBA58\uD1A0\uB9C1>",
+    source_org_name: "\uB3D9\uB300\uBB38\uAD6C\uCCAD",
+    summary_short: "\uCDE8\uC5C5\uD2B9\uAC15\uACFC \uC11C\uB958 \uBA74\uC811 \uBA58\uD1A0\uB9C1 \uCC38\uC5EC\uC790 \uBAA8\uC9D1",
+    content: "\uCC44\uC6A9\uB2F4\uB2F9\uC790\uC640 \uD568\uAED8\uD558\uB294 \uC774\uB825\uC11C \uD2B9\uAC15",
+    source_key: "https://example.test/job-coaching",
+    images: ["https://example.test/job-coaching.jpg"],
+  });
+
+  assert.notEqual(result.decision, "reject");
+  assert.equal(result.issues.some((issue) => issue.code === "employment-recruitment-notice"), false);
+});
+
+test("do not reject education support projects because shared detail text mentions parking", () => {
+  const result = evaluatePosterQuality({
+    title: "\uC11C\uC6B8\uBB38\uD654\uC608\uC220\uAD50\uC721 \uC9C0\uC6D0\uC0AC\uC5C5 <\uC6B0\uB9AC\uB4E4\uC758 \uB0AF\uC120 \uC11C\uC6B8>",
+    source_org_name: "\uCCAD\uB144\uBABD\uB545\uC815\uBCF4\uD1B5",
+    summary_short: "\uBB38\uD654\uC608\uC220\uAD50\uC721 \uC9C0\uC6D0\uC0AC\uC5C5 \uC0C1\uC138 \uC548\uB0B4",
+    content: "\uD648\uD398\uC774\uC9C0 \uC8FC\uCC28\uC7A5 \uC774\uC6A9 \uC548\uB0B4",
+    source_key: "https://example.test/art-education",
+    images: ["https://example.test/art-education.jpg"],
+  });
+
+  assert.notEqual(result.decision, "reject");
+  assert.equal(result.issues.some((issue) => issue.code === "parking-or-homepage"), false);
+});
+
 for (const title of [
   "[2026 마포구민노래자랑] 본선 진출자 공지",
   "2025 삼개시낭송경연대회 본선 진출 대상자 안내",

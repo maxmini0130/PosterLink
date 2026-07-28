@@ -1033,3 +1033,63 @@ pnpm --filter posterlink-crawler kpi:measure -- --base-url=http://localhost:4000
   - collection p95 duration: 3,260,942ms
   - semantic API latency: 로컬 웹 서버 미실행으로 skipped
 - `pnpm --filter posterlink-crawler test` → 57/57 통과
+
+---
+
+## 23. 2026-07-28 verify backfill 운영성 개선 및 published 비포스터 정밀 정리
+
+사용자가 지적한 "검수대기/게시 목록에 포스터가 아닌 것이 들어오면 AI가 걸러야 한다"는 흐름을 이어서, field verification 백필 스크립트 운영성을 개선하고 published/review 전체 후보를 다시 정밀 검수했다.
+
+### verify:backfill 스크립트 개선
+- `scripts/crawler/src/backfill-field-verification.js`
+  - `--concurrency` 옵션 추가. 기본 1, 최대 5.
+  - 각 행 처리 시작/완료를 stderr 진행 로그로 출력.
+  - 매 행 처리 후 report checkpoint 저장.
+  - 행 단위 실패를 `failed`로 기록하고 나머지 행은 계속 처리.
+  - report에 `started_at`, `processed_count`, `failed_count`, `concurrency`, 행별 `status` 추가.
+  - 동시 처리 중 report write가 섞이지 않도록 직렬화.
+
+### 추가 field verification 백필
+- dry-run 검증:
+  - `pnpm --filter posterlink-crawler verify:backfill -- --limit=3 --output=data/results/field-verification-backfill-progress-dryrun.json`
+  - `pnpm --filter posterlink-crawler verify:backfill -- --limit=3 --concurrency=2 --output=data/results/field-verification-backfill-progress-dryrun-c2.json`
+- apply:
+  - `pnpm --filter posterlink-crawler verify:backfill -- --limit=10 --concurrency=2 --apply --output=data/results/field-verification-backfill-apply-10-c2.json`
+  - 10건 적용, 실패 0건.
+- KPI:
+  - `pnpm --filter posterlink-crawler kpi:measure -- --days=30 --output=data/baseline/ai_kpi_report_after_verify_backfill_c2.json`
+  - field verification coverage: 31.9%
+
+### published/review 비포스터 후보 정밀검수
+- 기존 broad dry-run 후보 13건에는 실제 비포스터와 오탐이 섞여 있었다.
+- 오탐 방지 보강:
+  - 제목/요약이 참여자 모집 또는 교육/지원사업 성격이면, 본문 하단 공통 안내의 홈페이지/주차장/시설 문구만으로 자동 반려하지 않도록 개선.
+  - 채용연계형 교육생 모집, 취업특강/멘토링처럼 실제 프로그램성 포스터가 `employment-recruitment-notice`로 과반려되지 않도록 개선.
+- 회귀 테스트 추가:
+  - 공통 주차 문구가 포함된 참여자 모집은 반려하지 않음.
+  - 실제 주차장 이용 제한 안내는 반려함.
+  - 채용연계형 교육생 모집/취업특강/문화예술교육 지원사업은 반려하지 않음.
+
+### 실제 정리
+- 최종 dry-run:
+  - `pnpm --filter posterlink-crawler cleanup:review-nonposters -- --statuses=review,published --output=data/results/nonposter-cleanup-final-candidates-dryrun.json`
+  - reject 후보 3건.
+- apply:
+  - `pnpm --filter posterlink-crawler cleanup:review-nonposters -- --statuses=review,published --apply --output=data/results/nonposter-cleanup-final-candidates-apply.json`
+  - 반려 처리 3건:
+    - `서울청년센터 동대문 <대관 오픈 공지> 안내`
+    - `주차장 일부제한 안내`
+    - `주차장 승용차 5부제 시행 안내`
+- 적용 후 재검사:
+  - `pnpm --filter posterlink-crawler cleanup:review-nonposters -- --statuses=review,published --output=data/results/nonposter-cleanup-after-final-apply-dryrun.json`
+  - scanned 435건, reject 후보 0건.
+- KPI:
+  - `pnpm --filter posterlink-crawler kpi:measure -- --days=30 --output=data/baseline/ai_kpi_report_after_published_cleanup.json`
+  - embedding coverage: 100%
+  - field verification coverage: 32.1%
+  - review queue: 4건
+  - review queue reject candidates: 0건
+
+### 검증
+- `pnpm --filter posterlink-crawler test` - 72/72 통과
+- `git diff --check` - 통과

@@ -70,7 +70,7 @@ const TEXT_RULES = [
     severity: "high",
     decision: "reject",
     scope: "title",
-    pattern: /(?:채용\s*(?:재|연장)?공고|직원\s*채용|계약직\s*(?:직원|사회복지사|매니저)?\s*채용|청년도전\s*매니저\s*채용|강사\s*모집|통장\s*모집\s*공고)/i,
+    pattern: /(?:\uCC44\uC6A9\s*(?:\uACF5\uACE0|\uC7AC\uACF5\uACE0|\uAE30\uAC04|\uC548\uB0B4)|\uC9C1\uC6D0\s*\uCC44\uC6A9|\uACC4\uC57D\uC9C1\s*(?:\uC9C1\uC6D0|\uC0AC\uD68C\uBCF5\uC9C0\uC0AC|\uB9E4\uB2C8\uC800)?\s*\uCC44\uC6A9|\uCCAD\uB144\uC548\uC804\s*\uB9E4\uB2C8\uC800\s*\uCC44\uC6A9|\uAC15\uC0AC\s*\uBAA8\uC9D1|\uD1B5\uC7A5\s*\uBAA8\uC9D1\s*\uACF5\uACE0)/i,
     reason: "employment or administrative recruitment notice is not a poster",
   },
   {
@@ -107,6 +107,11 @@ const NEWS_BOARD_SOURCE_PATTERN = /\/(?:community\/news|notice\/news|board\/news
 const ROBUST_JOB_RECRUITMENT_PATTERN = /(?:\uCC44\uC6A9\s*(?:\uACF5\uACE0|\uAE30\uAC04|\uC548\uB0B4)|\uC9C1\uC6D0\s*\uCC44\uC6A9|\uC0AC\uD68C\uBCF5\uC9C0\uC0AC.*\uCC44\uC6A9|\uC815\uADDC\uC9C1.*\uCC44\uC6A9|\uACC4\uC57D\uC9C1.*\uCC44\uC6A9|\uAC15\uC0AC\s*\uBAA8\uC9D1|\uD300\uC6D0\s*\uCC44\uC6A9)/i;
 const ENCODED_TEXT_PATTERN = /\b[A-Za-z0-9+/]{160,}={0,2}\b/;
 const PUBLIC_SAFETY_GUIDE_PATTERN = /(?:\uAC00\uC2A4|\uBD80\uD0C4|\uC7A5\uB9C8\uCCA0|\uD589\uB77D\uCCA0|\uC0DD\uD65C\s*\uC548\uC804).*(?:\uC548\uC804\s*\uAD00\uB9AC\s*\uC694\uB839|\uC548\uC804\s*\uC0AC\uC6A9\s*\uC694\uB839|\uC0AC\uC6A9\s*\uC694\uB839|\uAD00\uB9AC\s*\uC694\uB839)|(?:\uC548\uC804\s*\uAD00\uB9AC\s*\uC694\uB839|\uC548\uC804\s*\uC0AC\uC6A9\s*\uC694\uB839|\uC0AC\uC6A9\s*\uC694\uB839|\uAD00\uB9AC\s*\uC694\uB839).*(?:\uAC00\uC2A4|\uBD80\uD0C4|\uC7A5\uB9C8\uCCA0|\uD589\uB77D\uCCA0|\uC0DD\uD65C\s*\uC548\uC804)/i;
+const PROGRAM_EDUCATION_RECRUITMENT_PATTERN = /(?:\uAD50\uC721\uC0DD|\uC218\uAC15\uC0DD|\uD2B9\uAC15|\uBA58\uD1A0\uB9C1|\uC544\uCE74\uB370\uBBF8|\uAC15\uC88C|\uAD50\uC721|\uD504\uB85C\uADF8\uB7A8|\uCEA0\uD504)/i;
+const SHARED_DETAIL_FALSE_POSITIVE_RULE_CODES = new Set([
+  "facility-use",
+  "parking-or-homepage",
+]);
 
 const GENERIC_TITLE_PATTERNS = [
   /^\s*$/i,
@@ -335,6 +340,20 @@ function hasActiveRecruitmentSignal(text) {
   return ACTIVE_RECRUITMENT_PATTERN.test(text);
 }
 
+function shouldIgnoreSharedDetailRule(rule, title, summary, titleMatch, allTextMatch) {
+  const primaryText = `${title} ${summary}`;
+  return SHARED_DETAIL_FALSE_POSITIVE_RULE_CODES.has(rule.code)
+    && !titleMatch
+    && allTextMatch
+    && (hasActiveRecruitmentSignal(primaryText) || PROGRAM_EDUCATION_RECRUITMENT_PATTERN.test(primaryText));
+}
+
+function isProgramEducationRecruitment(title, summary) {
+  const primaryText = `${title} ${summary}`;
+  return hasActiveRecruitmentSignal(primaryText)
+    && PROGRAM_EDUCATION_RECRUITMENT_PATTERN.test(primaryText);
+}
+
 function isNewsBoardSource(sourceKey) {
   return NEWS_BOARD_SOURCE_PATTERN.test(String(sourceKey ?? ""));
 }
@@ -428,7 +447,9 @@ export function evaluatePosterQuality(input = {}, options = {}) {
     addIssue(issues, "encoded-or-binary-text", "high", "encoded/binary-looking text was captured instead of readable poster content", summary || allText, "reject");
   }
 
-  if (ROBUST_JOB_RECRUITMENT_PATTERN.test(title) || ROBUST_JOB_RECRUITMENT_PATTERN.test(allText)) {
+  const titleHasJobRecruitment = ROBUST_JOB_RECRUITMENT_PATTERN.test(title);
+  const allTextHasJobRecruitment = ROBUST_JOB_RECRUITMENT_PATTERN.test(allText);
+  if (titleHasJobRecruitment || (allTextHasJobRecruitment && !isProgramEducationRecruitment(title, summary))) {
     addIssue(issues, "employment-recruitment-notice", "high", "employment or administrative recruitment notice is not a poster", title || allText, "reject");
   }
 
@@ -457,10 +478,12 @@ export function evaluatePosterQuality(input = {}, options = {}) {
   }
 
   for (const rule of TEXT_RULES) {
-    const isMatch = rule.scope === "title"
-      ? rule.pattern.test(title)
-      : rule.pattern.test(title) || rule.pattern.test(allText);
-    if (isMatch) {
+    const titleMatch = rule.pattern.test(title);
+    const allTextMatch = rule.scope === "title" ? false : rule.pattern.test(allText);
+    if (titleMatch || allTextMatch) {
+      if (shouldIgnoreSharedDetailRule(rule, title, summary, titleMatch, allTextMatch)) {
+        continue;
+      }
       if (isCentralText && CENTRAL_TEXT_NOTICE_REVIEW_ONLY_CODES.has(rule.code)) {
         addIssue(issues, rule.code, "medium", rule.reason, title || allText, "review");
         continue;
