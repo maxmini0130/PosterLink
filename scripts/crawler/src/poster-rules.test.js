@@ -111,6 +111,22 @@ test("identical image phash across different URLs (board vs. blog CDN) triggers 
   assert.ok(result.matched.includes("image-phash"));
 });
 
+test("matching image phash without org or deadline corroboration stays review, not merge", () => {
+  const phash = "a1b2c3d4e5f6a1b2";
+  const result = scorePosterDuplicate(
+    {
+      title: "2026 청년 창업 지원사업 참여자 모집",
+      imagePhash: phash,
+    },
+    {
+      title: "2026 청년 주거 지원사업 참여자 모집",
+      imagePhash: phash,
+    },
+  );
+  assert.equal(result.decision, "review");
+  assert.ok(result.matched.includes("image-phash"));
+});
+
 test("an exact image URL match is not double-counted as a separate phash match", () => {
   const phash = "a1b2c3d4e5f6a1b2";
   const sharedUrl = "https://board.mapo.go.kr/upload/photo999.jpg";

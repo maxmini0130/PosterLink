@@ -13,7 +13,6 @@ import "./load-env.js";
 import crypto from "node:crypto";
 import fs from "fs/promises";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import WebSocket from "ws";
 import { inferPosterClassification } from "./poster-classifier.js";
@@ -783,17 +782,23 @@ async function enrichReadableNoticeInfoWithLlm(readableInfo, post) {
     { title: readableInfo.title, content },
     readableInfo.facts ?? {},
   );
-  if (llmResult.filledByLlm.length === 0) return readableInfo;
+  const factsLlmMeta = {
+    filledByLlm: llmResult.filledByLlm,
+    rejectedUngrounded: llmResult.rejectedUngrounded ?? [],
+    allFactsGroundedInText: llmResult.allFactsGroundedInText,
+    model: llmResult.model,
+  };
+  const hasLlmAuditMeta =
+    llmResult.model !== "none" ||
+    factsLlmMeta.filledByLlm.length > 0 ||
+    factsLlmMeta.rejectedUngrounded.length > 0;
+
+  if (!hasLlmAuditMeta) return readableInfo;
 
   return {
     ...readableInfo,
     facts: llmResult.facts,
-    factsLlmMeta: {
-      filledByLlm: llmResult.filledByLlm,
-      rejectedUngrounded: llmResult.rejectedUngrounded ?? [],
-      allFactsGroundedInText: llmResult.allFactsGroundedInText,
-      model: llmResult.model,
-    },
+    factsLlmMeta,
   };
 }
 
@@ -2109,7 +2114,7 @@ async function uploadToSupabase(filePath) {
 }
 
 const isDirectExecution = Boolean(
-  process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url
+  process.argv[1] && path.basename(process.argv[1]).match(/^upload-to-supabase\.(js|cjs)$/)
 );
 if (isDirectExecution) {
   const filePath = process.argv[2];

@@ -613,3 +613,69 @@ cbbf893 docs: record pitch-deck review findings and today's 3 AI feature impleme
   "LLM 보완 후 몇 %로 올라갔는지")은 아직 정량적으로 측정 안 함 — 사업계획서의
   "95%↑ 정확도" 목표에 쓸 실제 baseline 숫자가 필요하면 100+건 골든셋을 만들어
   측정하는 후속 작업이 필요함.
+
+---
+
+## 11. 2026-07-28 후속 리뷰 보강 — Claude 작업 검토 후 안전장치 추가
+
+사용자가 "현재 클로드가 작업한 내용들이 잘 되었는지도 검사"를 요청해서 최신
+AI 기능 작업을 코드 리뷰 관점으로 재검토했다.
+
+### 확인 결과
+- `pnpm --filter posterlink-crawler test` 통과
+- `pnpm --filter web exec tsc --noEmit -p tsconfig.json` 통과
+- `pnpm --filter web build` 통과
+- 운영 DB에서 `get_recommended_posters_v2` 직접 호출해 `similarity_score` 반환 확인
+
+### 보강 1 — pHash 중복판정 자동 병합 조건 완화
+
+문제: `image-phash`가 85점을 주고 `score >= 90`이면 바로 merge라, 같은 기관
+공통 배너/템플릿 이미지가 반복될 때 서로 다른 공고가 자동 병합될 위험이 있었다.
+
+조치: `phashMatched`는 여전히 강한 신호로 쓰되, 자동 merge는 제목 유사도와 함께
+기관명/마감일/신청URL 중 하나가 보강될 때만 허용하도록 변경. 보강 신호가 부족하면
+`review`로 남긴다.
+
+추가 테스트:
+`matching image phash without org or deadline corroboration stays review, not merge`
+
+### 보강 2 — LLM 구조화 환각 reject 감사 메타 저장
+
+문제: `filledByLlm.length === 0`이면 바로 `readableInfo`를 반환해서, LLM을 실제로
+호출했고 `rejectedUngrounded`가 있어도 `field_verification.readableNotice.
+factsLlmMeta`에 남지 않았다.
+
+조치: `filledByLlm`이 비어 있어도 `model !== "none"`이거나 `rejectedUngrounded`가
+있으면 `factsLlmMeta`를 저장하도록 변경.
+
+### 보강 3 — LLM 독립 근거검증 회귀 테스트 추가
+
+`notice-facts-extractor.test.js` 추가. `fetch`를 모킹해서 모델이 본문에 없는
+`period` 값을 채우고 동시에 `allFactsGroundedInText: true`라고 거짓 보고하는
+상황을 재현한다. 기대 결과는 `period: null`, `rejectedUngrounded: ["period"]`,
+`allFactsGroundedInText: false`.
+
+테스트 캐시가 실제 `data/notice_facts_llm.json`을 더럽히지 않도록
+`NOTICE_FACTS_CACHE_PATH` 환경변수도 추가했다(기본값은 기존과 동일).
+
+### 보강 4 — 웹 번들 크롤러 업로드 CLI 진입점 수정
+
+`pnpm --filter web build` 중 `upload-to-supabase.js`의 `import.meta.url`이 CJS
+번들에서 비어 있다는 esbuild 경고가 계속 나왔다. 확인해보니 관리자 크롤러 실행
+API(`/api/admin/crawler/run`)는 빌드된 `apps/web/.generated/crawler/
+upload-to-supabase.cjs`를 `node upload-to-supabase.cjs <result.json>`로 직접
+실행하는데, 기존 direct-execution 체크가 `import.meta.url` 비교라 CJS 번들에서는
+false가 되어 업로드 단계가 조용히 실행되지 않을 수 있었다.
+
+조치: direct-execution 체크를 `path.basename(process.argv[1])` 기반으로 바꿔
+`upload-to-supabase.js`와 `upload-to-supabase.cjs` 양쪽에서 동작하게 수정.
+
+검증:
+- `pnpm --filter web build`에서 해당 esbuild 경고 사라짐
+- `node apps/web/.generated/crawler/upload-to-supabase.cjs` 인자 없이 실행 시
+  usage 출력 후 exit 1 확인(즉 CLI 진입점이 실제로 살아 있음)
+
+최종 검증:
+- `pnpm --filter posterlink-crawler test` → 57/57 통과
+- `pnpm --filter web exec tsc --noEmit -p tsconfig.json` → 통과
+- `pnpm --filter web build` → 통과

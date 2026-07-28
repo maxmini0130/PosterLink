@@ -12,7 +12,7 @@ import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
 
-const CACHE_PATH = "data/notice_facts_llm.json";
+const CACHE_PATH = process.env.NOTICE_FACTS_CACHE_PATH?.trim() || "data/notice_facts_llm.json";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY?.trim();
 const MODE = (process.env.NOTICE_FACTS_EXTRACTOR ?? "auto").trim().toLowerCase();
 const MODEL = process.env.OPENAI_NOTICE_FACTS_MODEL?.trim() || "gpt-5-mini";

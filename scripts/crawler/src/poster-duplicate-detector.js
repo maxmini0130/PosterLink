@@ -329,12 +329,20 @@ export function scorePosterDuplicate(candidate = {}, existing = {}) {
     matched.push("application-url");
   }
 
+  const phashCorroborated =
+    phashMatched &&
+    titleSimilarity >= 0.72 &&
+    (orgSimilarity >= 0.65 || matched.includes("deadline") || applicationUrlMatched);
+  const highScoreCanMerge =
+    score >= 90 &&
+    (!phashMatched || imageMatched || attachmentMatched || applicationUrlMatched || orgSimilarity >= 0.65 || matched.includes("deadline"));
+
   const canMerge =
-    score >= 90 ||
+    highScoreCanMerge ||
     (titleSimilarity === 1 && candidateFp.title.length >= 8 && orgSimilarity >= 0.9) ||
     (score >= 85 && titleSimilarity >= 0.72 && (orgSimilarity >= 0.65 || matched.includes("deadline"))) ||
     (imageMatched && titleSimilarity >= 0.45) ||
-    (phashMatched && titleSimilarity >= 0.45) ||
+    phashCorroborated ||
     (attachmentMatched && titleSimilarity >= 0.45) ||
     (applicationUrlMatched && titleSimilarity >= 0.72 && orgSimilarity >= 0.65);
   const needsReview = !canMerge && score >= 65 && titleSimilarity >= 0.55;
