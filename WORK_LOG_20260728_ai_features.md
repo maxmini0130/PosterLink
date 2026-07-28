@@ -736,6 +736,39 @@ pnpm --filter posterlink-crawler cleanup:review-nonposters -- --limit=1000 --app
 
 ---
 
+## 21. 2026-07-28 field verification coverage 백필 도구 구현
+
+AI KPI 재점검에서 `field verification coverage`가 23.1%로 낮게 나왔기 때문에, 기존 published/review 포스터 중 검증 결과가 없는 항목을 소량 배치로 보강할 수 있는 백필 도구를 추가했다.
+
+### 변경 사항
+- `scripts/crawler/src/backfill-field-verification.js`
+  - `posters.poster_status IN ('published', 'review')` 중 `field_verification`에 verifier 결과가 없는 항목을 조회.
+  - 기본은 dry-run으로 대상 목록만 리포트.
+  - `--apply`를 붙이면 기존 `verifyPosterFields`를 호출해 `field_verification`을 채움.
+  - 기존 `qualityIssues` 등 다른 검증 메타는 보존하고 verifier 결과를 병합.
+- `scripts/crawler/package.json`
+  - `verify:backfill` 스크립트 추가.
+- `docs/ai_kpi_measurement.md`
+  - dry-run 및 소량 적용 방법 문서화.
+
+### 사용법
+```bash
+pnpm --filter posterlink-crawler verify:backfill -- --limit=25
+pnpm --filter posterlink-crawler verify:backfill -- --limit=10 --apply
+```
+
+### 검증 및 적용
+- `pnpm --filter posterlink-crawler verify:backfill -- --limit=10 --output=data/results/field-verification-backfill-dryrun.json`
+  - 백필 대상 10건 확인.
+- `pnpm --filter posterlink-crawler verify:backfill -- --limit=5 --apply --output=data/results/field-verification-backfill-apply-5.json`
+  - 5건 적용 완료.
+- `pnpm --filter posterlink-crawler kpi:measure -- --days=30 --output=data/baseline/ai_kpi_report_after_verify_backfill.json`
+  - field verification coverage: 23.1% → 24.3%
+  - review queue reject candidates: 0건 유지
+- `pnpm --filter posterlink-crawler test` → 64/64 통과
+
+---
+
 ## 20. 2026-07-28 AI 1~5번 품질 흐름 재점검 및 측정 보강
 
 AI 관련 1~5번 흐름(정확도 baseline, KPI, 검수대기 정리, 품질 게이트, 수집 전 필터)을 한 번에 이어서 재점검했고, 측정 도구가 실제 품질 게이트 판단을 더 잘 보여주도록 보강했다.

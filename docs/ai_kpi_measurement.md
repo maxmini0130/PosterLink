@@ -32,3 +32,17 @@ pnpm --filter posterlink-crawler kpi:measure -- --queries="startup grant|small b
 ```
 
 Generated reports are written under `data/`, which is ignored by git.
+
+## Backfill Field Verification
+
+Use dry-run first:
+
+```bash
+pnpm --filter posterlink-crawler verify:backfill -- --limit=25
+```
+
+Apply in small batches because this may call the OpenAI field verifier:
+
+```bash
+pnpm --filter posterlink-crawler verify:backfill -- --limit=10 --apply
+```
