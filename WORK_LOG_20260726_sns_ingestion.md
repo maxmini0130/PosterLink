@@ -423,9 +423,10 @@ $0이라 `insufficient_quota` 오류가 났다가, 크레딧을 충전한 뒤 �
   신규 마이그레이션)를 `notice_sightings`에 저장한다. 블로그 인제스터가
   RSS `description`의 텍스트만 뽑고 이미지는 통째로 버리고 있던 것도 이번에
   같이 고쳐서(`<img>` 첫 태그 추출) 블로그 쪽에도 이미지가 채워지게 됨.
-  **단, phash를 실제 중복판정 점수(`poster-duplicate-detector.js`)에 반영하는
-  것은 이번에 안 함** — 운영 중인 중복병합 로직을 건드리는 거라 별도 검토가
-  필요하다고 판단해 범위를 좁힘. 지금은 phash를 계산·저장만 하고 있음.
+  ✅ **2026-07-28 추가 완료**: phash를 실제 중복판정 점수(`poster-duplicate-detector.js`
+  `scorePosterDuplicate()`)에도 반영함 — 게시판/블로그에 같은 사진이 다른 URL로
+  올라와도 해밍거리 기반으로 매칭됨(정확 URL 일치와 중복 가산 안 되게 처리).
+  자세한 내용은 `WORK_LOG_20260728_ai_features.md` 참고.
 - ✅ **2026-07-27 완료: 대표 이미지 자동 선정.** `upload-to-supabase.js`에
   `refreshRepresentativeImage(candidateId)` 추가 — 게시판/블로그 등 어떤
   출처든 sighting이 candidate에 연결될 때마다 호출되어, 그 candidate에 딸린
