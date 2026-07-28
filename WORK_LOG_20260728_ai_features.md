@@ -677,6 +677,42 @@ false가 되어 업로드 단계가 조용히 실행되지 않을 수 있었다.
 
 최종 검증:
 - `pnpm --filter posterlink-crawler test` → 57/57 통과
+
+---
+
+## 18. 2026-07-28 검수대기 비포스터 AI 품질 게이트 보강
+
+검수대기(`posters.poster_status=review`)에 포스터가 아닌 사후 소식/채용공고/깨진 문서 본문이 섞여 있는 문제가 확인되어, 신규 업로드 품질 게이트와 기존 검수대기 정리 경로를 보강했다.
+
+### 변경 사항
+- `scripts/crawler/src/poster-quality-gate.js`
+  - `소식`, `후기`, `결과`, `활동보고`, `모임 소식` 등 사후성 제목이면서 모집/신청/접수 액션이 없으면 `retrospective-news`로 reject.
+  - `/community/news`, `/notice/news`, `/board/news` 계열 뉴스 게시판에서 모집/신청/접수 액션이 없는 글은 `news-board-without-action`으로 reject.
+  - 직원/사회복지사/정규직/계약직 채용공고를 더 안정적으로 reject.
+  - base64처럼 인코딩된 문서 본문이 요약에 들어온 경우 `encoded-or-binary-text`로 reject.
+- `scripts/crawler/src/cleanup-review-nonposters.js`
+  - 기존 검수대기 포스터를 현재 품질 게이트로 재평가.
+  - 기본은 dry-run 리포트만 생성.
+  - `--apply`를 붙이면 확실한 reject 대상만 `poster_status='rejected'`로 이동.
+- `scripts/crawler/package.json`
+  - `cleanup:review-nonposters` 스크립트 추가.
+
+### 사용법
+```bash
+pnpm --filter posterlink-crawler cleanup:review-nonposters -- --limit=1000 --output=data/results/review-nonposter-cleanup.json
+pnpm --filter posterlink-crawler cleanup:review-nonposters -- --limit=1000 --apply
+```
+
+### 검증 및 적용
+- `pnpm --filter posterlink-crawler cleanup:review-nonposters -- --limit=1000 --output=data/results/review-nonposter-cleanup-dryrun.json`
+  - 검수대기 20건 중 16건 비포스터 reject 후보 확인.
+  - 주요 유형: 마포구노동자종합지원센터 사후 소식, 채용공고, 깨진/인코딩 문서 본문.
+- `pnpm --filter posterlink-crawler cleanup:review-nonposters -- --limit=1000 --apply --output=data/results/review-nonposter-cleanup-apply.json`
+  - 16건을 `poster_status='rejected'`로 이동.
+- 적용 후 재검증:
+  - 검수대기 크롤러 항목 4건 남음.
+  - `cleanup:review-nonposters` 재 dry-run 결과 reject 후보 0건.
+- `pnpm --filter posterlink-crawler test` → 61/61 통과
 - `pnpm --filter web exec tsc --noEmit -p tsconfig.json` → 통과
 - `pnpm --filter web build` → 통과
 

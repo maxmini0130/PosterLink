@@ -101,6 +101,11 @@ const JOB_ALIO_RECRUIT_NOTICE_PATTERN = /(?:\uCC44\uC6A9\s*\uAE30\uAC04|\uC751\u
 const JOB_ALIO_REVIEW_ONLY_CODES = new Set([
   "facility-use",
 ]);
+const ACTIVE_RECRUITMENT_PATTERN = /(?:\uBAA8\uC9D1|\uC2E0\uCCAD|\uC811\uC218|\uCC38\uC5EC\uC790|\uAD50\uC721\uC0DD|\uC218\uAC15\uC0DD|\uC9C0\uC6D0\s*\uB300\uC0C1|\uB300\uC0C1\uC790\s*\uBAA8\uC9D1|\uCC38\uAC00\uC790\s*\uBAA8\uC9D1|\uC774\uC6A9\uC790\s*\uBAA8\uC9D1|\uACF5\uBAA8|\uC120\uCC29\uC21C|\uC811\uC218\s*\uC911|apply|register|registration)/i;
+const RETROSPECTIVE_NEWS_PATTERN = /(?:\uC18C\uC2DD|\uD6C4\uAE30|\uACB0\uACFC|\uD604\uC7A5\s*\uC2A4\uCF00\uCE58|\uD65C\uB3D9\s*\uBCF4\uACE0|\uD589\uC0AC\s*\uC2A4\uCF00\uCE58|\uBAA8\uC784\s*\uC18C\uC2DD|\uAC04\uB2F4\uD68C|\uB300\uD45C\uC790\s*\uBAA8\uC784)/i;
+const NEWS_BOARD_SOURCE_PATTERN = /\/(?:community\/news|notice\/news|board\/news)(?:\/|$|\?)/i;
+const ROBUST_JOB_RECRUITMENT_PATTERN = /(?:\uCC44\uC6A9\s*(?:\uACF5\uACE0|\uAE30\uAC04|\uC548\uB0B4)|\uC9C1\uC6D0\s*\uCC44\uC6A9|\uC0AC\uD68C\uBCF5\uC9C0\uC0AC.*\uCC44\uC6A9|\uC815\uADDC\uC9C1.*\uCC44\uC6A9|\uACC4\uC57D\uC9C1.*\uCC44\uC6A9|\uAC15\uC0AC\s*\uBAA8\uC9D1|\uD300\uC6D0\s*\uCC44\uC6A9)/i;
+const ENCODED_TEXT_PATTERN = /\b[A-Za-z0-9+/]{160,}={0,2}\b/;
 
 const GENERIC_TITLE_PATTERNS = [
   /^\s*$/i,
@@ -325,6 +330,14 @@ function isJobAlioRecruitTextNotice(input, sourceKey, allText) {
     && JOB_ALIO_RECRUIT_NOTICE_PATTERN.test(allText);
 }
 
+function hasActiveRecruitmentSignal(text) {
+  return ACTIVE_RECRUITMENT_PATTERN.test(text);
+}
+
+function isNewsBoardSource(sourceKey) {
+  return NEWS_BOARD_SOURCE_PATTERN.test(String(sourceKey ?? ""));
+}
+
 export function buildPosterDuplicateMaps(rows = []) {
   const source = new Map();
   const titleOrg = new Map();
@@ -408,6 +421,22 @@ export function evaluatePosterQuality(input = {}, options = {}) {
 
   if (hasMojibake(allText)) {
     addIssue(issues, "mojibake", "high", "broken encoding text detected", allText, "reject");
+  }
+
+  if (ENCODED_TEXT_PATTERN.test(summary) || ENCODED_TEXT_PATTERN.test(allText)) {
+    addIssue(issues, "encoded-or-binary-text", "high", "encoded/binary-looking text was captured instead of readable poster content", summary || allText, "reject");
+  }
+
+  if (ROBUST_JOB_RECRUITMENT_PATTERN.test(title) || ROBUST_JOB_RECRUITMENT_PATTERN.test(allText)) {
+    addIssue(issues, "employment-recruitment-notice", "high", "employment or administrative recruitment notice is not a poster", title || allText, "reject");
+  }
+
+  if (RETROSPECTIVE_NEWS_PATTERN.test(title) && !hasActiveRecruitmentSignal(`${title} ${summary}`)) {
+    addIssue(issues, "retrospective-news", "high", "retrospective news/follow-up content is not an active poster recruitment", title, "reject");
+  }
+
+  if (isNewsBoardSource(sourceKey) && !hasActiveRecruitmentSignal(`${title} ${summary}`)) {
+    addIssue(issues, "news-board-without-action", "high", "news-board content without recruitment/application action is not a poster", sourceKey, "reject");
   }
 
   const badApplicationLink = findBadApplicationLink(input, options, sourceKey);

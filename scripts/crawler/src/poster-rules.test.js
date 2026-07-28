@@ -247,6 +247,58 @@ test("reject a provider-only title captured from a youth notice", () => {
   assert.ok(result.issues.some((issue) => issue.code === "generic-title"));
 });
 
+test("reject retrospective news items even when they have an image", () => {
+  const result = evaluatePosterQuality({
+    title: "4\uC6D4 \uAC77\uAE30\uBAA8\uC784 \uC18C\uC2DD",
+    source_org_name: "\uB9C8\uD3EC\uAD6C\uB178\uB3D9\uC790\uC885\uD569\uC9C0\uC6D0\uC13C\uD130",
+    summary_short: "4\uC6D4 \uAC77\uAE30\uBAA8\uC784 \uC18C\uC2DD",
+    source_key: "https://mapolabor.org/community/news/post?seq=368",
+    images: ["https://mapolabor.org/files/news-walk.jpg"],
+  });
+
+  assert.equal(result.decision, "reject");
+  assert.ok(result.issues.some((issue) => issue.code === "retrospective-news"));
+});
+
+test("reject news-board posts without recruitment or application action", () => {
+  const result = evaluatePosterQuality({
+    title: "\uACBD\uBE44\uB178\uB3D9\uC790 \uAD50\uC721 \uBC0F \uD55C\uB9C8\uB2F9",
+    source_org_name: "\uB9C8\uD3EC\uAD6C\uB178\uB3D9\uC790\uC885\uD569\uC9C0\uC6D0\uC13C\uD130",
+    summary_short: "\uACBD\uBE44\uB178\uB3D9\uC790 \uAD50\uC721 \uBC0F \uD55C\uB9C8\uB2F9 \uD589\uC0AC \uC548\uB0B4",
+    source_key: "https://mapolabor.org/community/news/post?seq=369",
+    images: ["https://mapolabor.org/files/event.jpg"],
+  });
+
+  assert.equal(result.decision, "reject");
+  assert.ok(result.issues.some((issue) => issue.code === "news-board-without-action"));
+});
+
+test("keep active recruitment notices from a news board", () => {
+  const result = evaluatePosterQuality({
+    title: "\uACBD\uBE44\uB178\uB3D9\uC790 \uAD50\uC721 \uCC38\uC5EC\uC790 \uBAA8\uC9D1",
+    source_org_name: "\uB9C8\uD3EC\uAD6C\uB178\uB3D9\uC790\uC885\uD569\uC9C0\uC6D0\uC13C\uD130",
+    summary_short: "\uB300\uC0C1\uC790\uB97C \uBAA8\uC9D1\uD558\uBA70 2026\uB144 8\uC6D4 10\uC77C\uAE4C\uC9C0 \uC2E0\uCCAD \uC811\uC218\uD569\uB2C8\uB2E4.",
+    source_key: "https://mapolabor.org/community/news/post?seq=999",
+    images: ["https://mapolabor.org/files/recruit.jpg"],
+  });
+
+  assert.notEqual(result.decision, "reject");
+});
+
+test("reject unreadable encoded document text in review candidates", () => {
+  const result = evaluatePosterQuality({
+    title: "[\uACF5\uACE0 \uC81C2026-1\uD638] \uC9C1\uC6D0 \uCC44\uC6A9\uACF5\uACE0",
+    source_org_name: "\uB9C8\uD3EC\uBCF5\uC9C0\uC7AC\uB2E8",
+    summary_short: "V20xYVJWWnNjRmxWZWtGNFQxaEJORlF5TlRSYWJHZDRUMVZHVUdKdWFFSmFhMUozVVZaU1dFOVhkR0ZYU0doQ1dtdG9ZV05HY0ZsYVJHaFFZbTVvY0ZscVNrZGxWbkJHWWtWV2JWSlZTVFJhUkU1clRUQXhObEpxYUZCaWJtZ3hXa1pqZUU5R1JrbGtNMmhQVmtkME5GcHJVbmRQUjA1SVVtMDFZVmRJYUVKYWExSkxUMFU1ZFdWSVNtRlhSM2gwV1Zaa1YyTXhjRWxsUlVadFUwaGpNbHByWkRCaVIxW",
+    source_key: "https://www.mapowf.or.kr/main/sub.html?boardID=www31&Mode=view&num=1591",
+    images: ["https://example.test/recruitment.jpg"],
+  });
+
+  assert.equal(result.decision, "reject");
+  assert.ok(result.issues.some((issue) => issue.code === "encoded-or-binary-text"));
+  assert.ok(result.issues.some((issue) => issue.code === "employment-recruitment-notice"));
+});
+
 test("keep the specific Youth Seoul title over a generic external page title", () => {
   assert.equal(
     choosePreferredDetailTitle(

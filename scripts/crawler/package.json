@@ -17,6 +17,7 @@
     "refresh:site": "node src/refresh-site-posters.js",
     "storage:orphans": "node src/cleanup-orphan-storage.js",
     "audit:current": "node src/audit-current-posters.js",
+    "cleanup:review-nonposters": "node src/cleanup-review-nonposters.js",
     "baseline:sample": "node src/create-baseline-goldenset.js",
     "baseline:score": "node src/score-baseline-goldenset.js",
     "kpi:measure": "node src/measure-ai-kpis.js",
