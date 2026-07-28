@@ -2082,17 +2082,23 @@ async function uploadToSupabase(filePath) {
     }
   }
 
-  const { data: statusRows, error: statusError } = await supabase
-    .from("posters")
-    .select("poster_status");
-  if (statusError) {
-    console.warn(`  전체 상태 카운트 확인 실패: ${statusError.message}`);
-  } else {
+  try {
     const statusCounts = {};
-    for (const row of statusRows ?? []) {
-      statusCounts[row.poster_status] = (statusCounts[row.poster_status] ?? 0) + 1;
+    const pageSize = 1000;
+    for (let from = 0; ; from += pageSize) {
+      const { data: statusRows, error: statusError } = await supabase
+        .from("posters")
+        .select("poster_status")
+        .range(from, from + pageSize - 1);
+      if (statusError) throw statusError;
+      for (const row of statusRows ?? []) {
+        statusCounts[row.poster_status] = (statusCounts[row.poster_status] ?? 0) + 1;
+      }
+      if (!statusRows || statusRows.length < pageSize) break;
     }
     console.log(`  현재 posters 상태별 카운트: ${JSON.stringify(statusCounts)}`);
+  } catch (error) {
+    console.warn(`  전체 상태 카운트 확인 실패: ${error.message}`);
   }
 
   const { data: latestCrawlerRows, error: latestError } = await supabase
