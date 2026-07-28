@@ -19,6 +19,7 @@
     "audit:current": "node src/audit-current-posters.js",
     "baseline:sample": "node src/create-baseline-goldenset.js",
     "baseline:score": "node src/score-baseline-goldenset.js",
+    "kpi:measure": "node src/measure-ai-kpis.js",
     "embed:backfill": "node src/backfill-poster-embeddings.js",
     "ingest:naver-blog": "node src/naver-blog-ingester.js",
     "measure:coverage": "node src/measure-institution-coverage.js"

@@ -837,3 +837,39 @@ Outbound 마지막 신규 기능 축으로, 운영자 대시보드에 등록 공
 - `pnpm --filter posterlink-crawler baseline:score -- --input=data/baseline/goldenset_sample_test.csv --output=data/baseline/baseline_report_test.json` → 미라벨 상태에서 `n/a` 리포트 정상 출력
 - `pnpm --filter posterlink-crawler baseline:sample -- --limit=100 --output=data/baseline/goldenset_sample.csv` → 100건 샘플 생성 완료
 - `pnpm --filter posterlink-crawler test` → 57/57 통과
+
+---
+
+## 17. 2026-07-28 AI KPI 자동 측정 도구 구현
+
+정확도 baseline은 사람 검수가 필요하므로, 그와 별개로 DB/API에서 자동 산출 가능한 KPI 측정 도구를 추가했다. 사업계획서의 "현재 baseline → 목표" 표기에 쓸 보조 수치를 빠르게 뽑기 위한 작업이다.
+
+### 변경 사항
+- `scripts/crawler/src/measure-ai-kpis.js`
+  - published 포스터 embedding coverage 측정.
+  - published/review 포스터 field verification guard coverage 측정.
+  - 최근 `collection_source_runs` 기준 수집 실행 수, 성공률, duration p50/p95, throughput, 건당 처리시간 측정.
+  - `--base-url`을 넘기면 `/api/posters/semantic-search` latency도 측정.
+- `scripts/crawler/package.json`
+  - `kpi:measure` 스크립트 추가.
+- `docs/ai_kpi_measurement.md`
+  - KPI 리포트 생성 방법 문서화.
+
+### 사용법
+```bash
+pnpm --filter posterlink-crawler kpi:measure -- --days=30 --output=data/baseline/ai_kpi_report.json
+```
+
+웹 서버가 떠 있을 때는 semantic API latency까지 측정:
+```bash
+pnpm --filter posterlink-crawler kpi:measure -- --base-url=http://localhost:4000
+```
+
+### 검증
+- `pnpm --filter posterlink-crawler kpi:measure -- --days=30 --output=data/baseline/ai_kpi_report.json` → 리포트 생성 완료
+  - embedding coverage: 100%
+  - field verification coverage: 25.8%
+  - 최근 30일 collection run: 195건
+  - collection p95 duration: 3,260,942ms
+  - semantic API latency: 로컬 웹 서버 미실행으로 skipped
+- `pnpm --filter posterlink-crawler test` → 57/57 통과
