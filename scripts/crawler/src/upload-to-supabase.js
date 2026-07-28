@@ -790,6 +790,7 @@ async function enrichReadableNoticeInfoWithLlm(readableInfo, post) {
     facts: llmResult.facts,
     factsLlmMeta: {
       filledByLlm: llmResult.filledByLlm,
+      rejectedUngrounded: llmResult.rejectedUngrounded ?? [],
       allFactsGroundedInText: llmResult.allFactsGroundedInText,
       model: llmResult.model,
     },

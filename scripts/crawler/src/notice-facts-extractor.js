@@ -24,6 +24,30 @@ const MIN_REGEX_FACTS_BEFORE_LLM = Number(process.env.NOTICE_FACTS_MIN_REGEX_FIE
 const OPENAI_REQUEST_TIMEOUT_MS = Number(process.env.OPENAI_REQUEST_TIMEOUT_MS ?? "45000");
 
 const FACT_KEYS = ["period", "target", "content", "application", "location", "contact"];
+// 필드값의 몇 %가 원문에 실제로 등장해야 "근거 있음"으로 볼지 — LLM의 자기 판단
+// (allFactsGroundedInText)만 믿지 않고, 여기서 독립적으로 재확인한다.
+const GROUNDING_BIGRAM_OVERLAP_THRESHOLD = 0.4;
+
+function bigrams(text) {
+  const compact = text.replace(/\s+/g, "");
+  if (compact.length <= 1) return compact ? [compact] : [];
+  const grams = [];
+  for (let i = 0; i < compact.length - 1; i += 1) grams.push(compact.slice(i, i + 2));
+  return grams;
+}
+
+// factValue가 실제로 content 안에 등장하는 표현인지, 순수 문자열 오버랩(bigram containment)으로
+// 독립 검증한다 — LLM이 "true"라고 자가보고해도 이 프로그램적 체크를 같이 통과해야 grounded로 친다.
+function isGroundedInText(factValue, content) {
+  const value = String(factValue ?? "").trim();
+  if (!value) return true; // null/빈 값은 검증 대상 아님
+  const valueGrams = bigrams(value);
+  if (valueGrams.length === 0) return content.includes(value);
+
+  const contentCompact = content.replace(/\s+/g, "");
+  const matched = valueGrams.filter((gram) => contentCompact.includes(gram)).length;
+  return matched / valueGrams.length >= GROUNDING_BIGRAM_OVERLAP_THRESHOLD;
+}
 
 function createOpenAiTimeoutSignal() {
   const timeoutMs = Number.isFinite(OPENAI_REQUEST_TIMEOUT_MS) && OPENAI_REQUEST_TIMEOUT_MS > 0
@@ -72,7 +96,7 @@ function normalizeText(value, maxLength = 300) {
 export async function extractNoticeFactsWithLlm(source = {}, existingFacts = {}) {
   const missingKeys = FACT_KEYS.filter((key) => !existingFacts[key]);
   const filledByRegexCount = FACT_KEYS.length - missingKeys.length;
-  const baseResult = { facts: { ...existingFacts }, allFactsGroundedInText: null, filledByLlm: [], reason: "", model: "none" };
+  const baseResult = { facts: { ...existingFacts }, allFactsGroundedInText: null, filledByLlm: [], rejectedUngrounded: [], reason: "", model: "none" };
 
   // 정규식이 이미 충분히 채웠으면(임계값 이상) 굳이 LLM을 부르지 않는다 — 남은 빈 필드는
   // 대개 본문에 정말 없는 정보(예: 장소가 필요 없는 정책 안내문)이지 추출 실패가 아니다.
@@ -154,20 +178,28 @@ export async function extractNoticeFactsWithLlm(source = {}, existingFacts = {})
     const parsed = parseJson(outputText);
 
     const filledByLlm = [];
+    const rejectedUngrounded = [];
     const facts = { ...existingFacts };
+    const fullSourceText = `${title}\n${content}`;
     for (const key of FACT_KEYS) {
       if (facts[key]) continue; // 정규식 값이 있으면 절대 덮어쓰지 않는다
       const value = normalizeText(parsed[key]);
-      if (value) {
+      if (!value) continue;
+      // LLM의 자가보고(allFactsGroundedInText)만 믿지 않고, 값이 실제로 원문에 등장하는지
+      // 문자열 오버랩으로 독립 검증한다 — 통과 못 하면 환각으로 간주해 버린다(null 유지).
+      if (isGroundedInText(value, fullSourceText)) {
         facts[key] = value;
         filledByLlm.push(key);
+      } else {
+        rejectedUngrounded.push(key);
       }
     }
 
     const result = {
       facts,
-      allFactsGroundedInText: Boolean(parsed.allFactsGroundedInText),
+      allFactsGroundedInText: Boolean(parsed.allFactsGroundedInText) && rejectedUngrounded.length === 0,
       filledByLlm,
+      rejectedUngrounded,
       reason: normalizeText(parsed.reason, 300) ?? "",
       model: MODEL,
     };
