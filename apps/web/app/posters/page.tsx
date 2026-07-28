@@ -40,6 +40,7 @@ function PosterListPageContent() {
   const [sortBy, setSortBy] = useState("latest");
   const [hideClosedPosters, setHideClosedPosters] = useState(true);
   const [myMatchesOnly, setMyMatchesOnly] = useState(false);
+  const [semanticSearchActive, setSemanticSearchActive] = useState(false);
 
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -107,15 +108,41 @@ function PosterListPageContent() {
         userInterestCategoryIds = (interestRes.data ?? []).map((row: any) => row.category_id).filter(Boolean);
       }
 
-      if (hideClosedPosters) {
-        const { data: rpcData, error } = await supabase.rpc("search_posters_with_synonyms", {
-          p_query: normalizedQuery,
-          p_category_id: selectedCategoryId,
-          p_region_id: null,
-        });
+      let semanticSearchUsed = false;
+      const selectedRegionScopeIds = getRegionScopeIds(selectedRegionId, regions);
 
-        if (error) throw error;
-        data = rpcData ?? [];
+      if (hideClosedPosters) {
+        if (normalizedQuery.length >= 2) {
+          const semanticResponse = await fetch("/api/posters/semantic-search", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              query: normalizedQuery,
+              limit: 80,
+              categoryId: selectedCategoryId,
+              regionIds: selectedRegionScopeIds ? Array.from(selectedRegionScopeIds) : null,
+            }),
+          }).catch(() => null);
+
+          if (semanticResponse?.ok) {
+            const payload = await semanticResponse.json().catch(() => null);
+            if (payload?.semantic && Array.isArray(payload.posters) && payload.posters.length > 0) {
+              data = payload.posters;
+              semanticSearchUsed = true;
+            }
+          }
+        }
+
+        if (!semanticSearchUsed) {
+          const { data: rpcData, error } = await supabase.rpc("search_posters_with_synonyms", {
+            p_query: normalizedQuery,
+            p_category_id: selectedCategoryId,
+            p_region_id: null,
+          });
+
+          if (error) throw error;
+          data = rpcData ?? [];
+        }
       } else {
         let query = supabase
           .from("posters")
@@ -156,9 +183,9 @@ function PosterListPageContent() {
         viewCount: baseMetricCounts.viewCounts[poster.id] ?? 0,
         linkClickCount: baseMetricCounts.linkClickCounts[poster.id] ?? 0,
         favoriteCount: baseMetricCounts.favoriteCounts[poster.id] ?? 0,
+        semanticScore: poster.semantic_score ?? null,
       }));
 
-      const selectedRegionScopeIds = getRegionScopeIds(selectedRegionId, regions);
       const userRegionScopeIds = getRegionScopeIds(userPrimaryRegionId, regions);
 
       const filteredData = enrichedData.filter((poster: any) => (
@@ -171,6 +198,9 @@ function PosterListPageContent() {
       ));
 
       const sortedData = [...filteredData].sort((a: any, b: any) => {
+        if (semanticSearchUsed && normalizedQuery && sortBy === "latest") {
+          return (b.semanticScore ?? 0) - (a.semanticScore ?? 0);
+        }
         if (sortBy === "deadline") {
           const deadlineRank = (poster: any) => {
             if (!poster.application_end_at) return Number.MAX_SAFE_INTEGER;
@@ -195,6 +225,7 @@ function PosterListPageContent() {
       });
 
       setPosters(sortedData);
+      setSemanticSearchActive(semanticSearchUsed);
       setDisplayCount(PAGE_SIZE);
 
       if (normalizedQuery && pendingSearchLogRef.current === normalizedQuery) {
@@ -210,6 +241,7 @@ function PosterListPageContent() {
     } catch (err) {
       console.error("Error fetching posters:", err);
       setPosters([]);
+      setSemanticSearchActive(false);
     } finally {
       setLoading(false);
     }
@@ -437,6 +469,7 @@ function PosterListPageContent() {
           <div className="flex items-center justify-between border-b border-gray-50 pb-4">
              <span className="text-[11px] font-black text-gray-300 uppercase tracking-widest">
                총 {posters.length.toLocaleString()}건 {hideClosedPosters ? "· 접수 중" : "· 전체"} {myMatchesOnly ? "· 내 맞춤" : ""}
+               {semanticSearchActive ? " · 의미순" : ""}
              </span>
 
              <div className="flex flex-wrap justify-end gap-3">
@@ -471,6 +504,7 @@ function PosterListPageContent() {
                     viewCount: poster.viewCount,
                     linkClickCount: poster.linkClickCount,
                     favoriteCount: poster.favoriteCount,
+                    similarityScore: poster.semanticScore,
                     tags: [poster.categoryName, poster.regionName].filter((tag): tag is string => Boolean(tag))
                   }}
                 />

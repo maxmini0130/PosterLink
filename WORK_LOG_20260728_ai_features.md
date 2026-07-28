@@ -679,3 +679,44 @@ false가 되어 업로드 단계가 조용히 실행되지 않을 수 있었다.
 - `pnpm --filter posterlink-crawler test` → 57/57 통과
 - `pnpm --filter web exec tsc --noEmit -p tsconfig.json` → 통과
 - `pnpm --filter web build` → 통과
+
+---
+
+## 12. 2026-07-28 Core 자연어 검색 v1 구현
+
+사업계획서의 Core 항목인 "RAG 기반 자연어 질의 이해"에 맞춰, 포스터 목록 검색에 임베딩 기반 의미 검색 경로를 추가했다. 기존 키워드/동의어 검색은 OpenAI 키 누락, API 오류, 의미 검색 결과 없음 상황에서 fallback으로 그대로 유지한다.
+
+### 변경 사항
+- `supabase/migrations/20260728010000_add_semantic_search_rpc.sql`
+  - `match_posters_by_embedding` RPC 추가.
+  - `posters.embedding`과 query embedding의 cosine similarity 기준으로 접수 중인 published 공고를 정렬.
+- `supabase/migrations/20260728011000_fix_semantic_search_return_types.sql`
+  - 운영 DB의 varchar 컬럼과 `RETURNS TABLE ... TEXT` 타입 불일치 보정.
+- `supabase/migrations/20260728012000_add_semantic_search_filters.sql`
+  - 카테고리/지역 필터가 켜진 상태에서도 DB 단계에서 먼저 필터링한 뒤 의미 점수순 top-K를 고르도록 RPC 확장.
+- `apps/web/app/api/posters/semantic-search/route.ts`
+  - 서버에서 OpenAI embedding 생성 후 Supabase RPC 호출.
+  - `OPENAI_API_KEY`가 없거나 실패하면 200 응답으로 빈 결과를 반환해 클라이언트가 기존 키워드 검색으로 fallback.
+- `apps/web/app/posters/page.tsx`
+  - 접수 중 목록에서 검색어 2자 이상이면 의미 검색을 먼저 시도.
+  - 성공 시 결과 카운트에 `의미순` 표시.
+  - 의미 점수를 `PosterCard`의 `similarityScore`로 전달해 `맞춤 NN%` 배지 표시.
+  - 카테고리/지역/내 맞춤/정렬 필터는 기존 흐름과 함께 동작하도록 유지.
+
+### 검증
+- `npx supabase db push --dry-run` → 신규 마이그레이션 적용 대상 확인
+- `npx supabase db push` → 운영 DB에 `20260728012000_add_semantic_search_filters.sql` 적용
+- API 직접 검증
+  - `청년 창업 지원금` → `semantic: true`
+  - 1순위: `「2026년 청년 취업 준비 비용 지원사업」 신청자 모집공고`
+  - 카테고리 필터 포함 요청도 `semantic: true` 및 결과 반환 확인
+- 화면 검증
+  - `/posters?q=청년 창업 지원금`
+  - 결과 문구: `총 80건 · 접수 중 · 의미순`
+  - 첫 5개 결과가 API 의미 점수순과 일치
+  - `맞춤 NN%` 배지 12개 표시
+  - 콘솔 에러 0건
+  - 스크린샷: `data/results/semantic-search-posters.png`
+- `pnpm --filter web exec tsc --noEmit -p tsconfig.json` → 통과
+- `pnpm --filter posterlink-crawler test` → 57/57 통과
+- `pnpm --filter web build` → 통과
