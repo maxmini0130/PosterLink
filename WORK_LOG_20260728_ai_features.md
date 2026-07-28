@@ -1120,6 +1120,65 @@ AI 정확도 95% 목표를 실제로 측정하려면 사람이 라벨링한 gold
   - labeled_rows 0
   - macro_accuracy `n/a`
   - 라벨 전 상태에서 정상적으로 빈 리포트를 생성함.
+
+---
+
+## 26. 2026-07-28 AI 운영 healthcheck 및 이미지 검증 백필 추가
+
+남은 항목을 이어서 처리했다. field verification coverage를 추가로 올리고, AI 이미지 검증 결과가 품질 게이트/운영 점검에 보이도록 연결했으며, 여러 점검 명령을 한 번에 실행하는 healthcheck를 추가했다.
+
+### field verification 추가 확대
+- `pnpm --filter posterlink-crawler verify:backfill -- --limit=25 --concurrency=2 --apply --output=data/results/field-verification-backfill-apply-next-25-c2.json`
+  - 25건 적용
+  - 실패 0건
+- `pnpm --filter posterlink-crawler verify:apply-corrections -- --limit=1000 --min-confidence=0.85 --apply --output=data/results/field-verification-corrections-after-backfill25-apply.json`
+  - 추가 보정 후보 5건 적용
+- KPI:
+  - field verification coverage: 32.1% → 37.8%
+  - review queue reject candidates: 0건 유지
+
+### 운영 healthcheck 추가
+- `scripts/crawler/src/ai-healthcheck.js`
+  - KPI 측정
+  - field verification 보정 후보 dry-run
+  - published/review 비포스터 후보 dry-run
+  - 선택한 golden set score
+  - 이미지 AI 검증 커버리지/비포스터 이미지/저신뢰 이미지 카운트 측정
+- `scripts/crawler/package.json`
+  - `ai:healthcheck` 추가
+- 실행:
+  - `pnpm --filter posterlink-crawler ai:healthcheck -- --golden-set=data/baseline/human_golden_set_seed_20260728.csv --output=data/results/ai-healthcheck-after-image-backfill.json`
+  - embedding coverage: 100%
+  - field verification coverage: 37.8%
+  - review queue: 4건
+  - review queue reject candidates: 0건
+  - field correction candidates: 0건
+  - nonposter reject candidates: 0건
+  - golden set labeled rows: 0건
+
+### 이미지 AI 검증 백필 및 품질 게이트 연결
+- `scripts/crawler/src/backfill-image-classification.js`
+  - thumbnail이 있지만 `field_verification.posterImageOcr.imageClassification`이 없는 published/review 포스터를 분류.
+  - 기본 dry-run, `--apply`에서만 저장.
+  - progress log/checkpoint/실패 분리/동시성 옵션 지원.
+- `scripts/crawler/src/poster-quality-gate.js`
+  - DB에 저장된 `field_verification.posterImageOcr.imageClassification` 및 `contentMatch`를 품질 게이트가 직접 읽도록 연결.
+- `scripts/crawler/package.json`
+  - `image:backfill` 추가
+- 적용:
+  - `pnpm --filter posterlink-crawler image:backfill -- --limit=10 --concurrency=2 --apply --output=data/results/image-classification-backfill-apply-10.json`
+  - 10건 적용, 실패 0건
+  - 비포스터 이미지 판정 0건
+- healthcheck 기준 이미지 AI 커버리지:
+  - 5.7% → 8.0%
+
+### 검증
+- `pnpm --filter posterlink-crawler cleanup:review-nonposters -- --statuses=review,published --output=data/results/nonposter-cleanup-after-image-backfill-dryrun.json`
+  - reject 후보 0건
+- `pnpm --filter posterlink-crawler verify:apply-corrections -- --limit=1000 --min-confidence=0.85 --output=data/results/field-verification-corrections-after-image-backfill-dryrun.json`
+  - correction 후보 0건
+- `pnpm --filter posterlink-crawler test` - 72/72 통과
+- `git diff --check` - 통과
 - `git diff --check` - 통과
 
 ---

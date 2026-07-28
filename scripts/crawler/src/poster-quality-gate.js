@@ -281,8 +281,14 @@ function hasMojibake(value) {
 
 function getVerification(input = {}) {
   return {
-    imageClassification: input.imageClassification ?? input.posterImageCheck?.model ?? null,
-    contentVerification: input.posterContentVerification ?? input.posterImageCheck?.content ?? null,
+    imageClassification: input.imageClassification
+      ?? input.posterImageCheck?.model
+      ?? input.field_verification?.posterImageOcr?.imageClassification
+      ?? null,
+    contentVerification: input.posterContentVerification
+      ?? input.posterImageCheck?.content
+      ?? input.field_verification?.posterImageOcr?.contentMatch
+      ?? null,
   };
 }
 

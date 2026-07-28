@@ -21,9 +21,11 @@
     "baseline:sample": "node src/create-baseline-goldenset.js",
     "baseline:score": "node src/score-baseline-goldenset.js",
     "kpi:measure": "node src/measure-ai-kpis.js",
+    "ai:healthcheck": "node src/ai-healthcheck.js",
     "embed:backfill": "node src/backfill-poster-embeddings.js",
     "verify:backfill": "node src/backfill-field-verification.js",
     "verify:apply-corrections": "node src/apply-field-verification-corrections.js",
+    "image:backfill": "node src/backfill-image-classification.js",
     "ingest:naver-blog": "node src/naver-blog-ingester.js",
     "measure:coverage": "node src/measure-institution-coverage.js"
   },
