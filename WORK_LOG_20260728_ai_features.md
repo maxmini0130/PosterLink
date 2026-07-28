@@ -720,3 +720,33 @@ false가 되어 업로드 단계가 조용히 실행되지 않을 수 있었다.
 - `pnpm --filter web exec tsc --noEmit -p tsconfig.json` → 통과
 - `pnpm --filter posterlink-crawler test` → 57/57 통과
 - `pnpm --filter web build` → 통과
+
+---
+
+## 13. 2026-07-28 Outbound 스마트 공고 생성기 v1 구현
+
+Core 자연어 검색 v1 다음 단계로, 사업계획서의 Outbound 항목 중 "기관용 스마트 공고 생성기"의 첫 화면 기능을 추가했다. 포스터 이미지를 올리는 기존 OCR 흐름은 유지하고, 기관 담당자가 원문 메모나 행사 정보를 텍스트로 붙여넣으면 AI가 등록 폼의 주요 항목을 먼저 채우는 방식이다.
+
+### 변경 사항
+- `apps/web/app/api/operator/posters/draft/route.ts`
+  - 로그인 사용자만 호출 가능한 초안 생성 API 추가.
+  - OpenAI `/v1/responses` + `json_schema`로 제목, 기관명, 카테고리, 지역, 마감일, 요약, 공식 링크를 구조화.
+  - 카테고리/지역은 운영 DB의 실제 `categories`, `regions` id 후보 중 하나만 반환하도록 제한.
+  - 불명확하거나 누락된 항목은 `missingFields`, `ambiguousPhrases`로 별도 반환.
+  - `OPENAI_POSTER_DRAFT_MODEL` → `OPENAI_NOTICE_FACTS_MODEL` → `gpt-5-mini` 순서로 모델 선택.
+- `apps/web/app/operator/posters/new/page.tsx`
+  - 신규 등록 화면에 `AI 공고 초안` 패널 추가.
+  - `초안 채우기` 버튼으로 API 호출 후 기존 폼 상태에 병합.
+  - AI가 지적한 누락/모호 항목을 노란 검토 박스로 표시.
+
+### 검증
+- API 직접 검증
+  - 입력: 마포구 청년 창업 교육 참여자 모집, 무료, 2026-08-31 마감, 공식 링크 포함.
+  - 반환: 제목/기관/카테고리/지역/마감/요약/링크 정상 구조화.
+  - 누락 정보(신청방법, 교육기간, 장소, 모집인원, 제출서류 등)와 모호 표현 반환 확인.
+- 화면 검증
+  - 임시 operator 프로필 사용자로 `/operator/posters/new` 진입.
+  - `AI 공고 초안`, 설명문, `초안 채우기` 버튼 표시 확인.
+  - 스크린샷: `data/results/operator-smart-draft.png`
+- `pnpm --filter web exec tsc --noEmit -p tsconfig.json` → 통과
+- `pnpm --filter web build` → 통과

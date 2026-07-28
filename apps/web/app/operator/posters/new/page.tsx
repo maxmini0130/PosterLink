@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "../../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { Button } from "@posterlink/ui";
-import { Camera, ChevronLeft, Loader2 } from "lucide-react";
+import { Camera, ChevronLeft, Loader2, WandSparkles } from "lucide-react";
 import { ImageCropper } from "../../../components/ImageCropper";
 import { getCityRegions, getDistrictRegions, getRegionLabel, getSelectedCityId, getSelectedDistrictId } from "../../../lib/regionHelpers";
 
@@ -121,6 +121,9 @@ export default function NewPosterPage() {
   };
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isDrafting, setIsDrafting] = useState(false);
+  const [draftPrompt, setDraftPrompt] = useState("");
+  const [draftReview, setDraftReview] = useState<{ missingFields: string[]; ambiguousPhrases: string[] } | null>(null);
 
   const onCropComplete = (blob: Blob) => {
     setCroppedImageBlobs((blobs) => [...blobs, blob].slice(0, 2));
@@ -181,6 +184,50 @@ export default function NewPosterPage() {
       console.error("OCR Error:", err);
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const generateSmartDraft = async () => {
+    const sourceText = draftPrompt.trim();
+    if (sourceText.length < 10) {
+      toast.error("공고 초안으로 만들 내용을 조금 더 입력해주세요.");
+      return;
+    }
+
+    setIsDrafting(true);
+    setDraftReview(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch("/api/operator/posters/draft", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ sourceText }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error ?? "AI 초안 생성에 실패했습니다.");
+      }
+
+      const draft = payload.draft ?? {};
+      setFormData((prev) => ({
+        ...prev,
+        title: draft.title || prev.title,
+        sourceOrgName: draft.sourceOrgName || prev.sourceOrgName,
+        categoryId: draft.categoryId || prev.categoryId,
+        regionId: draft.regionId || prev.regionId,
+        appEndAt: draft.appEndAt || prev.appEndAt,
+        summaryShort: draft.summaryShort || prev.summaryShort,
+        officialLink: draft.officialLink || prev.officialLink,
+      }));
+      setDraftReview(payload.review ?? null);
+      toast.success("AI 초안을 폼에 채웠습니다. 게시 전 사실관계를 확인해주세요.");
+    } catch (err: any) {
+      toast.error(err.message ?? "AI 초안 생성에 실패했습니다.");
+    } finally {
+      setIsDrafting(false);
     }
   };
 
@@ -363,6 +410,46 @@ export default function NewPosterPage() {
         </section>
 
         {/* 상세 정보 입력 영역 (기존과 동일) */}
+        <section className="space-y-4 rounded-[2rem] border border-blue-100 bg-blue-50/40 p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="flex items-center gap-2 text-sm font-black text-gray-900">
+                <WandSparkles size={18} className="text-blue-600" />
+                AI 공고 초안
+              </h2>
+              <p className="mt-1 text-xs font-bold leading-5 text-gray-500">
+                원문 메모나 행사 정보를 붙여넣으면 등록 폼의 주요 항목을 먼저 채웁니다.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={generateSmartDraft}
+              disabled={isDrafting}
+              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 text-xs font-black text-white shadow-lg shadow-blue-100 transition-colors hover:bg-blue-700 disabled:bg-blue-200"
+            >
+              {isDrafting ? <Loader2 size={16} className="animate-spin" /> : <WandSparkles size={16} />}
+              초안 채우기
+            </button>
+          </div>
+          <textarea
+            value={draftPrompt}
+            onChange={(event) => setDraftPrompt(event.target.value)}
+            rows={5}
+            className="w-full resize-none rounded-2xl border border-blue-100 bg-white p-4 text-sm font-bold leading-6 text-gray-900 outline-none transition focus:ring-2 focus:ring-blue-100 placeholder:text-gray-300"
+            placeholder="예: 마포구 청년 창업 교육 참여자 모집. 대상은 만 19~39세 예비창업자, 교육비 무료, 신청 마감은 2026-08-31, 문의는 일자리청년과..."
+          />
+          {draftReview && (draftReview.missingFields.length > 0 || draftReview.ambiguousPhrases.length > 0) && (
+            <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-xs font-bold leading-5 text-amber-800">
+              {draftReview.missingFields.length > 0 && (
+                <p>확인 필요: {draftReview.missingFields.join(", ")}</p>
+              )}
+              {draftReview.ambiguousPhrases.length > 0 && (
+                <p className="mt-1">모호한 표현: {draftReview.ambiguousPhrases.join(", ")}</p>
+              )}
+            </div>
+          )}
+        </section>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-10 rounded-[3rem] shadow-sm border border-gray-50">
           <div className="md:col-span-2">
             <label className="text-xs font-black text-gray-400 uppercase mb-2 block px-1">TITLE</label>
