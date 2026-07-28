@@ -750,3 +750,26 @@ Core 자연어 검색 v1 다음 단계로, 사업계획서의 Outbound 항목 �
   - 스크린샷: `data/results/operator-smart-draft.png`
 - `pnpm --filter web exec tsc --noEmit -p tsconfig.json` → 통과
 - `pnpm --filter web build` → 통과
+
+---
+
+## 14. 2026-07-28 Outbound 포스터 이미지 자동 제작 v1 구현
+
+스마트 공고 생성기 다음 단계로, 운영자 신규 포스터 등록 화면에서 텍스트/초안 폼 값만으로 검수용 기본 포스터 이미지를 만들 수 있게 했다. 기존 이미지 업로드/OCR 흐름을 대체하지 않고, 이미지가 없는 기관 담당자가 바로 검수 등록까지 갈 수 있는 보조 경로다.
+
+### 변경 사항
+- `apps/web/app/operator/posters/new/page.tsx`
+  - 1080x1350 PNG를 브라우저 canvas로 생성하는 템플릿 포스터 제작 함수 추가.
+  - 제목, 기관명, 카테고리, 마감일, 요약을 포스터 레이아웃에 반영.
+  - 입력 텍스트 기반으로 파란색/초록색/빨간색/보라색 팔레트를 안정적으로 선택.
+  - `포스터 이미지 자동 제작` 섹션과 `이미지 만들기` 버튼 추가.
+  - 생성된 PNG Blob을 기존 `croppedImageBlobs`/`imagePreviews`에 주입해 기존 업로드/저장 로직을 그대로 사용.
+
+### 검증
+- 임시 operator 프로필 사용자로 `/operator/posters/new` 진입.
+- 제목/기관/마감/요약 입력 후 `이미지 만들기` 클릭.
+- 이미지 preview가 0개 → 1개로 증가 확인.
+- 콘솔 에러 0건.
+- 스크린샷: `data/results/operator-template-poster.png`
+- `pnpm --filter web exec tsc --noEmit -p tsconfig.json` → 통과
+- `pnpm --filter web build` → 통과

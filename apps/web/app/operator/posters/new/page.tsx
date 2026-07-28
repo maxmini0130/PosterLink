@@ -5,9 +5,166 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "../../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { Button } from "@posterlink/ui";
-import { Camera, ChevronLeft, Loader2, WandSparkles } from "lucide-react";
+import { Camera, ChevronLeft, ImagePlus, Loader2, WandSparkles } from "lucide-react";
 import { ImageCropper } from "../../../components/ImageCropper";
 import { getCityRegions, getDistrictRegions, getRegionLabel, getSelectedCityId, getSelectedDistrictId } from "../../../lib/regionHelpers";
+
+const TEMPLATE_PALETTES = [
+  { accent: "#2563eb", dark: "#1e3a8a", soft: "#dbeafe" },
+  { accent: "#059669", dark: "#064e3b", soft: "#d1fae5" },
+  { accent: "#dc2626", dark: "#7f1d1d", soft: "#fee2e2" },
+  { accent: "#7c3aed", dark: "#4c1d95", soft: "#ede9fe" },
+];
+
+function templatePaletteForText(text: string) {
+  const seed = Array.from(text).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return TEMPLATE_PALETTES[seed % TEMPLATE_PALETTES.length];
+}
+
+function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
+  const safeRadius = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + safeRadius, y);
+  ctx.arcTo(x + width, y, x + width, y + height, safeRadius);
+  ctx.arcTo(x + width, y + height, x, y + height, safeRadius);
+  ctx.arcTo(x, y + height, x, y, safeRadius);
+  ctx.arcTo(x, y, x + width, y, safeRadius);
+  ctx.closePath();
+}
+
+function wrapCanvasLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number) {
+  const words = text.replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (ctx.measureText(next).width <= maxWidth) {
+      current = next;
+      continue;
+    }
+    if (current) lines.push(current);
+    current = word;
+    if (lines.length === maxLines) break;
+  }
+  if (current && lines.length < maxLines) lines.push(current);
+
+  if (lines.length === maxLines && words.length > lines.join(" ").split(/\s+/).length) {
+    let lastLine = `${lines[maxLines - 1]}...`;
+    while (lastLine.length > 1 && ctx.measureText(lastLine).width > maxWidth) {
+      lastLine = `${lastLine.slice(0, -4)}...`;
+    }
+    lines[maxLines - 1] = lastLine;
+  }
+
+  return lines;
+}
+
+function drawWrappedText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number, maxLines: number) {
+  const lines = wrapCanvasLines(ctx, text, maxWidth, maxLines);
+  lines.forEach((line, index) => ctx.fillText(line, x, y + index * lineHeight));
+  return y + lines.length * lineHeight;
+}
+
+async function createTemplatePosterBlob({
+  title,
+  org,
+  category,
+  period,
+  summary,
+}: {
+  title: string;
+  org: string;
+  category: string;
+  period: string;
+  summary: string;
+}) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1080;
+  canvas.height = 1350;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("포스터 이미지를 만들 수 없습니다.");
+
+  const palette = templatePaletteForText(`${title}${category}`);
+  const fontFamily = `"Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif`;
+
+  ctx.fillStyle = "#f8fafc";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = palette.accent;
+  ctx.fillRect(0, 0, canvas.width, 420);
+  ctx.fillStyle = palette.dark;
+  ctx.globalAlpha = 0.18;
+  ctx.beginPath();
+  ctx.moveTo(690, 0);
+  ctx.lineTo(1080, 0);
+  ctx.lineTo(1080, 420);
+  ctx.lineTo(520, 420);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  ctx.fillStyle = "rgba(255,255,255,0.18)";
+  roundedRect(ctx, 72, 72, 280, 58, 29);
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `800 28px ${fontFamily}`;
+  ctx.fillText((category || "공고").slice(0, 18), 104, 111);
+
+  ctx.font = `900 ${title.length > 70 ? 58 : 66}px ${fontFamily}`;
+  const titleBottom = drawWrappedText(ctx, title || "공고 제목", 72, 205, 900, 78, 5);
+  ctx.font = `800 30px ${fontFamily}`;
+  ctx.fillStyle = "rgba(255,255,255,0.86)";
+  ctx.fillText((org || "기관명").slice(0, 34), 72, Math.min(titleBottom + 35, 385));
+
+  ctx.fillStyle = "#ffffff";
+  roundedRect(ctx, 72, 492, 936, 704, 24);
+  ctx.fill();
+
+  ctx.fillStyle = palette.soft;
+  roundedRect(ctx, 112, 540, 856, 150, 20);
+  ctx.fill();
+  ctx.fillStyle = palette.dark;
+  ctx.font = `900 28px ${fontFamily}`;
+  ctx.fillText("신청 기간", 152, 595);
+  ctx.font = `900 44px ${fontFamily}`;
+  drawWrappedText(ctx, period || "원문 공고 확인", 152, 657, 780, 52, 2);
+
+  ctx.fillStyle = "#111827";
+  ctx.font = `900 34px ${fontFamily}`;
+  ctx.fillText("주요 내용", 112, 770);
+  ctx.fillStyle = "#334155";
+  ctx.font = `800 38px ${fontFamily}`;
+  drawWrappedText(ctx, summary || "자세한 내용은 원문 공고를 확인하세요.", 112, 840, 856, 56, 6);
+
+  ctx.strokeStyle = "#e5e7eb";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(112, 1092);
+  ctx.lineTo(968, 1092);
+  ctx.stroke();
+
+  ctx.fillStyle = "#0f172a";
+  ctx.font = `900 34px ${fontFamily}`;
+  ctx.fillText("자세한 내용은 원문 공고를 확인하세요.", 112, 1155);
+
+  ctx.fillStyle = palette.accent;
+  roundedRect(ctx, 72, 1240, 250, 52, 26);
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `900 25px ${fontFamily}`;
+  ctx.fillText("PosterLink", 114, 1275);
+  ctx.fillStyle = "#64748b";
+  ctx.font = `800 24px ${fontFamily}`;
+  ctx.fillText("공공 공고를 더 쉽게 모아보기", 348, 1275);
+
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((result) => {
+      if (result) resolve(result);
+      else reject(new Error("포스터 이미지를 만들 수 없습니다."));
+    }, "image/png");
+  });
+}
 
 export default function NewPosterPage() {
   const [loading, setLoading] = useState(false);
@@ -122,6 +279,7 @@ export default function NewPosterPage() {
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isDrafting, setIsDrafting] = useState(false);
+  const [isTemplateGenerating, setIsTemplateGenerating] = useState(false);
   const [draftPrompt, setDraftPrompt] = useState("");
   const [draftReview, setDraftReview] = useState<{ missingFields: string[]; ambiguousPhrases: string[] } | null>(null);
 
@@ -228,6 +386,42 @@ export default function NewPosterPage() {
       toast.error(err.message ?? "AI 초안 생성에 실패했습니다.");
     } finally {
       setIsDrafting(false);
+    }
+  };
+
+  const generateTemplatePoster = async () => {
+    if (!formData.title.trim()) {
+      toast.error("포스터 제목을 먼저 입력해주세요.");
+      return;
+    }
+    if (!formData.sourceOrgName.trim()) {
+      toast.error("기관명을 먼저 입력해주세요.");
+      return;
+    }
+
+    setIsTemplateGenerating(true);
+    try {
+      const categoryName = categories.find((category) => category.id === formData.categoryId)?.name ?? "공고";
+      const period = formData.appEndAt ? `${formData.appEndAt} 마감` : "원문 공고 확인";
+      const blob = await createTemplatePosterBlob({
+        title: formData.title.trim(),
+        org: formData.sourceOrgName.trim(),
+        category: categoryName,
+        period,
+        summary: formData.summaryShort.trim() || "자세한 내용은 원문 공고를 확인하세요.",
+      });
+
+      imagePreviews.forEach((preview) => URL.revokeObjectURL(preview));
+      setCroppedImageBlobs([blob]);
+      setImagePreviews([URL.createObjectURL(blob)]);
+      setOriginalImage(null);
+      setShowCropper(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      toast.success("폼 내용을 바탕으로 포스터 이미지를 만들었습니다.");
+    } catch (err: any) {
+      toast.error(err.message ?? "포스터 이미지를 만들지 못했습니다.");
+    } finally {
+      setIsTemplateGenerating(false);
     }
   };
 
@@ -448,6 +642,27 @@ export default function NewPosterPage() {
               )}
             </div>
           )}
+        </section>
+
+        <section className="flex flex-col gap-4 rounded-[2rem] border border-indigo-100 bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-black text-gray-900">
+              <ImagePlus size={18} className="text-indigo-600" />
+              포스터 이미지 자동 제작
+            </h2>
+            <p className="mt-1 text-xs font-bold leading-5 text-gray-500">
+              입력된 제목, 기관, 마감일, 요약으로 검수용 기본 포스터 이미지를 만듭니다.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={generateTemplatePoster}
+            disabled={isTemplateGenerating}
+            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-5 text-xs font-black text-white shadow-lg shadow-indigo-100 transition-colors hover:bg-indigo-700 disabled:bg-indigo-200"
+          >
+            {isTemplateGenerating ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}
+            이미지 만들기
+          </button>
         </section>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-10 rounded-[3rem] shadow-sm border border-gray-50">
