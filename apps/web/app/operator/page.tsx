@@ -3,11 +3,46 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import Link from "next/link";
-import { FileText, CheckCircle2, Clock, AlertCircle, Plus, Send } from "lucide-react";
+import { FileText, CheckCircle2, Clock, AlertCircle, Plus, Send, BarChart3, Download, MousePointerClick, Star, Eye } from "lucide-react";
+
+type PerformanceReport = {
+  rangeDays: number;
+  generatedAt: string;
+  totals: {
+    posters: number;
+    published: number;
+    review: number;
+    rejected: number;
+    views: number;
+    clicks: number;
+    favorites: number;
+    engagementScore: number;
+  };
+  rates: {
+    clickThroughRate: number;
+    saveRate: number;
+  };
+  insights: string[];
+  aiGenerated: boolean;
+  topPosters: Array<{
+    id: string;
+    title: string;
+    status: string;
+    views: number;
+    clicks: number;
+    favorites: number;
+    engagementScore: number;
+  }>;
+};
+
+function formatPercent(value: number) {
+  return `${Math.round(value * 1000) / 10}%`;
+}
 
 export default function OperatorDashboardPage() {
   const [stats, setStats] = useState({ draft: 0, review: 0, published: 0, rejected: 0 });
   const [recent, setRecent] = useState<any[]>([]);
+  const [report, setReport] = useState<PerformanceReport | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -15,12 +50,19 @@ export default function OperatorDashboardPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const [draftRes, reviewRes, publishedRes, rejectedRes, recentRes] = await Promise.all([
+      const [draftRes, reviewRes, publishedRes, rejectedRes, recentRes, reportRes] = await Promise.all([
         supabase.from("posters").select("id", { count: "exact", head: true }).eq("created_by", user.id).eq("poster_status", "draft"),
         supabase.from("posters").select("id", { count: "exact", head: true }).eq("created_by", user.id).eq("poster_status", "review"),
         supabase.from("posters").select("id", { count: "exact", head: true }).eq("created_by", user.id).eq("poster_status", "published"),
         supabase.from("posters").select("id", { count: "exact", head: true }).eq("created_by", user.id).eq("poster_status", "rejected"),
         supabase.from("posters").select("id, title, poster_status, created_at").eq("created_by", user.id).order("created_at", { ascending: false }).limit(5),
+        supabase.auth.getSession().then(async ({ data: { session } }) => {
+          const response = await fetch("/api/operator/performance-report?days=30", {
+            cache: "no-store",
+            headers: session ? { Authorization: `Bearer ${session.access_token}` } : {},
+          });
+          return response.ok ? response.json() : null;
+        }),
       ]);
 
       setStats({
@@ -30,6 +72,7 @@ export default function OperatorDashboardPage() {
         rejected: rejectedRes.count ?? 0,
       });
       if (recentRes.data) setRecent(recentRes.data);
+      if (reportRes) setReport(reportRes);
       setLoading(false);
     };
     fetchData();
@@ -49,6 +92,12 @@ export default function OperatorDashboardPage() {
     { key: "published", label: "게시 중",   icon: <CheckCircle2 size={22} />, color: "bg-green-50 text-green-600" },
     { key: "rejected",  label: "반려됨",    icon: <AlertCircle size={22} />,  color: "bg-rose-50 text-rose-500" },
   ];
+  const performanceCards = report ? [
+    { label: "조회", value: report.totals.views, icon: <Eye size={20} />, color: "bg-sky-50 text-sky-600" },
+    { label: "링크 클릭", value: report.totals.clicks, icon: <MousePointerClick size={20} />, color: "bg-indigo-50 text-indigo-600" },
+    { label: "저장", value: report.totals.favorites, icon: <Star size={20} />, color: "bg-amber-50 text-amber-600" },
+    { label: "클릭률", value: formatPercent(report.rates.clickThroughRate), icon: <BarChart3 size={20} />, color: "bg-emerald-50 text-emerald-600" },
+  ] : [];
 
   return (
     <div className="max-w-4xl mx-auto pb-10">
@@ -78,6 +127,87 @@ export default function OperatorDashboardPage() {
           </div>
         ))}
       </div>
+
+      <section className="mb-10 rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-gray-900">
+              <BarChart3 size={18} className="text-blue-600" />
+              성과 리포트
+            </h2>
+            <p className="mt-1 text-xs font-bold text-gray-400">
+              최근 30일 기준 조회, 클릭, 저장 반응을 자동 집계합니다.
+            </p>
+          </div>
+          <a
+            href="/api/operator/performance-report?days=30&format=csv"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-gray-900 px-5 text-xs font-black text-white transition-colors hover:bg-black"
+          >
+            <Download size={15} />
+            CSV 다운로드
+          </a>
+        </div>
+
+        {loading ? (
+          <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {[1, 2, 3, 4].map((item) => (
+              <div key={item} className="h-24 animate-pulse rounded-2xl bg-gray-50" />
+            ))}
+          </div>
+        ) : report ? (
+          <>
+            <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+              {performanceCards.map((card) => (
+                <div key={card.label} className="rounded-2xl border border-gray-100 bg-gray-50/40 p-4">
+                  <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl ${card.color}`}>
+                    {card.icon}
+                  </div>
+                  <p className="text-2xl font-black text-gray-900">
+                    {typeof card.value === "number" ? card.value.toLocaleString() : card.value}
+                  </p>
+                  <p className="mt-1 text-[11px] font-black uppercase tracking-wider text-gray-400">{card.label}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 rounded-2xl border border-blue-100 bg-blue-50/40 p-5">
+              <p className="mb-3 text-xs font-black uppercase tracking-wider text-blue-600">
+                {report.aiGenerated ? "AI 인사이트" : "자동 인사이트"}
+              </p>
+              <div className="space-y-2">
+                {report.insights.map((insight, index) => (
+                  <p key={index} className="text-sm font-bold leading-6 text-gray-700">{insight}</p>
+                ))}
+              </div>
+            </div>
+
+            {report.topPosters.length > 0 && (
+              <div className="mt-6 overflow-hidden rounded-2xl border border-gray-100">
+                <div className="grid grid-cols-[1fr_64px_64px_64px] gap-3 bg-gray-50 px-4 py-3 text-[11px] font-black uppercase tracking-wider text-gray-400">
+                  <span>공고</span>
+                  <span className="text-right">조회</span>
+                  <span className="text-right">클릭</span>
+                  <span className="text-right">저장</span>
+                </div>
+                <div className="divide-y divide-gray-100">
+                  {report.topPosters.slice(0, 5).map((poster) => (
+                    <div key={poster.id} className="grid grid-cols-[1fr_64px_64px_64px] gap-3 px-4 py-3 text-sm">
+                      <span className="line-clamp-1 font-black text-gray-800">{poster.title}</span>
+                      <span className="text-right font-bold text-gray-500">{poster.views.toLocaleString()}</span>
+                      <span className="text-right font-bold text-gray-500">{poster.clicks.toLocaleString()}</span>
+                      <span className="text-right font-bold text-gray-500">{poster.favorites.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="mt-6 rounded-2xl bg-gray-50 p-8 text-center text-sm font-bold text-gray-400">
+            성과 리포트를 불러오지 못했습니다.
+          </div>
+        )}
+      </section>
 
       <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-6 py-5 border-b border-gray-50">

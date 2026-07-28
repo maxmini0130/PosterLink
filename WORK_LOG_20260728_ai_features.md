@@ -773,3 +773,36 @@ Core 자연어 검색 v1 다음 단계로, 사업계획서의 Outbound 항목 �
 - 스크린샷: `data/results/operator-template-poster.png`
 - `pnpm --filter web exec tsc --noEmit -p tsconfig.json` → 통과
 - `pnpm --filter web build` → 통과
+
+---
+
+## 15. 2026-07-28 Outbound AI 성과 리포트 v1 구현
+
+Outbound 마지막 신규 기능 축으로, 운영자 대시보드에 등록 공고 성과 리포트를 추가했다. 운영자가 만든 공고 기준으로 최근 30일 조회/링크 클릭/저장 반응을 자동 집계하고, 요약 인사이트와 CSV 다운로드를 제공한다.
+
+### 변경 사항
+- `apps/web/app/api/operator/performance-report/route.ts`
+  - 로그인한 `operator`/`admin`/`super_admin`만 호출 가능한 성과 리포트 API 추가.
+  - 운영자가 생성한 공고만 대상으로 `poster_view_logs`, `poster_link_click_logs`, `favorites`를 집계.
+  - 총 공고 수, 게시/검수/반려 수, 조회, 클릭, 저장, 참여 점수, 클릭률, 저장률 반환.
+  - 상위 공고 top 10 반환.
+  - `format=csv` 요청 시 UTF-8 BOM 포함 CSV 다운로드 응답 제공.
+  - `OPENAI_API_KEY`가 있으면 3문장 성과 인사이트를 생성하고, 실패/키 없음 상황에서는 규칙 기반 인사이트로 fallback.
+- `apps/web/app/operator/page.tsx`
+  - 운영자 대시보드에 `성과 리포트` 섹션 추가.
+  - 조회/링크 클릭/저장/클릭률 카드 표시.
+  - `AI 인사이트` 또는 `자동 인사이트` 문장 표시.
+  - 상위 반응 공고 표와 CSV 다운로드 버튼 추가.
+
+### 검증
+- API 직접 검증
+  - 임시 operator 사용자로 JSON 응답 200 확인.
+  - 공고 0건 상태에서 빈 리포트 응답 확인.
+  - CSV 요청도 `text/csv; charset=utf-8` 및 헤더 라인 반환 확인.
+- 화면 검증
+  - 임시 operator 사용자로 `/operator` 진입.
+  - `성과 리포트`, `CSV 다운로드`, 조회/링크 클릭/저장/클릭률 카드, 자동 인사이트 렌더링 확인.
+  - 콘솔 에러 0건.
+  - 스크린샷: `data/results/operator-performance-report.png`
+- `pnpm --filter web exec tsc --noEmit -p tsconfig.json` → 통과
+- `pnpm --filter web build` → 통과
