@@ -713,6 +713,26 @@ pnpm --filter posterlink-crawler cleanup:review-nonposters -- --limit=1000 --app
   - 검수대기 크롤러 항목 4건 남음.
   - `cleanup:review-nonposters` 재 dry-run 결과 reject 후보 0건.
 - `pnpm --filter posterlink-crawler test` → 61/61 통과
+
+---
+
+## 19. 2026-07-28 수집 전 비포스터 필터 보강
+
+검수대기 정리 후에도 같은 오염원이 다시 들어오지 않도록, 업로드 품질 게이트보다 앞단인 `post-candidate-filter`에도 사후 뉴스/뉴스 게시판 필터를 추가했다. 이로써 `/community/news` 계열에서 모집/신청/접수 액션이 없는 글은 상세 이미지 처리와 업로드 전에 제외된다.
+
+### 변경 사항
+- `scripts/crawler/src/post-candidate-filter.js`
+  - `소식`, `후기`, `활동보고`, `행사 스케치`, `모임 소식` 등 사후성 제목을 수집 전 제외.
+  - 단, 제목/본문에 `모집`, `신청`, `접수`, `참여자`, `교육생`, `선착순` 등 실제 액션이 있으면 제외하지 않음.
+  - `/community/news`, `/notice/news`, `/board/news` 출처에서 액션 없는 글은 `news-board-without-action`으로 제외.
+- `scripts/crawler/src/poster-rules.test.js`
+  - 사후 뉴스 제외, 뉴스 게시판 액션 없음 제외, 액션 있는 모집글 유지 테스트 추가.
+
+### 검증
+- mapo-labor 샘플 제목 확인:
+  - `4월 걷기모임 소식`, `경비노동자 교육 및 한마당` 등은 `news-board-without-action`으로 제외.
+  - `경비노동자 교육 참여자 모집 소식`은 통과.
+- `pnpm --filter posterlink-crawler test` → 64/64 통과
 - `pnpm --filter web exec tsc --noEmit -p tsconfig.json` → 통과
 - `pnpm --filter web build` → 통과
 

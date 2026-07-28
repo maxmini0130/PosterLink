@@ -31,9 +31,16 @@ const TITLE_EXCLUDE_RULES = [
   },
   {
     name: "completed-activity-report",
-    pattern: /(?:\uC131\uB8CC|\uAC10\uC0AC\uD328\s*\uC218\uC0C1|\uC870\uAC74\s*TOP\s*5\s*\uC120\uC815|\uD504\uB85C\uC81D\uD2B8.*\uC131\uB8CC).*\(\s*\d{4}\s*[.\-/]\s*\d{1,2}\s*[.\-/]\s*\d{1,2}\s*[.)]/i,
+    pattern: /(?:\uC131\uB8CC|\uAC10\uC0AC\uD328\s*\uC218\uC0C1|\uC870\uAC74\s*TOP\s*5\s*\uC120\uC815|\uD504\uB85C\uC81D\uD2B8.*\uC131\uB8CC|\uD6C4\uAE30|\uD65C\uB3D9\s*\uBCF4\uACE0|\uD589\uC0AC\s*\uC2A4\uCF00\uCE58).*\(\s*\d{4}\s*[.\-/]\s*\d{1,2}\s*[.\-/]\s*\d{1,2}\s*[.)]/i,
     reason: "completed activity report is not an active poster notice",
     titleOnly: true,
+  },
+  {
+    name: "retrospective-news-no-action",
+    pattern: /(?:\uC18C\uC2DD|\uD6C4\uAE30|\uD65C\uB3D9\s*\uBCF4\uACE0|\uD589\uC0AC\s*\uC2A4\uCF00\uCE58|\uBAA8\uC784\s*\uC18C\uC2DD|\uAC04\uB2F4\uD68C|\uB300\uD45C\uC790\s*\uBAA8\uC784)/i,
+    reason: "retrospective news/follow-up content is not an active recruitment or event poster",
+    titleOnly: true,
+    requiresNoAction: true,
   },
   {
     name: "selected-list-or-award-list",
@@ -266,6 +273,8 @@ const TITLE_EXCLUDE_RULES = [
 ];
 
 const COLLECTABLE_ANNOUNCEMENT_PATTERN = /\uBAA8\uC9D1|\uACF5\uACE0|\uCC44\uC6A9|\uC9C0\uC6D0\s*\uC0AC\uC5C5|\uC9C0\uC6D0\uC0AC\uC5C5|\uAD50\uC721|\uD504\uB85C\uADF8\uB7A8|\uCC38\uC5EC\uC790|\uC218\uAC15\uC0DD|\uACF5\uBAA8|\uC811\uC218|\uC2E0\uCCAD\uC790|\uD6C8\uB828|\uAC15\uC88C|\uD074\uB798\uC2A4/i;
+const ACTIVE_RECRUITMENT_ACTION_PATTERN = /(?:\uBAA8\uC9D1|\uC2E0\uCCAD|\uC811\uC218|\uCC38\uC5EC\uC790|\uAD50\uC721\uC0DD|\uC218\uAC15\uC0DD|\uC9C0\uC6D0\s*\uB300\uC0C1|\uB300\uC0C1\uC790\s*\uBAA8\uC9D1|\uCC38\uAC00\uC790\s*\uBAA8\uC9D1|\uC774\uC6A9\uC790\s*\uBAA8\uC9D1|\uACF5\uBAA8|\uC120\uCC29\uC21C|\uC811\uC218\s*\uC911|apply|register|registration)/i;
+const NEWS_BOARD_SOURCE_PATTERN = /\/(?:community\/news|notice\/news|board\/news)(?:\/|$|\?)/i;
 const STRONG_COLLECTABLE_NOTICE_PATTERN = /(?:\uC785\uC8FC\uAE30\uC5C5|\uC785\uC8FC\s*\uC2A4\uD0C0\uD2B8\uC5C5|\uCC38\uC5EC(?:\uC790|\uCCAD\uB144)|\uAD50\uC721\uC0DD|\uC218\uAC15\uC0DD|\uB4DC\uB9BC\uCCAD\uB144|\uAD6C\uC9C1\uCCAD\uB144|\uC2E0\uD63C\uBD80\uBD80|\uC790\uACA9\uC99D).*(?:\uBAA8\uC9D1|\uC9C0\uC6D0|\uAD50\uC721|\uD504\uB85C\uADF8\uB7A8|\uC0AC\uC5C5)|(?:\uBAA8\uC9D1|\uC9C0\uC6D0|\uAD50\uC721|\uD504\uB85C\uADF8\uB7A8|\uC0AC\uC5C5).*(?:\uC785\uC8FC\uAE30\uC5C5|\uC785\uC8FC\s*\uC2A4\uD0C0\uD2B8\uC5C5|\uCC38\uC5EC(?:\uC790|\uCCAD\uB144)|\uAD50\uC721\uC0DD|\uC218\uAC15\uC0DD|\uB4DC\uB9BC\uCCAD\uB144|\uAD6C\uC9C1\uCCAD\uB144|\uC2E0\uD63C\uBD80\uBD80|\uC790\uACA9\uC99D)/i;
 const WEAK_ADMIN_EXCLUSION_RULES = new Set([
   "holiday-designation-or-partial-operation",
@@ -375,6 +384,18 @@ export function getPostExclusionReason(post = {}) {
   ].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
   if (!text) return null;
 
+  const sourceText = [
+    post.sourceUrl,
+    post.url,
+    post.source_key,
+  ].filter(Boolean).join(" ");
+  if (NEWS_BOARD_SOURCE_PATTERN.test(sourceText) && !ACTIVE_RECRUITMENT_ACTION_PATTERN.test(`${title} ${text}`)) {
+    return {
+      rule: "news-board-without-action",
+      reason: "news-board content without recruitment/application action is not a poster notice",
+    };
+  }
+
   const titleYear = Number(title.match(/^\s*(\d{4})\s*년?/)?.[1]);
   if (
     Number.isFinite(titleYear)
@@ -392,6 +413,9 @@ export function getPostExclusionReason(post = {}) {
     rule.pattern.test(title) || (!rule.titleOnly && rule.pattern.test(text))
   ));
   if (!matchedRule) return null;
+  if (matchedRule.requiresNoAction && ACTIVE_RECRUITMENT_ACTION_PATTERN.test(`${title} ${text}`)) {
+    return null;
+  }
   if (isCentralTextNoticeFalsePositive(post, matchedRule, `${title} ${text}`)) {
     return null;
   }

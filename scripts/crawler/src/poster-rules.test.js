@@ -299,6 +299,35 @@ test("reject unreadable encoded document text in review candidates", () => {
   assert.ok(result.issues.some((issue) => issue.code === "employment-recruitment-notice"));
 });
 
+test("pre-upload filter rejects retrospective news titles without action", () => {
+  const result = getPostExclusionReason({
+    title: "4\uC6D4 \uAC77\uAE30\uBAA8\uC784 \uC18C\uC2DD",
+    content: "\uB9C8\uD3EC\uAD6C \uB178\uB3D9\uC790 \uAC77\uAE30\uBAA8\uC784 \uD65C\uB3D9 \uC0AC\uC9C4\uACFC \uD6C4\uAE30",
+  });
+
+  assert.equal(result?.rule, "retrospective-news-no-action");
+});
+
+test("pre-upload filter rejects news-board posts without action", () => {
+  const result = getPostExclusionReason({
+    title: "\uACBD\uBE44\uB178\uB3D9\uC790 \uAD50\uC721 \uBC0F \uD55C\uB9C8\uB2F9",
+    content: "\uACBD\uBE44\uB178\uB3D9\uC790 \uAD50\uC721 \uBC0F \uD55C\uB9C8\uB2F9 \uD589\uC0AC \uC548\uB0B4",
+    sourceUrl: "https://mapolabor.org/community/news/post?seq=369",
+  });
+
+  assert.equal(result?.rule, "news-board-without-action");
+});
+
+test("pre-upload filter keeps active recruitment despite news-like wording", () => {
+  const result = getPostExclusionReason({
+    title: "\uACBD\uBE44\uB178\uB3D9\uC790 \uAD50\uC721 \uCC38\uC5EC\uC790 \uBAA8\uC9D1 \uC18C\uC2DD",
+    content: "2026\uB144 8\uC6D4 10\uC77C\uAE4C\uC9C0 \uC2E0\uCCAD \uC811\uC218\uD558\uBA70 \uCC38\uC5EC\uC790\uB97C \uBAA8\uC9D1\uD569\uB2C8\uB2E4.",
+    sourceUrl: "https://mapolabor.org/community/news/post?seq=999",
+  });
+
+  assert.equal(result, null);
+});
+
 test("keep the specific Youth Seoul title over a generic external page title", () => {
   assert.equal(
     choosePreferredDetailTitle(
