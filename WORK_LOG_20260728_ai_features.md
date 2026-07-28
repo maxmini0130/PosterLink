@@ -806,3 +806,34 @@ Outbound 마지막 신규 기능 축으로, 운영자 대시보드에 등록 공
   - 스크린샷: `data/results/operator-performance-report.png`
 - `pnpm --filter web exec tsc --noEmit -p tsconfig.json` → 통과
 - `pnpm --filter web build` → 통과
+
+---
+
+## 16. 2026-07-28 AI 정확도 baseline 측정 도구 구현
+
+사업계획서의 “95%↑ 비정형 포스터 구조화 정확도” 목표를 현재 baseline과 함께 제시할 수 있도록, 골든셋 샘플 생성 및 채점 스크립트를 추가했다. 이 단계는 AI 기능 자체를 더 붙이는 작업이 아니라, 현재 시스템의 정확도를 숫자로 재기 위한 측정 기반이다.
+
+### 변경 사항
+- `scripts/crawler/src/create-baseline-goldenset.js`
+  - 운영 DB의 최신 `posters`와 `poster_notice_candidates`에서 검수 샘플 CSV 생성.
+  - 기본 100건 샘플: 포스터 70%, 이미지 없는 후보 30%.
+  - 현재 예측값: 공고 여부, 제목, 기관명, 마감일, 카테고리, 중복 판단, 원문 excerpt.
+  - 사람이 채울 `gold_*` 컬럼 포함.
+- `scripts/crawler/src/score-baseline-goldenset.js`
+  - 사람이 채운 `gold_*` 컬럼을 기준으로 metric별 정확도 계산.
+  - 공고/비공고, 제목, 기관명, 마감일, 카테고리, 중복 판단 accuracy 및 macro accuracy 출력.
+- `scripts/crawler/package.json`
+  - `baseline:sample`, `baseline:score` 스크립트 추가.
+- `docs/ai_baseline_evaluation.md`
+  - 샘플 생성, 사람 검수, 채점 방법 문서화.
+
+### 생성한 로컬 산출물
+- `data/baseline/goldenset_sample.csv`
+  - 100건 생성 완료.
+  - `data/`는 gitignore 대상이므로 커밋하지 않음.
+
+### 검증
+- `pnpm --filter posterlink-crawler baseline:sample -- --limit=12 --output=data/baseline/goldenset_sample_test.csv` → 12건 샘플 생성 확인
+- `pnpm --filter posterlink-crawler baseline:score -- --input=data/baseline/goldenset_sample_test.csv --output=data/baseline/baseline_report_test.json` → 미라벨 상태에서 `n/a` 리포트 정상 출력
+- `pnpm --filter posterlink-crawler baseline:sample -- --limit=100 --output=data/baseline/goldenset_sample.csv` → 100건 샘플 생성 완료
+- `pnpm --filter posterlink-crawler test` → 57/57 통과
