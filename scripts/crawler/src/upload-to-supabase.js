@@ -45,6 +45,7 @@ import { evaluateRelevanceHeuristic } from "./relevance-heuristic.js";
 import { routePosterRelevance } from "./poster-relevance-router.js";
 import { parseDeadlineText } from "./deadline-parser.js";
 import { computeImagePhash, selectRepresentativeImage } from "./image-phash.js";
+import { extractNoticeFactsWithLlm } from "./notice-facts-extractor.js";
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)?.trim();
 const SUPABASE_KEY = (process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)?.trim();
@@ -773,6 +774,28 @@ export function buildReadableNoticeInfo(post = {}) {
   };
 }
 
+// buildReadableNoticeInfo의 정규식 facts를 그대로 두고, 못 채운 필드만 LLM으로 보완한다
+// (notice-facts-extractor.js — 정규식이 대부분 채웠으면 호출 자체를 건너뛰어 비용을 아낀다).
+async function enrichReadableNoticeInfoWithLlm(readableInfo, post) {
+  const posterImageText = getPosterImageInsight(post)?.posterTextSummary ?? "";
+  const content = [post.content, posterImageText].filter(Boolean).join("\n");
+  const llmResult = await extractNoticeFactsWithLlm(
+    { title: readableInfo.title, content },
+    readableInfo.facts ?? {},
+  );
+  if (llmResult.filledByLlm.length === 0) return readableInfo;
+
+  return {
+    ...readableInfo,
+    facts: llmResult.facts,
+    factsLlmMeta: {
+      filledByLlm: llmResult.filledByLlm,
+      allFactsGroundedInText: llmResult.allFactsGroundedInText,
+      model: llmResult.model,
+    },
+  };
+}
+
 function buildAttachmentAnalysisSummary(analysis = null) {
   if (!analysis || typeof analysis !== "object" || !Number(analysis.checked ?? 0)) return null;
 
@@ -824,10 +847,11 @@ function mergeReadableNoticeIntoFieldVerification(verification = {}, post = {}, 
 
   if (info.summaryShort || Object.keys(info.facts ?? {}).length > 0) {
     next.readableNotice = {
-      source: "crawler-normalizer",
+      source: info.factsLlmMeta ? "crawler-normalizer+llm" : "crawler-normalizer",
       title: info.title,
       summaryShort: info.summaryShort,
       facts: info.facts ?? {},
+      ...(info.factsLlmMeta ? { factsLlmMeta: info.factsLlmMeta } : {}),
     };
   }
   if (attachmentAnalysis) next.attachmentAnalysis = attachmentAnalysis;
@@ -1118,7 +1142,7 @@ async function upsertNoticeCandidate(post, {
   relevanceRoute,
   deadlineParse,
 }) {
-  const readableInfo = buildReadableNoticeInfo(post);
+  const readableInfo = await enrichReadableNoticeInfoWithLlm(buildReadableNoticeInfo(post), post);
   const summaryShort = readableInfo.summaryShort;
   const summaryLong = readableInfo.summaryLong;
   const enrichedFieldVerification = mergeReadableNoticeIntoFieldVerification(fieldVerification ?? {}, post, readableInfo);
@@ -1869,7 +1893,7 @@ async function uploadToSupabase(filePath) {
     const postWithStoredImages = { ...post, images: storedImages };
 
     // ── 1. posters 테이블 upsert ─────────────────────────────
-    const readableInfo = buildReadableNoticeInfo(postWithStoredImages);
+    const readableInfo = await enrichReadableNoticeInfoWithLlm(buildReadableNoticeInfo(postWithStoredImages), postWithStoredImages);
     const summaryShort = readableInfo.summaryShort;
     const summaryLong = readableInfo.summaryLong || posterImageInsight?.posterTextSummary || null;
     const posterFieldVerification = mergeReadableNoticeIntoFieldVerification(fieldVerification, postWithStoredImages, readableInfo);
