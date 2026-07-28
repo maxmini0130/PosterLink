@@ -1092,6 +1092,34 @@ pnpm --filter posterlink-crawler kpi:measure -- --base-url=http://localhost:4000
 
 ### 검증
 - `pnpm --filter posterlink-crawler test` - 72/72 통과
+
+---
+
+## 25. 2026-07-28 human golden set 검수 패킷 준비
+
+AI 정확도 95% 목표를 실제로 측정하려면 사람이 라벨링한 golden set이 필요하므로, 최신 DB 상태 기준 검수용 CSV를 생성하고 라벨링 기준 문서를 추가했다.
+
+### 변경 사항
+- `docs/ai_human_golden_set_protocol.md`
+  - `gold_*` 라벨 규칙 정의.
+  - poster/non-poster, 제목, 기관명, 마감일, 카테고리, 중복 판단 기준 정리.
+  - 검수 후 score 명령 기록.
+- `docs/ai_baseline_evaluation.md`
+  - human golden set protocol 문서 링크 추가.
+
+### 생성한 로컬 검수 파일
+- `pnpm --filter posterlink-crawler baseline:sample -- --limit=100 --output=data/baseline/human_golden_set_seed_20260728.csv`
+  - sampled 100건
+  - posters 70건
+  - candidates 30건
+  - `data/` 하위 파일이라 git에는 커밋하지 않음.
+
+### 채점기 검증
+- `pnpm --filter posterlink-crawler baseline:score -- --input=data/baseline/human_golden_set_seed_20260728.csv --output=data/baseline/human_golden_set_report_unlabeled_20260728.json`
+  - rows 100
+  - labeled_rows 0
+  - macro_accuracy `n/a`
+  - 라벨 전 상태에서 정상적으로 빈 리포트를 생성함.
 - `git diff --check` - 통과
 
 ---

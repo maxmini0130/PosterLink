@@ -3,6 +3,9 @@
 Use this workflow to measure the current PosterLink AI extraction baseline before
 claiming or improving toward the 95%+ structured-poster accuracy target.
 
+For the reviewer-facing labeling rules, see
+[`ai_human_golden_set_protocol.md`](./ai_human_golden_set_protocol.md).
+
 ## 1. Create a Golden-Set Sample
 
 ```bash
