@@ -736,6 +736,46 @@ pnpm --filter posterlink-crawler cleanup:review-nonposters -- --limit=1000 --app
 
 ---
 
+## 22. 2026-07-28 field verification 25건 확대 및 안전수칙 비포스터 정리
+
+`verify:backfill`을 25건 단위로 확대 적용했고, 백필 결과에서 새 비포스터 유형이 발견되어 품질 게이트와 수집 전 필터를 보강했다.
+
+### field verification 백필 확대
+- `pnpm --filter posterlink-crawler verify:backfill -- --limit=25 --apply --output=data/results/field-verification-backfill-apply-25.json`
+  - 25건 적용 완료.
+  - 처리 시간이 길어 운영 배치에서는 작은 batch 또는 추후 진행 로그/동시성 개선이 필요함.
+- `pnpm --filter posterlink-crawler kpi:measure -- --days=30 --output=data/baseline/ai_kpi_report_after_verify_backfill_25.json`
+  - field verification coverage: 24.3% → 29.9%
+  - review queue reject candidates: 0건 유지
+- 주요 low-confidence 유형:
+  - 본문이 제목 수준으로 짧아 마감일/기관 근거를 확인할 수 없는 항목.
+  - `장마철 가스안전관리 요령`, `행락철 이동식 부탄연소기 안전사용요령` 같은 생활안전 안내.
+
+### 안전수칙 비포스터 게이트 보강
+- `scripts/crawler/src/poster-quality-gate.js`
+  - `가스/부탄/장마철/행락철 + 안전관리 요령/안전사용요령` 패턴을 `public-safety-guide`로 reject.
+  - 단, 모집/신청/접수/참여자 등 액션이 있으면 제외하지 않음.
+- `scripts/crawler/src/post-candidate-filter.js`
+  - 동일 유형을 수집 전 단계에서도 `public-safety-guide`로 제외.
+- `scripts/crawler/src/cleanup-review-nonposters.js`
+  - `--statuses=review,published` 옵션 지원.
+  - PowerShell 쉼표 인자 전달 문제를 피하도록 쉼표/공백 모두 파싱.
+- `scripts/crawler/src/poster-rules.test.js`
+  - 안전수칙 reject, 수집 전 reject, 실제 안전교육 모집 통과 테스트 추가.
+
+### 기존 데이터 정리
+- published 상태였던 아래 2건을 `rejected`로 이동:
+  - `장마철 가스안전관리 요령`
+  - `행락철 이동식 부탄연소기 안전사용요령`
+- broad cleanup dry-run(`review,published`)은 13건 후보가 남았으나, 일부 교육 클래스 오탐 가능성이 있어 전체 apply는 보류.
+- 최종 KPI:
+  - field verification coverage: 29.6%
+  - review queue: 4건
+  - review queue reject candidates: 0건
+- `pnpm --filter posterlink-crawler test` → 67/67 통과
+
+---
+
 ## 21. 2026-07-28 field verification coverage 백필 도구 구현
 
 AI KPI 재점검에서 `field verification coverage`가 23.1%로 낮게 나왔기 때문에, 기존 published/review 포스터 중 검증 결과가 없는 항목을 소량 배치로 보강할 수 있는 백필 도구를 추가했다.

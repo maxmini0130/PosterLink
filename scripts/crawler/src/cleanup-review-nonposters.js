@@ -20,9 +20,9 @@ const args = Object.fromEntries(
 
 if (args.help || args.h) {
   console.log(`Usage:
-  node src/cleanup-review-nonposters.js [--limit=1000] [--output=data/results/review-nonposter-cleanup.json] [--apply]
+  node src/cleanup-review-nonposters.js [--limit=1000] [--statuses=review] [--output=data/results/review-nonposter-cleanup.json] [--apply]
 
-Re-evaluates crawler-created review posters with the current quality gate.
+Re-evaluates crawler-created posters with the current quality gate.
 Without --apply, only writes a dry-run report.`);
   process.exit(0);
 }
@@ -71,7 +71,7 @@ function mergeQualityIssues(fieldVerification = {}, quality) {
   };
 }
 
-async function fetchReviewRows(supabase, limit) {
+async function fetchReviewRows(supabase, limit, statuses) {
   const rows = [];
   const pageSize = 1000;
 
@@ -80,7 +80,7 @@ async function fetchReviewRows(supabase, limit) {
     const { data, error } = await supabase
       .from("posters")
       .select("id,title,source_org_name,summary_short,summary_long,thumbnail_url,source_key,created_at,field_verification")
-      .eq("poster_status", "review")
+      .in("poster_status", statuses)
       .not("source_key", "is", null)
       .order("created_at", { ascending: false })
       .range(offset, to);
@@ -97,7 +97,11 @@ async function main() {
   const limit = Math.max(1, Number(args.limit || DEFAULT_LIMIT));
   const output = path.resolve(REPO_ROOT, args.output || DEFAULT_OUTPUT);
   const apply = Boolean(args.apply);
-  const rows = await fetchReviewRows(supabase, limit);
+  const statuses = String(args.statuses || "review")
+    .split(/[,\s]+/)
+    .map((status) => status.trim())
+    .filter(Boolean);
+  const rows = await fetchReviewRows(supabase, limit, statuses);
 
   const rejected = rows
     .map((row) => {
@@ -134,7 +138,7 @@ async function main() {
           field_verification: mergeQualityIssues(row.field_verification ?? {}, quality),
         })
         .eq("id", row.id)
-        .eq("poster_status", "review");
+        .in("poster_status", statuses);
       if (error) throw error;
     }
   }
@@ -142,6 +146,7 @@ async function main() {
   const report = {
     generated_at: new Date().toISOString(),
     mode: apply ? "apply" : "dry-run",
+    statuses,
     scanned_count: rows.length,
     reject_count: rejected.length,
     rows: reportRows,

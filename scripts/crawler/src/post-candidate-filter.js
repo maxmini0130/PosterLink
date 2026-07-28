@@ -43,6 +43,13 @@ const TITLE_EXCLUDE_RULES = [
     requiresNoAction: true,
   },
   {
+    name: "public-safety-guide",
+    pattern: /(?:\uAC00\uC2A4|\uBD80\uD0C4|\uC7A5\uB9C8\uCCA0|\uD589\uB77D\uCCA0|\uC0DD\uD65C\s*\uC548\uC804).*(?:\uC548\uC804\s*\uAD00\uB9AC\s*\uC694\uB839|\uC548\uC804\s*\uC0AC\uC6A9\s*\uC694\uB839|\uC0AC\uC6A9\s*\uC694\uB839|\uAD00\uB9AC\s*\uC694\uB839)|(?:\uC548\uC804\s*\uAD00\uB9AC\s*\uC694\uB839|\uC548\uC804\s*\uC0AC\uC6A9\s*\uC694\uB839|\uC0AC\uC6A9\s*\uC694\uB839|\uAD00\uB9AC\s*\uC694\uB839).*(?:\uAC00\uC2A4|\uBD80\uD0C4|\uC7A5\uB9C8\uCCA0|\uD589\uB77D\uCCA0|\uC0DD\uD65C\s*\uC548\uC804)/i,
+    reason: "public safety guide/tips content is not an active poster notice",
+    titleOnly: true,
+    requiresNoAction: true,
+  },
+  {
     name: "selected-list-or-award-list",
     pattern: /\uCD5C\uC885\s*\uC120\uBC1C\s*\uBA85\uB2E8|\uC120\uBC1C\s*\uBA85\uB2E8|\uCC38\uAC00\uC0C1\s*\uBA85\uB2E8|\uC218\uC0C1(?:\uC790)?\s*\uBA85\uB2E8|\uBCF8\uC120\s*\uC9C4\uCD9C(?:\uC790|\s*\uB300\uC0C1\uC790)?\s*(?:\uACF5\uC9C0|\uC548\uB0B4)?/i,
     reason: "selected/result list announcement",

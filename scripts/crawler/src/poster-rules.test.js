@@ -328,6 +328,39 @@ test("pre-upload filter keeps active recruitment despite news-like wording", () 
   assert.equal(result, null);
 });
 
+test("reject public safety guide images without recruitment action", () => {
+  const result = evaluatePosterQuality({
+    title: "\uC7A5\uB9C8\uCCA0 \uAC00\uC2A4\uC548\uC804\uAD00\uB9AC \uC694\uB839",
+    source_org_name: "\uB9C8\uD3EC\uAD6C\uCCAD",
+    summary_short: "\uC7A5\uB9C8\uCCA0 \uAC00\uC2A4\uC548\uC804\uAD00\uB9AC \uC694\uB839",
+    source_key: "https://www.mapo.go.kr/site/main/board/notice/276453?bcId=notice",
+    images: ["https://example.test/safety.png"],
+  });
+
+  assert.equal(result.decision, "reject");
+  assert.ok(result.issues.some((issue) => issue.code === "public-safety-guide"));
+});
+
+test("pre-upload filter rejects public safety guide titles without action", () => {
+  const result = getPostExclusionReason({
+    title: "\uD589\uB77D\uCCA0 \uC774\uB3D9\uC2DD \uBD80\uD0C4\uC5F0\uC18C\uAE30 \uC548\uC804\uC0AC\uC6A9\uC694\uB839",
+    content: "\uC548\uC804\uC0AC\uC6A9\uC694\uB839 \uC548\uB0B4",
+    sourceUrl: "https://www.mapo.go.kr/site/main/board/notice/276454?bcId=notice",
+  });
+
+  assert.equal(result?.rule, "public-safety-guide");
+});
+
+test("keep public safety education recruitment", () => {
+  const result = getPostExclusionReason({
+    title: "\uC5EC\uB984\uCCA0 \uAC00\uC2A4\uC548\uC804 \uAD50\uC721 \uCC38\uC5EC\uC790 \uBAA8\uC9D1",
+    content: "2026\uB144 8\uC6D4 10\uC77C\uAE4C\uC9C0 \uC2E0\uCCAD \uC811\uC218\uD569\uB2C8\uB2E4.",
+    sourceUrl: "https://www.mapo.go.kr/site/main/board/notice/999999?bcId=notice",
+  });
+
+  assert.equal(result, null);
+});
+
 test("keep the specific Youth Seoul title over a generic external page title", () => {
   assert.equal(
     choosePreferredDetailTitle(

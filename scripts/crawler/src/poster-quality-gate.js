@@ -106,6 +106,7 @@ const RETROSPECTIVE_NEWS_PATTERN = /(?:\uC18C\uC2DD|\uD6C4\uAE30|\uACB0\uACFC|\u
 const NEWS_BOARD_SOURCE_PATTERN = /\/(?:community\/news|notice\/news|board\/news)(?:\/|$|\?)/i;
 const ROBUST_JOB_RECRUITMENT_PATTERN = /(?:\uCC44\uC6A9\s*(?:\uACF5\uACE0|\uAE30\uAC04|\uC548\uB0B4)|\uC9C1\uC6D0\s*\uCC44\uC6A9|\uC0AC\uD68C\uBCF5\uC9C0\uC0AC.*\uCC44\uC6A9|\uC815\uADDC\uC9C1.*\uCC44\uC6A9|\uACC4\uC57D\uC9C1.*\uCC44\uC6A9|\uAC15\uC0AC\s*\uBAA8\uC9D1|\uD300\uC6D0\s*\uCC44\uC6A9)/i;
 const ENCODED_TEXT_PATTERN = /\b[A-Za-z0-9+/]{160,}={0,2}\b/;
+const PUBLIC_SAFETY_GUIDE_PATTERN = /(?:\uAC00\uC2A4|\uBD80\uD0C4|\uC7A5\uB9C8\uCCA0|\uD589\uB77D\uCCA0|\uC0DD\uD65C\s*\uC548\uC804).*(?:\uC548\uC804\s*\uAD00\uB9AC\s*\uC694\uB839|\uC548\uC804\s*\uC0AC\uC6A9\s*\uC694\uB839|\uC0AC\uC6A9\s*\uC694\uB839|\uAD00\uB9AC\s*\uC694\uB839)|(?:\uC548\uC804\s*\uAD00\uB9AC\s*\uC694\uB839|\uC548\uC804\s*\uC0AC\uC6A9\s*\uC694\uB839|\uC0AC\uC6A9\s*\uC694\uB839|\uAD00\uB9AC\s*\uC694\uB839).*(?:\uAC00\uC2A4|\uBD80\uD0C4|\uC7A5\uB9C8\uCCA0|\uD589\uB77D\uCCA0|\uC0DD\uD65C\s*\uC548\uC804)/i;
 
 const GENERIC_TITLE_PATTERNS = [
   /^\s*$/i,
@@ -433,6 +434,10 @@ export function evaluatePosterQuality(input = {}, options = {}) {
 
   if (RETROSPECTIVE_NEWS_PATTERN.test(title) && !hasActiveRecruitmentSignal(`${title} ${summary}`)) {
     addIssue(issues, "retrospective-news", "high", "retrospective news/follow-up content is not an active poster recruitment", title, "reject");
+  }
+
+  if (PUBLIC_SAFETY_GUIDE_PATTERN.test(`${title} ${summary}`) && !hasActiveRecruitmentSignal(`${title} ${summary}`)) {
+    addIssue(issues, "public-safety-guide", "high", "public safety guide/tips content is not an active poster recruitment", title || summary, "reject");
   }
 
   if (isNewsBoardSource(sourceKey) && !hasActiveRecruitmentSignal(`${title} ${summary}`)) {
