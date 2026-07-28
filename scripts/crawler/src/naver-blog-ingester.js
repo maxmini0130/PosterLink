@@ -87,7 +87,7 @@ async function upsertNoticeSighting(supabase, entry, { sourceOrg }) {
     .maybeSingle();
 
   if (lookupError) throw new Error(`notice_sighting_lookup:${lookupError.message}`);
-  if (existing) return { sighting: existing, isNew: false, sourceUrl };
+  if (existing) return { sighting: existing, isNew: false, sourceUrl, imagePhash: null };
 
   const imageUrl = extractFirstImage(entry.description);
   const imagePhash = await computeImagePhash(imageUrl);
@@ -111,7 +111,7 @@ async function upsertNoticeSighting(supabase, entry, { sourceOrg }) {
     .single();
 
   if (error) throw new Error(`notice_sighting_insert:${error.message}`);
-  return { sighting: inserted, isNew: true, sourceUrl };
+  return { sighting: inserted, isNew: true, sourceUrl, imagePhash: imagePhash?.phash ?? null };
 }
 
 async function classifyEntry(entry) {
@@ -144,12 +144,13 @@ function coalesceMergeRecord(existingRow, incomingFields) {
   return update;
 }
 
-async function linkOrCreateCandidate(supabase, entry, sourceUrl, relevanceRoute, deadlineParse, duplicateCandidates, { sourceOrg }) {
+async function linkOrCreateCandidate(supabase, entry, sourceUrl, relevanceRoute, deadlineParse, duplicateCandidates, { sourceOrg, imagePhash = null }) {
   const candidateShape = {
     source_key: sourceUrl,
     title: entry.title,
     source_org_name: sourceOrg ?? null,
     application_end_at: deadlineParse.applyEnd ?? null,
+    imagePhash,
   };
 
   const match = findBestPosterDuplicate(candidateShape, duplicateCandidates);
@@ -250,7 +251,7 @@ export async function ingestNaverBlog(blogId, options = {}) {
   let duplicateCandidates = null;
 
   for (const entry of entries) {
-    const { sighting, isNew, sourceUrl } = await upsertNoticeSighting(supabase, entry, { sourceOrg });
+    const { sighting, isNew, sourceUrl, imagePhash } = await upsertNoticeSighting(supabase, entry, { sourceOrg });
     if (!isNew) {
       stats.alreadySeen += 1;
       continue;
@@ -267,7 +268,7 @@ export async function ingestNaverBlog(blogId, options = {}) {
     const deadlineParse = await parseDeadlineText(relevanceRoute.deadlineText || "", { postedAt: entry.pubDate });
 
     duplicateCandidates ??= await loadDuplicateCandidates();
-    const result = await linkOrCreateCandidate(supabase, entry, sourceUrl, relevanceRoute, deadlineParse, duplicateCandidates, { sourceOrg });
+    const result = await linkOrCreateCandidate(supabase, entry, sourceUrl, relevanceRoute, deadlineParse, duplicateCandidates, { sourceOrg, imagePhash });
 
     if (result.candidateId) {
       const { error: linkError } = await supabase

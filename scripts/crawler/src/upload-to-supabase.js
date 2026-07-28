@@ -1022,7 +1022,7 @@ function mergeClassificationIntoFieldVerification(verification = {}, classificat
 // naver-blog-ingester.js는 블로그 쪽 sightings만 쓰고 있었는데, 게시판 쪽이 없으면
 // "공고 1건 : 출처 N건" 구조가 절반만 완성된다. 실패해도 본 업로드 파이프라인을
 // 막지 않도록 에러는 던지지 않고 경고만 남긴다(부가적인 기록이라 위상이 다름).
-export async function upsertBoardNoticeSighting(post, sourceUrl, { candidateId = null, posterId = null } = {}) {
+export async function upsertBoardNoticeSighting(post, sourceUrl, { candidateId = null, posterId = null, precomputedImagePhash = undefined } = {}) {
   try {
     const { data: existing, error: lookupError } = await supabase
       .from("notice_sightings")
@@ -1038,7 +1038,8 @@ export async function upsertBoardNoticeSighting(post, sourceUrl, { candidateId =
 
     const imageUrl = Array.isArray(post.images) ? post.images[0] ?? null : null;
     // 로컬 계산(비용 0원)이라 실패해도 fail-open — phash 없이도 기존 텍스트/URL dedup은 그대로 동작.
-    const imagePhash = await computeImagePhash(imageUrl);
+    // 호출부(dedup 매칭)에서 이미 계산해뒀으면 재계산하지 않고 재사용한다.
+    const imagePhash = precomputedImagePhash !== undefined ? precomputedImagePhash : await computeImagePhash(imageUrl);
 
     const fields = sanitizeForPostgrest({
       surface_type: "게시판",
@@ -1322,6 +1323,28 @@ async function fetchByPosterIds(table, columns, posterIds, batchSize = 100) {
   return rows;
 }
 
+// notice_sightings.image_phash values for a set of poster/candidate ids, grouped
+// by the given id column. Used to let poster-duplicate-detector.js catch the
+// same photo hosted at two different URLs (board CDN vs. blog CDN).
+async function fetchSightingPhashesByIds(idColumn, ids, batchSize = 100) {
+  const map = new Map();
+  for (const batchIds of chunkArray(ids, batchSize)) {
+    const { data, error } = await supabase
+      .from("notice_sightings")
+      .select(`${idColumn},image_phash`)
+      .in(idColumn, batchIds)
+      .not("image_phash", "is", null);
+
+    if (error) throw error;
+    for (const row of data ?? []) {
+      const list = map.get(row[idColumn]) ?? [];
+      list.push(row.image_phash);
+      map.set(row[idColumn], list);
+    }
+  }
+  return map;
+}
+
 async function loadNoticeCandidateDuplicateCandidates(limit) {
   const rows = [];
   const pageSize = 1000;
@@ -1344,6 +1367,13 @@ async function loadNoticeCandidateDuplicateCandidates(limit) {
     if (!data || data.length < pageSize) break;
   }
 
+  let phashesByCandidateId = new Map();
+  try {
+    phashesByCandidateId = await fetchSightingPhashesByIds("candidate_id", rows.map((row) => row.id).filter(Boolean));
+  } catch (error) {
+    console.warn(`Notice candidate phash load failed: ${error.message}`);
+  }
+
   return rows.map((row) => ({
     ...row,
     duplicateTargetType: "notice_candidate",
@@ -1359,6 +1389,7 @@ async function loadNoticeCandidateDuplicateCandidates(limit) {
           is_primary: true,
         }]
       : [],
+    imagePhashes: phashesByCandidateId.get(row.id) ?? [],
   }));
 }
 
@@ -1397,9 +1428,10 @@ export async function loadDuplicateCandidates() {
 
   let posterRows = rows;
   try {
-    const [imageRows, linkRows] = await Promise.all([
+    const [imageRows, linkRows, phashesByPosterId] = await Promise.all([
       fetchByPosterIds("poster_images", "poster_id,storage_path,width,height", posterIds),
       fetchByPosterIds("poster_links", "poster_id,url,title,link_type,is_primary", posterIds),
+      fetchSightingPhashesByIds("poster_id", posterIds),
     ]);
     const imagesByPosterId = groupByPosterId(imageRows);
     const linksByPosterId = groupByPosterId(linkRows);
@@ -1407,6 +1439,7 @@ export async function loadDuplicateCandidates() {
       ...row,
       poster_images: imagesByPosterId.get(row.id) ?? [],
       poster_links: linksByPosterId.get(row.id) ?? [],
+      imagePhashes: phashesByPosterId.get(row.id) ?? [],
     }));
   } catch (error) {
     console.warn(`Duplicate relation load failed: ${error.message}`);
@@ -1488,7 +1521,7 @@ function mergeDuplicateIssueIntoFieldVerification(verification = {}, issue) {
   };
 }
 
-function addDuplicateCandidate(candidates, posterId, posterRecord, post, sourceUrl, storedImages, linkEntries = []) {
+function addDuplicateCandidate(candidates, posterId, posterRecord, post, sourceUrl, storedImages, linkEntries = [], imagePhash = null) {
   if (!posterId) return;
   candidates.unshift({
     id: posterId,
@@ -1502,6 +1535,7 @@ function addDuplicateCandidate(candidates, posterId, posterRecord, post, sourceU
     summary_long: posterRecord.summary_long,
     attachmentAnalysis: post.attachmentAnalysis ?? null,
     images: storedImages,
+    imagePhash,
     poster_images: storedImages.map((storagePath) => ({ storage_path: storagePath })),
     poster_links: linkEntries.length > 0
       ? linkEntries
@@ -1516,7 +1550,7 @@ function addDuplicateCandidate(candidates, posterId, posterRecord, post, sourceU
   });
 }
 
-function addNoticeDuplicateCandidate(candidates, candidateId, post, sourceKey, sourceUrl, verifiedOrgName, finalDeadline, fieldVerification) {
+function addNoticeDuplicateCandidate(candidates, candidateId, post, sourceKey, sourceUrl, verifiedOrgName, finalDeadline, fieldVerification, imagePhash = null) {
   if (!candidateId) return;
   const readableInfo = buildReadableNoticeInfo(post);
   candidates.unshift({
@@ -1532,6 +1566,7 @@ function addNoticeDuplicateCandidate(candidates, candidateId, post, sourceKey, s
     summary_short: readableInfo.summaryShort,
     summary_long: readableInfo.summaryLong,
     field_verification: mergeReadableNoticeIntoFieldVerification(fieldVerification ?? {}, post, readableInfo),
+    imagePhash,
     poster_images: [],
     poster_links: sourceUrl
       ? [{
@@ -1679,12 +1714,16 @@ async function uploadToSupabase(filePath) {
       row.duplicateTargetType === "notice_candidate" &&
       normalizeSourceKey(row.source_key ?? row.sourceUrl ?? row.url) === sourceKey
     ));
+    // 계산해두고 이 post의 나머지 처리(중복 매칭 + notice_sightings 저장)에서 재사용한다
+    // (다운로드+로컬 phash 계산 비용을 한 번만 지불).
+    const currentImagePhash = sourceImages[0] ? await computeImagePhash(sourceImages[0]) : null;
     const duplicateMatch = findBestPosterDuplicate({
       ...post,
       source_key: sourceKey,
       sourceUrl,
       url: sourceUrl,
       images: sourceImages,
+      imagePhash: currentImagePhash?.phash ?? null,
       poster_links: linkEntries,
       application_end_at: post.deadline ?? null,
     }, duplicateSearchCandidates);
@@ -1700,7 +1739,7 @@ async function uploadToSupabase(filePath) {
       await assignPosterCategories(duplicateMatch.row.id, post, categoryMap, classification);
       await assignPosterRegions(duplicateMatch.row.id, post, regionMap, classification);
       await assignPosterAudiences(duplicateMatch.row.id, classification, audienceMap);
-      await upsertBoardNoticeSighting(post, sourceUrl, { posterId: duplicateMatch.row.id });
+      await upsertBoardNoticeSighting(post, sourceUrl, { posterId: duplicateMatch.row.id, precomputedImagePhash: currentImagePhash?.phash ?? null });
       process.stdout.write("=");
       console.log(`\n  Duplicate merged into existing poster ${duplicateMatch.row.id}: ${post.title} (${duplicateMatch.score})`);
       continue;
@@ -1803,8 +1842,8 @@ async function uploadToSupabase(filePath) {
           relevanceRoute,
           deadlineParse,
         });
-        addNoticeDuplicateCandidate(duplicateCandidates, candidateResult.id, post, sourceKey, sourceUrl, verifiedOrgName, finalDeadline, fieldVerification);
-        await upsertBoardNoticeSighting(post, sourceUrl, { candidateId: candidateResult.id });
+        addNoticeDuplicateCandidate(duplicateCandidates, candidateResult.id, post, sourceKey, sourceUrl, verifiedOrgName, finalDeadline, fieldVerification, currentImagePhash?.phash ?? null);
+        await upsertBoardNoticeSighting(post, sourceUrl, { candidateId: candidateResult.id, precomputedImagePhash: currentImagePhash?.phash ?? null });
         if (candidateResult.created) {
           success++;
           noticeCandidateSuccess++;
@@ -1934,7 +1973,7 @@ async function uploadToSupabase(filePath) {
       await assignPosterCategories(existingPoster.id, post, categoryMap, classification);
       await assignPosterRegions(existingPoster.id, post, regionMap, classification);
       await assignPosterAudiences(existingPoster.id, classification, audienceMap);
-      await upsertBoardNoticeSighting(post, sourceUrl, { posterId: existingPoster.id });
+      await upsertBoardNoticeSighting(post, sourceUrl, { posterId: existingPoster.id, precomputedImagePhash: currentImagePhash?.phash ?? null });
       process.stdout.write("-");
       continue;
     }
@@ -1967,8 +2006,8 @@ async function uploadToSupabase(filePath) {
     await assignPosterCategories(posterId, post, categoryMap, classification);
     await assignPosterRegions(posterId, post, regionMap, classification);
     await assignPosterAudiences(posterId, classification, audienceMap);
-    addDuplicateCandidate(duplicateCandidates, posterId, posterRecord, post, sourceUrl, storedImages, linkEntries);
-    await upsertBoardNoticeSighting(post, sourceUrl, { posterId });
+    addDuplicateCandidate(duplicateCandidates, posterId, posterRecord, post, sourceUrl, storedImages, linkEntries, currentImagePhash?.phash ?? null);
+    await upsertBoardNoticeSighting(post, sourceUrl, { posterId, precomputedImagePhash: currentImagePhash?.phash ?? null });
 
     success++;
     collectionStats.recordCreated(post);

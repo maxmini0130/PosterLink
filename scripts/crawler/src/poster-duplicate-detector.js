@@ -1,3 +1,5 @@
+import { arePhashSimilar } from "./image-phash.js";
+
 const TITLE_GENERIC_WORDS = [
   "참여자",
   "교육생",
@@ -207,6 +209,17 @@ function getApplicationUrls(row = {}) {
   return [row.application_url, row.applicationUrl, row.applyUrl, ...links].filter(Boolean);
 }
 
+// notice_sightings.image_phash values reachable for this row (either a single
+// precomputed value on the in-flight candidate, or several gathered across
+// board/blog sightings for an existing poster/notice_candidate row).
+function getImagePhashes(row = {}) {
+  const values = [
+    row.imagePhash,
+    ...(Array.isArray(row.imagePhashes) ? row.imagePhashes : []),
+  ];
+  return values.filter((value) => /^[a-f0-9]{16}$/i.test(String(value ?? "")));
+}
+
 function getAttachmentHashes(row = {}) {
   const directSources = Array.isArray(row.attachmentAnalysis?.sources)
     ? row.attachmentAnalysis.sources
@@ -228,6 +241,7 @@ export function buildDuplicateFingerprint(row = {}) {
   const applicationUrls = new Set(getApplicationUrls(row).map(normalizeSourceUrl).filter(Boolean));
   const attachmentHashes = new Set(getAttachmentHashes(row));
   const images = new Set(getImages(row).map(normalizeImageIdentity).filter(Boolean));
+  const imagePhashes = new Set(getImagePhashes(row));
   const deadline = normalizeDateKey(row.application_end_at ?? row.deadline);
 
   return {
@@ -240,6 +254,7 @@ export function buildDuplicateFingerprint(row = {}) {
     applicationUrls,
     attachmentHashes,
     images,
+    imagePhashes,
   };
 }
 
@@ -264,6 +279,17 @@ export function scorePosterDuplicate(candidate = {}, existing = {}) {
   if (imageMatched) {
     score += 95;
     matched.push("image");
+  }
+
+  // Same photo hosted at two different URLs (board CDN vs. blog CDN) — the
+  // exact-URL check above misses this, so perceptual hash catches it instead.
+  // Skip when an exact URL match already fired to avoid double-counting.
+  const phashMatched = !imageMatched && [...candidateFp.imagePhashes].some(
+    (hash) => [...existingFp.imagePhashes].some((otherHash) => arePhashSimilar(hash, otherHash))
+  );
+  if (phashMatched) {
+    score += 85;
+    matched.push("image-phash");
   }
 
   const titleSimilarity = textSimilarity(candidateFp.title, existingFp.title);
@@ -308,6 +334,7 @@ export function scorePosterDuplicate(candidate = {}, existing = {}) {
     (titleSimilarity === 1 && candidateFp.title.length >= 8 && orgSimilarity >= 0.9) ||
     (score >= 85 && titleSimilarity >= 0.72 && (orgSimilarity >= 0.65 || matched.includes("deadline"))) ||
     (imageMatched && titleSimilarity >= 0.45) ||
+    (phashMatched && titleSimilarity >= 0.45) ||
     (attachmentMatched && titleSimilarity >= 0.45) ||
     (applicationUrlMatched && titleSimilarity >= 0.72 && orgSimilarity >= 0.65);
   const needsReview = !canMerge && score >= 65 && titleSimilarity >= 0.55;

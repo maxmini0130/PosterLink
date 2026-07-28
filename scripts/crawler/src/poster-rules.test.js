@@ -91,6 +91,45 @@ test("matching official application URLs participate in duplicate detection", ()
   assert.ok(result.matched.includes("application-url"));
 });
 
+test("identical image phash across different URLs (board vs. blog CDN) triggers a merge", () => {
+  const phash = "a1b2c3d4e5f6a1b2";
+  const result = scorePosterDuplicate(
+    {
+      title: "2026년 소상공인 지원사업 모집 공고",
+      source_org_name: "마포구청",
+      images: ["https://blog-cdn.example.com/photo123.jpg"],
+      imagePhash: phash,
+    },
+    {
+      title: "2026년 소상공인 지원사업 모집",
+      source_org_name: "마포구청",
+      images: ["https://board.mapo.go.kr/upload/photo999.jpg"],
+      imagePhash: phash,
+    },
+  );
+  assert.equal(result.decision, "merge");
+  assert.ok(result.matched.includes("image-phash"));
+});
+
+test("an exact image URL match is not double-counted as a separate phash match", () => {
+  const phash = "a1b2c3d4e5f6a1b2";
+  const sharedUrl = "https://board.mapo.go.kr/upload/photo999.jpg";
+  const result = scorePosterDuplicate(
+    { title: "2026년 소상공인 지원사업 모집 공고", images: [sharedUrl], imagePhash: phash },
+    { title: "2026년 소상공인 지원사업 모집 공고", images: [sharedUrl], imagePhash: phash },
+  );
+  assert.ok(result.matched.includes("image"));
+  assert.ok(!result.matched.includes("image-phash"));
+});
+
+test("different image phash values do not falsely merge on their own", () => {
+  const result = scorePosterDuplicate(
+    { title: "청년 창업 특강 참가자 모집", imagePhash: "0000000000000000" },
+    { title: "청소년 여름 축제 안내", imagePhash: "ffffffffffffffff" },
+  );
+  assert.ok(!result.matched.includes("image-phash"));
+});
+
 test("OCR text is converted into structured notice facts", () => {
   const result = buildReadableNoticeInfo({
     title: "청년 창업 특강",
