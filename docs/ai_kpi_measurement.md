@@ -13,6 +13,7 @@ The report includes:
 
 - published-poster embedding coverage
 - field verification guard coverage
+- review-queue quality-gate reject candidates
 - recent crawler run duration, throughput, and per-item processing time
 - optional semantic-search API latency
 

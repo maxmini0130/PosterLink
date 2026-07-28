@@ -4,6 +4,7 @@ import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
+import { evaluatePosterQuality, summarizeQualityIssues } from "./poster-quality-gate.js";
 
 const DEFAULT_OUTPUT = "data/baseline/ai_kpi_report.json";
 const DEFAULT_DAYS = 30;
@@ -99,6 +100,44 @@ async function measureFieldVerificationCoverage(supabase) {
     coverage_percent: percent(verified, active),
     planning_target_percent: 98,
     note: "Coverage is not hallucination accuracy. Use the golden-set score for correctness.",
+  };
+}
+
+async function measureReviewQueueQuality(supabase) {
+  const { data, error, count } = await supabase
+    .from("posters")
+    .select("id,title,source_org_name,summary_short,summary_long,thumbnail_url,source_key,created_at", { count: "exact" })
+    .eq("poster_status", "review")
+    .order("created_at", { ascending: false })
+    .limit(1000);
+  if (error) throw error;
+
+  const rows = data ?? [];
+  const evaluations = rows.map((row) => {
+    const quality = evaluatePosterQuality({
+      ...row,
+      images: row.thumbnail_url ? [row.thumbnail_url] : [],
+    });
+    return { row, quality };
+  });
+  const rejectCandidates = evaluations.filter(({ quality }) => quality.decision === "reject");
+  const reviewWarnings = evaluations.filter(({ quality }) => quality.decision === "review");
+
+  return {
+    review_queue_count: count ?? rows.length,
+    sampled_review_rows: rows.length,
+    quality_gate_reject_candidates: rejectCandidates.length,
+    quality_gate_review_warnings: reviewWarnings.length,
+    estimated_nonposter_rate_percent: percent(rejectCandidates.length, rows.length),
+    target_reject_candidates: 0,
+    top_reject_candidates: rejectCandidates.slice(0, 20).map(({ row, quality }) => ({
+      id: row.id,
+      title: row.title,
+      source_org_name: row.source_org_name,
+      source_key: row.source_key,
+      issues: quality.issues.map((issue) => issue.code),
+      reason: summarizeQualityIssues(quality, 6),
+    })),
   };
 }
 
@@ -215,9 +254,10 @@ async function main() {
     .filter(Boolean);
   const supabase = createSupabase();
 
-  const [embeddingCoverage, fieldVerificationCoverage, collectionRuns, semanticApi] = await Promise.all([
+  const [embeddingCoverage, fieldVerificationCoverage, reviewQueueQuality, collectionRuns, semanticApi] = await Promise.all([
     measureEmbeddingCoverage(supabase),
     measureFieldVerificationCoverage(supabase),
+    measureReviewQueueQuality(supabase),
     measureCollectionRuns(supabase, days),
     measureSemanticApi(baseUrl, queries.length > 0 ? queries : DEFAULT_QUERIES),
   ]);
@@ -232,6 +272,7 @@ async function main() {
       },
       embedding_coverage: embeddingCoverage,
       field_verification_coverage: fieldVerificationCoverage,
+      review_queue_quality: reviewQueueQuality,
       collection_processing: collectionRuns,
       semantic_search_latency: semanticApi,
     },
@@ -245,6 +286,8 @@ async function main() {
     generated_at: report.generated_at,
     embedding_coverage_percent: embeddingCoverage.coverage_percent,
     field_verification_coverage_percent: fieldVerificationCoverage.coverage_percent,
+    review_queue_count: reviewQueueQuality.review_queue_count,
+    review_queue_reject_candidates: reviewQueueQuality.quality_gate_reject_candidates,
     collection_run_count: collectionRuns.run_count,
     collection_p95_duration_ms: collectionRuns.p95_duration_ms,
     semantic_api_p95_latency_ms: semanticApi.skipped ? "skipped" : semanticApi.p95_latency_ms,

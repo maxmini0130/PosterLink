@@ -733,6 +733,37 @@ pnpm --filter posterlink-crawler cleanup:review-nonposters -- --limit=1000 --app
   - `4월 걷기모임 소식`, `경비노동자 교육 및 한마당` 등은 `news-board-without-action`으로 제외.
   - `경비노동자 교육 참여자 모집 소식`은 통과.
 - `pnpm --filter posterlink-crawler test` → 64/64 통과
+
+---
+
+## 20. 2026-07-28 AI 1~5번 품질 흐름 재점검 및 측정 보강
+
+AI 관련 1~5번 흐름(정확도 baseline, KPI, 검수대기 정리, 품질 게이트, 수집 전 필터)을 한 번에 이어서 재점검했고, 측정 도구가 실제 품질 게이트 판단을 더 잘 보여주도록 보강했다.
+
+### 변경 사항
+- `scripts/crawler/src/create-baseline-goldenset.js`
+  - 골든셋 CSV에 `predicted_quality_decision`, `predicted_quality_issues` 추가.
+  - 사람이 `gold_is_valid_poster`를 채울 때 현재 AI 품질 게이트의 판단 근거를 바로 비교할 수 있게 함.
+- `scripts/crawler/src/measure-ai-kpis.js`
+  - `review_queue_quality` KPI 추가.
+  - 현재 검수대기 수, 품질 게이트 기준 reject 후보 수, 추정 비포스터율, 상위 reject 후보 목록 산출.
+- `docs/ai_baseline_evaluation.md`, `docs/ai_kpi_measurement.md`
+  - 새 컬럼/지표 문서화.
+
+### 검증
+- `pnpm --filter posterlink-crawler baseline:sample -- --limit=20 --output=data/baseline/goldenset_quality_sample.csv`
+  - 20건 샘플 생성 완료, 품질 게이트 예측 컬럼 포함 확인.
+- `pnpm --filter posterlink-crawler kpi:measure -- --days=30 --output=data/baseline/ai_kpi_report_review_quality.json`
+  - embedding coverage: 100%
+  - field verification coverage: 23.1%
+  - review queue: 4건
+  - review queue reject candidates: 0건
+- `pnpm --filter posterlink-crawler cleanup:review-nonposters -- --limit=1000 --output=data/results/review-nonposter-cleanup-sequence-check.json`
+  - 검수대기 4건 스캔, reject 후보 0건.
+- 사후 뉴스/모집글 샘플 확인:
+  - `4월 걷기모임 소식` → 수집 전 필터 `news-board-without-action`, 품질 게이트 `reject`.
+  - `경비노동자 교육 참여자 모집 소식` → 수집 전 필터 통과, 품질 게이트 `review`.
+- `pnpm --filter posterlink-crawler test` → 64/64 통과
 - `pnpm --filter web exec tsc --noEmit -p tsconfig.json` → 통과
 - `pnpm --filter web build` → 통과
 

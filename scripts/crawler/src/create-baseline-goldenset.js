@@ -4,6 +4,7 @@ import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
+import { evaluatePosterQuality, summarizeQualityIssues } from "./poster-quality-gate.js";
 
 const DEFAULT_OUTPUT = "data/baseline/goldenset_sample.csv";
 const DEFAULT_LIMIT = 100;
@@ -132,6 +133,10 @@ async function fetchCandidates(supabase, limit) {
 function toBaselineRow(row, categoryMap) {
   const classification = getClassification(row);
   const route = compact(classification.route || classification.decision || "");
+  const quality = evaluatePosterQuality({
+    ...row,
+    images: row.thumbnail_url ? [row.thumbnail_url] : [],
+  });
   const predictedIsValidPoster = row.kind === "poster"
     ? (row.poster_status === "rejected" ? "0" : "1")
     : (row.candidate_status === "rejected" ? "0" : "1");
@@ -152,6 +157,8 @@ function toBaselineRow(row, categoryMap) {
     predicted_deadline: predictedDeadline,
     predicted_category: predictedCategory,
     predicted_duplicate_decision: predictedDuplicate,
+    predicted_quality_decision: quality.decision,
+    predicted_quality_issues: summarizeQualityIssues(quality, 6),
     source_excerpt: compact(`${row.title ?? ""}\n${row.summary_short ?? ""}\n${row.summary_long ?? ""}`, 1200),
     gold_is_valid_poster: "",
     gold_title_ok: "",
@@ -192,6 +199,8 @@ async function main() {
     "predicted_deadline",
     "predicted_category",
     "predicted_duplicate_decision",
+    "predicted_quality_decision",
+    "predicted_quality_issues",
     "source_excerpt",
     "gold_is_valid_poster",
     "gold_title_ok",

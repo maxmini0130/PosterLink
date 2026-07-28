@@ -28,6 +28,11 @@ Main metrics:
 - `gold_category_ok`: category classification
 - `gold_duplicate_ok`: duplicate decision
 
+Helpful prediction columns:
+
+- `predicted_quality_decision`: current quality-gate decision (`pass`, `review`, or `reject`)
+- `predicted_quality_issues`: quality-gate reasons to compare against the human label
+
 ## 3. Score the Baseline
 
 ```bash
