@@ -87,6 +87,10 @@ export default function Home() {
             viewCount: metricCounts.viewCounts[poster.id] ?? 0,
             linkClickCount: metricCounts.linkClickCounts[poster.id] ?? 0,
             favoriteCount: metricCounts.favoriteCounts[poster.id] ?? 0,
+            // get_recommended_posters_v2가 주는 순수 코사인 유사도(0~1). 공개 목록
+            // 조회(fetchPublicPosters)에는 이 컬럼이 없어 undefined로 남고, PosterCard는
+            // null/undefined일 땐 배지를 표시하지 않는다.
+            similarityScore: poster.similarity_score ?? null,
           }));
         };
 
@@ -389,6 +393,7 @@ export default function Home() {
                       viewCount: poster.viewCount,
                       linkClickCount: poster.linkClickCount,
                       favoriteCount: poster.favoriteCount,
+                      similarityScore: poster.similarityScore,
                       tags: [poster.categoryName, poster.regionName].filter((tag): tag is string => Boolean(tag)),
                     }}
                   />

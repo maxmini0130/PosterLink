@@ -17,6 +17,7 @@ interface PosterCardProps {
     viewCount?: number;
     linkClickCount?: number;
     favoriteCount?: number;
+    similarityScore?: number | null;
   };
 }
 
@@ -29,6 +30,10 @@ export function PosterCard({ poster }: PosterCardProps) {
   const imageUrls = resolvePosterImageGallery(poster.images ?? [], poster.image, poster.sourceUrl);
   const showViewCount = (poster.viewCount ?? 0) >= 100;
   const showFavoriteCount = (poster.favoriteCount ?? 0) >= 10;
+  // 찜/조회 이력 기반 의미 유사도 — 이력이 없거나 임베딩이 없으면 null이라 표시 안 함.
+  // 너무 낮은 유사도는 "AI가 이 정도로 추천했다"는 신뢰를 깎으므로 일정 이상만 배지로 노출.
+  const fitPercent = typeof poster.similarityScore === "number" ? Math.round(poster.similarityScore * 100) : null;
+  const showFitBadge = fitPercent !== null && fitPercent >= 30;
 
   return (
     <Link href={`/posters/${poster.id}`} className="group block h-full">
@@ -38,12 +43,17 @@ export function PosterCard({ poster }: PosterCardProps) {
         }`}
       >
         <div className="flex flex-1 flex-col p-4">
-          <div className="mb-3 flex flex-wrap gap-1">
+          <div className="mb-3 flex flex-wrap items-center gap-1">
             {(category ? [category, region].filter(Boolean) : tags.slice(0, 2)).map((tag) => (
               <span key={tag} className="border border-slate-200 px-2 py-1 text-[10px] font-black text-slate-600">
                 {tag}
               </span>
             ))}
+            {showFitBadge && (
+              <span className="border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-700">
+                맞춤 {fitPercent}%
+              </span>
+            )}
           </div>
 
           <h3

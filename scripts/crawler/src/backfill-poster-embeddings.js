@@ -1,13 +1,6 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import dotenv from "dotenv";
+import "./load-env.js";
 import { createClient } from "@supabase/supabase-js";
 import { embedPosterText, embeddingToPgVector } from "./poster-embedder.js";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, "../../../apps/web/.env.local") });
-dotenv.config({ path: path.resolve(__dirname, "../.env") });
-dotenv.config();
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
