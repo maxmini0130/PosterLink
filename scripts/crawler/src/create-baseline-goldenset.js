@@ -8,6 +8,7 @@ import { evaluatePosterQuality, summarizeQualityIssues } from "./poster-quality-
 
 const DEFAULT_OUTPUT = "data/baseline/goldenset_sample.csv";
 const DEFAULT_LIMIT = 100;
+const UTF8_BOM = "\uFEFF";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "../../..");
 
@@ -212,8 +213,9 @@ async function main() {
   ];
 
   await fs.mkdir(path.dirname(output), { recursive: true });
-  await fs.writeFile(output, [csvLine(header), ...rows.map((row) => csvLine(header.map((key) => row[key])))]
-    .join("\n"), "utf-8");
+  const csv = [csvLine(header), ...rows.map((row) => csvLine(header.map((key) => row[key])))]
+    .join("\n");
+  await fs.writeFile(output, `${UTF8_BOM}${csv}`, "utf-8");
 
   console.log(JSON.stringify({
     output,
