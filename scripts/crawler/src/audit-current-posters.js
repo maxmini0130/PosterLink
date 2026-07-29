@@ -2,12 +2,16 @@
 import "./load-env.js";
 import fs from "fs/promises";
 import path from "path";
+import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import { buildPosterDuplicateMaps, evaluatePosterQuality } from "./poster-quality-gate.js";
 
-const REPORT_DIR = path.resolve("data");
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(__dirname, "../../..");
+const REPORT_DIR = path.join(REPO_ROOT, "data");
 const REPORT_PATH = path.join(REPORT_DIR, "poster-current-audit.json");
 const CSV_PATH = path.join(REPORT_DIR, "poster-current-audit.csv");
+const UTF8_BOM = "\uFEFF";
 const AUDIT_LIMIT = Number(process.env.POSTER_AUDIT_LIMIT ?? "5000");
 const AUDIT_STATUSES = (process.env.POSTER_AUDIT_STATUSES ?? "published,review")
   .split(",")
@@ -183,7 +187,7 @@ async function main() {
       row.id,
     ].map(toCsvValue).join(",")),
   ];
-  await fs.writeFile(CSV_PATH, csvRows.join("\n"), "utf-8");
+  await fs.writeFile(CSV_PATH, `${UTF8_BOM}${csvRows.join("\n")}`, "utf-8");
 
   console.log(JSON.stringify({
     ...summary,
