@@ -101,9 +101,45 @@ The source recheck exposed a false rejection in the image URL rule:
 The recovered 788x1119 source poster now scores 100 and is selected before the
 400x400 source thumbnail.
 
+## Systemic Prevention
+
+The correction was extended from the reviewed rows to the collection pipeline
+so that the same classes of errors are rejected or reordered before upload.
+
+- Source and application links now have shared classification rules for Google
+  Forms, Naver Forms, Microsoft Forms, Typeform, Tally, and common application
+  URL paths and labels.
+- Youth Seoul and generic-board adapters keep the notice page as the canonical
+  source and store an externally resolved application form as
+  `official_apply`.
+- The uploader independently applies the same fallback, so an adapter
+  regression cannot silently promote an application form to `source_key`.
+- A strong full-size portrait poster now outranks and replaces a 400px listing
+  crop.
+- Multi-page square carousels keep the listing summary first while preserving
+  every source page.
+- Extreme vertical composites no longer displace a usable listing poster.
+- AI image verification preserves the heuristic first choice instead of
+  re-sorting it by raw candidate score.
+- Generic provider titles are enriched only from a grounded quoted program
+  name. Existing specific titles are not enriched twice.
+- AI healthcheck now reports `application_source_key_count`.
+
+The 20 issue-note rows were re-audited through the updated rules:
+
+- Application forms selected as canonical source: 0
+- Small square crop selected over a strong portrait original: 0
+- Duplicated specific-title enrichment: 0
+- Reviewer-noted source-link rows resolving to their notice pages: 8/8
+
+Reports:
+
+- `data/results/human-review-systemic-reaudit-20260729.json`
+- `data/results/ai-healthcheck-systemic-guards-20260729.json`
+
 ## Final Verification
 
-- Crawler tests: 76/76 passed
+- Crawler tests: 88/88 passed
 - Web config tests: 13/13 passed
 - Human correction database verification: 20/20 passed
 - Golden-set reconciliation is idempotent
@@ -115,5 +151,6 @@ The recovered 788x1119 source poster now scores 100 and is selected before the
 - Review queue reject candidates: 0
 - Field correction candidates: 0
 - Published/review non-poster reject candidates: 0
+- Application-form source keys: 0
 - Golden-set labeled rows: 55
 - Golden-set partial macro accuracy: 87.5%

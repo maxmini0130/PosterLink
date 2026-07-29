@@ -385,9 +385,17 @@ function getVerificationCandidates(imageSelection) {
     candidatesByUrl.set(candidate.imageUrl, candidate);
   }
 
-  return [...candidatesByUrl.values()]
-    .sort((a, b) => (b.rule?.score ?? 0) - (a.rule?.score ?? 0))
-    .slice(0, MAX_VERIFIED_IMAGE_CANDIDATES);
+  const selected = imageSelection?.selectedImageUrl
+    ? candidatesByUrl.get(imageSelection.selectedImageUrl)
+    : null;
+  const remaining = [...candidatesByUrl.values()]
+    .filter((candidate) => candidate.imageUrl !== selected?.imageUrl)
+    .sort((a, b) => (b.rule?.score ?? 0) - (a.rule?.score ?? 0));
+
+  return [...(selected ? [selected] : []), ...remaining].slice(
+    0,
+    MAX_VERIFIED_IMAGE_CANDIDATES,
+  );
 }
 
 async function selectVerifiedPosterImage(fullPost, imageSelection) {

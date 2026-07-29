@@ -5,6 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { spawn } from "child_process";
 import { createClient } from "@supabase/supabase-js";
+import { isLikelyApplicationLink } from "./source-link-rules.js";
 
 const DEFAULT_OUTPUT = "data/results/ai-healthcheck.json";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -26,6 +27,7 @@ Runs a read-only AI operations check:
   - KPI measurement
   - field_verification correction dry-run
   - published/review non-poster cleanup dry-run
+  - application-form source_key regression check
   - optional unlabeled golden-set score when --golden-set=path is provided`);
   process.exit(0);
 }
@@ -121,6 +123,38 @@ async function measureImageAiCoverage() {
   };
 }
 
+async function measureSourceLinkQuality() {
+  const supabase = createSupabase();
+  const rows = [];
+  const pageSize = 1000;
+
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("posters")
+      .select("id,title,poster_status,source_key")
+      .in("poster_status", ["published", "review"])
+      .not("source_key", "is", null)
+      .range(offset, offset + pageSize - 1);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+    if (!data || data.length < pageSize) break;
+  }
+
+  const applicationSources = rows.filter((row) =>
+    isLikelyApplicationLink(row.source_key),
+  );
+  return {
+    checked_rows: rows.length,
+    application_source_key_count: applicationSources.length,
+    application_source_sample: applicationSources.slice(0, 10).map((row) => ({
+      id: row.id,
+      title: row.title,
+      status: row.poster_status,
+      source_key: row.source_key,
+    })),
+  };
+}
+
 async function main() {
   const output = path.resolve(REPO_ROOT, args.output || DEFAULT_OUTPUT);
   const days = Math.max(1, Number(args.days || 30));
@@ -135,6 +169,7 @@ async function main() {
     `--output=${kpiOutput}`,
   ]);
   const imageAi = await measureImageAiCoverage();
+  const sourceLinks = await measureSourceLinkQuality();
   const corrections = await runJson("src/apply-field-verification-corrections.js", [
     "--limit=1000",
     `--min-confidence=${minConfidence}`,
@@ -170,6 +205,7 @@ async function main() {
       image_ai_coverage_percent: imageAi.coverage_percent,
       image_ai_nonposter_count: imageAi.nonposter_image_count,
       image_ai_low_confidence_count: imageAi.low_confidence_count,
+      application_source_key_count: sourceLinks.application_source_key_count,
       field_correction_candidates: corrections.correction_count,
       nonposter_reject_candidates: nonposters.reject_count,
       golden_set_labeled_rows: goldenSet?.labeled_rows ?? null,
@@ -184,6 +220,7 @@ async function main() {
     details: {
       kpi: kpiReport.summary ?? kpiReport,
       image_ai: imageAi,
+      source_links: sourceLinks,
       field_correction_sample: correctionsReport.rows?.slice(0, 10) ?? [],
       nonposter_sample: nonpostersReport.rows?.slice(0, 10) ?? [],
       golden_set: goldenSet,

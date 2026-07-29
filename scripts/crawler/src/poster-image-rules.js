@@ -61,13 +61,55 @@ function isLikelyThumbnailProxy(imageUrl) {
   return /\/atch\/getImg\.do/i.test(imageUrl);
 }
 
-function removeThumbnailProxiesWhenOriginalsExist(images) {
-  const hasOriginalLikeImage = images.some(
-    (imageUrl) => !isLikelyThumbnailProxy(imageUrl),
+function candidateDimensions(candidate) {
+  return candidate?.rule?.dimensions ?? null;
+}
+
+function isStrongPortraitOriginal(candidate) {
+  if (isLikelyThumbnailProxy(candidate.imageUrl)) return false;
+  const dimensions = candidateDimensions(candidate);
+  if (!dimensions) return false;
+  const ratio = dimensions.width / dimensions.height;
+  return (
+    dimensions.width >= 600 &&
+    dimensions.height >= 700 &&
+    ratio >= 0.45 &&
+    ratio <= 0.9
   );
-  return hasOriginalLikeImage
-    ? images.filter((imageUrl) => !isLikelyThumbnailProxy(imageUrl))
-    : images;
+}
+
+function byScore(left, right) {
+  return (right.rule?.score ?? 0) - (left.rule?.score ?? 0);
+}
+
+export function orderPosterImageCandidates(candidates = []) {
+  const passing = candidates.filter((candidate) => candidate.rule?.passes);
+  const rejected = candidates.filter((candidate) => !candidate.rule?.passes);
+  const proxies = passing
+    .filter((candidate) => isLikelyThumbnailProxy(candidate.imageUrl))
+    .sort(byScore);
+  const originals = passing
+    .filter((candidate) => !isLikelyThumbnailProxy(candidate.imageUrl))
+    .sort(byScore);
+  const portraitOriginals = originals.filter(isStrongPortraitOriginal);
+
+  let orderedPassing;
+  if (portraitOriginals.length > 0) {
+    const portraitUrls = new Set(
+      portraitOriginals.map((candidate) => candidate.imageUrl),
+    );
+    orderedPassing = [
+      ...portraitOriginals,
+      ...originals.filter((candidate) => !portraitUrls.has(candidate.imageUrl)),
+    ];
+  } else if (proxies.length > 0 && originals.length > 1) {
+    // A listing thumbnail often summarizes a multi-page square carousel.
+    orderedPassing = [...proxies, ...originals];
+  } else {
+    orderedPassing = [...passing].sort(byScore);
+  }
+
+  return [...orderedPassing, ...rejected.sort(byScore)];
 }
 
 function getUrlPath(imageUrl) {
@@ -397,14 +439,17 @@ export async function selectBestPosterImage(images, context = {}) {
     candidates.push({ imageUrl, rule });
   }
 
-  candidates.sort((a, b) => b.rule.score - a.rule.score);
+  const orderedCandidates = orderPosterImageCandidates(candidates);
   const selected =
-    candidates.find((candidate) => candidate.rule.passes) ?? null;
+    orderedCandidates.find((candidate) => candidate.rule.passes) ?? null;
 
   return {
     selectedImageUrl: selected?.imageUrl ?? null,
     selectedRule: selected?.rule ?? null,
-    candidates,
+    orderedImageUrls: orderedCandidates
+      .filter((candidate) => candidate.rule.passes)
+      .map((candidate) => candidate.imageUrl),
+    candidates: [...candidates].sort(byScore),
   };
 }
 
@@ -419,19 +464,8 @@ export async function filterAndOrderPosterImages(images, context = {}) {
     };
   }
 
-  const passingImages = selection.candidates
-    .filter((candidate) => candidate.rule.passes)
-    .map((candidate) => candidate.imageUrl);
-
-  const orderedImages = removeThumbnailProxiesWhenOriginalsExist([
-    selection.selectedImageUrl,
-    ...passingImages.filter(
-      (imageUrl) => imageUrl !== selection.selectedImageUrl,
-    ),
-  ]);
-
   return {
-    images: orderedImages,
+    images: selection.orderedImageUrls,
     posterImageRule: selection.selectedRule,
     posterImageCandidates: selection.candidates,
   };

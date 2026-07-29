@@ -45,6 +45,11 @@ import { routePosterRelevance } from "./poster-relevance-router.js";
 import { parseDeadlineText } from "./deadline-parser.js";
 import { computeImagePhash, selectRepresentativeImage } from "./image-phash.js";
 import { extractNoticeFactsWithLlm } from "./notice-facts-extractor.js";
+import {
+  inferPosterLinkType,
+  isLikelyApplicationLink,
+  resolveCanonicalSource,
+} from "./source-link-rules.js";
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)?.trim();
 const SUPABASE_KEY = (process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)?.trim();
@@ -392,7 +397,6 @@ export function normalizeSourceKey(sourceUrl) {
   }
 }
 
-const APPLICATION_LINK_LABEL_PATTERN = /신청|접수|지원|응모|등록|apply|application/i;
 const POSTER_LINK_TYPES = new Set([
   "official_notice",
   "official_apply",
@@ -477,7 +481,8 @@ function buildPosterLinkEntries(post, sourceUrl) {
   for (const entry of post.links ?? post.poster_links ?? []) {
     const label = getAttachmentLabel(entry) || "참고 링크";
     const url = normalizeCrawlerLinkUrl(entry?.url, sourceUrl);
-    const linkType = POSTER_LINK_TYPES.has(entry?.link_type) ? entry.link_type : "other";
+    const declaredLinkType = POSTER_LINK_TYPES.has(entry?.link_type) ? entry.link_type : "other";
+    const linkType = inferPosterLinkType(declaredLinkType, url, label);
     if (!url) continue;
     if (linkType === "official_apply" && !isUsableApplicationLink(url, sourceUrl)) continue;
     if (linkType === "official_notice" && linkIdentity(url) === linkIdentity(sourceUrl)) continue;
@@ -487,14 +492,14 @@ function buildPosterLinkEntries(post, sourceUrl) {
   for (const attachment of post.attachments ?? []) {
     const label = getAttachmentLabel(attachment);
     const url = normalizeCrawlerLinkUrl(attachment?.url, sourceUrl);
-    if (!url || !APPLICATION_LINK_LABEL_PATTERN.test(label)) continue;
+    if (!url || !isLikelyApplicationLink(url, label)) continue;
     if (!isUsableApplicationLink(url, sourceUrl)) continue;
     if (linkIdentity(url) === linkIdentity(sourceUrl)) continue;
     addLink("official_apply", url, label || "공식 신청 링크", true);
   }
 
   for (const entry of extractInlineUrls(post.content)) {
-    if (!APPLICATION_LINK_LABEL_PATTERN.test(entry.context)) continue;
+    if (!isLikelyApplicationLink(entry.url, entry.context)) continue;
     if (!isUsableApplicationLink(entry.url, sourceUrl)) continue;
     if (linkIdentity(entry.url) === linkIdentity(sourceUrl)) continue;
     addLink("official_apply", entry.url, "공식 신청 링크", true);
@@ -1703,7 +1708,8 @@ async function uploadToSupabase(filePath) {
   const qualityReview = [];
 
   for (const post of posts) {
-    const sourceUrl = post.sourceUrl || post.url;
+    const sourceResolution = resolveCanonicalSource(post);
+    const sourceUrl = sourceResolution.sourceUrl;
     const sourceKey = normalizeSourceKey(sourceUrl);
     if (!sourceKey) {
       fail++;
@@ -1720,8 +1726,17 @@ async function uploadToSupabase(filePath) {
       continue;
     }
 
+    const postWithSourceLinks = sourceResolution.derivedLinks.length
+      ? {
+          ...post,
+          links: [
+            ...(post.links ?? post.poster_links ?? []),
+            ...sourceResolution.derivedLinks,
+          ],
+        }
+      : post;
     const sourceImages = normalizePostImages(post, sourceUrl);
-    const linkEntries = buildPosterLinkEntries(post, sourceUrl);
+    const linkEntries = buildPosterLinkEntries(postWithSourceLinks, sourceUrl);
     const posterImageInsight = getPosterImageInsight(post);
     const aiContent = buildAiContentWithPosterImageText(post, posterImageInsight);
     const aiPost = {

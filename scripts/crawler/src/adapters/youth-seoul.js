@@ -7,6 +7,7 @@ import {
   resolveUrl,
 } from "../external-original-resolver.js";
 import { filterAndOrderPosterImages } from "../poster-image-rules.js";
+import { isLikelyApplicationLink } from "../source-link-rules.js";
 
 const BASE_URL = "https://youth.seoul.go.kr";
 const IMAGE_ONLY_CONTENT =
@@ -49,7 +50,25 @@ export function choosePreferredDetailTitle(youthTitle, externalTitle) {
   return external;
 }
 
-function inferSpecificTitle(title, content, attachments = []) {
+function extractQuotedProgramName(text) {
+  const candidates = [
+    ...String(text ?? "").matchAll(/'([^'\n]{4,80})'/g),
+    ...String(text ?? "").matchAll(/"([^"\n]{4,80})"/g),
+    ...String(text ?? "").matchAll(/\u300C([^\u300D\n]{4,80})\u300D/g),
+  ]
+    .map((match) => ({
+      value: cleanText(match[1]),
+      prefix: String(text ?? "").slice(Math.max(0, (match.index ?? 0) - 30), match.index ?? 0),
+    }))
+    .filter(({ value }) => value && !/^https?:\/\//i.test(value));
+
+  return candidates.find(({ value, prefix }) => (
+    /[A-Za-z0-9]/.test(value)
+    || /(?:\uD504\uB85C\uADF8\uB7A8|\uD589\uC0AC|\uB300\uD68C|\uAC15\uC88C|\uAD50\uC721|\uACF5\uBAA8)\s*\uBA85?\s*[:：]?\s*$/.test(prefix)
+  ))?.value ?? "";
+}
+
+export function inferSpecificTitle(title, content, attachments = []) {
   const text = [title, content, ...attachments.map((attachment) => attachment?.name)]
     .filter(Boolean)
     .join(" ")
@@ -84,6 +103,20 @@ function inferSpecificTitle(title, content, attachments = []) {
     if (/\uC0DD\uC131\uD615\s*\uBE14\uB85C\uADF8|\uBE14\uB85C\uADF8\s*\uC62C\uC778\uC6D0/i.test(text)) {
       return "\uC5D0\uC774\uBE14\uB7F0 <\uC218\uC775\uD654\uBD80\uD130 \uC790\uB3D9\uD654\uAE4C\uC9C0! \uC0DD\uC131\uD615 \uBE14\uB85C\uADF8 \uC62C\uC778\uC6D0 \uD074\uB798\uC2A4>";
     }
+  }
+
+  const genericMatch = cleanText(title).match(
+    /^(.{2,50}?)\s+(\uC9C4\uD589\s*\uC548\uB0B4|\uBAA8\uC9D1|\uC548\uB0B4)$/,
+  );
+  const alreadySpecific = /[<\u3008\uFF1C][^>\u3009\uFF1E]+[>\u3009\uFF1E]/.test(title);
+  const programName = genericMatch && !alreadySpecific
+    ? extractQuotedProgramName(text)
+    : "";
+  if (genericMatch && programName) {
+    const action = /\uC0AC\uC804\s*\uB4F1\uB85D/.test(text)
+      ? "\uC0AC\uC804\uB4F1\uB85D \uC548\uB0B4"
+      : genericMatch[2];
+    return `${genericMatch[1]} <${programName}> ${action}`;
   }
 
   return title;
@@ -191,8 +224,26 @@ export default {
     const content = externalDetail?.content && externalDetail.content.length > baseContent.length
       ? externalDetail.content
       : baseContent;
-    const sourceUrl = externalDetail?.url ?? postUrl;
-    const sourceLinks = externalDetail?.viaLink ? [externalDetail.viaLink] : [];
+    const externalIsApplication = isLikelyApplicationLink(
+      externalDetail?.url,
+      externalDetail?.originalLink?.label,
+    );
+    const sourceUrl = externalIsApplication
+      ? postUrl
+      : externalDetail?.url ?? postUrl;
+    const sourceLinks = externalIsApplication
+      ? [{
+          link_type: "official_apply",
+          title: (
+            externalDetail?.originalLink?.label
+            && !/^https?:\/\//i.test(externalDetail.originalLink.label)
+          )
+            ? externalDetail.originalLink.label
+            : "\uACF5\uC2DD \uC2E0\uCCAD \uB9C1\uD06C",
+          url: externalDetail.url,
+          is_primary: true,
+        }]
+      : externalDetail?.viaLink ? [externalDetail.viaLink] : [];
     const preferredTitle = choosePreferredDetailTitle(title, externalDetail?.title);
     const inferredTitle = inferSpecificTitle(preferredTitle, content, attachments);
 

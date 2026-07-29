@@ -87,6 +87,24 @@ may add `review_resolution` to record source rechecks and applied corrections.
   while the original notice is available.
 - blank when the original source cannot be identified.
 
+## Recurring Error Guards
+
+When a reviewed error is confirmed, fix both the affected data and the
+collection rule that produced it.
+
+- Keep the notice or organizer page as `source_key`. Store forms and
+  registration pages separately as `official_apply`.
+- Prefer a sufficiently large portrait source poster over a small listing crop.
+- Keep all required pages for multi-page posters; the listing summary may stay
+  first when the source presents a square carousel.
+- Do not replace a usable poster with an extreme-height page composite.
+- Enrich a generic title only when the program name is explicitly grounded in
+  the source. Do not append another program name to an already specific title.
+- Add a regression test for each confirmed error class and rerun the affected
+  sample through `review:audit-notes`.
+- Check `application_source_key_count` in `ai:healthcheck`; the expected value
+  is zero.
+
 ## Score
 
 After review:

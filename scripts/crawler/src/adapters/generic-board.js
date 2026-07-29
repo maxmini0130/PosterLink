@@ -1,6 +1,7 @@
 import { fetchPage } from "../crawler.js";
 import { resolveExternalOriginalDetailWithTrace } from "../external-original-resolver.js";
 import { filterAndOrderPosterImages } from "../poster-image-rules.js";
+import { isLikelyApplicationLink } from "../source-link-rules.js";
 
 const DEFAULT_SELECTORS = {
   listItem: [
@@ -585,8 +586,26 @@ export default {
     const finalAttachments = externalDetail?.attachments?.length
       ? uniqueByUrl([...attachments, ...externalDetail.attachments])
       : attachments;
-    const sourceUrl = externalDetail?.url ?? postUrl;
-    const links = externalDetail?.viaLink ? [externalDetail.viaLink] : [];
+    const externalIsApplication = isLikelyApplicationLink(
+      externalDetail?.url,
+      externalDetail?.originalLink?.label,
+    );
+    const sourceUrl = externalIsApplication
+      ? postUrl
+      : externalDetail?.url ?? postUrl;
+    const links = externalIsApplication
+      ? [{
+          link_type: "official_apply",
+          title: (
+            externalDetail?.originalLink?.label
+            && !/^https?:\/\//i.test(externalDetail.originalLink.label)
+          )
+            ? externalDetail.originalLink.label
+            : "\uACF5\uC2DD \uC2E0\uCCAD \uB9C1\uD06C",
+          url: externalDetail.url,
+          is_primary: true,
+        }]
+      : externalDetail?.viaLink ? [externalDetail.viaLink] : [];
 
     const posterImages = await filterAndOrderPosterImages(rawImages, {
       title: finalTitle,
