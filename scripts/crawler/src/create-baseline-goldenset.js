@@ -167,6 +167,8 @@ function toBaselineRow(row, categoryMap) {
     gold_deadline_ok: "",
     gold_category_ok: "",
     gold_duplicate_ok: "",
+    gold_image_ok: "",
+    gold_source_link_ok: "",
     gold_notes: "",
   };
 }
@@ -209,6 +211,8 @@ async function main() {
     "gold_deadline_ok",
     "gold_category_ok",
     "gold_duplicate_ok",
+    "gold_image_ok",
+    "gold_source_link_ok",
     "gold_notes",
   ];
 

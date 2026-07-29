@@ -30,6 +30,8 @@ Main metrics:
 - `gold_deadline_ok`: deadline extraction
 - `gold_category_ok`: category classification
 - `gold_duplicate_ok`: duplicate decision
+- `gold_image_ok`: poster image selection and completeness
+- `gold_source_link_ok`: original source-page link selection
 
 Helpful prediction columns:
 

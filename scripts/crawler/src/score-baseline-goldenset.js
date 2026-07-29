@@ -105,6 +105,8 @@ async function main() {
     deadline_extraction: scoreMetric(rows, "gold_deadline_ok"),
     category_classification: scoreMetric(rows, "gold_category_ok"),
     duplicate_decision: scoreMetric(rows, "gold_duplicate_ok"),
+    image_selection: scoreMetric(rows, "gold_image_ok"),
+    source_link: scoreMetric(rows, "gold_source_link_ok"),
   };
   const labeledMetrics = Object.values(metrics).filter((metric) => metric.labeled > 0);
   const macroAccuracy = labeledMetrics.length > 0

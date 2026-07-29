@@ -27,11 +27,11 @@ Do not change the `predicted_*`, `source_key`, `thumbnail_url`, or
 
 `gold_is_valid_poster`
 
-- `1` when the row is a real active poster/program/event/recruitment notice for
-  users.
-- `0` when it is a facility notice, parking notice, homepage/accessibility
-  artifact, result announcement, retrospective news, hiring/admin recruitment,
-  or another non-poster.
+- `1` when `predicted_is_valid_poster` matches the human decision.
+- `0` when the prediction and human decision differ.
+- A real active poster/program/event/recruitment notice is valid. A facility or
+  parking notice, homepage/accessibility artifact, result announcement,
+  retrospective news, hiring/admin recruitment, or similar content is not.
 
 `gold_title_ok`
 
@@ -68,6 +68,21 @@ Do not change the `predicted_*`, `source_key`, `thumbnail_url`, or
 - `0` when the row should have merged with another known duplicate or was
   incorrectly treated as a duplicate.
 - blank when duplicate status cannot be judged from this sample alone.
+
+`gold_image_ok`
+
+- `1` when `thumbnail_url` shows the correct, sufficiently complete poster or
+  representative source image.
+- `0` when the image is unrelated, incorrectly cropped, selects a detail image
+  instead of the main poster, or omits other required poster pages.
+- blank when the image cannot be compared against the source.
+
+`gold_source_link_ok`
+
+- `1` when `source_key` opens the original notice page that supports the poster.
+- `0` when it opens only an application form, unrelated page, or indirect page
+  while the original notice is available.
+- blank when the original source cannot be identified.
 
 ## Score
 
