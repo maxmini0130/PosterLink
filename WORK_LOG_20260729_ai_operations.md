@@ -163,6 +163,68 @@ git diff --check
 
 ## 8. 남은 작업
 
-- Human golden set `gold_*` 라벨링은 아직 사람이 확정해야 한다.
-- 라벨링 후 `baseline:score`를 실행해 실제 baseline accuracy를 확정해야 한다.
-- 이후 image AI coverage를 30~50%까지 추가 확대할 수 있다.
+- Human golden set은 100건 중 55건의 포스터 여부를 사람이 판정했다.
+- 이미지 선택은 47건, 원문 링크는 54건이 채점되어 부분 macro accuracy
+  87.5%를 확정했다.
+- 제목, 주관기관, 마감일, 카테고리, 중복 판정은 아직 사람 라벨이 없다.
+- 미검수 45건은 rejected 15건과 pending candidate 30건이다.
+- 상세 검수 및 데이터 보정 기록은
+  `WORK_LOG_20260729_human_golden_review.md`에 이어서 관리한다.
+
+## 9. 자동 품질 게이트
+
+사람 검수에서 발견한 오류 유형이 다시 들어오는 것을 자동으로 감지하도록
+CI와 일일 크롤러에 품질 게이트를 연결했다.
+
+- 일반 CI에 독립된 `crawler-ci` 작업을 추가해 크롤러 회귀 테스트를 실행한다.
+- 일일 크롤러도 실제 수집 전에 같은 회귀 테스트를 실행한다.
+- 업로더의 순수 규칙 함수는 Supabase 비밀키 없이 import할 수 있게 하고,
+  실제 업로드 직접 실행에서만 DB 설정을 필수로 검사한다.
+- 업로드 후 `ai:healthcheck --enforce`를 실행한다.
+- 임계치 미달 또는 품질 후보 발생 시 보고서를 먼저 저장하고 종료 코드 2로
+  워크플로를 실패 처리한다.
+- 성공 및 실패 보고서는 GitHub Actions artifact에 모두 보관한다.
+- 커버리지 기준은 GitHub repository variable로 조정할 수 있다.
+  - `AI_MIN_EMBEDDING_COVERAGE`: 기본 99%
+  - `AI_MIN_FIELD_COVERAGE`: 기본 45%
+  - `AI_MIN_IMAGE_COVERAGE`: 기본 20%
+- 다음 품질 후보의 허용값은 기본 0건이다.
+  - 신청 폼 `source_key`
+  - 검수 대기 reject 후보
+  - 이미지 AI 비포스터 및 저신뢰 후보
+  - 필드 보정 후보
+  - published/review 비포스터 후보
+
+운영 DB 검증:
+
+- 정상 기준 실행: `quality_gate_status=pass`
+- 강제 실패 기준 실행: 위반 내역 기록 후 종료 코드 2 확인
+- crawler tests: 92/92 통과
+- web config tests: 13/13 통과
+- workflow YAML 및 신규 파일 형식 검사 통과
+- `git diff --check` 통과
+- embedding coverage: 100%
+- field verification coverage: 48.2%
+- image AI coverage: 20.4%
+- review queue: 3건
+- 모든 차단 품질 후보: 0건
+- golden-set labeled rows: 55건
+- partial macro accuracy: 87.5%
+
+## 10. 현재 작업 리스트
+
+- [x] 신청 폼과 원문 링크 분리 및 업로드 이중 방어
+- [x] 원문 포스터 우선순위와 다중 페이지 이미지 보존
+- [x] 근거 없는 제목 보정 및 중복 제목 방지
+- [x] 알려진 오류 유형 회귀 테스트 추가
+- [x] CI 및 일일 크롤러 회귀 테스트 연결
+- [x] 일일 업로드 후 AI 품질 게이트 및 artifact 연결
+- [ ] rejected 15건 사람 판정
+- [ ] pending candidate 30건 사람 판정
+- [ ] 제목, 주관기관, 마감일, 카테고리, 중복 골든 라벨 작성
+- [ ] 전체 골든셋 재채점 및 지표별 목표 확정
+- [ ] field verification coverage 60% 이상 확대
+- [ ] image AI coverage 30~50% 확대
+- [ ] 현재 review queue 3건 처리
+- [ ] 다음 일일 수집 결과에서 신규 표본 재감사
+- [ ] 관리자/운영자 핵심 E2E 및 운영 배포 점검

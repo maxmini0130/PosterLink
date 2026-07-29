@@ -55,42 +55,41 @@ const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABA
 const SUPABASE_KEY = (process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)?.trim();
 const CRAWLER_USER_ID = process.env.CRAWLER_USER_ID?.trim() || null;
 
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error("❌ .env 파일에 SUPABASE_URL 과 SUPABASE_KEY 를 설정하세요.");
-  process.exit(1);
+function createConfiguredSupabase() {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return null;
+
+  const keyType = SUPABASE_KEY.startsWith("sb_secret_")
+    ? "secret"
+    : SUPABASE_KEY.startsWith("sb_publishable_")
+      ? "publishable"
+      : SUPABASE_KEY.startsWith("eyJ")
+        ? "legacy-jwt"
+        : "unknown";
+
+  console.log(`Supabase URL: ${new URL(SUPABASE_URL).host}`);
+  console.log(`Supabase key type: ${keyType}, length: ${SUPABASE_KEY.length}`);
+
+  if (SUPABASE_KEY.includes("*")) {
+    throw new Error("SUPABASE_KEY가 마스킹된 값처럼 보입니다. Dashboard의 실제 키 전체를 복사해야 합니다.");
+  }
+
+  if (keyType === "publishable") {
+    throw new Error("SUPABASE_KEY에 publishable/anon 계열 키가 들어갔습니다. secret 또는 legacy service_role 키가 필요합니다.");
+  }
+
+  return createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+    realtime: {
+      transport: WebSocket,
+    },
+  });
 }
 
-const keyType = SUPABASE_KEY.startsWith("sb_secret_")
-  ? "secret"
-  : SUPABASE_KEY.startsWith("sb_publishable_")
-    ? "publishable"
-    : SUPABASE_KEY.startsWith("eyJ")
-      ? "legacy-jwt"
-      : "unknown";
-
-console.log(`Supabase URL: ${new URL(SUPABASE_URL).host}`);
-console.log(`Supabase key type: ${keyType}, length: ${SUPABASE_KEY.length}`);
-
-if (SUPABASE_KEY.includes("*")) {
-  console.error("❌ SUPABASE_KEY가 마스킹된 값처럼 보입니다. Dashboard의 실제 키 전체를 복사해야 합니다.");
-  process.exit(1);
-}
-
-if (keyType === "publishable") {
-  console.error("❌ SUPABASE_KEY에 publishable/anon 계열 키가 들어갔습니다. secret 또는 legacy service_role 키가 필요합니다.");
-  process.exit(1);
-}
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-    detectSessionInUrl: false,
-  },
-  realtime: {
-    transport: WebSocket,
-  },
-});
+const supabase = createConfiguredSupabase();
 
 const POSTER_IMAGE_BUCKET = process.env.POSTER_IMAGE_BUCKET?.trim() || "poster-originals";
 const POSTER_DUPLICATE_LOOKUP_LIMIT = Number(process.env.POSTER_DUPLICATE_LOOKUP_LIMIT ?? "5000");
@@ -2138,6 +2137,11 @@ const isDirectExecution = Boolean(
   process.argv[1] && path.basename(process.argv[1]).match(/^upload-to-supabase\.(js|cjs)$/)
 );
 if (isDirectExecution) {
+  if (!supabase) {
+    console.error("❌ .env 파일에 SUPABASE_URL 과 SUPABASE_KEY 를 설정하세요.");
+    process.exit(1);
+  }
+
   const filePath = process.argv[2];
   if (!filePath) {
     console.error("사용법: node src/upload-to-supabase.js <결과파일.json>");

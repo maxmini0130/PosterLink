@@ -5,6 +5,10 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { spawn } from "child_process";
 import { createClient } from "@supabase/supabase-js";
+import {
+  DEFAULT_HEALTHCHECK_THRESHOLDS,
+  evaluateHealthcheckGates,
+} from "./ai-healthcheck-gates.js";
 import { isLikelyApplicationLink } from "./source-link-rules.js";
 
 const DEFAULT_OUTPUT = "data/results/ai-healthcheck.json";
@@ -21,14 +25,26 @@ const args = Object.fromEntries(
 
 if (args.help || args.h) {
   console.log(`Usage:
-  node src/ai-healthcheck.js [--output=data/results/ai-healthcheck.json] [--days=30] [--min-confidence=0.85]
+  node src/ai-healthcheck.js [--output=data/results/ai-healthcheck.json] [--days=30] [--min-confidence=0.85] [--enforce]
 
 Runs a read-only AI operations check:
   - KPI measurement
   - field_verification correction dry-run
   - published/review non-poster cleanup dry-run
   - application-form source_key regression check
-  - optional unlabeled golden-set score when --golden-set=path is provided`);
+  - optional unlabeled golden-set score when --golden-set=path is provided
+
+Quality gate options:
+  --enforce
+  --min-embedding-coverage=99
+  --min-field-coverage=45
+  --min-image-coverage=20
+  --max-review-reject-candidates=0
+  --max-image-nonposters=0
+  --max-image-low-confidence=0
+  --max-application-source-keys=0
+  --max-field-correction-candidates=0
+  --max-nonposter-reject-candidates=0`);
   process.exit(0);
 }
 
@@ -82,6 +98,19 @@ async function readJson(filePath) {
 
 function percent(numerator, denominator) {
   return denominator > 0 ? Math.round((numerator / denominator) * 1000) / 10 : 0;
+}
+
+function numericArg(name, fallback) {
+  if (!(name in args)) return fallback;
+  const value = Number(args[name]);
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`--${name} must be a non-negative number`);
+  }
+  return value;
+}
+
+function enabledArg(name) {
+  return /^(?:1|true|yes)$/i.test(String(args[name] ?? ""));
 }
 
 async function measureImageAiCoverage() {
@@ -159,6 +188,45 @@ async function main() {
   const output = path.resolve(REPO_ROOT, args.output || DEFAULT_OUTPUT);
   const days = Math.max(1, Number(args.days || 30));
   const minConfidence = Math.max(0, Math.min(1, Number(args["min-confidence"] || 0.85)));
+  const enforce = enabledArg("enforce");
+  const thresholds = {
+    min_embedding_coverage_percent: numericArg(
+      "min-embedding-coverage",
+      DEFAULT_HEALTHCHECK_THRESHOLDS.min_embedding_coverage_percent,
+    ),
+    min_field_verification_coverage_percent: numericArg(
+      "min-field-coverage",
+      DEFAULT_HEALTHCHECK_THRESHOLDS.min_field_verification_coverage_percent,
+    ),
+    min_image_ai_coverage_percent: numericArg(
+      "min-image-coverage",
+      DEFAULT_HEALTHCHECK_THRESHOLDS.min_image_ai_coverage_percent,
+    ),
+    max_review_queue_reject_candidates: numericArg(
+      "max-review-reject-candidates",
+      DEFAULT_HEALTHCHECK_THRESHOLDS.max_review_queue_reject_candidates,
+    ),
+    max_image_ai_nonposter_count: numericArg(
+      "max-image-nonposters",
+      DEFAULT_HEALTHCHECK_THRESHOLDS.max_image_ai_nonposter_count,
+    ),
+    max_image_ai_low_confidence_count: numericArg(
+      "max-image-low-confidence",
+      DEFAULT_HEALTHCHECK_THRESHOLDS.max_image_ai_low_confidence_count,
+    ),
+    max_application_source_key_count: numericArg(
+      "max-application-source-keys",
+      DEFAULT_HEALTHCHECK_THRESHOLDS.max_application_source_key_count,
+    ),
+    max_field_correction_candidates: numericArg(
+      "max-field-correction-candidates",
+      DEFAULT_HEALTHCHECK_THRESHOLDS.max_field_correction_candidates,
+    ),
+    max_nonposter_reject_candidates: numericArg(
+      "max-nonposter-reject-candidates",
+      DEFAULT_HEALTHCHECK_THRESHOLDS.max_nonposter_reject_candidates,
+    ),
+  };
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const kpiOutput = `data/results/ai-healthcheck-kpi-${timestamp}.json`;
   const correctionsOutput = `data/results/ai-healthcheck-corrections-${timestamp}.json`;
@@ -193,24 +261,30 @@ async function main() {
   const correctionsReport = await readJson(correctionsOutput);
   const nonpostersReport = await readJson(cleanupOutput);
 
+  const summary = {
+    embedding_coverage_percent: kpi.embedding_coverage_percent,
+    field_verification_coverage_percent: kpi.field_verification_coverage_percent,
+    review_queue_count: kpi.review_queue_count,
+    review_queue_reject_candidates: kpi.review_queue_reject_candidates,
+    image_ai_coverage_percent: imageAi.coverage_percent,
+    image_ai_nonposter_count: imageAi.nonposter_image_count,
+    image_ai_low_confidence_count: imageAi.low_confidence_count,
+    application_source_key_count: sourceLinks.application_source_key_count,
+    field_correction_candidates: corrections.correction_count,
+    nonposter_reject_candidates: nonposters.reject_count,
+    golden_set_labeled_rows: goldenSet?.labeled_rows ?? null,
+    golden_set_macro_accuracy: goldenSet?.macro_accuracy_label ?? null,
+  };
+  const qualityGate = evaluateHealthcheckGates(summary, thresholds);
+  summary.quality_gate_status = qualityGate.passed ? "pass" : "fail";
+
   const report = {
     generated_at: new Date().toISOString(),
     days,
     min_confidence: minConfidence,
-    summary: {
-      embedding_coverage_percent: kpi.embedding_coverage_percent,
-      field_verification_coverage_percent: kpi.field_verification_coverage_percent,
-      review_queue_count: kpi.review_queue_count,
-      review_queue_reject_candidates: kpi.review_queue_reject_candidates,
-      image_ai_coverage_percent: imageAi.coverage_percent,
-      image_ai_nonposter_count: imageAi.nonposter_image_count,
-      image_ai_low_confidence_count: imageAi.low_confidence_count,
-      application_source_key_count: sourceLinks.application_source_key_count,
-      field_correction_candidates: corrections.correction_count,
-      nonposter_reject_candidates: nonposters.reject_count,
-      golden_set_labeled_rows: goldenSet?.labeled_rows ?? null,
-      golden_set_macro_accuracy: goldenSet?.macro_accuracy_label ?? null,
-    },
+    enforce,
+    summary,
+    quality_gate: qualityGate,
     outputs: {
       kpi: kpiOutput,
       field_corrections: correctionsOutput,
@@ -233,7 +307,15 @@ async function main() {
   console.log(JSON.stringify({
     output,
     ...report.summary,
+    quality_gate_violations: qualityGate.violations,
   }, null, 2));
+
+  if (enforce && !qualityGate.passed) {
+    console.error(
+      `[ai:healthcheck] quality gate failed with ${qualityGate.violations.length} violation(s)`,
+    );
+    process.exitCode = 2;
+  }
 }
 
 main().catch((error) => {

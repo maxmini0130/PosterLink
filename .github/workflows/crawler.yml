@@ -2,7 +2,7 @@ name: Daily Crawler
 
 on:
   schedule:
-    - cron: "0 1 * * *"   # Every day 01:00 UTC = 10:00 KST
+    - cron: "0 1 * * *" # Every day 01:00 UTC = 10:00 KST
   workflow_dispatch:
     inputs:
       source:
@@ -53,6 +53,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Run crawler regression tests
+        run: npm test
 
       - uses: actions/setup-python@v5
         with:
@@ -162,10 +165,28 @@ jobs:
           OPENAI_POSTER_ROUTER_MODEL: ${{ secrets.OPENAI_POSTER_ROUTER_MODEL || 'gpt-4o-mini' }}
           OPENAI_POSTER_DEADLINE_MODEL: ${{ secrets.OPENAI_POSTER_DEADLINE_MODEL || 'gpt-4o-mini' }}
 
+      - name: Run AI quality gate
+        if: ${{ github.event_name == 'schedule' || (github.event.inputs.dry_run != 'true' && github.event.inputs.upload != 'false') }}
+        run: |
+          node src/ai-healthcheck.js \
+            --enforce \
+            --min-embedding-coverage="$AI_MIN_EMBEDDING_COVERAGE" \
+            --min-field-coverage="$AI_MIN_FIELD_COVERAGE" \
+            --min-image-coverage="$AI_MIN_IMAGE_COVERAGE" \
+            --output="data/results/ai-healthcheck-${GITHUB_RUN_ID}.json"
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          AI_MIN_EMBEDDING_COVERAGE: ${{ vars.AI_MIN_EMBEDDING_COVERAGE || '99' }}
+          AI_MIN_FIELD_COVERAGE: ${{ vars.AI_MIN_FIELD_COVERAGE || '45' }}
+          AI_MIN_IMAGE_COVERAGE: ${{ vars.AI_MIN_IMAGE_COVERAGE || '20' }}
+
       - name: Upload result artifact
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: crawler-results-${{ github.run_id }}
-          path: scripts/crawler/data/results/
+          path: |
+            scripts/crawler/data/results/
+            data/results/
           retention-days: 7

@@ -33,6 +33,24 @@ pnpm --filter posterlink-crawler kpi:measure -- --queries="startup grant|small b
 
 Generated reports are written under `data/`, which is ignored by git.
 
+## Run The Automated Quality Gate
+
+Run the same read-only gate used after the daily crawler upload:
+
+```bash
+pnpm --filter posterlink-crawler ai:healthcheck -- --enforce --output=data/results/ai-healthcheck.json
+```
+
+The default coverage floors are 99% for embeddings, 45% for field
+verification, and 20% for image AI. Application-form source keys, review reject
+candidates, image non-poster or low-confidence candidates, field correction
+candidates, and published/review non-poster candidates must all remain at zero.
+
+The command writes its full report before returning exit code 2 on a gate
+failure. Override coverage floors with `--min-embedding-coverage`,
+`--min-field-coverage`, and `--min-image-coverage` when deliberately raising
+the operating baseline.
+
 ## Backfill Field Verification
 
 Use dry-run first:
