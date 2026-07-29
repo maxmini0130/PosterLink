@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "../../../../lib/supabase-server";
+import {
+  classifyVisitActor,
+  detectVisitAutomation,
+  getVisitActorLabel,
+  getVisitAutomationLabel,
+  type VisitActorType,
+} from "../../../../lib/siteVisitClassification";
 
 const ADMIN_ROLES = new Set(["admin", "super_admin"]);
 const DEFAULT_DAYS = 30;
 const MAX_ROWS = 10000;
+const ACTOR_VISIT_SELECT_COLUMNS =
+  "created_at, user_id, ip_hash, visitor_key, session_key, path, query_string, referrer_url, referrer_host, utm_source, utm_medium, utm_campaign, user_agent, actor_type, is_automated, automation_source";
 const VISIT_SELECT_COLUMNS =
   "created_at, user_id, ip_hash, visitor_key, session_key, path, query_string, referrer_url, referrer_host, utm_source, utm_medium, utm_campaign, user_agent";
 const LEGACY_VISIT_SELECT_COLUMNS =
@@ -24,6 +33,25 @@ type VisitRow = {
   utm_medium: string | null;
   utm_campaign: string | null;
   user_agent: string | null;
+  actor_type: string | null;
+  is_automated: boolean | null;
+  automation_source: string | null;
+};
+
+type ProfileIdentity = {
+  id: string;
+  role: string | null;
+  nickname: string | null;
+};
+
+type VisitActorContext = {
+  key: VisitActorType;
+  label: string;
+  detail: string | null;
+  role: string | null;
+  is_automated: boolean;
+  automation_source: string | null;
+  automation_label: string | null;
 };
 
 type OverviewRow = {
@@ -158,6 +186,47 @@ function getClientPlatform(row: VisitRow): ClientPlatform {
   return { key: "unknown", label: "알 수 없음" };
 }
 
+function getVisitActorContext(
+  row: VisitRow,
+  profiles: Map<string, ProfileIdentity>
+): VisitActorContext {
+  const profile = row.user_id ? profiles.get(row.user_id) : null;
+  const queryAutomationSource = getQueryParams(row).get("_pl_automation");
+  const detectedAutomation = detectVisitAutomation({
+    userAgent: row.user_agent,
+    explicitSource: row.automation_source || queryAutomationSource,
+  });
+  const isAutomated = Boolean(
+    row.is_automated || detectedAutomation.isAutomated
+  );
+  const automation = {
+    isAutomated,
+    isBot:
+      detectedAutomation.isBot ||
+      row.actor_type === "bot" ||
+      row.automation_source === "bot-user-agent",
+    source: row.automation_source || detectedAutomation.source,
+  };
+  const actorType = classifyVisitActor({
+    role: profile?.role,
+    automation,
+    storedActorType: row.actor_type,
+  });
+
+  return {
+    key: actorType,
+    label: getVisitActorLabel(actorType, profile?.role),
+    detail: profile?.nickname || null,
+    role: profile?.role || null,
+    is_automated: automation.isAutomated,
+    automation_source: automation.source,
+    automation_label: getVisitAutomationLabel(
+      automation.source,
+      automation.isBot
+    ),
+  };
+}
+
 function formatDateKey(value: string) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",
@@ -186,6 +255,16 @@ function isMissingIdentityColumnError(error: { code?: string; message?: string }
   return error.code === "42703" || error.code === "PGRST204" || message.includes("ip_hash");
 }
 
+function isMissingActorColumnError(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    message.includes("actor_type") ||
+    message.includes("is_automated") ||
+    message.includes("automation_source")
+  );
+}
+
 function normalizeVisitRows(rows: Partial<VisitRow>[] | null | undefined): VisitRow[] {
   return (rows ?? []).map((row) => ({
     created_at: row.created_at ?? new Date(0).toISOString(),
@@ -201,6 +280,9 @@ function normalizeVisitRows(rows: Partial<VisitRow>[] | null | undefined): Visit
     utm_medium: row.utm_medium ?? null,
     utm_campaign: row.utm_campaign ?? null,
     user_agent: row.user_agent ?? null,
+    actor_type: row.actor_type ?? null,
+    is_automated: row.is_automated ?? null,
+    automation_source: row.automation_source ?? null,
   }));
 }
 
@@ -267,10 +349,19 @@ export async function GET(request: NextRequest) {
 
   let visitsRes: any = await admin
     .from("site_visit_logs")
-    .select(VISIT_SELECT_COLUMNS)
+    .select(ACTOR_VISIT_SELECT_COLUMNS)
     .gte("created_at", since)
     .order("created_at", { ascending: false })
     .limit(MAX_ROWS);
+
+  if (isMissingActorColumnError(visitsRes.error)) {
+    visitsRes = await admin
+      .from("site_visit_logs")
+      .select(VISIT_SELECT_COLUMNS)
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(MAX_ROWS);
+  }
 
   if (isMissingIdentityColumnError(visitsRes.error)) {
     visitsRes = await admin
@@ -294,6 +385,23 @@ export async function GET(request: NextRequest) {
   }
 
   const rows = normalizeVisitRows(visitsRes.data as Partial<VisitRow>[] | null);
+  const userIds = Array.from(
+    new Set(rows.map((row) => row.user_id).filter((value): value is string => Boolean(value)))
+  );
+  const profileMap = new Map<string, ProfileIdentity>();
+  if (userIds.length > 0) {
+    const { data: profiles, error: profilesError } = await admin
+      .from("profiles")
+      .select("id, role, nickname")
+      .in("id", userIds);
+    if (profilesError) {
+      return NextResponse.json({ error: profilesError.message }, { status: 500 });
+    }
+    for (const profile of (profiles ?? []) as ProfileIdentity[]) {
+      profileMap.set(profile.id, profile);
+    }
+  }
+
   const ownHosts = getOwnHosts();
   const sessions = new Map<string, VisitRow>();
   const sessionPageviews = new Map<string, number>();
@@ -302,6 +410,16 @@ export async function GET(request: NextRequest) {
   const landingMap = new Map<string, { visitors: Set<string>; sessions: Set<string>; pageviews: number }>();
   const pageMap = new Map<string, { visitors: Set<string>; sessions: Set<string>; pageviews: number }>();
   const dailyMap = new Map<string, { visitors: Set<string>; sessions: Set<string>; pageviews: number }>();
+  const actorMap = new Map<
+    string,
+    {
+      label: string;
+      visitors: Set<string>;
+      sessions: Set<string>;
+      pageviews: number;
+      automatedPageviews: number;
+    }
+  >();
 
   [...rows].reverse().forEach((row, index) => {
     const sessionId = getSessionId(row, index);
@@ -314,7 +432,21 @@ export async function GET(request: NextRequest) {
     const path = getPath(row);
     const dateKey = formatDateKey(row.created_at);
     const platform = getClientPlatform(row);
+    const actor = getVisitActorContext(row, profileMap);
     sessionPageviews.set(sessionId, (sessionPageviews.get(sessionId) ?? 0) + 1);
+
+    const actorBucket = actorMap.get(actor.key) ?? {
+      label: actor.label,
+      visitors: new Set<string>(),
+      sessions: new Set<string>(),
+      pageviews: 0,
+      automatedPageviews: 0,
+    };
+    actorBucket.visitors.add(visitorId);
+    actorBucket.sessions.add(sessionId);
+    actorBucket.pageviews += 1;
+    if (actor.is_automated) actorBucket.automatedPageviews += 1;
+    actorMap.set(actor.key, actorBucket);
 
     const platformBucket = platformMap.get(platform.key) ?? {
       label: platform.label,
@@ -384,6 +516,17 @@ export async function GET(request: NextRequest) {
     pageviews: value.pageviews ?? 0,
   }));
 
+  const actorBreakdown = Array.from(actorMap.entries())
+    .map(([key, value]) => ({
+      key,
+      label: value.label,
+      visitors: value.visitors.size,
+      sessions: value.sessions.size,
+      pageviews: value.pageviews,
+      automated_pageviews: value.automatedPageviews,
+    }))
+    .sort((left, right) => right.pageviews - left.pageviews);
+
   const landingPages = toCountList(Array.from(landingMap.entries()), (path, value) => ({
     path,
     visitors: value.visitors?.size ?? 0,
@@ -406,23 +549,27 @@ export async function GET(request: NextRequest) {
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  const recentVisits = rows.slice(0, 80).map((row, index) => ({
-    created_at: row.created_at,
-    path: getPath(row),
-    query_string: row.query_string,
-    source: getSourceLabel(row, ownHosts),
-    client_platform: getClientPlatform(row),
-    referrer_host: row.referrer_host,
-    referrer_url: row.referrer_url,
-    utm_source: row.utm_source,
-    utm_medium: row.utm_medium,
-    utm_campaign: row.utm_campaign,
-    user_agent: row.user_agent,
-    user_id: row.user_id,
-    ip_hash: row.ip_hash,
-    visitor_key: row.visitor_key,
-    session_key: getSessionId(row, index),
-  }));
+  const recentVisits = rows.slice(0, 80).map((row, index) => {
+    const actor = getVisitActorContext(row, profileMap);
+    return {
+      created_at: row.created_at,
+      path: getPath(row),
+      query_string: row.query_string,
+      source: getSourceLabel(row, ownHosts),
+      client_platform: getClientPlatform(row),
+      actor,
+      referrer_host: row.referrer_host,
+      referrer_url: row.referrer_url,
+      utm_source: row.utm_source,
+      utm_medium: row.utm_medium,
+      utm_campaign: row.utm_campaign,
+      user_agent: row.user_agent,
+      user_id: row.user_id,
+      ip_hash: row.ip_hash,
+      visitor_key: row.visitor_key,
+      session_key: getSessionId(row, index),
+    };
+  });
 
   let overview = overviewRes.data;
   let overviewExact = Boolean(overview);
@@ -430,9 +577,17 @@ export async function GET(request: NextRequest) {
   if (!overview) {
     let allVisitsRes: any = await admin
       .from("site_visit_logs")
-      .select(VISIT_SELECT_COLUMNS)
+      .select(ACTOR_VISIT_SELECT_COLUMNS)
       .order("created_at", { ascending: false })
       .limit(MAX_ROWS);
+
+    if (isMissingActorColumnError(allVisitsRes.error)) {
+      allVisitsRes = await admin
+        .from("site_visit_logs")
+        .select(VISIT_SELECT_COLUMNS)
+        .order("created_at", { ascending: false })
+        .limit(MAX_ROWS);
+    }
 
     if (isMissingIdentityColumnError(allVisitsRes.error)) {
       allVisitsRes = await admin
@@ -455,6 +610,7 @@ export async function GET(request: NextRequest) {
     overview,
     sources,
     clientPlatforms,
+    actorBreakdown,
     landingPages,
     topPages,
     daily,

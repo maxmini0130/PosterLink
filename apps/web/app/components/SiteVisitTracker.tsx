@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 
 const VISITOR_KEY = "posterlink.visitor_key";
 const SESSION_KEY = "posterlink.session_key";
+const AUTOMATION_SOURCE_KEY = "posterlink.automation_source";
 
 function createKey() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -38,6 +39,19 @@ function getSessionKey() {
   }
 }
 
+function getAutomationSource(searchParams: URLSearchParams) {
+  const querySource = searchParams.get("_pl_automation")?.trim().slice(0, 80);
+  try {
+    if (querySource) {
+      window.sessionStorage.setItem(AUTOMATION_SOURCE_KEY, querySource);
+      return querySource;
+    }
+    return window.sessionStorage.getItem(AUTOMATION_SOURCE_KEY);
+  } catch {
+    return querySource || null;
+  }
+}
+
 function shouldTrackPath(pathname: string) {
   return (
     !pathname.startsWith("/admin") &&
@@ -66,6 +80,8 @@ export default function SiteVisitTracker() {
       query_string: queryString ? `?${queryString}` : null,
       referrer_url: document.referrer || null,
       user_agent: navigator.userAgent || null,
+      webdriver: navigator.webdriver === true,
+      automation_source: getAutomationSource(searchParams),
     };
     const body = JSON.stringify(payload);
 

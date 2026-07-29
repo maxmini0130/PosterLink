@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "../../../lib/supabase-server";
+import {
+  classifyVisitActor,
+  detectVisitAutomation,
+} from "../../../lib/siteVisitClassification";
 
 export const runtime = "nodejs";
 
@@ -12,6 +16,8 @@ type SiteVisitPayload = {
   query_string?: string | null;
   referrer_url?: string | null;
   user_agent?: string | null;
+  webdriver?: boolean | null;
+  automation_source?: string | null;
 };
 
 function createSupabaseAdmin() {
@@ -65,7 +71,19 @@ function isMissingTableError(error: { code?: string; message?: string } | null) 
   return error?.code === "42P01" || error?.message?.includes("site_visit_logs");
 }
 
-function isMissingColumnError(error: { code?: string; message?: string } | null) {
+function isMissingActorColumnError(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    message.includes("actor_type") ||
+    message.includes("is_automated") ||
+    message.includes("automation_source")
+  );
+}
+
+function isMissingIdentityColumnError(error: { code?: string; message?: string } | null) {
   if (!error) return false;
   const message = error.message ?? "";
   return error.code === "42703" || error.code === "PGRST204" || message.includes("ip_hash");
@@ -119,19 +137,44 @@ export async function POST(request: Request) {
   const referrerUrl = truncate(payload.referrer_url, 2048);
   const referrerHost = getReferrerHost(referrerUrl);
   const searchParams = getSearchParams(queryString);
+  const supabaseAdmin = createSupabaseAdmin();
 
   let userId: string | null = null;
+  let userRole: string | null = null;
   try {
     const supabase = await createSupabaseServerClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
     userId = user?.id ?? null;
+    if (userId) {
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("role")
+        .eq("id", userId)
+        .maybeSingle();
+      userRole = profile?.role ?? null;
+    }
   } catch {
     userId = null;
+    userRole = null;
   }
 
-  const supabaseAdmin = createSupabaseAdmin();
+  const userAgent = truncate(
+    request.headers.get("user-agent") || payload.user_agent,
+    512
+  );
+  const automation = detectVisitAutomation({
+    userAgent,
+    webdriver: payload.webdriver === true,
+    explicitSource:
+      truncate(request.headers.get("x-posterlink-automation"), 80) ||
+      truncate(payload.automation_source, 80),
+  });
+  const actorType = classifyVisitActor({
+    role: userRole,
+    automation,
+  });
   const visitRecord = {
     user_id: userId,
     ip_hash: hashIp(getClientIp(request)),
@@ -144,13 +187,38 @@ export async function POST(request: Request) {
     utm_source: truncate(searchParams.get("utm_source"), 120),
     utm_medium: truncate(searchParams.get("utm_medium"), 120),
     utm_campaign: truncate(searchParams.get("utm_campaign"), 200),
-    user_agent: truncate(payload.user_agent, 512),
+    user_agent: userAgent,
+    actor_type: actorType,
+    is_automated: automation.isAutomated,
+    automation_source: automation.source,
   };
 
   let { error } = await supabaseAdmin.from("site_visit_logs").insert(visitRecord);
 
-  if (isMissingColumnError(error)) {
-    const legacyVisitRecord: Omit<typeof visitRecord, "ip_hash"> = {
+  const identityVisitRecord = {
+    user_id: visitRecord.user_id,
+    ip_hash: visitRecord.ip_hash,
+    visitor_key: visitRecord.visitor_key,
+    session_key: visitRecord.session_key,
+    path: visitRecord.path,
+    query_string: visitRecord.query_string,
+    referrer_url: visitRecord.referrer_url,
+    referrer_host: visitRecord.referrer_host,
+    utm_source: visitRecord.utm_source,
+    utm_medium: visitRecord.utm_medium,
+    utm_campaign: visitRecord.utm_campaign,
+    user_agent: visitRecord.user_agent,
+  };
+
+  if (isMissingActorColumnError(error)) {
+    const retry = await supabaseAdmin
+      .from("site_visit_logs")
+      .insert(identityVisitRecord);
+    error = retry.error;
+  }
+
+  if (isMissingIdentityColumnError(error)) {
+    const legacyVisitRecord: Omit<typeof identityVisitRecord, "ip_hash"> = {
       user_id: visitRecord.user_id,
       visitor_key: visitRecord.visitor_key,
       session_key: visitRecord.session_key,

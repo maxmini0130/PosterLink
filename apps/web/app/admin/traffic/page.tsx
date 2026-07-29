@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   BarChart3,
+  Bot,
   CalendarDays,
   ExternalLink,
   Globe2,
@@ -12,6 +13,7 @@ import {
   RefreshCcw,
   Route,
   Search,
+  ShieldCheck,
   Users,
 } from "lucide-react";
 
@@ -56,6 +58,25 @@ type ClientPlatformRow = {
   pageviews: number;
 };
 
+type ActorRow = {
+  key: string;
+  label: string;
+  visitors: number;
+  sessions: number;
+  pageviews: number;
+  automated_pageviews: number;
+};
+
+type VisitActor = {
+  key: string;
+  label: string;
+  detail: string | null;
+  role: string | null;
+  is_automated: boolean;
+  automation_source: string | null;
+  automation_label: string | null;
+};
+
 type RecentVisit = {
   created_at: string;
   path: string;
@@ -65,6 +86,7 @@ type RecentVisit = {
     key: string;
     label: string;
   } | null;
+  actor?: VisitActor | null;
   referrer_host: string | null;
   referrer_url: string | null;
   utm_source: string | null;
@@ -87,6 +109,7 @@ type TrafficData = {
   overview?: Overview;
   sources?: SourceRow[];
   clientPlatforms?: ClientPlatformRow[];
+  actorBreakdown?: ActorRow[];
   landingPages?: PathRow[];
   topPages?: PathRow[];
   daily?: DailyRow[];
@@ -94,6 +117,14 @@ type TrafficData = {
 };
 
 const DAY_OPTIONS = [7, 30, 90, 365];
+const ACTOR_FILTERS = [
+  { key: "all", label: "전체" },
+  { key: "visitor", label: "일반 방문" },
+  { key: "member", label: "회원" },
+  { key: "staff", label: "관리자·운영자" },
+  { key: "automation", label: "자동 검사·봇" },
+] as const;
+type ActorFilter = (typeof ACTOR_FILTERS)[number]["key"];
 const numberFormatter = new Intl.NumberFormat("ko-KR");
 
 function formatNumber(value: number | undefined) {
@@ -154,6 +185,27 @@ function platformTone(key?: string | null) {
   if (key === "tablet_web") return "bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-200";
   if (key === "desktop_web") return "bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-slate-200";
   return "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200";
+}
+
+function actorTone(key?: string | null) {
+  if (key === "admin") return "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-200";
+  if (key === "operator") return "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-200";
+  if (key === "member") return "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200";
+  if (key === "automation") return "bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-100";
+  if (key === "bot") return "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-100";
+  return "bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-slate-200";
+}
+
+function matchesActorFilter(row: RecentVisit, filter: ActorFilter) {
+  if (filter === "all") return true;
+  const actor = row.actor;
+  if (filter === "automation") {
+    return Boolean(actor?.is_automated || actor?.key === "automation" || actor?.key === "bot");
+  }
+  if (filter === "staff") {
+    return actor?.key === "admin" || actor?.key === "operator";
+  }
+  return actor?.key === filter && !actor?.is_automated;
 }
 
 function MetricCard({
@@ -218,6 +270,7 @@ export default function AdminTrafficPage() {
   const [data, setData] = useState<TrafficData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actorFilter, setActorFilter] = useState<ActorFilter>("all");
 
   const loadTraffic = async () => {
     setLoading(true);
@@ -263,7 +316,11 @@ export default function AdminTrafficPage() {
 
   const overview = data?.overview;
   const recentVisits = data?.recentVisits ?? [];
+  const filteredRecentVisits = recentVisits.filter((row) =>
+    matchesActorFilter(row, actorFilter)
+  );
   const clientPlatforms = data?.clientPlatforms ?? [];
+  const actorBreakdown = data?.actorBreakdown ?? [];
   const mobileWebSessions = clientPlatforms.find((row) => row.key === "mobile_web")?.sessions ?? 0;
   const appSessions = clientPlatforms.find((row) => row.key === "app")?.sessions ?? 0;
 
@@ -391,6 +448,51 @@ export default function AdminTrafficPage() {
               </div>
             ) : (
               <EmptyBlock text="방문 환경 데이터가 없습니다." />
+            )}
+          </section>
+
+          <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <SectionTitle
+              icon={ShieldCheck}
+              title="방문 주체"
+              subtitle="로그인 역할과 자동 검사 트래픽을 분리한 집계"
+            />
+            {actorBreakdown.length > 0 ? (
+              <div className="divide-y divide-gray-100 dark:divide-slate-800">
+                {actorBreakdown.map((row) => (
+                  <div
+                    key={row.key}
+                    className="grid gap-3 py-3 sm:grid-cols-[minmax(0,1fr)_100px_100px_120px] sm:items-center"
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      {row.key === "automation" || row.key === "bot" ? (
+                        <Bot size={16} className="shrink-0 text-amber-500" />
+                      ) : (
+                        <Users size={16} className="shrink-0 text-gray-400" />
+                      )}
+                      <span
+                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ${actorTone(row.key)}`}
+                      >
+                        {row.label}
+                      </span>
+                    </div>
+                    <span className="text-xs font-bold text-gray-500">
+                      방문자 {formatNumber(row.visitors)}
+                    </span>
+                    <span className="text-xs font-bold text-gray-500">
+                      세션 {formatNumber(row.sessions)}
+                    </span>
+                    <span className="text-xs font-bold text-gray-500">
+                      {formatNumber(row.pageviews)}뷰
+                      {row.automated_pageviews > 0
+                        ? ` · 자동 ${formatNumber(row.automated_pageviews)}`
+                        : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyBlock text="방문 주체 데이터가 없습니다." />
             )}
           </section>
 
@@ -522,14 +624,31 @@ export default function AdminTrafficPage() {
 
           <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <SectionTitle icon={Activity} title="최근 방문 로그" subtitle="최근 80건" />
-            {recentVisits.length > 0 ? (
+            <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="방문 주체 필터">
+              {ACTOR_FILTERS.map((filter) => (
+                <button
+                  key={filter.key}
+                  type="button"
+                  onClick={() => setActorFilter(filter.key)}
+                  className={`rounded-md px-3 py-2 text-xs font-black transition-colors ${
+                    actorFilter === filter.key
+                      ? "bg-gray-950 text-white dark:bg-white dark:text-slate-950"
+                      : "bg-gray-100 text-gray-500 hover:text-gray-950 dark:bg-slate-800 dark:text-slate-300 dark:hover:text-white"
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+            {filteredRecentVisits.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[980px] text-left text-sm">
+                <table className="w-full min-w-[1120px] text-left text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 text-xs font-black uppercase tracking-widest text-gray-400 dark:border-slate-800">
                       <th className="py-3 pr-4">시간</th>
                       <th className="py-3 pr-4">페이지</th>
                       <th className="py-3 pr-4">유입</th>
+                      <th className="py-3 pr-4">주체</th>
                       <th className="py-3 pr-4">환경</th>
                       <th className="py-3 pr-4">UTM</th>
                       <th className="py-3 pr-4">방문자</th>
@@ -537,7 +656,7 @@ export default function AdminTrafficPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
-                    {recentVisits.map((row, index) => (
+                    {filteredRecentVisits.map((row, index) => (
                       <tr key={`${row.created_at}-${index}`} className="align-top">
                         <td className="whitespace-nowrap py-3 pr-4 text-xs font-bold text-gray-500">
                           {formatDateTime(row.created_at)}
@@ -560,6 +679,23 @@ export default function AdminTrafficPage() {
                           )}
                         </td>
                         <td className="py-3 pr-4">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ${actorTone(row.actor?.key)}`}
+                          >
+                            {row.actor?.label ?? "일반 방문"}
+                          </span>
+                          {row.actor?.detail && (
+                            <span className="mt-1 block text-xs font-bold text-gray-500">
+                              {row.actor.detail}
+                            </span>
+                          )}
+                          {row.actor?.is_automated && (
+                            <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2 py-1 text-xs font-black text-amber-800 dark:bg-amber-500/10 dark:text-amber-100">
+                              {row.actor.automation_label ?? "자동 브라우저"}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 pr-4">
                           <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ${platformTone(row.client_platform?.key)}`}>
                             {row.client_platform?.label ?? "알 수 없음"}
                           </span>
@@ -579,7 +715,13 @@ export default function AdminTrafficPage() {
                 </table>
               </div>
             ) : (
-              <EmptyBlock text="최근 방문 로그가 없습니다." />
+              <EmptyBlock
+                text={
+                  recentVisits.length > 0
+                    ? "선택한 방문 주체의 로그가 없습니다."
+                    : "최근 방문 로그가 없습니다."
+                }
+              />
             )}
           </section>
         </>
