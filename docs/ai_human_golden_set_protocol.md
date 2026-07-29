@@ -23,6 +23,9 @@ Use only these values in `gold_*` columns:
 Do not change the `predicted_*`, `source_key`, `thumbnail_url`, or
 `source_excerpt` columns while labeling.
 
+Keep the human-authored `gold_notes` intact during automated follow-up. Tools
+may add `review_resolution` to record source rechecks and applied corrections.
+
 ## Metric Rules
 
 `gold_is_valid_poster`
@@ -94,3 +97,16 @@ pnpm --filter posterlink-crawler baseline:score -- --input=data/baseline/human_g
 
 Record the resulting `macro_accuracy` and per-metric values in the project log or
 planning material.
+
+## Reconcile Reviewed Issues
+
+After checking issue notes against the source pages and applying approved data
+corrections, reconcile only the evidence-backed label interpretation:
+
+```bash
+pnpm --filter posterlink-crawler review:reconcile-goldenset -- --input=data/baseline/human_golden_set_seed_20260728.csv
+```
+
+This command preserves `gold_notes`, writes a UTF-8 BOM for Excel, and records
+the follow-up in `review_resolution`. A corrected database value does not turn
+an originally incorrect prediction into a correct baseline label.

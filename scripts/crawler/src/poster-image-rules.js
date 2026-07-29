@@ -17,7 +17,8 @@ const HARD_REJECT_URL_PATTERNS = [
   /\uC6F9\s*\uC811\uADFC\uC131|\uC811\uADFC\uC131\s*\uC778\uC99D|\uD488\uC9C8\s*\uC778\uC99D|\uC778\uC99D\s*\uB9C8\uD06C|\uB300\uCCB4\s*\uD14D\uC2A4\uD2B8|\uB300\uCCB4\uD14D\uC2A4\uD2B8/i,
   /(?:\uCE98\uB9B0\uB354|\uB2EC\uB825|\uC2A4\uCF00\uC904|\uC2A4\uCF00\uC904\uD615|\uC2DC\uAC04\uD45C|\uC77C\uC815\uD45C)/i,
   /(?:calendar|schedule|timetable)/i,
-  /(?:facebook|twitter|instagram|youtube|kakao|naver_blog)/i,
+  /(?:facebook|twitter|instagram|youtube|naver_blog)/i,
+  /(?:^|[\/$_.-])kakao(?:[\/$_.-]|$)/i,
 ];
 
 const HARD_REJECT_CONTEXT_PATTERNS = [
@@ -61,8 +62,12 @@ function isLikelyThumbnailProxy(imageUrl) {
 }
 
 function removeThumbnailProxiesWhenOriginalsExist(images) {
-  const hasOriginalLikeImage = images.some((imageUrl) => !isLikelyThumbnailProxy(imageUrl));
-  return hasOriginalLikeImage ? images.filter((imageUrl) => !isLikelyThumbnailProxy(imageUrl)) : images;
+  const hasOriginalLikeImage = images.some(
+    (imageUrl) => !isLikelyThumbnailProxy(imageUrl),
+  );
+  return hasOriginalLikeImage
+    ? images.filter((imageUrl) => !isLikelyThumbnailProxy(imageUrl))
+    : images;
 }
 
 function getUrlPath(imageUrl) {
@@ -72,6 +77,11 @@ function getUrlPath(imageUrl) {
   } catch {
     return imageUrl;
   }
+}
+
+export function isHardRejectedPosterImageUrl(imageUrl) {
+  const urlText = getUrlPath(imageUrl);
+  return HARD_REJECT_URL_PATTERNS.some((pattern) => pattern.test(urlText));
 }
 
 function parsePngSize(buffer) {
@@ -95,7 +105,11 @@ function parseGifSize(buffer) {
 
 function parseWebpSize(buffer) {
   if (buffer.length < 30) return null;
-  if (buffer.toString("ascii", 0, 4) !== "RIFF" || buffer.toString("ascii", 8, 12) !== "WEBP") return null;
+  if (
+    buffer.toString("ascii", 0, 4) !== "RIFF" ||
+    buffer.toString("ascii", 8, 12) !== "WEBP"
+  )
+    return null;
 
   const chunk = buffer.toString("ascii", 12, 16);
   if (chunk === "VP8 " && buffer.length >= 30) {
@@ -127,7 +141,8 @@ function parseWebpSize(buffer) {
 }
 
 function parseJpegSize(buffer) {
-  if (buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8) return null;
+  if (buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8)
+    return null;
 
   let offset = 2;
   while (offset < buffer.length) {
@@ -140,10 +155,8 @@ function parseJpegSize(buffer) {
     const length = buffer.readUInt16BE(offset + 2);
     if (length < 2) return null;
 
-    const isSofMarker = (
-      marker >= 0xc0 && marker <= 0xcf &&
-      ![0xc4, 0xc8, 0xcc].includes(marker)
-    );
+    const isSofMarker =
+      marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker);
     if (isSofMarker && offset + 8 < buffer.length) {
       return {
         width: buffer.readUInt16BE(offset + 7),
@@ -158,10 +171,12 @@ function parseJpegSize(buffer) {
 }
 
 function parseImageSize(buffer) {
-  return parsePngSize(buffer)
-    ?? parseGifSize(buffer)
-    ?? parseWebpSize(buffer)
-    ?? parseJpegSize(buffer);
+  return (
+    parsePngSize(buffer) ??
+    parseGifSize(buffer) ??
+    parseWebpSize(buffer) ??
+    parseJpegSize(buffer)
+  );
 }
 
 async function probeImage(imageUrl) {
@@ -170,10 +185,11 @@ async function probeImage(imageUrl) {
     timeout: 12000,
     maxContentLength: 5 * 1024 * 1024,
     headers: {
-      "User-Agent": "PosterLink-Crawler/1.0 (posterlink.kr; poster image rules)",
-      "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+      "User-Agent":
+        "PosterLink-Crawler/1.0 (posterlink.kr; poster image rules)",
+      Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
       "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.3",
-      "Range": `bytes=0-${PROBE_BYTES - 1}`,
+      Range: `bytes=0-${PROBE_BYTES - 1}`,
     },
     validateStatus: (status) => status >= 200 && status < 400,
   };
@@ -192,7 +208,8 @@ async function probeImage(imageUrl) {
 
   const buffer = Buffer.from(response.data);
   return {
-    contentType: response.headers["content-type"]?.split(";")[0]?.toLowerCase() ?? "",
+    contentType:
+      response.headers["content-type"]?.split(";")[0]?.toLowerCase() ?? "",
     contentLength: Number(response.headers["content-length"] ?? 0),
     dimensions: parseImageSize(buffer),
   };
@@ -207,16 +224,24 @@ export async function scorePosterImageCandidate(imageUrl, context = {}) {
     context.category,
     context.content,
     context.sourceUrl,
-  ].filter(Boolean).join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
   const reasons = [];
   const signals = [];
   let score = 30;
 
   if (!imageUrl) {
-    return { passes: false, score: 0, reason: "missing image URL", reasons: ["missing image URL"], signals: [] };
+    return {
+      passes: false,
+      score: 0,
+      reason: "missing image URL",
+      reasons: ["missing image URL"],
+      signals: [],
+    };
   }
 
-  if (HARD_REJECT_URL_PATTERNS.some((pattern) => pattern.test(urlText))) {
+  if (isHardRejectedPosterImageUrl(imageUrl)) {
     return {
       passes: false,
       score: 0,
@@ -226,12 +251,17 @@ export async function scorePosterImageCandidate(imageUrl, context = {}) {
     };
   }
 
-  if (HARD_REJECT_CONTEXT_PATTERNS.some((pattern) => pattern.test(contextText))) {
+  if (
+    HARD_REJECT_CONTEXT_PATTERNS.some((pattern) => pattern.test(contextText))
+  ) {
     return {
       passes: false,
       score: 0,
-      reason: "context looks like accessibility, homepage, parking-control, rental-schedule, or monthly schedule notice",
-      reasons: ["context looks like accessibility, homepage, parking-control, rental-schedule, or monthly schedule notice"],
+      reason:
+        "context looks like accessibility, homepage, parking-control, rental-schedule, or monthly schedule notice",
+      reasons: [
+        "context looks like accessibility, homepage, parking-control, rental-schedule, or monthly schedule notice",
+      ],
       signals: [],
     };
   }
@@ -273,7 +303,9 @@ export async function scorePosterImageCandidate(imageUrl, context = {}) {
 
     if (!probe.contentType.startsWith("image/") && probe.dimensions) {
       score += 8;
-      signals.push(`image bytes with generic content type (${probe.contentType})`);
+      signals.push(
+        `image bytes with generic content type (${probe.contentType})`,
+      );
     }
 
     if (probe.contentType === "image/svg+xml") {
@@ -299,7 +331,9 @@ export async function scorePosterImageCandidate(imageUrl, context = {}) {
         passes: false,
         score: 0,
         reason: `image shape looks like a certification mark (${width}x${height})`,
-        reasons: [`image shape looks like a certification mark (${width}x${height})`],
+        reasons: [
+          `image shape looks like a certification mark (${width}x${height})`,
+        ],
         signals,
         contentType: probe?.contentType,
         contentLength: probe?.contentLength,
@@ -364,7 +398,8 @@ export async function selectBestPosterImage(images, context = {}) {
   }
 
   candidates.sort((a, b) => b.rule.score - a.rule.score);
-  const selected = candidates.find((candidate) => candidate.rule.passes) ?? null;
+  const selected =
+    candidates.find((candidate) => candidate.rule.passes) ?? null;
 
   return {
     selectedImageUrl: selected?.imageUrl ?? null,
@@ -390,7 +425,9 @@ export async function filterAndOrderPosterImages(images, context = {}) {
 
   const orderedImages = removeThumbnailProxiesWhenOriginalsExist([
     selection.selectedImageUrl,
-    ...passingImages.filter((imageUrl) => imageUrl !== selection.selectedImageUrl),
+    ...passingImages.filter(
+      (imageUrl) => imageUrl !== selection.selectedImageUrl,
+    ),
   ]);
 
   return {

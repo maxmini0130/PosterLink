@@ -46,3 +46,10 @@ pnpm --filter posterlink-crawler baseline:score -- --input=data/baseline/goldens
 
 The JSON report includes `macro_accuracy` and per-metric accuracy values that can
 be used as the measured baseline in planning material.
+
+When issue notes are subsequently checked against live source evidence, preserve
+the human notes and record the resolution separately:
+
+```bash
+pnpm --filter posterlink-crawler review:reconcile-goldenset -- --input=data/baseline/human_golden_set_seed_20260728.csv
+```

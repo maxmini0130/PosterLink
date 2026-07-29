@@ -17,7 +17,7 @@
 - Title, organization, deadline, category, and duplicate metrics remain
   unlabeled because they were outside this review scope.
 
-## Note Conversion
+## Initial Note Conversion
 
 - All reviewed rows except the note indicating a non-poster were marked as
   correct poster relevance predictions.
@@ -29,7 +29,10 @@
   selection and excluded from image selection when comparison was not possible.
 - Rejected and pending rows remained blank and were excluded from scoring.
 
-## Baseline Result
+## Initial Baseline Result
+
+The first mechanical conversion of note phrases, before source-page
+revalidation, produced:
 
 - Labeled rows: 55
 - Poster relevance: 54/55, 98.2%
@@ -48,12 +51,69 @@ Report:
 - Corrected the poster-relevance labeling protocol to define `1` as a correct
   prediction rather than an unconditional real-poster label.
 
-## Verification
+## Source And Image Revalidation
 
-- Crawler tests: 72/72 passed
+The 20 issue-note rows were rechecked against the live source pages, source
+images, and current database relations.
+
+- Original-source corrections: 10
+  - 8 directly noted by the reviewer
+  - 2 additional rows with the same application-form `source_key` problem
+- Representative-image corrections: 7
+- Title/organization corrections: 14
+- Human-confirmed non-poster rejections: 1
+- Image notes found to be already correct after source comparison: 4
+  - one source thumbnail was intentionally square and not cropped
+  - two questioned images were the exact source posters
+  - one three-page item already stored all three images
+
+The original reviewer-authored `gold_notes` remain unchanged. The canonical CSV
+adds `review_resolution` for the source recheck and database action.
+
+Apply and verify:
+
+```bash
+pnpm --filter posterlink-crawler review:apply-corrections -- --apply --output=data/results/human-review-corrections-applied-20260729.json
+pnpm --filter posterlink-crawler review:reconcile-goldenset -- --input=data/baseline/human_golden_set_seed_20260728.csv
+```
+
+Database verification passed for all 20 reviewed issue rows.
+
+## Confirmed Baseline Result
+
+After correcting the mechanical label interpretation with source evidence:
+
+- Labeled rows: 55
+- Poster relevance: 54/55, 98.2%
+- Image selection: 39/47, 83.0%
+- Source link: 44/54, 81.5%
+- Partial macro accuracy: 87.5%
+
+The image score increased because four questioned rows were valid on source
+comparison. The source-link score decreased because two image-note rows also
+used application forms as `source_key`.
+
+## Poster Image Rule Fix
+
+The source recheck exposed a false rejection in the image URL rule:
+`KakaoTalk_*.png` uploads were classified as Kakao social assets. The broad
+`kakao` URL rejection was removed while existing icon/SNS patterns remain.
+The recovered 788x1119 source poster now scores 100 and is selected before the
+400x400 source thumbnail.
+
+## Final Verification
+
+- Crawler tests: 76/76 passed
+- Web config tests: 13/13 passed
+- Human correction database verification: 20/20 passed
+- Golden-set reconciliation is idempotent
+- Golden-set UTF-8 BOM: `EF BB BF`
 - Embedding coverage: 100%
-- Field verification coverage: 48.3%
-- Image AI coverage: 20.6%
+- Field verification coverage: 48.2%
+- Image AI coverage: 20.4%
+- Review queue: 3
 - Review queue reject candidates: 0
 - Field correction candidates: 0
 - Published/review non-poster reject candidates: 0
+- Golden-set labeled rows: 55
+- Golden-set partial macro accuracy: 87.5%
