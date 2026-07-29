@@ -2,6 +2,7 @@ import { arePhashSimilar } from "./image-phash.js";
 
 const TITLE_GENERIC_WORDS = [
   "참여자",
+  "참가자",
   "교육생",
   "수강생",
   "대상자",
@@ -322,29 +323,55 @@ export function scorePosterDuplicate(candidate = {}, existing = {}) {
     matched.push("attachment-hash");
   }
 
-  const applicationUrlMatched = [...candidateFp.applicationUrls]
-    .some((url) => existingFp.applicationUrls.has(url));
+  const matchedApplicationUrl = [...candidateFp.applicationUrls]
+    .find((url) => existingFp.applicationUrls.has(url));
+  const applicationUrlMatched = Boolean(matchedApplicationUrl);
   if (applicationUrlMatched) {
-    score += 55;
+    // One application form is often shared by several sessions/programs.
+    // Treat it as corroborating evidence, never as a notice identity by itself.
+    score += 35;
     matched.push("application-url");
   }
 
+  const applicationTitleStrong =
+    applicationUrlMatched &&
+    !/(?:^|\/\/)(?:forms\.gle|docs\.google\.com\/forms|form\.naver\.com|forms\.office\.com)(?:\/|$)/i.test(matchedApplicationUrl) &&
+    titleSimilarity >= 0.72 &&
+    candidateFp.title.length >= 8 &&
+    existingFp.title.length >= 8;
+  const sharedApplicationWithoutNoticeIdentity =
+    applicationUrlMatched &&
+    !imageMatched &&
+    !phashMatched &&
+    !attachmentMatched &&
+    !matched.includes("deadline");
   const phashCorroborated =
     phashMatched &&
     titleSimilarity >= 0.72 &&
     (orgSimilarity >= 0.65 || matched.includes("deadline") || applicationUrlMatched);
   const highScoreCanMerge =
     score >= 90 &&
+    !sharedApplicationWithoutNoticeIdentity &&
     (!phashMatched || imageMatched || attachmentMatched || applicationUrlMatched || orgSimilarity >= 0.65 || matched.includes("deadline"));
 
   const canMerge =
     highScoreCanMerge ||
-    (titleSimilarity === 1 && candidateFp.title.length >= 8 && orgSimilarity >= 0.9) ||
-    (score >= 85 && titleSimilarity >= 0.72 && (orgSimilarity >= 0.65 || matched.includes("deadline"))) ||
+    (
+      titleSimilarity === 1 &&
+      candidateFp.title.length >= 8 &&
+      orgSimilarity >= 0.9 &&
+      !sharedApplicationWithoutNoticeIdentity
+    ) ||
+    (
+      score >= 85 &&
+      titleSimilarity >= 0.72 &&
+      (orgSimilarity >= 0.65 || matched.includes("deadline")) &&
+      !sharedApplicationWithoutNoticeIdentity
+    ) ||
     (imageMatched && titleSimilarity >= 0.45) ||
     phashCorroborated ||
     (attachmentMatched && titleSimilarity >= 0.45) ||
-    (applicationUrlMatched && titleSimilarity >= 0.72 && orgSimilarity >= 0.65);
+    (applicationTitleStrong && orgSimilarity >= 0.65);
   const needsReview = !canMerge && score >= 65 && titleSimilarity >= 0.55;
 
   return {

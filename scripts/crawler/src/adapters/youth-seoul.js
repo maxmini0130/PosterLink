@@ -68,6 +68,23 @@ function extractQuotedProgramName(text) {
   ))?.value ?? "";
 }
 
+function extractAttachmentProgramName(attachments = []) {
+  return attachments
+    .map((attachment) => cleanText(attachment?.name))
+    .filter((name) => /\.(?:png|jpe?g|webp|gif|pdf)$/i.test(name))
+    .map((name) => name
+      .replace(/\.(?:png|jpe?g|webp|gif|pdf)$/i, "")
+      .replace(/^\s*\[(?:모집|공고|안내|포스터)\]\s*/i, "")
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim())
+    .filter((name) => (
+      name.length >= 8
+      && !/^(?:포스터|웹포스터|모집|공고|안내|첨부파일|image|img)\s*\d*$/i.test(name)
+    ))
+    .sort((left, right) => right.length - left.length)[0] ?? "";
+}
+
 export function inferSpecificTitle(title, content, attachments = []) {
   const text = [title, content, ...attachments.map((attachment) => attachment?.name)]
     .filter(Boolean)
@@ -117,6 +134,13 @@ export function inferSpecificTitle(title, content, attachments = []) {
       ? "\uC0AC\uC804\uB4F1\uB85D \uC548\uB0B4"
       : genericMatch[2];
     return `${genericMatch[1]} <${programName}> ${action}`;
+  }
+
+  const attachmentProgramName = genericMatch && !alreadySpecific
+    ? extractAttachmentProgramName(attachments)
+    : "";
+  if (genericMatch && attachmentProgramName) {
+    return `${attachmentProgramName} ${genericMatch[2]}`;
   }
 
   return title;

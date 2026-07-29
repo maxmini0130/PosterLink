@@ -18,10 +18,11 @@ const APPLICATION_LABEL_PATTERN =
 export function isLikelyApplicationLink(value, label = "") {
   const text = String(value ?? "").trim();
   if (!text) return false;
-  if (APPLICATION_LABEL_PATTERN.test(String(label ?? ""))) return true;
 
   try {
     const url = new URL(text);
+    if (/^(?:pf|open)\.kakao\.com$/i.test(url.hostname)) return false;
+    if (APPLICATION_LABEL_PATTERN.test(String(label ?? ""))) return true;
     if (
       APPLICATION_HOST_PATTERNS.some((pattern) => pattern.test(url.hostname))
     ) {
@@ -37,7 +38,33 @@ export function isLikelyApplicationLink(value, label = "") {
       pattern.test(`${url.pathname}${url.search}`),
     );
   } catch {
-    return false;
+    return APPLICATION_LABEL_PATTERN.test(String(label ?? ""));
+  }
+}
+
+export function sanitizeKnownShortUrl(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return text;
+
+  try {
+    const url = new URL(text);
+    const host = url.hostname.replace(/^www\./i, "").toLowerCase();
+
+    if (host === "forms.gle" || host === "naver.me") {
+      const token = url.pathname.match(/^\/([A-Za-z0-9_-]+)/)?.[1];
+      return token ? `${url.origin}/${token}` : text;
+    }
+
+    if (host === "pf.kakao.com") {
+      const token = url.pathname.match(/^\/(_?[A-Za-z0-9_-]+)/)?.[1];
+      if (!token) return text;
+      const action = url.pathname.match(/^\/_?[A-Za-z0-9_-]+\/(chat|friend)(?:\/|$)/i)?.[1];
+      return `${url.origin}/${token}/${action ? `${action}/` : ""}`;
+    }
+
+    return text;
+  } catch {
+    return text;
   }
 }
 

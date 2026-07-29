@@ -106,6 +106,12 @@ const RETROSPECTIVE_NEWS_PATTERN = /(?:\uC18C\uC2DD|\uD6C4\uAE30|\uACB0\uACFC|\u
 const NEWS_BOARD_SOURCE_PATTERN = /\/(?:community\/news|notice\/news|board\/news)(?:\/|$|\?)/i;
 const ROBUST_JOB_RECRUITMENT_PATTERN = /(?:\uCC44\uC6A9\s*(?:\uACF5\uACE0|\uAE30\uAC04|\uC548\uB0B4)|\uC9C1\uC6D0\s*\uCC44\uC6A9|\uC0AC\uD68C\uBCF5\uC9C0\uC0AC.*\uCC44\uC6A9|\uC815\uADDC\uC9C1.*\uCC44\uC6A9|\uACC4\uC57D\uC9C1.*\uCC44\uC6A9|\uAC15\uC0AC\s*\uBAA8\uC9D1|\uD300\uC6D0\s*\uCC44\uC6A9)/i;
 const ENCODED_TEXT_PATTERN = /\b[A-Za-z0-9+/]{160,}={0,2}\b/;
+const APPLICATION_SOURCE_PATTERN =
+  /(?:^|\/\/)(?:forms\.gle|docs\.google\.com\/forms|form\.naver\.com|forms\.office\.com)(?:\/|$)/i;
+const FORM_UI_NOISE_PATTERN =
+  /(?:표시는\s*필수\s*질문|Google Forms를\s*통해|다음\s*양식\s*지우기|이메일\s*\*\s*응답과\s*함께)/i;
+const STRUCTURED_SECTION_MARKER_PATTERN =
+  /(?:📌\s*(?:대상|인원|장소|참여\s*비용|참여\s*선정\s*안내|신청\s*기간|신청\s*방법|운영\s*기간|교육\s*일시|교육\s*장소|문의(?:처)?)|❤️\s*문의(?:처)?|🚨|※)/gu;
 const PUBLIC_SAFETY_GUIDE_PATTERN = /(?:\uAC00\uC2A4|\uBD80\uD0C4|\uC7A5\uB9C8\uCCA0|\uD589\uB77D\uCCA0|\uC0DD\uD65C\s*\uC548\uC804).*(?:\uC548\uC804\s*\uAD00\uB9AC\s*\uC694\uB839|\uC548\uC804\s*\uC0AC\uC6A9\s*\uC694\uB839|\uC0AC\uC6A9\s*\uC694\uB839|\uAD00\uB9AC\s*\uC694\uB839)|(?:\uC548\uC804\s*\uAD00\uB9AC\s*\uC694\uB839|\uC548\uC804\s*\uC0AC\uC6A9\s*\uC694\uB839|\uC0AC\uC6A9\s*\uC694\uB839|\uAD00\uB9AC\s*\uC694\uB839).*(?:\uAC00\uC2A4|\uBD80\uD0C4|\uC7A5\uB9C8\uCCA0|\uD589\uB77D\uCCA0|\uC0DD\uD65C\s*\uC548\uC804)/i;
 const PROGRAM_EDUCATION_RECRUITMENT_PATTERN = /(?:\uAD50\uC721\uC0DD|\uC218\uAC15\uC0DD|\uD2B9\uAC15|\uBA58\uD1A0\uB9C1|\uC544\uCE74\uB370\uBBF8|\uAC15\uC88C|\uAD50\uC721|\uD504\uB85C\uADF8\uB7A8|\uCEA0\uD504)/i;
 const SHARED_DETAIL_FALSE_POSITIVE_RULE_CODES = new Set([
@@ -402,7 +408,8 @@ export function evaluatePosterQuality(input = {}, options = {}) {
   const issues = [];
   const title = compact(input.title);
   const org = compact(input.source_org_name ?? input.org ?? input.site);
-  const summary = compact(input.summary_short ?? input.summary_long ?? input.content);
+  const rawSummary = String(input.summary_long ?? input.summary_short ?? input.content ?? "");
+  const summary = compact(rawSummary);
   const isTextNotice = input.noticeOnly === true || input.contentMode === "text_notice" || options.contentMode === "text_notice";
   const sourceKey = normalizeUrl(options.sourceKey ?? input.source_key ?? input.sourceUrl ?? input.url);
   const thumbnail = normalizeUrl(input.thumbnail_url);
@@ -429,6 +436,37 @@ export function evaluatePosterQuality(input = {}, options = {}) {
   if (!org) addIssue(issues, "missing-org", "medium", "missing organization/source name");
   if (!summary || summary.length < 25) addIssue(issues, "weak-summary", "medium", "summary is missing or too short", summary);
   if (!sourceKey && links.length === 0) addIssue(issues, "missing-source", "high", "missing official source URL");
+  const structuredMarkerCount = (rawSummary.match(STRUCTURED_SECTION_MARKER_PATTERN) ?? []).length;
+  if (structuredMarkerCount >= 2 && !/[\r\n]/.test(rawSummary)) {
+    addIssue(
+      issues,
+      "collapsed-structured-summary",
+      "medium",
+      "structured notice sections were collapsed into one line",
+      rawSummary.slice(0, 240),
+      "review",
+    );
+  }
+  if (FORM_UI_NOISE_PATTERN.test(rawSummary)) {
+    addIssue(
+      issues,
+      "form-ui-noise",
+      "high",
+      "application form controls or browser UI text leaked into the notice summary",
+      rawSummary.slice(0, 240),
+      "review",
+    );
+  }
+  if (APPLICATION_SOURCE_PATTERN.test(sourceKey)) {
+    addIssue(
+      issues,
+      "application-url-as-source",
+      "high",
+      "shared application URL cannot be used as the notice identity",
+      sourceKey,
+      "review",
+    );
+  }
   if (images.length === 0) {
     if (isTextNotice) {
       addIssue(issues, "text-notice-no-image", "medium", "text-only official notice needs admin review", "", "review");

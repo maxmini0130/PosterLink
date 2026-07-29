@@ -6,8 +6,9 @@ import { evaluatePosterQuality } from "./poster-quality-gate.js";
 import { getPostExclusionReason } from "./post-candidate-filter.js";
 import { buildReadableNoticeInfo } from "./upload-to-supabase.js";
 import { getAttachmentFailureCode } from "./attachment-text-extractor.js";
-import { choosePreferredDetailTitle } from "./adapters/youth-seoul.js";
+import { choosePreferredDetailTitle, inferSpecificTitle } from "./adapters/youth-seoul.js";
 import { extractOrgFromTitle, resolveSourceOrgName } from "./poster-org.js";
+import { isLikelyApplicationLink, sanitizeKnownShortUrl } from "./source-link-rules.js";
 
 const org = "금천구";
 
@@ -91,6 +92,25 @@ test("matching official application URLs participate in duplicate detection", ()
   assert.ok(result.matched.includes("application-url"));
 });
 
+test("a shared application form does not merge generic program records", () => {
+  const applyUrl = "https://forms.gle/shared-program-form";
+  const result = scorePosterDuplicate(
+    {
+      title: "을지유니크팩토리 모집",
+      source_org_name: "청년몽땅정보통",
+      poster_links: [{ link_type: "official_apply", url: applyUrl }],
+    },
+    {
+      title: "을지유니크팩토리 모집",
+      source_org_name: "청년몽땅정보통",
+      poster_links: [{ link_type: "official_apply", url: applyUrl }],
+    },
+  );
+
+  assert.notEqual(result.decision, "merge");
+  assert.ok(result.matched.includes("application-url"));
+});
+
 test("identical image phash across different URLs (board vs. blog CDN) triggers a merge", () => {
   const phash = "a1b2c3d4e5f6a1b2";
   const result = scorePosterDuplicate(
@@ -166,6 +186,87 @@ test("OCR text is converted into structured notice facts", () => {
   assert.equal(result.facts.application, "온라인 신청");
   assert.equal(result.facts.contact, "02-1234-5678");
   assert.ok(result.facts.period);
+});
+
+test("collapsed form content is restored to readable sections without form UI noise", () => {
+  const result = buildReadableNoticeInfo({
+    title: "을지유니크팩토리 모집",
+    content: [
+      "[신청] 중성프 2026년 7-8월 전체 프로그램",
+      "📌 대상☑️ 서울 중구 청년(만 18세~만 39세)",
+      "※재학생과 사업자등록증 보유자는 제외됩니다.",
+      "📌 장소☑️ 을지유니크팩토리 B2층",
+      "❤️ 문의https://pf.kakao.com/_ytIPn/",
+      "🚨신청 후 노쇼하는 경우 참여가 제한될 수 있습니다.",
+      "* 표시는 필수 질문임이메일 *응답과 함께 이메일 주소 기록",
+      "Google Forms를 통해 비밀번호를 제출하지 마세요.",
+    ].join(""),
+  });
+
+  assert.equal(result.facts.target, "서울 중구 청년(만 18세~만 39세)");
+  assert.equal(result.facts.location, "을지유니크팩토리 B2층");
+  assert.match(result.summaryLong, /\n대상: /);
+  assert.match(result.summaryLong, /\n장소: /);
+  assert.match(result.summaryLong, /\n주의: /);
+  assert.ok(!result.summaryLong.includes("필수 질문"));
+  assert.ok(!result.summaryLong.includes("Google Forms"));
+});
+
+test("program names in angle brackets are preserved as text, not removed as HTML", () => {
+  const result = buildReadableNoticeInfo({
+    title: "강북구 직장인 커뮤니티 <우리동네 직장인> 모임원 모집",
+    content: "대상: 강북구 직장인\n내용: 직장인 커뮤니티 모임",
+  });
+
+  assert.equal(result.title, "강북구 직장인 커뮤니티 <우리동네 직장인> 모임원 모집");
+});
+
+test("generic youth title is made specific from a poster attachment name", () => {
+  assert.equal(
+    inferSpecificTitle(
+      "을지유니크팩토리 모집",
+      "프로그램 신청 안내",
+      [{ name: "[모집] 중구 청성프_유니크_지구를 위한 생활 실험실 2.png" }],
+    ),
+    "중구 청성프 유니크 지구를 위한 생활 실험실 2 모집",
+  );
+});
+
+test("known short URLs drop text and emoji accidentally glued to the path", () => {
+  assert.equal(
+    sanitizeKnownShortUrl("https://forms.gle/KLM3hcpWf3uuSxTc6%F0%9F%94%97"),
+    "https://forms.gle/KLM3hcpWf3uuSxTc6",
+  );
+  assert.equal(
+    sanitizeKnownShortUrl("https://pf.kakao.com/_ytIPn/%F0%9F%9A%A8%EC%8B%A0%EC%B2%AD"),
+    "https://pf.kakao.com/_ytIPn/",
+  );
+});
+
+test("Kakao contact channels are not promoted to application links by nearby text", () => {
+  assert.equal(
+    isLikelyApplicationLink(
+      "https://pf.kakao.com/_ytIPn/",
+      "문의 후 신청 관련 안내",
+    ),
+    false,
+  );
+});
+
+test("quality gate flags collapsed form summaries and application URLs used as source keys", () => {
+  const quality = evaluatePosterQuality({
+    title: "을지유니크팩토리 모집",
+    source_org_name: "청년몽땅정보통",
+    source_key: "https://forms.gle/shared-program-form",
+    summary_long: "📌 대상☑️ 서울 청년📌 장소☑️ 을지로* 표시는 필수 질문임",
+    images: ["https://example.com/poster.png"],
+  });
+  const codes = quality.issues.map((issue) => issue.code);
+
+  assert.ok(codes.includes("collapsed-structured-summary"));
+  assert.ok(codes.includes("form-ui-noise"));
+  assert.ok(codes.includes("application-url-as-source"));
+  assert.equal(quality.decision, "review");
 });
 
 test("leading '상세정보' tab label is stripped from the summary", () => {

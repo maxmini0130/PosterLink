@@ -49,6 +49,7 @@ import {
   inferPosterLinkType,
   isLikelyApplicationLink,
   resolveCanonicalSource,
+  sanitizeKnownShortUrl,
 } from "./source-link-rules.js";
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)?.trim();
@@ -407,7 +408,7 @@ const POSTER_LINK_TYPES = new Set([
 ]);
 
 function normalizeCrawlerLinkUrl(value, baseUrl) {
-  const text = String(value ?? "").trim();
+  const text = sanitizeKnownShortUrl(value);
   if (!text || /^javascript:/i.test(text) || text === "#") return null;
   if (/^(mailto|tel):/i.test(text)) return text;
   if (/^\/\//.test(text)) return `https:${text}`;
@@ -448,10 +449,10 @@ function getAttachmentLabel(attachment) {
 
 function extractInlineUrls(text) {
   const source = String(text ?? "");
-  return [...source.matchAll(/https?:\/\/[^\s<>"')\]}]+/gi)].map((match) => {
+  return [...source.matchAll(/https?:\/\/[\x21-\x7E]+/gi)].map((match) => {
     const index = match.index ?? 0;
     return {
-      url: match[0].replace(/[.,;:]+$/, ""),
+      url: sanitizeKnownShortUrl(match[0].replace(/[.,;:!?)}\]>]+$/, "")),
       context: source.slice(Math.max(0, index - 80), Math.min(source.length, index + match[0].length + 80)),
     };
   });
@@ -536,11 +537,20 @@ const SUMMARY_NOISE_LINE_PATTERNS = [
   /^이전글|^다음글|^목록\s*보기/i,
   /^(facebook|twitter|kakaotalk|url\s*copy|rss)$/i,
   /^청년정책\s*>\s*청년정책검색\s*>\s*청년지원정보/i,
+  /^(Google Forms|Forms 개선|양식이 의심스러운가요|이 설문지는)/i,
 ];
 
 // 게시판 상세 페이지의 탭/섹션 라벨이 본문 첫 줄 앞에 그대로 붙는 경우가 있다
 // (예: "상세정보 안녕하세요 ..."). 본문 시작의 이 라벨을 제거한다.
 const TAB_LABEL_PREFIX = /^(?:상세정보|상세보기|상세내용|본문보기|본문)\s+/;
+const FORM_UI_NOISE_PATTERNS = [
+  /\*?\s*표시는\s*필수\s*질문/i,
+  /이메일\s*\*\s*응답과\s*함께\s*이메일\s*주소\s*기록/i,
+  /다음\s*양식\s*지우기/i,
+  /Google Forms를\s*통해/i,
+];
+const STRUCTURED_MARKER_LABEL_PATTERN =
+  /대상|인원|장소|참여\s*비용|참여\s*선정\s*안내|신청\s*기간|신청\s*방법|운영\s*기간|교육\s*일시|교육\s*장소|문의(?:처)?/;
 
 function decodeHtmlEntities(value) {
   return String(value ?? "")
@@ -552,15 +562,38 @@ function decodeHtmlEntities(value) {
     .replace(/&#39;|&apos;/gi, "'");
 }
 
+function removeTrailingFormUiNoise(value) {
+  const text = String(value ?? "");
+  const cutoff = FORM_UI_NOISE_PATTERNS
+    .map((pattern) => text.search(pattern))
+    .filter((index) => index >= 0)
+    .sort((left, right) => left - right)[0];
+  return cutoff === undefined ? text : text.slice(0, cutoff);
+}
+
+function restoreSemanticLineBreaks(value) {
+  return removeTrailingFormUiNoise(value)
+    .replace(
+      new RegExp(`\\s*📌\\s*(${STRUCTURED_MARKER_LABEL_PATTERN.source})\\s*(?:☑️|✅)?\\s*`, "giu"),
+      "\n$1: ",
+    )
+    .replace(/\s*❤️\s*문의(?:처)?\s*/gu, "\n문의: ")
+    .replace(/\s*🚨\s*/gu, "\n주의: ")
+    .replace(/\s*※\s*/gu, "\n참고: ")
+    .replace(/([.!?。])(?=[📌🚨❤️])/gu, "$1\n");
+}
+
 function splitReadableLines(value) {
-  const raw = decodeHtmlEntities(value)
+  const raw = restoreSemanticLineBreaks(decodeHtmlEntities(value))
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/(?:p|div|li|tr|h[1-6])>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
+    .replace(/<\/?(?:a|b|blockquote|div|em|h[1-6]|i|img|li|ol|p|span|strong|table|tbody|td|th|thead|tr|ul)\b[^>]*>/gi, " ")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n");
 
-  const lines = raw.split(/\n+/).map((line) => line.replace(/\s+/g, " ").trim());
+  const lines = raw
+    .split(/\n+/)
+    .map((line) => line.replace(/^[☑️✅]\s*/u, "").replace(/\s+/g, " ").trim());
   // 본문 첫 줄 앞에 붙은 탭 라벨("상세정보" 등) 제거
   const firstIndex = lines.findIndex((line) => line);
   if (firstIndex >= 0) lines[firstIndex] = lines[firstIndex].replace(TAB_LABEL_PREFIX, "").trim();
@@ -716,6 +749,28 @@ function pickDateRange(text) {
   return null;
 }
 
+function compactFactValue(value, maxLength = 120) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (text.length <= maxLength) return text;
+
+  const clipped = Array.from(text).slice(0, maxLength).join("");
+  const sentenceEnd = Math.max(
+    clipped.lastIndexOf("."),
+    clipped.lastIndexOf("。"),
+    clipped.lastIndexOf(","),
+  );
+  return `${(sentenceEnd >= 40 ? clipped.slice(0, sentenceEnd + 1) : clipped).trim()}...`;
+}
+
+function isDuplicateFact(value, acceptedValues) {
+  const normalized = String(value ?? "").replace(/[^\p{L}\p{N}]/gu, "").toLowerCase();
+  if (normalized.length < 16) return false;
+  return acceptedValues.some((accepted) => {
+    const other = String(accepted ?? "").replace(/[^\p{L}\p{N}]/gu, "").toLowerCase();
+    return other.length >= 16 && (normalized.includes(other) || other.includes(normalized));
+  });
+}
+
 function normalizeSummary(post) {
   return buildReadableNoticeInfo(post).summaryShort;
 }
@@ -739,12 +794,19 @@ export function buildReadableNoticeInfo(post = {}) {
   const contact = pickField(source, ["문의처", "연락처", "문의"]);
   const location = pickField(source, ["장소", "교육장소", "행사장소", "진행장소", "주소"]);
 
-  if (target) parts.push(`대상: ${target}`);
-  if (period) parts.push(`기간: ${period}`);
-  if (benefit) parts.push(`내용: ${benefit}`);
-  if (application) parts.push(`신청: ${application}`);
-  if (location) parts.push(`장소: ${location}`);
-  if (contact) parts.push(`문의: ${contact}`);
+  const acceptedFactValues = [];
+  for (const [label, value] of [
+    ["대상", target],
+    ["기간", period],
+    ["내용", benefit],
+    ["신청", application],
+    ["장소", location],
+    ["문의", contact],
+  ]) {
+    if (!value || isDuplicateFact(value, acceptedFactValues)) continue;
+    acceptedFactValues.push(value);
+    parts.push(`${label}: ${compactFactValue(value)}`);
+  }
 
   const facts = Object.fromEntries(Object.entries({
     target,
@@ -764,10 +826,10 @@ export function buildReadableNoticeInfo(post = {}) {
     };
   }
 
-  const sentence = contentLines
-    .find((line) => line.length >= 20 && !/(목록|공유|첨부파일|이전글|다음글)/.test(line));
-
-  const fallback = sentence || content || title;
+  const meaningfulLines = contentLines
+    .filter((line) => line.length >= 12 && !/(목록|공유|첨부파일|이전글|다음글)/.test(line))
+    .slice(0, 3);
+  const fallback = meaningfulLines.join(" · ") || content || title;
   const summaryShort = fallback.length > 300 ? `${fallback.slice(0, 297).trim()}...` : fallback;
   return {
     title,

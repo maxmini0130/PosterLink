@@ -194,6 +194,10 @@ const SUMMARY_LABELS = [
   "참여인원",
   "모집인원",
   "참가비용",
+  "참여비용",
+  "참여 비용",
+  "참여선정안내",
+  "참여 선정 안내",
   "인원",
   "기간",
   "신청기간",
@@ -212,6 +216,8 @@ const SUMMARY_LABELS = [
   "진행장소",
   "참가비",
   "신청문의",
+  "주의",
+  "참고",
 ];
 
 const SUMMARY_LABEL_PATTERN = SUMMARY_LABELS
@@ -323,7 +329,7 @@ function splitNumberedSections(value: string, fallbackLabel?: string): SummaryLi
 
 function formatSummaryLines(value: string | null | undefined): SummaryLine[] {
   const text = String(value ?? "")
-    .replace(/<[^>]+>/g, " ")
+    .replace(/<\/?(?:a|b|blockquote|div|em|h[1-6]|i|img|li|ol|p|span|strong|table|tbody|td|th|thead|tr|ul)\b[^>]*>/gi, " ")
     .replace(/&nbsp;|&#160;/gi, " ")
     .replace(/^상세정보\s+/, "")
     .replace(/\s+(교육\s*개요|신청\s*안내)\s+/g, "\n")
@@ -655,22 +661,23 @@ export function PosterDetailClient({
               <span className="text-gray-400 w-16 flex-shrink-0">대상지역</span>
               <span className="text-gray-900 font-bold">{poster.regionName || "전국"}</span>
             </li>
-            {summaryLines.map((line, index) => (
-              <li key={`${line.label ?? "line"}-${index}`} className="flex gap-4">
-                <span className="text-gray-400 w-16 flex-shrink-0">
-                  {index === 0 ? "주요내용" : ""}
-                </span>
-                <div className="grid min-w-0 flex-1 grid-cols-[4rem_minmax(0,1fr)] gap-2 text-gray-900 font-bold leading-relaxed sm:grid-cols-[4.5rem_minmax(0,1fr)]">
-                  {line.label && (
-                    <span className="mt-0.5 inline-flex h-6 w-fit items-center rounded-md bg-blue-50 px-2 text-[11px] font-black text-blue-600 ring-1 ring-blue-100">
-                      {line.label}
-                    </span>
-                  )}
-                  {!line.label && <span aria-hidden="true" />}
-                  {renderSummaryContent(line)}
+            {summaryLines.length > 0 && (
+              <li className="grid grid-cols-[4rem_minmax(0,1fr)] gap-4">
+                <span className="text-gray-400">주요내용</span>
+                <div className="min-w-0 space-y-4 text-gray-900 font-bold leading-relaxed">
+                  {summaryLines.map((line, index) => (
+                    <div key={`${line.label ?? "line"}-${index}`} className="min-w-0">
+                      {line.label && (
+                        <span className="mb-1.5 inline-flex min-h-6 w-fit items-center rounded-md bg-blue-50 px-2 py-1 text-[11px] font-black text-blue-600 ring-1 ring-blue-100">
+                          {line.label}
+                        </span>
+                      )}
+                      {renderSummaryContent(line)}
+                    </div>
+                  ))}
                 </div>
               </li>
-            ))}
+            )}
           </ul>
         </section>
 
