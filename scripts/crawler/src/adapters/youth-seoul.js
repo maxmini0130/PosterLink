@@ -7,6 +7,7 @@ import {
   resolveUrl,
 } from "../external-original-resolver.js";
 import { filterAndOrderPosterImages } from "../poster-image-rules.js";
+import { mergeAttachmentImageCandidates } from "../attachment-image-candidates.js";
 import { isLikelyApplicationLink } from "../source-link-rules.js";
 
 const BASE_URL = "https://youth.seoul.go.kr";
@@ -184,7 +185,7 @@ export default {
     return [...new Map(posts.map((post) => [post.url, post])).values()];
   },
 
-  async parseDetail(postUrl) {
+  async parseDetail(postUrl, _site = null, _board = null, options = {}) {
     const $ = await fetchPage(postUrl);
     if (!$) return {};
 
@@ -222,10 +223,12 @@ export default {
       if (href && name) attachments.push({ name, url: resolveUrl(postUrl, href) });
     });
 
-    const externalOriginalResult = await resolveExternalOriginalDetailWithTrace($, postUrl, title, {
-      scopeSelector: ".feed-view",
-      viaLinkTitle: "\uCCAD\uB144\uBABD\uB545\uC815\uBCF4\uD1B5 \uACBD\uC720 \uCD9C\uCC98",
-    });
+    const externalOriginalResult = options.skipExternal
+      ? { detail: null, trace: { attempted: false, reason: "skipped_by_caller" } }
+      : await resolveExternalOriginalDetailWithTrace($, postUrl, title, {
+          scopeSelector: ".feed-view",
+          viaLinkTitle: "\uCCAD\uB144\uBABD\uB545\uC815\uBCF4\uD1B5 \uACBD\uC720 \uCD9C\uCC98",
+        });
     const externalDetail = externalOriginalResult.detail;
 
     const baseContent = isMeaningfulContent(detailText)
@@ -270,13 +273,21 @@ export default {
       : externalDetail?.viaLink ? [externalDetail.viaLink] : [];
     const preferredTitle = choosePreferredDetailTitle(title, externalDetail?.title);
     const inferredTitle = inferSpecificTitle(preferredTitle, content, attachments);
+    const mergedImageCandidates = mergeAttachmentImageCandidates(
+      images,
+      attachments,
+      sourceUrl,
+    );
 
-    const posterImages = await filterAndOrderPosterImages(images, {
+    const posterImages = await filterAndOrderPosterImages(mergedImageCandidates.images, {
       title: inferredTitle,
       content,
       site: "\uCCAD\uB144\uBABD\uB545\uC815\uBCF4\uD1B5",
       sourceUrl,
-      preferredImageUrls: detailImages,
+      preferredImageUrls: [
+        ...mergedImageCandidates.attachmentImageUrls,
+        ...detailImages,
+      ],
     });
     return {
       title: inferredTitle || undefined,
@@ -285,6 +296,7 @@ export default {
       images: posterImages.images,
       posterImageRule: posterImages.posterImageRule,
       posterImageCandidates: posterImages.posterImageCandidates,
+      attachmentImageCandidates: mergedImageCandidates.attachmentCandidates,
       attachments,
       links: sourceLinks,
       sourceUrl,

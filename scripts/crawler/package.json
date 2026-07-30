@@ -14,6 +14,7 @@
     "ai:predict": "node ml/run-python.js predict_poster.py",
     "repair:images": "node src/repair-missing-poster-images.js",
     "repair:structure": "node src/repair-poster-structure.js",
+    "repair:attachment-posters": "node src/repair-attachment-poster-images.js",
     "repair:wa-youth": "node src/repair-wa-mark-youth-images.js",
     "refresh:site": "node src/refresh-site-posters.js",
     "storage:orphans": "node src/cleanup-orphan-storage.js",

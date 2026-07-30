@@ -14,6 +14,7 @@ import { verifyPosterMatchesNotice } from "./poster-content-verifier.js";
 import { getPostExclusionReason } from "./post-candidate-filter.js";
 import { selectBestPosterImage } from "./poster-image-rules.js";
 import { analyzePostAttachments } from "./attachment-text-extractor.js";
+import { mergeAttachmentImageCandidates } from "./attachment-image-candidates.js";
 import { evaluateRelevanceHeuristic } from "./relevance-heuristic.js";
 
 // ── Logger ──────────────────────────────────────
@@ -551,6 +552,23 @@ export async function crawlSite(site, adapter, options = {}) {
               siteId: site.id,
               crawledAt: dayjs().toISOString(),
             };
+            const mergedAttachmentImages = mergeAttachmentImageCandidates(
+              fullPost.images,
+              fullPost.attachments,
+              fullPost.sourceUrl || fullPost.url,
+            );
+            const addedAttachmentImage = mergedAttachmentImages.images.some(
+              (imageUrl) => !fullPost.images.includes(imageUrl),
+            );
+            if (mergedAttachmentImages.attachmentCandidates.length > 0) {
+              fullPost.images = mergedAttachmentImages.images;
+              fullPost.attachmentImageCandidates = mergedAttachmentImages.attachmentCandidates;
+              fullPost.preferredImageUrls = mergedAttachmentImages.attachmentImageUrls;
+            }
+            if (addedAttachmentImage) {
+              fullPost.posterImageRule = null;
+              fullPost.posterImageCandidates = null;
+            }
             const detailExclusion = getPostExclusionReason(fullPost);
             if (detailExclusion) {
               stats.detailFiltered += 1;
@@ -627,6 +645,7 @@ export async function crawlSite(site, adapter, options = {}) {
                   category: fullPost.category,
                   content: fullPost.content,
                   sourceUrl: fullPost.sourceUrl || fullPost.url,
+                  preferredImageUrls: fullPost.preferredImageUrls,
                 });
 
             if (!imageSelection.selectedImageUrl) {

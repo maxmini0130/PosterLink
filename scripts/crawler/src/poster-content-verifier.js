@@ -2,6 +2,7 @@ import axios from "axios";
 import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
+import { resolveImageContentType } from "./image-content-type.js";
 
 const CACHE_PATH = "data/poster_content_verifications.json";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY?.trim();
@@ -60,8 +61,9 @@ async function imageUrlToDataUrl(imageUrl) {
     },
   });
 
-  const contentType = response.headers["content-type"]?.split(";")[0] || "image/jpeg";
-  return `data:${contentType};base64,${Buffer.from(response.data).toString("base64")}`;
+  const imageBytes = Buffer.from(response.data);
+  const contentType = resolveImageContentType(response.headers["content-type"], imageBytes) || "image/jpeg";
+  return `data:${contentType};base64,${imageBytes.toString("base64")}`;
 }
 
 function parseJson(text) {

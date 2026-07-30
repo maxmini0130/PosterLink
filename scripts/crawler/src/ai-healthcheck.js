@@ -130,10 +130,15 @@ async function measureImageAiCoverage() {
     if (!data || data.length < pageSize) break;
   }
 
-  const checkedRows = rows.filter((row) => row.field_verification?.posterImageOcr?.imageClassification);
-  const nonposterRows = checkedRows.filter((row) => row.field_verification.posterImageOcr.imageClassification.isPoster === false);
+  const getImageClassification = (row) => (
+    row.field_verification?.posterImageOcr?.imageClassification
+    ?? row.field_verification?.attachmentPosterRepair?.imageClassification
+    ?? null
+  );
+  const checkedRows = rows.filter((row) => getImageClassification(row));
+  const nonposterRows = checkedRows.filter((row) => getImageClassification(row).isPoster === false);
   const lowConfidenceRows = checkedRows.filter((row) => {
-    const confidence = Number(row.field_verification.posterImageOcr.imageClassification.confidence ?? 0);
+    const confidence = Number(getImageClassification(row).confidence ?? 0);
     return Number.isFinite(confidence) && confidence < 0.55;
   });
 
@@ -147,7 +152,7 @@ async function measureImageAiCoverage() {
       id: row.id,
       title: row.title,
       status: row.poster_status,
-      reason: row.field_verification.posterImageOcr.imageClassification.reason ?? "",
+      reason: getImageClassification(row).reason ?? "",
     })),
   };
 }

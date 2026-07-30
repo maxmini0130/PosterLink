@@ -43,6 +43,7 @@ import {
 import { evaluateRelevanceHeuristic } from "./relevance-heuristic.js";
 import { routePosterRelevance } from "./poster-relevance-router.js";
 import { parseDeadlineText } from "./deadline-parser.js";
+import { resolveImageContentType } from "./image-content-type.js";
 import { computeImagePhash, selectRepresentativeImage } from "./image-phash.js";
 import { extractNoticeFactsWithLlm } from "./notice-facts-extractor.js";
 import {
@@ -580,6 +581,7 @@ function restoreSemanticLineBreaks(value) {
     .replace(/\s*❤️\s*문의(?:처)?\s*/gu, "\n문의: ")
     .replace(/\s*🚨\s*/gu, "\n주의: ")
     .replace(/\s*※\s*/gu, "\n참고: ")
+    .replace(/\s*([■□◆▶])\s*/gu, "\n$1 ")
     .replace(/([.!?。])(?=[📌🚨❤️])/gu, "$1\n");
 }
 
@@ -719,32 +721,48 @@ function normalizeStorageTitle(post = {}) {
 
 function pickField(text, labels) {
   const lines = splitReadableLines(text);
+  const isUsefulValue = (value) => {
+    const normalized = String(value ?? "").replace(/\s+/g, " ").trim();
+    return Boolean(normalized)
+      && !/^<[^>]+>$/.test(normalized)
+      && !/^\d{4}(?:[.\-\/년]\d{0,2})?$/.test(normalized);
+  };
+
   for (const label of labels) {
     // 줄 시작 라벨: 라벨 뒤에 콜론 또는 공백(실제 구분자)이 있어야 값으로 인정한다.
     // "내용은 ...", "대상으로 ..." 처럼 라벨이 단어 일부인 경우를 배제한다.
-    const linePattern = new RegExp(`^${escapeRegExp(label)}(?:\\s*[:：]\\s*|\\s+)(.{4,140})$`, "i");
-    const lineMatch = lines.map((line) => line.match(linePattern)).find(Boolean);
-    if (lineMatch?.[1]) return lineMatch[1].replace(/\s+/g, " ").trim();
+    const linePattern = new RegExp(`^[■□◆▶]?\\s*${escapeRegExp(label)}(?:\\s*[:：]\\s*|\\s+)(.{4,140})$`, "iu");
+    for (const line of lines) {
+      const lineMatch = line.match(linePattern);
+      if (isUsefulValue(lineMatch?.[1])) return lineMatch[1].replace(/\s+/g, " ").trim();
+    }
 
     // 줄 중간 라벨: 콜론(:／：)이 반드시 있어야 라벨로 인정한다("... 대상으로 ..." 오매칭 방지).
-    const pattern = new RegExp(`${escapeRegExp(label)}\\s*[:：]\\s*([^\\n。.!?]{4,120})`, "i");
-    const match = String(text ?? "").match(pattern);
-    if (match?.[1]) return match[1].replace(/\s+/g, " ").trim();
+    const pattern = new RegExp(`(?:^|[^\\p{L}\\p{N}])${escapeRegExp(label)}\\s*[:：]\\s*([^\\n。.!?]{4,120})`, "giu");
+    for (const match of String(text ?? "").matchAll(pattern)) {
+      if (isUsefulValue(match?.[1])) return match[1].replace(/\s+/g, " ").trim();
+    }
   }
   return null;
 }
 
 function pickDateRange(text) {
-  const patterns = [
-    /(신청|접수|모집|운영|교육)\s*(기간|일시)?\s*[:：]?\s*([~.\-\/()\d\s년월일:]+(?:까지|부터)?)/,
-    /(\d{4}[.\-\/년]\s*\d{1,2}[.\-\/월]\s*\d{1,2}일?\s*(?:\([^)]*\))?\s*[~\-]\s*\d{4}?[.\-\/년]?\s*\d{1,2}[.\-\/월]\s*\d{1,2}일?)/,
-  ];
+  const fullDateRange =
+    /(\d{4}\s*[.\-\/년]\s*\d{1,2}\s*[.\-\/월]\s*\d{1,2}\s*일?\.?\s*(?:\([월화수목금토일]\))?\s*[~～-]\s*(?:\d{4}\s*[.\-\/년]\s*)?\d{1,2}\s*[.\-\/월]\s*\d{1,2}\s*일?\.?\s*(?:\([월화수목금토일]\))?(?:\s*(?:까지|마감))?)/u;
+  const labeledDateRange = new RegExp(
+    `(?:수강\\s*신청|신청|접수|모집)\\s*(?:기간|일시)?\\s*[:：]?\\s*${fullDateRange.source}`,
+    "u",
+  );
+  const labeledMatch = String(text ?? "").match(labeledDateRange);
+  if (labeledMatch?.[1]) return labeledMatch[1].replace(/\s+/g, " ").trim();
 
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    const value = match?.[3] ?? match?.[1];
-    if (value) return value.replace(/\s+/g, " ").trim();
-  }
+  const genericMatch = String(text ?? "").match(fullDateRange);
+  if (genericMatch?.[1]) return genericMatch[1].replace(/\s+/g, " ").trim();
+
+  const looseMatch = String(text ?? "").match(
+    /(신청|접수|모집|운영|교육|수강신청)\s*(기간|일시)?\s*[:：]?\s*([~.\-\/()\d\s년월일:화수목금토]+(?:까지|부터)?)/u,
+  );
+  if (looseMatch?.[3]) return looseMatch[3].replace(/\s+/g, " ").trim();
 
   return null;
 }
@@ -786,9 +804,9 @@ export function buildReadableNoticeInfo(post = {}) {
 
   const source = `${title}\n${content}`;
   const parts = [];
-  const period = pickField(source, ["신청기간", "접수기간", "모집기간", "운영기간", "교육기간", "기간"])
-    ?? pickDateRange(source);
-  const target = pickField(source, ["대상", "지원대상", "모집대상", "참여대상", "신청대상"]);
+  const period = pickDateRange(source)
+    ?? pickField(source, ["신청기간", "접수기간", "모집기간", "운영기간", "교육기간", "기간"]);
+  const target = pickField(source, ["교육대상", "지원대상", "모집대상", "참여대상", "신청대상", "대상"]);
   const benefit = pickField(source, ["내용", "지원내용", "주요내용", "사업내용", "교육내용", "프로그램", "모집내용"]);
   const application = pickField(source, ["신청방법", "접수방법", "신청", "접수", "지원방법"]);
   const contact = pickField(source, ["문의처", "연락처", "문의"]);
@@ -1340,12 +1358,10 @@ async function importImageToStorage(imageUrl, sourceKey, index) {
 
   if (!response.ok) throw new Error(`image download failed (${response.status})`);
 
-  const contentType = response.headers.get("content-type") ?? "image/jpeg";
-  if (!contentType.toLowerCase().startsWith("image/")) {
-    throw new Error(`not an image content type: ${contentType}`);
-  }
-
   const imageBytes = new Uint8Array(await response.arrayBuffer());
+  const declaredContentType = response.headers.get("content-type") ?? "";
+  const contentType = resolveImageContentType(declaredContentType, imageBytes);
+  if (!contentType) throw new Error(`not an image content type: ${declaredContentType || "unknown"}`);
   const hash = crypto.createHash("sha256").update(`${sourceKey}:${imageUrl}:${index}`).digest("hex").slice(0, 24);
   const ext = getImageExtension(imageUrl, contentType);
   const storagePath = `crawler/${hash}.${ext}`;
@@ -1358,7 +1374,7 @@ async function importImageToStorage(imageUrl, sourceKey, index) {
   return supabase.storage.from(POSTER_IMAGE_BUCKET).getPublicUrl(storagePath).data.publicUrl;
 }
 
-async function importPostImagesToStorage(post, sourceUrl, sourceKey) {
+export async function importPostImagesToStorage(post, sourceUrl, sourceKey) {
   const imageUrls = normalizePostImages(post, sourceUrl);
   const imported = [];
 
@@ -1374,7 +1390,7 @@ async function importPostImagesToStorage(post, sourceUrl, sourceKey) {
   return [...new Set(imported)];
 }
 
-async function syncPosterImages(posterId, post, sourceUrl) {
+export async function syncPosterImages(posterId, post, sourceUrl) {
   const images = normalizePostImages(post, sourceUrl);
   if (images.length === 0) return;
 

@@ -319,6 +319,34 @@ test("space-delimited label at line start is still captured", () => {
   assert.equal(result.facts.target, "마포구 거주 청년 30명");
 });
 
+test("Korean weekday date ranges are kept intact and square-bullet sections become lines", () => {
+  const result = buildReadableNoticeInfo({
+    title: "2026 서울핀테크아카데미 14기 교육생 모집",
+    content: [
+      "과정소개 안내",
+      "■ 수강신청 : 2026.6.15.(월) ~ 2026.7.16.(목)",
+      "■ 비용 : 무료",
+      "■ 교육기간 : 2026.8.21.(금) ~ 2026.11.7.(토)",
+    ].join(" "),
+  });
+
+  assert.equal(result.facts.period, "2026.6.15.(월) ~ 2026.7.16.(목)");
+  assert.match(result.summaryLong, /\n■ 수강신청/);
+  assert.match(result.summaryLong, /\n■ 비용/);
+});
+
+test("application period outranks an earlier education period", () => {
+  const result = buildReadableNoticeInfo({
+    title: "핀테크 교육생 모집",
+    content: [
+      "교육기간: 2026.8.21.(금) ~ 2026.11.7.(토)",
+      "신청기간: 2026.6.15.(월) ~ 2026.7.16.(목)",
+    ].join("\n"),
+  });
+
+  assert.equal(result.facts.period, "2026.6.15.(월) ~ 2026.7.16.(목)");
+});
+
 test("attachment failure reasons are standardized", () => {
   assert.equal(
     getAttachmentFailureCode({ kind: "hwp", status: "unsupported", reason: "legacy hwp requires converter" }),
