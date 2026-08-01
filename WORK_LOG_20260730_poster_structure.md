@@ -185,3 +185,12 @@ npm run repair:structure -- --apply --skip-images
 - 신청 폼 `source_key`: `0건`
 - 필드 보정 후보: `0건`
 - 검수 대기 reject 후보: `0건`
+
+## 8. 반영 상태 확인 (2026-08-01)
+
+- 기능 반영 커밋: `67601e3 fix: collect poster image attachments`
+- 로컬 `main`, `origin/main`, GitHub 기본 브랜치가 위 기능 커밋까지 동일하게 반영된 것을 확인
+- 기능 반영 CI: [GitHub Actions 성공](https://github.com/maxmini0130/PosterLink/actions/runs/30527271999)
+- 기능 반영 배포: [Vercel production Ready](https://poster-link-cx7jercu8-maxmini0130s-projects.vercel.app)
+- 복구된 공고 4건(`sprtInfoId=72271, 72273, 72274, 72280`)은 DB에서 모두 `review` 상태이며, 관리자 최종 판정이 유일한 미완료 항목
+- 5절과 이전 날짜별 로그의 테스트·커버리지 수치는 각 실행 시점의 기록이며, 최신 검증 결과는 7절을 기준으로 함
