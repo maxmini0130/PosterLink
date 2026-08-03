@@ -41,3 +41,13 @@ export function selectCrawlBatch(items, options = {}) {
 
   return items.filter((_, index) => index % batchCount === batchIndex);
 }
+
+export function buildBatchSummaryPath(date, options = {}) {
+  const { batchCount = 1, batchIndex = 0 } = options;
+  const dateLabel =
+    date instanceof Date ? date.toISOString().slice(0, 10) : String(date);
+  const batchSuffix =
+    batchCount > 1 ? `_batch-${batchIndex + 1}-of-${batchCount}` : "";
+
+  return `data/results/all_${dateLabel}${batchSuffix}.json`;
+}

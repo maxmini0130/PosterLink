@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseBatchOptions, selectCrawlBatch } from "./crawl-batches.js";
+import {
+  buildBatchSummaryPath,
+  parseBatchOptions,
+  selectCrawlBatch,
+} from "./crawl-batches.js";
 
 test("batch arguments default to a single complete crawl", () => {
   const options = parseBatchOptions([]);
@@ -43,5 +47,15 @@ test("invalid batch arguments fail before crawling", () => {
   assert.throws(
     () => parseBatchOptions(["--batch-count", "many"]),
     /non-negative integer/,
+  );
+});
+
+test("batch result paths are unique while single crawls keep the legacy name", () => {
+  const date = new Date("2026-08-04T00:00:00Z");
+
+  assert.equal(buildBatchSummaryPath(date), "data/results/all_2026-08-04.json");
+  assert.equal(
+    buildBatchSummaryPath(date, { batchCount: 4, batchIndex: 2 }),
+    "data/results/all_2026-08-04_batch-3-of-4.json",
   );
 });

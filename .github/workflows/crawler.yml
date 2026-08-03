@@ -149,6 +149,7 @@ jobs:
           CRAWLER_ALL_RUN_TIMEOUT: "150m"
 
       - name: Upload to Supabase
+        if: always()
         run: |
           if [ "$CRAWLER_DRY_RUN" = "true" ] || [ "$CRAWLER_UPLOAD" != "true" ]; then
             echo "Upload skipped. dry_run=$CRAWLER_DRY_RUN upload=$CRAWLER_UPLOAD"

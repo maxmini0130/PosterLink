@@ -11,7 +11,11 @@
 import { sites } from "./sites.js";
 import { getAdapter } from "./adapters/index.js";
 import { crawlSite, logger } from "./crawler.js";
-import { parseBatchOptions, selectCrawlBatch } from "./crawl-batches.js";
+import {
+  buildBatchSummaryPath,
+  parseBatchOptions,
+  selectCrawlBatch,
+} from "./crawl-batches.js";
 import "./load-env.js";
 import {
   createCollectionSourceStats,
@@ -31,6 +35,12 @@ function getLatestPostDate(posts) {
     }
   }
   return latest?.toISOString() ?? null;
+}
+
+async function writeSummaryFile(summaryFile, results) {
+  if (results.length === 0) return;
+  await fs.mkdir("data/results", { recursive: true });
+  await fs.writeFile(summaryFile, JSON.stringify(results, null, 2), "utf-8");
 }
 
 function buildCrawlRunMetadata(site, stats = {}) {
@@ -191,6 +201,7 @@ async function main() {
   let successCount = 0;
   let failCount = 0;
   const crawlSourceStats = createCollectionSourceStats(collectionSources);
+  const summaryFile = buildBatchSummaryPath(new Date(), batchOptions);
 
   for (const site of targetSites) {
     try {
@@ -221,6 +232,8 @@ async function main() {
       failCount++;
     }
 
+    await writeSummaryFile(summaryFile, allResults);
+
     // 사이트 간 3초 대기
     await new Promise((r) => setTimeout(r, 3000));
   }
@@ -239,13 +252,6 @@ async function main() {
 
   // 전체 결과를 하나의 파일로도 저장
   if (allResults.length > 0) {
-    const batchSuffix =
-      batchOptions.batchCount > 1
-        ? `_batch-${batchOptions.batchIndex + 1}-of-${batchOptions.batchCount}`
-        : "";
-    const summaryFile = `data/results/all_${new Date().toISOString().slice(0, 10)}${batchSuffix}.json`;
-    await fs.mkdir("data/results", { recursive: true });
-    await fs.writeFile(summaryFile, JSON.stringify(allResults, null, 2), "utf-8");
     logger.info(`전체 결과 저장: ${summaryFile}`);
   }
 
