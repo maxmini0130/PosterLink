@@ -25,6 +25,20 @@ export function parseBatchOptions(args = []) {
   return { batchCount, batchIndex };
 }
 
+export function parseExcludedSiteIds(args = []) {
+  const index = args.indexOf("--exclude-site");
+  const inline = args.find((arg) => arg.startsWith("--exclude-site="));
+  const raw =
+    index >= 0 ? args[index + 1] : inline?.slice("--exclude-site=".length);
+
+  return new Set(
+    String(raw ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+}
+
 export function selectCrawlBatch(items, options = {}) {
   const { batchCount = 1, batchIndex = 0 } = options;
 

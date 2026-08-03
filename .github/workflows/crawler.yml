@@ -108,6 +108,9 @@ jobs:
 
           if [ "$CRAWLER_BATCH_COUNT" -gt 1 ]; then
             ARGS+=(--batch-index "$CRAWLER_BATCH_INDEX" --batch-count "$CRAWLER_BATCH_COUNT")
+            if [ -n "$CRAWLER_EXCLUDE_SITES" ]; then
+              ARGS+=(--exclude-site "$CRAWLER_EXCLUDE_SITES")
+            fi
           fi
 
           if [ "$CRAWLER_DRY_RUN" = "true" ]; then
@@ -133,6 +136,7 @@ jobs:
           CRAWLER_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
           CRAWLER_BATCH_INDEX: ${{ matrix.batch }}
           CRAWLER_BATCH_COUNT: ${{ (github.event_name == 'schedule' || (inputs.source == '' && inputs.site == '')) && '4' || '1' }}
+          CRAWLER_EXCLUDE_SITES: "kesco"
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

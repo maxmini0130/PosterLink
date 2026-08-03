@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildBatchSummaryPath,
   parseBatchOptions,
+  parseExcludedSiteIds,
   selectCrawlBatch,
 } from "./crawl-batches.js";
 
@@ -58,4 +59,16 @@ test("batch result paths are unique while single crawls keep the legacy name", (
     buildBatchSummaryPath(date, { batchCount: 4, batchIndex: 2 }),
     "data/results/all_2026-08-04_batch-3-of-4.json",
   );
+});
+
+test("scheduled crawl exclusions accept comma-separated site ids", () => {
+  assert.deepEqual(
+    [...parseExcludedSiteIds(["--exclude-site", "kesco, slow-source"])],
+    ["kesco", "slow-source"],
+  );
+  assert.deepEqual(
+    [...parseExcludedSiteIds(["--exclude-site=kesco"])],
+    ["kesco"],
+  );
+  assert.deepEqual([...parseExcludedSiteIds([])], []);
 });

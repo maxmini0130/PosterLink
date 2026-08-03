@@ -14,6 +14,7 @@ import { crawlSite, logger } from "./crawler.js";
 import {
   buildBatchSummaryPath,
   parseBatchOptions,
+  parseExcludedSiteIds,
   selectCrawlBatch,
 } from "./crawl-batches.js";
 import "./load-env.js";
@@ -115,6 +116,7 @@ async function main() {
   const sourceIdx = args.indexOf("--source");
   const targetSource = sourceIdx >= 0 ? args[sourceIdx + 1] : null;
   const batchOptions = parseBatchOptions(args);
+  const excludedSiteIds = parseExcludedSiteIds(args);
 
   // ── 사이트 목록 출력 ─────────────────────────
   if (listOnly) {
@@ -166,6 +168,11 @@ async function main() {
     targetSites = sites.filter((s) => s.id === targetSite || s.id.startsWith(targetSite));
   } else {
     targetSites = mergeActiveCollectionSourceSites(sites, collectionSources);
+  }
+
+  if (excludedSiteIds.size > 0) {
+    targetSites = targetSites.filter((site) => !excludedSiteIds.has(site.id));
+    logger.info(`excluded scheduled sites: ${[...excludedSiteIds].join(", ")}`);
   }
 
   const unbatchedTargetCount = targetSites.length;
