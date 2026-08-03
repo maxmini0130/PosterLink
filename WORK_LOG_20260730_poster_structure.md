@@ -99,7 +99,7 @@ npm run repair:structure -- --apply --skip-images
 - [x] 기존 데이터 전수 백필 및 재감사
 - [x] 잘못 병합된 4개 공고 독립 복구
 - [x] 회귀 테스트, lint, production build, AI healthcheck
-- [ ] 복구된 검수 대기 4건 관리자 최종 판정
+- [x] 복구된 검수 대기 4건 관리자 최종 판정 (`3건 published`, `1건 closed`)
 
 ## 7. 첨부 포스터 원본 누락 보완
 
@@ -192,5 +192,5 @@ npm run repair:structure -- --apply --skip-images
 - 로컬 `main`, `origin/main`, GitHub 기본 브랜치가 위 기능 커밋까지 동일하게 반영된 것을 확인
 - 기능 반영 CI: [GitHub Actions 성공](https://github.com/maxmini0130/PosterLink/actions/runs/30527271999)
 - 기능 반영 배포: [Vercel production Ready](https://poster-link-cx7jercu8-maxmini0130s-projects.vercel.app)
-- 복구된 공고 4건(`sprtInfoId=72271, 72273, 72274, 72280`)은 DB에서 모두 `review` 상태이며, 관리자 최종 판정이 유일한 미완료 항목
+- 복구된 공고 4건(`sprtInfoId=72271, 72273, 72274, 72280`)은 2026-08-04 재확인 결과 `3건 published`, `1건 closed`로 최종 판정 완료
 - 5절과 이전 날짜별 로그의 테스트·커버리지 수치는 각 실행 시점의 기록이며, 최신 검증 결과는 7절을 기준으로 함
