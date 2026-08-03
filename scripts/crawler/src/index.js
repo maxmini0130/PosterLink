@@ -11,6 +11,7 @@
 import { sites } from "./sites.js";
 import { getAdapter } from "./adapters/index.js";
 import { crawlSite, logger } from "./crawler.js";
+import { parseBatchOptions, selectCrawlBatch } from "./crawl-batches.js";
 import "./load-env.js";
 import {
   createCollectionSourceStats,
@@ -103,6 +104,7 @@ async function main() {
   const targetSite = siteIdx >= 0 ? args[siteIdx + 1] : null;
   const sourceIdx = args.indexOf("--source");
   const targetSource = sourceIdx >= 0 ? args[sourceIdx + 1] : null;
+  const batchOptions = parseBatchOptions(args);
 
   // ── 사이트 목록 출력 ─────────────────────────
   if (listOnly) {
@@ -154,6 +156,24 @@ async function main() {
     targetSites = sites.filter((s) => s.id === targetSite || s.id.startsWith(targetSite));
   } else {
     targetSites = mergeActiveCollectionSourceSites(sites, collectionSources);
+  }
+
+  const unbatchedTargetCount = targetSites.length;
+  targetSites = selectCrawlBatch(targetSites, batchOptions);
+  if (batchOptions.batchCount > 1) {
+    logger.info(
+      `crawl batch ${batchOptions.batchIndex + 1}/${batchOptions.batchCount}: ` +
+        `${targetSites.length} of ${unbatchedTargetCount} sites`,
+    );
+  }
+
+  if (
+    unbatchedTargetCount > 0 &&
+    targetSites.length === 0 &&
+    batchOptions.batchCount > 1
+  ) {
+    logger.info("crawl batch has no assigned sites; nothing to do");
+    return;
   }
 
   if (targetSites.length === 0) {
@@ -219,7 +239,11 @@ async function main() {
 
   // 전체 결과를 하나의 파일로도 저장
   if (allResults.length > 0) {
-    const summaryFile = `data/results/all_${new Date().toISOString().slice(0, 10)}.json`;
+    const batchSuffix =
+      batchOptions.batchCount > 1
+        ? `_batch-${batchOptions.batchIndex + 1}-of-${batchOptions.batchCount}`
+        : "";
+    const summaryFile = `data/results/all_${new Date().toISOString().slice(0, 10)}${batchSuffix}.json`;
     await fs.mkdir("data/results", { recursive: true });
     await fs.writeFile(summaryFile, JSON.stringify(allResults, null, 2), "utf-8");
     logger.info(`전체 결과 저장: ${summaryFile}`);

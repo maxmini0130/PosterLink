@@ -38,6 +38,10 @@ jobs:
   crawl-and-upload:
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        batch: ${{ fromJSON((github.event_name == 'schedule' || (inputs.source == '' && inputs.site == '')) && '[0,1,2,3]' || '[0]') }}
     defaults:
       run:
         working-directory: scripts/crawler
@@ -102,12 +106,18 @@ jobs:
             ARGS+=(--site "$CRAWLER_SITE")
           fi
 
+          if [ "$CRAWLER_BATCH_COUNT" -gt 1 ]; then
+            ARGS+=(--batch-index "$CRAWLER_BATCH_INDEX" --batch-count "$CRAWLER_BATCH_COUNT")
+          fi
+
           if [ "$CRAWLER_DRY_RUN" = "true" ]; then
             ARGS+=(--dry-run)
           fi
 
           echo "Running crawler with args: ${ARGS[*]:-(all)}"
-          if [ "$CRAWLER_SOURCE" = "youth-seoul" ] || [ "$CRAWLER_SITE" = "youth-seoul" ]; then
+          if [ "$CRAWLER_BATCH_COUNT" -gt 1 ]; then
+            RUN_TIMEOUT="${CRAWLER_BATCH_RUN_TIMEOUT:-90m}"
+          elif [ "$CRAWLER_SOURCE" = "youth-seoul" ] || [ "$CRAWLER_SITE" = "youth-seoul" ]; then
             RUN_TIMEOUT="${CRAWLER_YOUTH_SEOUL_TIMEOUT:-45m}"
           elif [ -n "$CRAWLER_SOURCE" ] || [ -n "$CRAWLER_SITE" ]; then
             RUN_TIMEOUT="${CRAWLER_SINGLE_RUN_TIMEOUT:-25m}"
@@ -121,6 +131,8 @@ jobs:
           CRAWLER_SOURCE: ${{ github.event.inputs.source || '' }}
           CRAWLER_SITE: ${{ github.event.inputs.site || '' }}
           CRAWLER_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          CRAWLER_BATCH_INDEX: ${{ matrix.batch }}
+          CRAWLER_BATCH_COUNT: ${{ (github.event_name == 'schedule' || (inputs.source == '' && inputs.site == '')) && '4' || '1' }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -133,6 +145,7 @@ jobs:
           OPENAI_REQUEST_TIMEOUT_MS: "45000"
           CRAWLER_SINGLE_RUN_TIMEOUT: "25m"
           CRAWLER_YOUTH_SEOUL_TIMEOUT: "45m"
+          CRAWLER_BATCH_RUN_TIMEOUT: "90m"
           CRAWLER_ALL_RUN_TIMEOUT: "150m"
 
       - name: Upload to Supabase
@@ -142,7 +155,7 @@ jobs:
             exit 0
           fi
 
-          FILE=$(ls -t data/results/*.json 2>/dev/null | head -n 1 || true)
+          FILE=$(ls -t data/results/all_*.json 2>/dev/null | head -n 1 || true)
           if [ -f "$FILE" ]; then
             echo "Uploading $FILE"
             node src/upload-to-supabase.js "$FILE"
@@ -165,8 +178,38 @@ jobs:
           OPENAI_POSTER_ROUTER_MODEL: ${{ secrets.OPENAI_POSTER_ROUTER_MODEL || 'gpt-4o-mini' }}
           OPENAI_POSTER_DEADLINE_MODEL: ${{ secrets.OPENAI_POSTER_DEADLINE_MODEL || 'gpt-4o-mini' }}
 
+      - name: Upload result artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: crawler-results-${{ github.run_id }}-batch-${{ matrix.batch }}
+          path: |
+            scripts/crawler/data/results/
+            data/results/
+          retention-days: 7
+
+  quality-gate:
+    needs: crawl-and-upload
+    if: ${{ github.event_name == 'schedule' || (inputs.dry_run != 'true' && inputs.upload != 'false') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: scripts/crawler
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: scripts/crawler/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Run AI quality gate
-        if: ${{ github.event_name == 'schedule' || (github.event.inputs.dry_run != 'true' && github.event.inputs.upload != 'false') }}
         run: |
           node src/ai-healthcheck.js \
             --enforce \
@@ -181,12 +224,10 @@ jobs:
           AI_MIN_FIELD_COVERAGE: ${{ vars.AI_MIN_FIELD_COVERAGE || '45' }}
           AI_MIN_IMAGE_COVERAGE: ${{ vars.AI_MIN_IMAGE_COVERAGE || '20' }}
 
-      - name: Upload result artifact
+      - name: Upload quality gate artifact
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: crawler-results-${{ github.run_id }}
-          path: |
-            scripts/crawler/data/results/
-            data/results/
+          name: crawler-quality-gate-${{ github.run_id }}
+          path: scripts/crawler/data/results/
           retention-days: 7
