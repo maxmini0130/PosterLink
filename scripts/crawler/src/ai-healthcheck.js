@@ -5,6 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { spawn } from "child_process";
 import { createClient } from "@supabase/supabase-js";
+import WebSocket from "ws";
 import {
   DEFAULT_HEALTHCHECK_THRESHOLDS,
   evaluateHealthcheckGates,
@@ -59,7 +60,10 @@ function createSupabase() {
     throw new Error("NEXT_PUBLIC_SUPABASE_URL/SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY/SUPABASE_KEY are required");
   }
 
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    realtime: { transport: WebSocket },
+  });
 }
 
 function runJson(scriptName, scriptArgs = []) {
