@@ -205,3 +205,7 @@
   - 로컬 미검증 공개 공고에서 JSON-LD에 미검증 주관기관·마감일이 없고 캘린더 버튼도 노출되지 않음을 확인했다.
   - Chromium 데스크톱 `1440x1000`, 모바일 `412x915`에서 HTTP `200`, 가로 넘침 없음, 실패한 하위 요청 없음을 확인했다.
   - 기존 Playwright 묶음은 공개 테스트만 지정해도 전역 인증 준비가 먼저 실행되어 저장된 E2E 계정 단계에서 중단됐다. 계정을 변경하지 않고 동일 Chromium 직접 검수로 공개 화면을 대체 확인했다.
+- 운영 반영:
+  - 기능 변경 커밋 `cc636c5`를 `main`에 푸시했다.
+  - Supabase `check-deadlines` Edge Function을 공식 Management API로 배포해 `ACTIVE`, 버전 `5`, `verify_jwt=false`를 확인했다.
+  - `https://www.posterlink.kr`에 배포된 미검증 샘플에서 구버전 캘린더 버튼이 사라지고 JSON-LD에서 미검증 주관기관·마감일이 제외된 것을 다시 확인했다.
