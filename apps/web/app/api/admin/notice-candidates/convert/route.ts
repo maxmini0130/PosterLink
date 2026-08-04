@@ -10,6 +10,26 @@ const POSTER_IMAGE_BUCKET = process.env.POSTER_IMAGE_BUCKET?.trim() || "poster-o
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const IMAGE_SOURCE_VALUES = new Set(["admin_upload", "template_canvas"]);
+const STRUCTURED_POSTER_FIELDS = new Set([
+  "organizer_name",
+  "application_organization_name",
+  "deadline_type",
+  "event_start_at",
+  "event_end_at",
+  "eligibility_summary",
+  "target_age_min",
+  "target_age_max",
+  "participation_fee",
+  "benefits_summary",
+  "recruitment_count",
+  "application_method",
+  "required_documents",
+  "contact_info",
+  "event_location",
+  "verified_at",
+  "verification_status",
+  "data_confidence",
+]);
 const CATEGORY_LABEL_CODE_MAP = new Map([
   ["지원금/복지", "CAT_WELFARE"],
   ["복지", "CAT_WELFARE"],
@@ -73,6 +93,22 @@ function isMissingTableError(error: { code?: string; message?: string } | null) 
   return error.code === "42P01" || (error.message ?? "").includes("poster_notice_candidates");
 }
 
+function isMissingStructuredPosterColumnError(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    /organizer_name|deadline_type|verification_status/.test(message)
+  );
+}
+
+function withoutStructuredPosterFields(record: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(record).filter(([key]) => !STRUCTURED_POSTER_FIELDS.has(key))
+  );
+}
+
 function asPlainObject(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return value as Record<string, unknown>;
@@ -113,6 +149,71 @@ function normalizeOptionalDate(value: FormDataEntryValue | null, fieldName: stri
 
 function compactText(value: unknown) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function firstCompactText(values: unknown[], limit = 2000) {
+  for (const value of values) {
+    const text = compactText(value);
+    if (text) return text.slice(0, limit);
+  }
+  return null;
+}
+
+function normalizeDeadlineType(value: unknown, applicationEndAt: string | null) {
+  switch (compactText(value).toLowerCase()) {
+    case "고정":
+    case "fixed":
+      return "fixed";
+    case "상시":
+    case "ongoing":
+      return "ongoing";
+    case "소진시":
+    case "소진 시":
+    case "until_exhausted":
+      return "until_exhausted";
+    case "예정":
+    case "scheduled":
+      return "scheduled";
+    default:
+      return applicationEndAt ? "fixed" : "unknown";
+  }
+}
+
+function getCandidateStructuredFields(
+  candidate: Record<string, any>,
+  applicationStartAt: string | null,
+  applicationEndAt: string | null
+) {
+  const verification = asPlainObject(candidate.field_verification);
+  const organization = asPlainObject(verification.organization);
+  const readableNotice = asPlainObject(verification.readableNotice);
+  const facts = asPlainObject(readableNotice.facts);
+  const confidence = Number(verification.confidence ?? organization.confidence);
+
+  return {
+    organizer_name: firstCompactText(
+      [organization.organizerName, organization.displayOrgName, verification.correctedOrgName],
+      300
+    ),
+    application_organization_name: firstCompactText(
+      [
+        organization.applicationOrganizationName,
+        organization.applicationOrgName,
+        verification.applicationOrganizationName,
+      ],
+      300
+    ),
+    deadline_type: normalizeDeadlineType(candidate.deadline_type, applicationEndAt),
+    application_start_at: applicationStartAt,
+    application_end_at: applicationEndAt,
+    eligibility_summary: firstCompactText([candidate.target, facts.target]),
+    benefits_summary: firstCompactText([candidate.support_scale, facts.benefits, facts.content], 4000),
+    application_method: firstCompactText([facts.application], 4000),
+    contact_info: firstCompactText([candidate.contact, facts.contact], 1000),
+    event_location: firstCompactText([facts.location], 1000),
+    verification_status: "needs_review",
+    data_confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : null,
+  };
 }
 
 function asPlainObjectArray(value: unknown) {
@@ -299,6 +400,7 @@ export async function POST(request: NextRequest) {
     const applicationStartAt = applicationStartOverride !== undefined ? applicationStartOverride : candidate.application_start_at ?? null;
     const applicationEndAt = applicationEndOverride !== undefined ? applicationEndOverride : candidate.application_end_at ?? null;
     const candidateSourceUrl = sourceUrlOverride !== undefined ? sourceUrlOverride : candidate.source_url ?? null;
+    const candidateApplyUrl = normalizeHttpUrl(candidate.apply_url);
     if (!title) throw new HttpError("후보 제목이 비어 있습니다.", 400);
 
     const { data: existingPoster, error: existingPosterError } = await admin
@@ -344,26 +446,37 @@ export async function POST(request: NextRequest) {
       convertedAt,
       convertedBy: user.id,
     };
+    const structuredFields = getCandidateStructuredFields(candidate, applicationStartAt, applicationEndAt);
 
-    const { data: poster, error: posterError } = await admin
+    const posterRecord = {
+      title,
+      source_org_name: sourceOrgName,
+      summary_short: summaryShort,
+      summary_long: summaryLong,
+      poster_status: "review",
+      ...structuredFields,
+      created_by: user.id,
+      thumbnail_url: publicUrl,
+      source_key: candidate.source_key,
+      field_verification: fieldVerification,
+    };
+    let posterInsert = await admin
       .from("posters")
-      .insert({
-        title,
-        source_org_name: sourceOrgName,
-        summary_short: summaryShort,
-        summary_long: summaryLong,
-        poster_status: "review",
-        application_start_at: applicationStartAt,
-        application_end_at: applicationEndAt,
-        created_by: user.id,
-        thumbnail_url: publicUrl,
-        source_key: candidate.source_key,
-        field_verification: fieldVerification,
-      })
+      .insert(posterRecord)
       .select("id,title,poster_status,thumbnail_url,source_key")
       .single();
+    if (isMissingStructuredPosterColumnError(posterInsert.error)) {
+      posterInsert = await admin
+        .from("posters")
+        .insert(withoutStructuredPosterFields(posterRecord))
+        .select("id,title,poster_status,thumbnail_url,source_key")
+        .single();
+    }
+    const { data: poster, error: posterError } = posterInsert;
 
-    if (posterError) throw new HttpError(posterError.message, 500);
+    if (posterError || !poster) {
+      throw new HttpError(posterError?.message ?? "포스터 생성 결과를 확인하지 못했습니다.", 500);
+    }
     createdPosterId = poster.id;
 
     const taxonomy = await attachPosterTaxonomy(admin, poster.id, candidate, categoryNameOverride);
@@ -391,14 +504,28 @@ export async function POST(request: NextRequest) {
     });
     if (imageInsertError) throw new HttpError(imageInsertError.message, 500);
 
-    if (sourceUrl) {
-      const { error: linkError } = await admin.from("poster_links").insert({
-        poster_id: poster.id,
-        link_type: "official_notice",
-        url: sourceUrl,
-        title: "원문 공고",
-        is_primary: true,
-      });
+    const posterLinks = [
+      ...(candidateApplyUrl
+        ? [{
+            poster_id: poster.id,
+            link_type: "official_apply",
+            url: candidateApplyUrl,
+            title: "공식 신청 링크",
+            is_primary: true,
+          }]
+        : []),
+      ...(sourceUrl && sourceUrl !== candidateApplyUrl
+        ? [{
+            poster_id: poster.id,
+            link_type: "official_notice",
+            url: sourceUrl,
+            title: "원문 공고",
+            is_primary: !candidateApplyUrl,
+          }]
+        : []),
+    ];
+    if (posterLinks.length > 0) {
+      const { error: linkError } = await admin.from("poster_links").insert(posterLinks);
       if (linkError) throw new HttpError(linkError.message, 500);
     }
 

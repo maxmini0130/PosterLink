@@ -30,6 +30,7 @@
     "embed:backfill": "node src/backfill-poster-embeddings.js",
     "verify:backfill": "node src/backfill-field-verification.js",
     "verify:apply-corrections": "node src/apply-field-verification-corrections.js",
+    "structure:backfill": "node src/backfill-structured-poster-fields.js",
     "image:backfill": "node src/backfill-image-classification.js",
     "ingest:naver-blog": "node src/naver-blog-ingester.js",
     "measure:coverage": "node src/measure-institution-coverage.js"

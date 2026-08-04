@@ -8,9 +8,14 @@ import { CommentSection } from "../../components/CommentSection";
 import { PosterImageCarousel } from "../../components/PosterImageCarousel";
 import { supabase } from "../../lib/supabase";
 import { fetchPosterMetricCounts, logPosterView } from "../../lib/posterMetrics";
+import {
+  formatApplicationPeriod,
+  formatPosterDateTime,
+  getPosterApplicationState
+} from "../../../lib/posterApplication";
 import { resolvePosterImageGallery } from "../../../lib/posterImage";
 import { Footer } from "../../components/Footer";
-import { ChevronLeft, ChevronRight, Eye, Heart, Link2, Share2, X } from "lucide-react";
+import { CalendarPlus, ChevronLeft, ChevronRight, Eye, Heart, Share2, X } from "lucide-react";
 
 export type PosterDetailPoster = {
   id: string;
@@ -21,6 +26,24 @@ export type PosterDetailPoster = {
   poster_status: string | null;
   application_start_at?: string | null;
   application_end_at: string | null;
+  organizer_name?: string | null;
+  application_organization_name?: string | null;
+  deadline_type?: string | null;
+  event_start_at?: string | null;
+  event_end_at?: string | null;
+  eligibility_summary?: string | null;
+  target_age_min?: number | null;
+  target_age_max?: number | null;
+  participation_fee?: string | null;
+  benefits_summary?: string | null;
+  recruitment_count?: string | null;
+  application_method?: string | null;
+  required_documents?: string | null;
+  contact_info?: string | null;
+  event_location?: string | null;
+  verified_at?: string | null;
+  verification_status?: string | null;
+  data_confidence?: number | null;
   thumbnail_url: string | null;
   source_key: string | null;
   field_verification?: Record<string, any> | null;
@@ -83,43 +106,6 @@ function getPrimaryActionLink(links: PosterDetailLink[]) {
   );
 }
 
-function parseDateTime(value?: string | null) {
-  if (!value) return null;
-  const time = new Date(value).getTime();
-  return Number.isNaN(time) ? null : time;
-}
-
-function formatKoreanDate(value?: string | null) {
-  const time = parseDateTime(value);
-  if (time === null) return null;
-  const date = new Date(time);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}.${month}.${day}`;
-}
-
-function formatKoreanDateTime(value?: string | null) {
-  const time = parseDateTime(value);
-  if (time === null) return "확인 필요";
-  const date = new Date(time);
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${formatKoreanDate(value)} ${hours}:${minutes}`;
-}
-
-function formatApplicationPeriod(startAt?: string | null, endAt?: string | null) {
-  const startLabel = formatKoreanDate(startAt);
-  const endLabel = formatKoreanDate(endAt);
-  const hasInvalidDate = Boolean(startAt && !startLabel) || Boolean(endAt && !endLabel);
-
-  if (hasInvalidDate) return "기관 공고 확인";
-  if (startLabel && endLabel) return `${startLabel} ~ ${endLabel}까지`;
-  if (endLabel) return `${endLabel}까지`;
-  if (startLabel) return `${startLabel}부터 상시 모집`;
-  return "상시 모집";
-}
-
 function formatHostName(url: string) {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
@@ -129,7 +115,9 @@ function formatHostName(url: string) {
 }
 
 function normalizeOrgDisplayValue(value: unknown) {
-  return String(value ?? "").replace(/\s+/g, " ").trim();
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function getOrganizationVerification(poster: PosterDetailPoster) {
@@ -150,12 +138,85 @@ function getOrganizationVerification(poster: PosterDetailPoster) {
     organizerName,
     operatorName,
     boardName,
-    sourceDiffersFromOrganizer: Boolean(organization.sourceDiffersFromOrganizer),
+    sourceDiffersFromOrganizer: Boolean(organization.sourceDiffersFromOrganizer)
   };
 }
 
 function getPosterOrgDisplayName(poster: PosterDetailPoster) {
-  return getOrganizationVerification(poster)?.displayOrgName || poster.source_org_name || null;
+  return poster.organizer_name || getOrganizationVerification(poster)?.displayOrgName || poster.source_org_name || null;
+}
+
+function getReadableNoticeFacts(poster: PosterDetailPoster) {
+  const readableNotice = poster.field_verification?.readableNotice;
+  if (!readableNotice || typeof readableNotice !== "object" || Array.isArray(readableNotice)) return {};
+  const facts = (readableNotice as Record<string, any>).facts;
+  return facts && typeof facts === "object" && !Array.isArray(facts) ? (facts as Record<string, unknown>) : {};
+}
+
+function formatTargetAge(min?: number | null, max?: number | null) {
+  if (min != null && max != null) return `만 ${min}세 ~ ${max}세`;
+  if (min != null) return `만 ${min}세 이상`;
+  if (max != null) return `만 ${max}세 이하`;
+  return "연령 조건 확인 필요";
+}
+
+function verificationStatusLabel(status?: string | null) {
+  switch (status) {
+    case "verified":
+      return "검증 완료";
+    case "needs_review":
+      return "검수 필요";
+    case "rejected":
+      return "반려";
+    default:
+      return "검증 기록 확인 필요";
+  }
+}
+
+function escapeCalendarText(value: string) {
+  return value.replace(/([,;\\])/g, "\\$1").replace(/\n/g, "\\n");
+}
+
+function toCalendarDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z");
+}
+
+function downloadPosterCalendar(poster: PosterDetailPoster, link?: string | null) {
+  const startValue = poster.event_start_at || poster.application_end_at;
+  if (!startValue) return false;
+  const start = toCalendarDate(startValue);
+  if (!start) return false;
+  const fallbackEnd = new Date(new Date(startValue).getTime() + 60 * 60 * 1000).toISOString();
+  const end = toCalendarDate(poster.event_end_at || fallbackEnd);
+  if (!end) return false;
+
+  const purpose = poster.event_start_at ? poster.title : `${poster.title} 신청 마감`;
+  const calendar = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//PosterLink//Public Opportunity//KO",
+    "BEGIN:VEVENT",
+    `UID:${poster.id}@posterlink.kr`,
+    `DTSTAMP:${toCalendarDate(new Date().toISOString())}`,
+    `DTSTART:${start}`,
+    `DTEND:${end}`,
+    `SUMMARY:${escapeCalendarText(purpose)}`,
+    ...(link ? [`URL:${link}`, `DESCRIPTION:${escapeCalendarText(`공식 공고: ${link}`)}`] : []),
+    "END:VEVENT",
+    "END:VCALENDAR"
+  ].join("\r\n");
+  const url = URL.createObjectURL(new Blob([calendar], { type: "text/calendar;charset=utf-8" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `posterlink-${poster.id}.ics`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+  return true;
 }
 
 type SummaryLine = {
@@ -173,7 +234,7 @@ const CIRCLED_SECTION_LABELS: Record<string, string> = {
   "⑦": "참여혜택",
   "⑧": "문의",
   "⑨": "기타",
-  "⑩": "기타",
+  "⑩": "기타"
 };
 
 const SUMMARY_LABELS = [
@@ -217,11 +278,10 @@ const SUMMARY_LABELS = [
   "참가비",
   "신청문의",
   "주의",
-  "참고",
+  "참고"
 ];
 
-const SUMMARY_LABEL_PATTERN = SUMMARY_LABELS
-  .sort((a, b) => b.length - a.length)
+const SUMMARY_LABEL_PATTERN = SUMMARY_LABELS.sort((a, b) => b.length - a.length)
   .map((label) => label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
   .join("|");
 
@@ -264,18 +324,20 @@ function splitNumberedItems(value: string): Array<{ number: string; body: string
   const matches = [...value.matchAll(/(?:^|\s)(\d{1,2})[.)]\s+/g)];
   if (matches.length < 2) return [];
 
-  return matches.map((match, index) => {
-    const start = (match.index ?? 0) + match[0].length;
-    const end = matches[index + 1]?.index ?? value.length;
-    const itemText = value.slice(start, end).trim();
-    const [body, instructor] = itemText.split(/\s+강사:\s+/, 2);
+  return matches
+    .map((match, index) => {
+      const start = (match.index ?? 0) + match[0].length;
+      const end = matches[index + 1]?.index ?? value.length;
+      const itemText = value.slice(start, end).trim();
+      const [body, instructor] = itemText.split(/\s+강사:\s+/, 2);
 
-    return {
-      number: match[1],
-      body: body.trim(),
-      instructor: instructor?.trim(),
-    };
-  }).filter((item) => item.body);
+      return {
+        number: match[1],
+        body: body.trim(),
+        instructor: instructor?.trim()
+      };
+    })
+    .filter((item) => item.body);
 }
 
 function splitDashItems(value: string): string[] {
@@ -313,14 +375,16 @@ function splitNumberedSections(value: string, fallbackLabel?: string): SummaryLi
     const section = match[2].replace(/\s+/g, " ").trim();
     if (!section) continue;
 
-    const titleMatch = section.match(/^(목적(?:\([^)]*\))?|신청대상|신청기간|진행일정|진행내용|진행장소|참여혜택|문의\s*연락처|문의처|문의|대상|내용|기간|일시|장소)\s*(.*)$/);
+    const titleMatch = section.match(
+      /^(목적(?:\([^)]*\))?|신청대상|신청기간|진행일정|진행내용|진행장소|참여혜택|문의\s*연락처|문의처|문의|대상|내용|기간|일시|장소)\s*(.*)$/
+    );
     const rawLabel = titleMatch?.[1]?.trim() ?? CIRCLED_SECTION_LABELS[marker] ?? marker;
     const label = normalizeNumberedLabel(rawLabel) || CIRCLED_SECTION_LABELS[marker] || marker;
     const text = normalizeSummaryText(titleMatch?.[2] || section);
 
     lines.push({
       label,
-      text: text || section,
+      text: text || section
     });
   }
 
@@ -329,7 +393,10 @@ function splitNumberedSections(value: string, fallbackLabel?: string): SummaryLi
 
 function formatSummaryLines(value: string | null | undefined): SummaryLine[] {
   const text = String(value ?? "")
-    .replace(/<\/?(?:a|b|blockquote|div|em|h[1-6]|i|img|li|ol|p|span|strong|table|tbody|td|th|thead|tr|ul)\b[^>]*>/gi, " ")
+    .replace(
+      /<\/?(?:a|b|blockquote|div|em|h[1-6]|i|img|li|ol|p|span|strong|table|tbody|td|th|thead|tr|ul)\b[^>]*>/gi,
+      " "
+    )
     .replace(/&nbsp;|&#160;/gi, " ")
     .replace(/^상세정보\s+/, "")
     .replace(/\s+(교육\s*개요|신청\s*안내)\s+/g, "\n")
@@ -353,17 +420,25 @@ function formatSummaryLines(value: string | null | undefined): SummaryLine[] {
     .map((line) => line.trim())
     .filter(Boolean);
 
-  const parsed = lines.map((line) => {
-    const match = line.match(new RegExp(`^(${SUMMARY_LABEL_PATTERN})\\s*[:：-]\\s*(.+)$`));
-    if (!match) {
-      const looseMatch = line.match(/^(교육\s*내용)\s+(.+)$/);
-      if (looseMatch) {
-        return { label: normalizeSummaryLabel(looseMatch[1]), text: normalizeSummaryText(looseMatch[2]) };
+  const parsed = lines
+    .map((line) => {
+      const match = line.match(new RegExp(`^(${SUMMARY_LABEL_PATTERN})\\s*[:：-]\\s*(.+)$`));
+      if (!match) {
+        const looseMatch = line.match(/^(교육\s*내용)\s+(.+)$/);
+        if (looseMatch) {
+          return {
+            label: normalizeSummaryLabel(looseMatch[1]),
+            text: normalizeSummaryText(looseMatch[2])
+          };
+        }
+        return { text: normalizeSummaryText(line) };
       }
-      return { text: normalizeSummaryText(line) };
-    }
-    return { label: normalizeSummaryLabel(match[1]), text: normalizeSummaryText(match[2]) };
-  }).flatMap((line) => splitNumberedSections(line.text, line.label));
+      return {
+        label: normalizeSummaryLabel(match[1]),
+        text: normalizeSummaryText(match[2])
+      };
+    })
+    .flatMap((line) => splitNumberedSections(line.text, line.label));
 
   if (parsed.length > 1 || parsed.some((line) => line.label)) {
     return removeDanglingDuplicateLines(parsed);
@@ -389,11 +464,7 @@ function renderSummaryContent(line: SummaryLine) {
             </span>
             <div className="min-w-0 space-y-1 break-keep [overflow-wrap:anywhere]">
               <p>{item.body}</p>
-              {item.instructor && (
-                <p className="text-xs font-bold text-gray-500">
-                  강사: {item.instructor}
-                </p>
-              )}
+              {item.instructor && <p className="text-xs font-bold text-gray-500">강사: {item.instructor}</p>}
             </div>
           </div>
         ))}
@@ -429,7 +500,7 @@ export function PosterDetailClient({
   poster,
   links,
   initialViewCount = 0,
-  initialFavoriteCount = 0,
+  initialFavoriteCount = 0
 }: {
   poster: PosterDetailPoster;
   links: PosterDetailLink[];
@@ -445,17 +516,19 @@ export function PosterDetailClient({
   useEffect(() => {
     let cancelled = false;
 
-    void fetchPosterMetricCounts([poster.id]).then((metricCounts) => {
-      if (cancelled) return;
-      setViewCount(metricCounts.viewCounts[poster.id] ?? initialViewCount);
-      setFavoriteCount(metricCounts.favoriteCounts[poster.id] ?? initialFavoriteCount);
-    }).finally(() => {
-      void logPosterView(poster.id).then((logged) => {
-        if (!cancelled && logged) {
-          setViewCount((count) => count + 1);
-        }
+    void fetchPosterMetricCounts([poster.id])
+      .then((metricCounts) => {
+        if (cancelled) return;
+        setViewCount(metricCounts.viewCounts[poster.id] ?? initialViewCount);
+        setFavoriteCount(metricCounts.favoriteCounts[poster.id] ?? initialFavoriteCount);
+      })
+      .finally(() => {
+        void logPosterView(poster.id).then((logged) => {
+          if (!cancelled && logged) {
+            setViewCount((count) => count + 1);
+          }
+        });
       });
-    });
 
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (cancelled || !user) return;
@@ -474,7 +547,9 @@ export function PosterDetailClient({
   }, [initialFavoriteCount, initialViewCount, poster.id]);
 
   const toggleFavorite = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
     if (!user) {
       toast.error("로그인이 필요합니다.");
       return;
@@ -503,7 +578,7 @@ export function PosterDetailClient({
       link_id: link.id ?? null,
       link_type: link.link_type ?? null,
       link_url: link.url,
-      referrer_path: window.location.pathname,
+      referrer_path: window.location.pathname
     });
 
     try {
@@ -517,18 +592,19 @@ export function PosterDetailClient({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body,
-        keepalive: true,
+        keepalive: true
       });
     } catch (error) {
       console.warn("Failed to queue poster link click log:", error);
     }
   };
 
-  const deadlineTime = parseDateTime(poster.application_end_at);
-  const hasInvalidDeadline = Boolean(poster.application_end_at && deadlineTime === null);
-  const daysLeft = deadlineTime === null
-    ? null
-    : Math.ceil((deadlineTime - new Date().getTime()) / (1000 * 60 * 60 * 24));
+  const applicationState = getPosterApplicationState({
+    applicationStartAt: poster.application_start_at,
+    applicationEndAt: poster.application_end_at,
+    deadlineType: poster.deadline_type
+  });
+  const daysLeft = applicationState.daysLeft;
 
   const imageUrls = resolvePosterImageGallery(poster.images ?? [], poster.thumbnail_url, poster.source_key);
   const primaryLink = getPrimaryActionLink(links);
@@ -536,23 +612,60 @@ export function PosterDetailClient({
   const primaryActionLabel = primaryLink ? getLinkActionLabel(primaryLink) : "공식 공고 확인";
   const referenceLinks = links.filter((link) => link.id !== primaryLink?.id);
   const summaryLines = formatSummaryLines(poster.summary_long || poster.summary_short);
-  const applicationPeriodLabel = formatApplicationPeriod(poster.application_start_at, poster.application_end_at);
-  const lastCheckedLabel = formatKoreanDateTime(poster.updated_at || poster.created_at || poster.published_at);
+  const applicationPeriodLabel = formatApplicationPeriod({
+    applicationStartAt: poster.application_start_at,
+    applicationEndAt: poster.application_end_at,
+    deadlineType: poster.deadline_type
+  });
+  const lastCheckedLabel = formatPosterDateTime(poster.verified_at) || "검증 기록 확인 필요";
   const sourceHostLabel = sourceLink ? formatHostName(sourceLink.url) : null;
   const organizationInfo = getOrganizationVerification(poster);
   const displayOrgName = getPosterOrgDisplayName(poster);
+  const sourceOrgName = organizationInfo?.sourceOrgName || poster.source_org_name || null;
+  const sourceDiffersFromOrganizer = Boolean(
+    sourceOrgName &&
+    displayOrgName &&
+    normalizeOrgDisplayValue(sourceOrgName) !== normalizeOrgDisplayValue(displayOrgName)
+  );
   const showViewCount = viewCount >= 100;
   const showFavoriteCount = favoriteCount >= 10;
-  const statusLabel = hasInvalidDeadline ? "기관 확인 필요" : daysLeft === null ? "상시 모집" : daysLeft < 0 ? "마감됨" : daysLeft === 0 ? "오늘 마감" : "신청 가능";
-  const statusClass = hasInvalidDeadline
-    ? "bg-amber-50 text-amber-700 border-amber-100"
-    : daysLeft === null
-      ? "bg-emerald-50 text-emerald-700 border-emerald-100"
-    : daysLeft < 0
-      ? "bg-slate-100 text-slate-500 border-slate-200"
-      : daysLeft <= 3
-        ? "bg-rose-50 text-rose-600 border-rose-100"
-        : "bg-emerald-50 text-emerald-700 border-emerald-100";
+  const statusLabel = applicationState.label;
+  const statusClass =
+    applicationState.status === "needs_confirmation"
+      ? "bg-amber-50 text-amber-700 border-amber-100"
+      : applicationState.status === "ongoing" || applicationState.status === "until_exhausted"
+        ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+        : applicationState.status === "closed"
+          ? "bg-slate-100 text-slate-500 border-slate-200"
+          : applicationState.status === "due_today" || applicationState.status === "closing_soon"
+            ? "bg-rose-50 text-rose-600 border-rose-100"
+            : "bg-emerald-50 text-emerald-700 border-emerald-100";
+  const readableFacts = getReadableNoticeFacts(poster);
+  const coreFacts = [
+    {
+      label: "신청 대상",
+      value: poster.eligibility_summary || normalizeOrgDisplayValue(readableFacts.target) || "공식 공고 확인 필요"
+    },
+    { label: "신청 기간", value: applicationPeriodLabel },
+    { label: "대상 지역", value: poster.regionName || "지역 확인 필요" },
+    {
+      label: "연령",
+      value: formatTargetAge(poster.target_age_min, poster.target_age_max)
+    },
+    { label: "비용", value: poster.participation_fee || "기관 문의 필요" },
+    {
+      label: "혜택",
+      value: poster.benefits_summary || normalizeOrgDisplayValue(readableFacts.content) || "정보 확인 중"
+    },
+    {
+      label: "신청 방법",
+      value: poster.application_method || normalizeOrgDisplayValue(readableFacts.application) || "공식 공고 확인 필요"
+    },
+    {
+      label: "준비 서류",
+      value: poster.required_documents || "공식 공고 확인 필요"
+    }
+  ];
   const moveExpandedImage = (offset: number) => {
     setExpandedImageIndex((index) => (index + offset + imageUrls.length) % imageUrls.length);
   };
@@ -561,32 +674,13 @@ export function PosterDetailClient({
     <div className="min-h-screen bg-white pb-24 md:pb-10">
       <Header />
       <main className="container mx-auto max-w-2xl px-4 py-6">
-        <div
-          className="aspect-[3/4] w-full rounded-2xl overflow-hidden border shadow-lg mb-6 bg-gray-100 flex items-center justify-center relative"
-          aria-label="포스터 이미지 크게 보기"
-        >
-          <PosterImageCarousel
-            images={imageUrls}
-            title={poster.title}
-            org={displayOrgName}
-            fallbackClassName="p-8"
-            imgClassName="h-full w-full object-contain bg-gray-50"
-            showControls
-            iconSize={34}
-            onImageClick={(_, index) => {
-              setExpandedImageIndex(index);
-              setImageExpanded(true);
-            }}
-          />
-        </div>
-
         <div className="mb-8">
           <div className="flex flex-wrap items-center gap-2 mb-2">
-            <span className={`rounded-full border px-3 py-1 text-xs font-black ${statusClass}`}>
-              {statusLabel}
-            </span>
+            <span className={`rounded-full border px-3 py-1 text-xs font-black ${statusClass}`}>{statusLabel}</span>
             {daysLeft !== null && daysLeft >= 0 && (
-              <span className={`rounded-full px-3 py-1 text-xs font-black text-white ${daysLeft <= 3 ? "bg-rose-500" : "bg-blue-600"}`}>
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-black text-white ${daysLeft <= 3 ? "bg-rose-500" : "bg-blue-600"}`}
+              >
                 {daysLeft === 0 ? "D-Day" : `D-${daysLeft}`}
               </span>
             )}
@@ -605,10 +699,10 @@ export function PosterDetailClient({
               </span>
             )}
           </div>
-          {organizationInfo?.sourceDiffersFromOrganizer && organizationInfo.sourceOrgName && (
+          {sourceDiffersFromOrganizer && sourceOrgName && (
             <p className="mt-3 text-xs font-bold text-gray-400">
-              수집 출처: {organizationInfo.sourceOrgName}
-              {organizationInfo.boardName ? ` · ${organizationInfo.boardName}` : ""}
+              수집 출처: {sourceOrgName}
+              {organizationInfo?.boardName ? ` · ${organizationInfo.boardName}` : ""}
             </p>
           )}
           {(showViewCount || showFavoriteCount) && (
@@ -621,8 +715,7 @@ export function PosterDetailClient({
               )}
               {showFavoriteCount && (
                 <span className="inline-flex items-center gap-2 rounded-2xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-600">
-                  <Heart size={14} fill="currentColor" />
-                  찜 {favoriteCount.toLocaleString()}
+                  <Heart size={14} fill="currentColor" />찜 {favoriteCount.toLocaleString()}
                 </span>
               )}
             </div>
@@ -646,44 +739,59 @@ export function PosterDetailClient({
           </a>
         </div>
 
-        <section className="p-6 bg-gray-50 rounded-3xl mb-8 border border-gray-100">
-          <h2 className="text-sm font-black text-blue-600 mb-5 flex items-center gap-2">
-            <span className="w-1.5 h-1.5 bg-blue-600 rounded-full" /> 핵심 모집 요약
-          </h2>
-          <ul className="space-y-4 text-sm text-gray-700 font-medium">
-            <li className="flex gap-4">
-              <span className="text-gray-400 w-16 flex-shrink-0">신청기간</span>
-              <span className="text-gray-900 font-bold">
-                {applicationPeriodLabel}
-              </span>
-            </li>
-            <li className="flex gap-4">
-              <span className="text-gray-400 w-16 flex-shrink-0">대상지역</span>
-              <span className="text-gray-900 font-bold">{poster.regionName || "전국"}</span>
-            </li>
-            {summaryLines.length > 0 && (
-              <li className="grid grid-cols-[4rem_minmax(0,1fr)] gap-4">
-                <span className="text-gray-400">주요내용</span>
-                <div className="min-w-0 space-y-4 text-gray-900 font-bold leading-relaxed">
-                  {summaryLines.map((line, index) => (
-                    <div key={`${line.label ?? "line"}-${index}`} className="min-w-0">
-                      {line.label && (
-                        <span className="mb-1.5 inline-flex min-h-6 w-fit items-center rounded-md bg-blue-50 px-2 py-1 text-[11px] font-black text-blue-600 ring-1 ring-blue-100">
-                          {line.label}
-                        </span>
-                      )}
-                      {renderSummaryContent(line)}
-                    </div>
-                  ))}
-                </div>
-              </li>
-            )}
-          </ul>
+        <div
+          className="aspect-[3/4] w-full overflow-hidden border-y bg-gray-100 mb-8 flex items-center justify-center relative sm:rounded-2xl sm:border"
+          aria-label="포스터 이미지 크게 보기"
+        >
+          <PosterImageCarousel
+            images={imageUrls}
+            title={poster.title}
+            org={displayOrgName}
+            fallbackClassName="p-8"
+            imgClassName="h-full w-full object-contain bg-gray-50"
+            showControls
+            iconSize={34}
+            onImageClick={(_, index) => {
+              setExpandedImageIndex(index);
+              setImageExpanded(true);
+            }}
+          />
+        </div>
+
+        <section className="mb-8 border-y border-gray-200 py-6">
+          <h2 className="mb-5 text-base font-black text-gray-950">핵심 신청 조건</h2>
+          <dl className="grid gap-x-8 sm:grid-cols-2">
+            {coreFacts.map((fact) => (
+              <div
+                key={fact.label}
+                className="grid grid-cols-[5rem_minmax(0,1fr)] gap-3 border-t border-gray-100 py-3 first:border-t-0 sm:first:border-t"
+              >
+                <dt className="text-xs font-bold text-gray-400">{fact.label}</dt>
+                <dd className="min-w-0 break-words text-sm font-bold leading-relaxed text-gray-900">{fact.value}</dd>
+              </div>
+            ))}
+          </dl>
         </section>
+
+        {summaryLines.length > 0 && (
+          <section className="mb-8">
+            <h2 className="mb-4 text-base font-black text-gray-950">상세 내용</h2>
+            <div className="space-y-5 text-sm font-medium leading-relaxed text-gray-800">
+              {summaryLines.map((line, index) => (
+                <div key={`${line.label ?? "line"}-${index}`} className="min-w-0">
+                  {line.label && <h3 className="mb-1 text-xs font-black text-blue-600">{line.label}</h3>}
+                  {renderSummaryContent(line)}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl mb-10">
           <p className="text-[11px] text-blue-600 font-bold text-center leading-relaxed">
-            정확한 신청 자격 및 절차는 아래 버튼을 눌러<br />공식 공고문을 반드시 확인해 주세요.
+            정확한 신청 자격 및 절차는 아래 버튼을 눌러
+            <br />
+            공식 공고문을 반드시 확인해 주세요.
           </p>
         </div>
 
@@ -693,6 +801,12 @@ export function PosterDetailClient({
               <div>
                 <dt className="mb-1 font-black text-gray-400">주최/주관</dt>
                 <dd className="font-bold text-gray-900">{displayOrgName}</dd>
+              </div>
+            )}
+            {poster.application_organization_name && (
+              <div>
+                <dt className="mb-1 font-black text-gray-400">신청 접수기관</dt>
+                <dd className="font-bold text-gray-900">{poster.application_organization_name}</dd>
               </div>
             )}
             <div>
@@ -706,7 +820,7 @@ export function PosterDetailClient({
                     onClick={() => void logOfficialLinkClick(sourceLink)}
                     className="text-blue-600 underline-offset-4 hover:underline"
                   >
-                    {organizationInfo?.sourceOrgName || sourceHostLabel || "공식 원문"}
+                    {sourceOrgName || sourceHostLabel || "공식 원문"}
                   </a>
                 ) : (
                   "공식 링크 확인 필요"
@@ -720,6 +834,10 @@ export function PosterDetailClient({
             <div>
               <dt className="mb-1 font-black text-gray-400">공고 상태</dt>
               <dd className="font-bold text-gray-900">{statusLabel}</dd>
+            </div>
+            <div>
+              <dt className="mb-1 font-black text-gray-400">검수 상태</dt>
+              <dd className="font-bold text-gray-900">{verificationStatusLabel(poster.verification_status)}</dd>
             </div>
           </dl>
         </section>
@@ -755,24 +873,33 @@ export function PosterDetailClient({
                 isFavorited ? "bg-rose-50 border-rose-200" : "bg-white border-gray-100"
               }`}
             >
-              <Heart size={20} className={isFavorited ? "text-rose-500" : "text-gray-500"} fill={isFavorited ? "currentColor" : "none"} />
+              <Heart
+                size={20}
+                className={isFavorited ? "text-rose-500" : "text-gray-500"}
+                fill={isFavorited ? "currentColor" : "none"}
+              />
             </button>
 
             <button
               onClick={() => {
-                navigator.clipboard.writeText(window.location.href);
-                toast.success("링크가 복사되었습니다.");
+                const saved = downloadPosterCalendar(poster, primaryLink?.url);
+                if (saved) toast.success("캘린더 파일을 만들었습니다.");
+                else toast.error("저장할 일정 정보가 없습니다.");
               }}
               className="w-14 h-14 flex items-center justify-center border border-gray-100 bg-white rounded-2xl transition-all shadow-sm hover:bg-gray-50"
-              title="링크 복사"
+              title="캘린더 저장"
             >
-              <Link2 size={20} className="text-gray-500" />
+              <CalendarPlus size={20} className="text-gray-500" />
             </button>
 
             <button
               onClick={async () => {
                 if (navigator.share) {
-                  await navigator.share({ title: poster.title, text: poster.summary_short ?? "", url: window.location.href });
+                  await navigator.share({
+                    title: poster.title,
+                    text: poster.summary_short ?? "",
+                    url: window.location.href
+                  });
                 } else {
                   navigator.clipboard.writeText(window.location.href);
                   toast.success("링크가 복사되었습니다.");

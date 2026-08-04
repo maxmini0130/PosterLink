@@ -17,6 +17,24 @@ type PosterRow = {
   poster_status: string | null;
   application_start_at: string | null;
   application_end_at: string | null;
+  organizer_name?: string | null;
+  application_organization_name?: string | null;
+  deadline_type?: string | null;
+  event_start_at?: string | null;
+  event_end_at?: string | null;
+  eligibility_summary?: string | null;
+  target_age_min?: number | null;
+  target_age_max?: number | null;
+  participation_fee?: string | null;
+  benefits_summary?: string | null;
+  recruitment_count?: string | null;
+  application_method?: string | null;
+  required_documents?: string | null;
+  contact_info?: string | null;
+  event_location?: string | null;
+  verified_at?: string | null;
+  verification_status?: string | null;
+  data_confidence?: number | null;
   thumbnail_url: string | null;
   source_key: string | null;
   field_verification: Record<string, any> | null;
@@ -24,6 +42,20 @@ type PosterRow = {
   created_at: string | null;
   updated_at: string | null;
 };
+
+const LEGACY_POSTER_SELECT =
+  "id, title, source_org_name, summary_short, summary_long, poster_status, application_start_at, application_end_at, thumbnail_url, source_key, field_verification, published_at, created_at, updated_at";
+const STRUCTURED_POSTER_SELECT = `${LEGACY_POSTER_SELECT}, organizer_name, application_organization_name, deadline_type, event_start_at, event_end_at, eligibility_summary, target_age_min, target_age_max, participation_fee, benefits_summary, recruitment_count, application_method, required_documents, contact_info, event_location, verified_at, verification_status, data_confidence`;
+
+function isMissingStructuredPosterColumn(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    /organizer_name|deadline_type|verification_status/.test(message)
+  );
+}
 
 type CategoryLinkRow = {
   poster_id: string;
@@ -65,8 +97,8 @@ function createPosterServerClient() {
         getAll: () => cookieStore.getAll(),
         setAll: () => {
           // Server components only need read access to the auth cookies.
-        },
-      },
+        }
+      }
     }
   );
 }
@@ -84,10 +116,16 @@ function plainText(value?: string | null) {
 }
 
 function normalizeOrgDisplayValue(value: unknown) {
-  return String(value ?? "").replace(/\s+/g, " ").trim();
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function getPosterDisplayOrgName(poster: Pick<PosterDetailPoster, "source_org_name" | "field_verification">) {
+  if ("organizer_name" in poster) {
+    const organizerName = normalizeOrgDisplayValue((poster as PosterDetailPoster).organizer_name);
+    if (organizerName) return organizerName;
+  }
   const organization = poster.field_verification?.organization;
   if (organization && typeof organization === "object") {
     const displayOrgName = normalizeOrgDisplayValue((organization as Record<string, any>).displayOrgName);
@@ -99,20 +137,18 @@ function getPosterDisplayOrgName(poster: Pick<PosterDetailPoster, "source_org_na
 async function fetchPosterDetail(id: string) {
   const supabase = createPosterServerClient();
 
+  const fetchPoster = async () => {
+    const structuredResult = await supabase.from("posters").select(STRUCTURED_POSTER_SELECT).eq("id", id).maybeSingle();
+
+    if (!isMissingStructuredPosterColumn(structuredResult.error)) return structuredResult;
+
+    return supabase.from("posters").select(LEGACY_POSTER_SELECT).eq("id", id).maybeSingle();
+  };
+
   const [posterRes, categoryLinksRes, regionLinksRes, imageRes, linkRes] = await Promise.all([
-    supabase
-      .from("posters")
-      .select("id, title, source_org_name, summary_short, summary_long, poster_status, application_start_at, application_end_at, thumbnail_url, source_key, field_verification, published_at, created_at, updated_at")
-      .eq("id", id)
-      .maybeSingle(),
-    supabase
-      .from("poster_categories")
-      .select("poster_id, category_id")
-      .eq("poster_id", id),
-    supabase
-      .from("poster_regions")
-      .select("poster_id, region_id")
-      .eq("poster_id", id),
+    fetchPoster(),
+    supabase.from("poster_categories").select("poster_id, category_id").eq("poster_id", id),
+    supabase.from("poster_regions").select("poster_id, region_id").eq("poster_id", id),
     supabase
       .from("poster_images")
       .select("poster_id, storage_path, image_type, created_at")
@@ -123,7 +159,7 @@ async function fetchPosterDetail(id: string) {
       .select("id, poster_id, link_type, title, url, is_primary")
       .eq("poster_id", id)
       .order("is_primary", { ascending: false })
-      .order("created_at", { ascending: true }),
+      .order("created_at", { ascending: true })
   ]);
 
   if (posterRes.error || !posterRes.data) return null;
@@ -139,17 +175,14 @@ async function fetchPosterDetail(id: string) {
       : Promise.resolve({ data: [] as CategoryRow[] }),
     regionIds.length
       ? supabase.from("regions").select("id, name, full_name, level").in("id", regionIds)
-      : Promise.resolve({ data: [] as RegionRow[] }),
+      : Promise.resolve({ data: [] as RegionRow[] })
   ]);
 
   const categories = (categoryRes.data ?? []) as CategoryRow[];
   const regions = (regionRes.data ?? []) as RegionRow[];
   const categoryMap = Object.fromEntries(categories.map((category) => [category.id, category.name]));
   const regionMap = Object.fromEntries(
-    regions.map((region) => [
-      region.id,
-      region.level === "sigungu" ? region.full_name || region.name : region.name,
-    ])
+    regions.map((region) => [region.id, region.level === "sigungu" ? region.full_name || region.name : region.name])
   );
   const images = [...((imageRes.data ?? []) as ImageRow[])].sort((a, b) => {
     if (a.image_type === "thumbnail" && b.image_type !== "thumbnail") return -1;
@@ -166,14 +199,14 @@ async function fetchPosterDetail(id: string) {
     regionId,
     categoryIds,
     regionIds,
-    categoryName: categoryId ? categoryMap[categoryId] ?? null : null,
-    regionName: regionId ? regionMap[regionId] ?? null : null,
-    images: images.map((image) => image.storage_path).filter((path): path is string => Boolean(path)),
+    categoryName: categoryId ? (categoryMap[categoryId] ?? null) : null,
+    regionName: regionId ? (regionMap[regionId] ?? null) : null,
+    images: images.map((image) => image.storage_path).filter((path): path is string => Boolean(path))
   };
 
   return {
     poster: enrichedPoster,
-    links: ((linkRes.data ?? []) as PosterDetailLink[]).filter((link) => Boolean(link.url)),
+    links: ((linkRes.data ?? []) as PosterDetailLink[]).filter((link) => Boolean(link.url))
   };
 }
 
@@ -198,15 +231,15 @@ function buildPosterStructuredData(poster: PosterDetailPoster, links: PosterDeta
       ? {
           publisher: {
             "@type": "Organization",
-            name: organizationName,
-          },
+            name: organizationName
+          }
         }
       : {}),
     ...(poster.created_at ? { datePublished: poster.created_at } : {}),
     ...(poster.updated_at ? { dateModified: poster.updated_at } : {}),
     ...(imageUrls.length > 0 ? { image: imageUrls } : {}),
     ...(primaryLink?.url ? { sameAs: [primaryLink.url] } : {}),
-    about: [poster.categoryName, poster.regionName].filter(Boolean),
+    about: [poster.categoryName, poster.regionName].filter(Boolean)
   };
 }
 
@@ -215,13 +248,14 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
 
   if (!detail) {
     return {
-      title: "공고를 찾을 수 없습니다",
+      title: "공고를 찾을 수 없습니다"
     };
   }
 
   const { poster, links } = detail;
   const organizationName = getPosterDisplayOrgName(poster);
-  const description = plainText(poster.summary_short || poster.summary_long).slice(0, 155) ||
+  const description =
+    plainText(poster.summary_short || poster.summary_long).slice(0, 155) ||
     `${organizationName || "공공기관"} 공고를 PosterLink에서 확인하세요.`;
   const imageUrls = resolvePosterImageGallery(poster.images ?? [], poster.thumbnail_url, poster.source_key);
   const primaryLink = links.find((link) => link.is_primary) || links[0] || null;
@@ -230,22 +264,22 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
     title: `${poster.title} | ${organizationName || "공공 공고"}`,
     description,
     alternates: {
-      canonical: `/posters/${poster.id}`,
+      canonical: `/posters/${poster.id}`
     },
     openGraph: {
       title: `${poster.title} | ${organizationName || "공공 공고"} | PosterLink`,
       description,
       url: `/posters/${poster.id}`,
       type: "article",
-      images: imageUrls.length > 0 ? imageUrls.map((url) => ({ url })) : undefined,
+      images: imageUrls.length > 0 ? imageUrls.map((url) => ({ url })) : undefined
     },
     ...(primaryLink?.url
       ? {
           other: {
-            "posterlink:source_url": primaryLink.url,
-          },
+            "posterlink:source_url": primaryLink.url
+          }
         }
-      : {}),
+      : {})
   };
 }
 
@@ -260,10 +294,7 @@ export default async function PosterDetailPage({ params }: { params: { id: strin
 
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
-      />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
       <PosterDetailClient poster={detail.poster} links={detail.links} />
     </>
   );

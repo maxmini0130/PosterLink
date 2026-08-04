@@ -52,6 +52,7 @@ import {
   resolveCanonicalSource,
   sanitizeKnownShortUrl,
 } from "./source-link-rules.js";
+import { buildStructuredPosterFields } from "./poster-structured-fields.js";
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)?.trim();
 const SUPABASE_KEY = (process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)?.trim();
@@ -95,6 +96,41 @@ const supabase = createConfiguredSupabase();
 
 const POSTER_IMAGE_BUCKET = process.env.POSTER_IMAGE_BUCKET?.trim() || "poster-originals";
 const POSTER_DUPLICATE_LOOKUP_LIMIT = Number(process.env.POSTER_DUPLICATE_LOOKUP_LIMIT ?? "5000");
+const STRUCTURED_POSTER_FIELDS = new Set([
+  "organizer_name",
+  "application_organization_name",
+  "deadline_type",
+  "event_start_at",
+  "event_end_at",
+  "eligibility_summary",
+  "target_age_min",
+  "target_age_max",
+  "participation_fee",
+  "benefits_summary",
+  "recruitment_count",
+  "application_method",
+  "required_documents",
+  "contact_info",
+  "event_location",
+  "verified_at",
+  "verification_status",
+  "data_confidence",
+]);
+
+function isMissingStructuredPosterColumnError(error) {
+  const message = String(error?.message ?? "");
+  return (
+    error?.code === "42703" ||
+    error?.code === "PGRST204" ||
+    /organizer_name|deadline_type|verification_status/.test(message)
+  );
+}
+
+function withoutStructuredPosterFields(record) {
+  return Object.fromEntries(
+    Object.entries(record).filter(([key]) => !STRUCTURED_POSTER_FIELDS.has(key))
+  );
+}
 
 function removeInvalidSurrogates(value) {
   return String(value ?? "")
@@ -1996,18 +2032,24 @@ async function uploadToSupabase(filePath) {
     const summaryLong = readableInfo.summaryLong || posterImageInsight?.posterTextSummary || null;
     const posterFieldVerification = mergeReadableNoticeIntoFieldVerification(fieldVerification, postWithStoredImages, readableInfo);
     const embedding = await embedPosterText({ title: readableInfo.title, summaryShort, summaryLong });
+    const structuredFields = buildStructuredPosterFields({
+      fieldVerification: posterFieldVerification,
+      readableFacts: readableInfo.facts,
+      applicationEndAt: finalDeadline,
+      sourceText: `${post.title ?? ""}\n${post.content ?? ""}`,
+      fallbackOrganizerName: verifiedOrgName,
+    });
+    const sourceOrgName = posterFieldVerification?.organization?.sourceOrgName || post.site || null;
 
     const posterRecord = sanitizeForPostgrest({
       title: readableInfo.title,
-      source_org_name: resolveSourceOrgName(post.title, verifiedOrgName) || null,
+      source_org_name: sourceOrgName,
       summary_short: summaryShort,
       summary_long: summaryLong,
       poster_status: "review",         // 관리자 검수 대기
       source_key: sourceKey,           // 중복 방지 키
       created_by: CRAWLER_USER_ID,     // 크롤러 봇 계정 (null 가능)
-      application_end_at: finalDeadline
-        ? (() => { try { return new Date(finalDeadline).toISOString(); } catch { return null; } })()
-        : null,
+      ...structuredFields,
       thumbnail_url: storedImages[0] ?? null,
       field_verification: posterFieldVerification,
       embedding: embeddingToPgVector(embedding),
@@ -2021,12 +2063,25 @@ async function uploadToSupabase(filePath) {
     }
 
     const sourceKeyCandidates = [...new Set([sourceKey, sourceUrl].filter(Boolean))];
-    const { data: existingPoster, error: existingErr } = await supabase
+    let existingLookup = await supabase
       .from("posters")
-      .select("id, poster_status, title, summary_short, summary_long, thumbnail_url, source_key, embedding, field_verification, application_end_at")
+      .select(
+        "id, poster_status, title, summary_short, summary_long, thumbnail_url, source_key, embedding, field_verification, application_start_at, application_end_at, organizer_name, application_organization_name, deadline_type, eligibility_summary, benefits_summary, application_method, contact_info, event_location, verification_status, data_confidence"
+      )
       .in("source_key", sourceKeyCandidates)
       .limit(1)
       .maybeSingle();
+    let supportsStructuredPosterFields = true;
+    if (isMissingStructuredPosterColumnError(existingLookup.error)) {
+      supportsStructuredPosterFields = false;
+      existingLookup = await supabase
+        .from("posters")
+        .select("id, poster_status, title, summary_short, summary_long, thumbnail_url, source_key, embedding, field_verification, application_end_at")
+        .in("source_key", sourceKeyCandidates)
+        .limit(1)
+        .maybeSingle();
+    }
+    const { data: existingPoster, error: existingErr } = existingLookup;
 
     if (existingErr) {
       fail++;
@@ -2070,6 +2125,36 @@ async function uploadToSupabase(filePath) {
       if (!existingPoster.application_end_at && posterRecord.application_end_at) {
         updates.application_end_at = posterRecord.application_end_at;
       }
+      if (supportsStructuredPosterFields) {
+        for (const field of [
+          "application_start_at",
+          "organizer_name",
+          "application_organization_name",
+          "eligibility_summary",
+          "benefits_summary",
+          "application_method",
+          "contact_info",
+          "event_location",
+          "data_confidence",
+        ]) {
+          if (existingPoster[field] == null && posterRecord[field] != null) {
+            updates[field] = posterRecord[field];
+          }
+        }
+        if (
+          (!existingPoster.deadline_type || existingPoster.deadline_type === "unknown") &&
+          posterRecord.deadline_type &&
+          posterRecord.deadline_type !== "unknown"
+        ) {
+          updates.deadline_type = posterRecord.deadline_type;
+        }
+        if (
+          (!existingPoster.verification_status || existingPoster.verification_status === "unverified") &&
+          posterRecord.verification_status === "needs_review"
+        ) {
+          updates.verification_status = "needs_review";
+        }
+      }
       const hasReviewIssues = (verification) => (
         ["dateIssues", "classificationIssues", "qualityIssues", "duplicateIssues"]
           .some((key) => Array.isArray(verification?.[key]) && verification[key].length > 0)
@@ -2089,7 +2174,8 @@ async function uploadToSupabase(filePath) {
         updates.field_verification = posterRecord.field_verification;
       }
       if (Object.keys(updates).length > 0) {
-        await supabase.from("posters").update(updates).eq("id", existingPoster.id);
+        const { error: updateError } = await supabase.from("posters").update(updates).eq("id", existingPoster.id);
+        if (updateError) throw updateError;
       }
       await syncPosterImages(existingPoster.id, postWithStoredImages, sourceUrl);
       await assignPosterCategories(existingPoster.id, post, categoryMap, classification);
@@ -2100,11 +2186,16 @@ async function uploadToSupabase(filePath) {
       continue;
     }
 
-    const { data: poster, error: posterErr } = await supabase
-      .from("posters")
-      .insert(posterRecord)
-      .select("id")
-      .single();
+    let posterInsert = await supabase.from("posters").insert(posterRecord).select("id").single();
+    if (isMissingStructuredPosterColumnError(posterInsert.error)) {
+      console.warn("\n  구조화 공고 migration 미적용: 기존 컬럼 형식으로 저장합니다.");
+      posterInsert = await supabase
+        .from("posters")
+        .insert(withoutStructuredPosterFields(posterRecord))
+        .select("id")
+        .single();
+    }
+    const { data: poster, error: posterErr } = posterInsert;
 
     if (posterErr || !poster?.id) {
       fail++;

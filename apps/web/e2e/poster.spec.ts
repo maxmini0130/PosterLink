@@ -110,8 +110,8 @@ test.describe("포스터 목록 - 페이지네이션", () => {
   });
 });
 
-test.describe("포스터 상세 - 링크 복사", () => {
-  test("링크 복사 버튼 표시", async ({ page }) => {
+test.describe("포스터 상세 - 공유", () => {
+  test("공유 버튼 표시", async ({ page }) => {
     await page.goto("/posters");
     await page.waitForLoadState("networkidle");
 
@@ -122,8 +122,8 @@ test.describe("포스터 상세 - 링크 복사", () => {
     await page.goto(href!);
     await page.waitForLoadState("networkidle");
 
-    const copyBtn = page.locator("button[title='링크 복사']").first();
-    await expect(copyBtn).toBeVisible();
+    const shareBtn = page.locator("button[title='공유']").first();
+    await expect(shareBtn).toBeVisible();
   });
 });
 
