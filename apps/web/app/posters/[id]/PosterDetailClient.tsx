@@ -13,6 +13,8 @@ import {
   formatPosterDateTime,
   getPosterApplicationState
 } from "../../../lib/posterApplication";
+import { buildVerifiedPosterCalendar } from "../../../lib/posterCalendar";
+import { getVerifiedPosterCalendarSource } from "../../../lib/posterStructuredTrust";
 import { resolvePosterImageGallery } from "../../../lib/posterImage";
 import { Footer } from "../../components/Footer";
 import { CalendarPlus, ChevronLeft, ChevronRight, Eye, Heart, Share2, X } from "lucide-react";
@@ -166,47 +168,14 @@ function verificationStatusLabel(status?: string | null) {
   }
 }
 
-function escapeCalendarText(value: string) {
-  return value.replace(/([,;\\])/g, "\\$1").replace(/\n/g, "\\n");
-}
-
-function toCalendarDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date
-    .toISOString()
-    .replace(/[-:]/g, "")
-    .replace(/\.\d{3}Z$/, "Z");
-}
-
 function downloadPosterCalendar(poster: PosterDetailPoster, link?: string | null) {
-  const startValue = poster.event_start_at || poster.application_end_at;
-  if (!startValue) return false;
-  const start = toCalendarDate(startValue);
-  if (!start) return false;
-  const fallbackEnd = new Date(new Date(startValue).getTime() + 60 * 60 * 1000).toISOString();
-  const end = toCalendarDate(poster.event_end_at || fallbackEnd);
-  if (!end) return false;
+  const calendar = buildVerifiedPosterCalendar(poster, link);
+  if (!calendar) return false;
 
-  const purpose = poster.event_start_at ? poster.title : `${poster.title} 신청 마감`;
-  const calendar = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//PosterLink//Public Opportunity//KO",
-    "BEGIN:VEVENT",
-    `UID:${poster.id}@posterlink.kr`,
-    `DTSTAMP:${toCalendarDate(new Date().toISOString())}`,
-    `DTSTART:${start}`,
-    `DTEND:${end}`,
-    `SUMMARY:${escapeCalendarText(purpose)}`,
-    ...(link ? [`URL:${link}`, `DESCRIPTION:${escapeCalendarText(`공식 공고: ${link}`)}`] : []),
-    "END:VEVENT",
-    "END:VCALENDAR"
-  ].join("\r\n");
-  const url = URL.createObjectURL(new Blob([calendar], { type: "text/calendar;charset=utf-8" }));
+  const url = URL.createObjectURL(new Blob([calendar.content], { type: "text/calendar;charset=utf-8" }));
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `posterlink-${poster.id}.ics`;
+  anchor.download = calendar.filename;
   anchor.click();
   URL.revokeObjectURL(url);
   return true;
@@ -604,6 +573,7 @@ export function PosterDetailClient({
   const sourceLink = links.find((link) => link.link_type === "official_notice") || primaryLink;
   const primaryActionLabel = primaryLink ? getLinkActionLabel(primaryLink) : "공식 공고 확인";
   const referenceLinks = links.filter((link) => link.id !== primaryLink?.id);
+  const canSaveCalendar = getVerifiedPosterCalendarSource(poster) !== null;
   const summaryLines = formatSummaryLines(poster.summary_long || poster.summary_short);
   const applicationPeriodLabel = formatApplicationPeriod({
     applicationStartAt: poster.application_start_at,
@@ -872,17 +842,19 @@ export function PosterDetailClient({
               />
             </button>
 
-            <button
-              onClick={() => {
-                const saved = downloadPosterCalendar(poster, primaryLink?.url);
-                if (saved) toast.success("캘린더 파일을 만들었습니다.");
-                else toast.error("저장할 일정 정보가 없습니다.");
-              }}
-              className="w-14 h-14 flex items-center justify-center border border-gray-100 bg-white rounded-2xl transition-all shadow-sm hover:bg-gray-50"
-              title="캘린더 저장"
-            >
-              <CalendarPlus size={20} className="text-gray-500" />
-            </button>
+            {canSaveCalendar && (
+              <button
+                onClick={() => {
+                  const saved = downloadPosterCalendar(poster, primaryLink?.url);
+                  if (saved) toast.success("캘린더 파일을 만들었습니다.");
+                  else toast.error("검증된 일정 정보를 다시 확인해 주세요.");
+                }}
+                className="w-14 h-14 flex items-center justify-center border border-gray-100 bg-white rounded-2xl transition-all shadow-sm hover:bg-gray-50"
+                title="검증된 일정 캘린더 저장"
+              >
+                <CalendarPlus size={20} className="text-gray-500" />
+              </button>
+            )}
 
             <button
               onClick={async () => {

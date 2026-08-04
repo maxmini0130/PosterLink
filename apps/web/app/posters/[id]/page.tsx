@@ -4,6 +4,8 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { getAppOrigin } from "../../../lib/siteUrl";
 import { resolvePosterImageGallery } from "../../../lib/posterImage";
+import { hasVerifiedPosterStructuredData } from "../../../lib/posterStructuredTrust";
+import { buildPosterStructuredSeoData } from "../../../lib/posterStructuredSeo";
 import { PosterDetailClient, type PosterDetailLink, type PosterDetailPoster } from "./PosterDetailClient";
 
 export const dynamic = "force-dynamic";
@@ -121,15 +123,10 @@ function normalizeOrgDisplayValue(value: unknown) {
     .trim();
 }
 
-function getPosterDisplayOrgName(poster: Pick<PosterDetailPoster, "source_org_name" | "field_verification">) {
-  if ("organizer_name" in poster) {
-    const organizerName = normalizeOrgDisplayValue((poster as PosterDetailPoster).organizer_name);
+function getPosterDisplayOrgName(poster: PosterDetailPoster) {
+  if (hasVerifiedPosterStructuredData(poster)) {
+    const organizerName = normalizeOrgDisplayValue(poster.organizer_name);
     if (organizerName) return organizerName;
-  }
-  const organization = poster.field_verification?.organization;
-  if (organization && typeof organization === "object") {
-    const displayOrgName = normalizeOrgDisplayValue((organization as Record<string, any>).displayOrgName);
-    if (displayOrgName) return displayOrgName;
   }
   return poster.source_org_name || null;
 }
@@ -215,32 +212,11 @@ function buildPosterStructuredData(poster: PosterDetailPoster, links: PosterDeta
   const pageUrl = `${appOrigin}/posters/${poster.id}`;
   const imageUrls = resolvePosterImageGallery(poster.images ?? [], poster.thumbnail_url, poster.source_key);
   const primaryLink = links.find((link) => link.is_primary) || links[0] || null;
-  const description = plainText(poster.summary_short || poster.summary_long).slice(0, 300);
-
-  const organizationName = getPosterDisplayOrgName(poster);
-
-  return {
-    "@context": "https://schema.org",
-    "@type": "Article",
-    headline: poster.title,
-    description,
-    url: pageUrl,
-    mainEntityOfPage: pageUrl,
-    inLanguage: "ko-KR",
-    ...(organizationName
-      ? {
-          publisher: {
-            "@type": "Organization",
-            name: organizationName
-          }
-        }
-      : {}),
-    ...(poster.created_at ? { datePublished: poster.created_at } : {}),
-    ...(poster.updated_at ? { dateModified: poster.updated_at } : {}),
-    ...(imageUrls.length > 0 ? { image: imageUrls } : {}),
-    ...(primaryLink?.url ? { sameAs: [primaryLink.url] } : {}),
-    about: [poster.categoryName, poster.regionName].filter(Boolean)
-  };
+  return buildPosterStructuredSeoData(poster, {
+    pageUrl,
+    imageUrls,
+    primaryLinkUrl: primaryLink?.url,
+  });
 }
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {

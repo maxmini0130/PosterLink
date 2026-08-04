@@ -22,6 +22,16 @@ type PerformanceReport = {
     clickThroughRate: number;
     saveRate: number;
   };
+  structured: {
+    verified: number;
+    needsReview: number;
+    unverified: number;
+    rejected: number;
+    verificationMissingTimestamp: number;
+    seoReady: number;
+    calendarReady: number;
+    deadlineNotificationReady: number;
+  };
   insights: string[];
   aiGenerated: boolean;
   topPosters: Array<{
@@ -168,6 +178,35 @@ export default function OperatorDashboardPage() {
                   <p className="mt-1 text-[11px] font-black uppercase tracking-wider text-gray-400">{card.label}</p>
                 </div>
               ))}
+            </div>
+
+            <div className="mt-6 border-y border-gray-100 py-5">
+              <div className="mb-4 flex items-center justify-between gap-4">
+                <h3 className="text-xs font-black text-gray-900">구조화 데이터 신뢰 현황</h3>
+                <span className="text-[11px] font-bold text-gray-400">사람 검증 완료 데이터만 기능에 사용</span>
+              </div>
+              <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-5">
+                <div>
+                  <dt className="text-[11px] font-bold text-gray-400">검증 완료</dt>
+                  <dd className="mt-1 text-xl font-black text-emerald-600">{report.structured.verified.toLocaleString()}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] font-bold text-gray-400">검토 대기</dt>
+                  <dd className="mt-1 text-xl font-black text-amber-600">{report.structured.needsReview.toLocaleString()}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] font-bold text-gray-400">SEO 준비</dt>
+                  <dd className="mt-1 text-xl font-black text-gray-900">{report.structured.seoReady.toLocaleString()}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] font-bold text-gray-400">캘린더 준비</dt>
+                  <dd className="mt-1 text-xl font-black text-gray-900">{report.structured.calendarReady.toLocaleString()}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] font-bold text-gray-400">마감 알림 준비</dt>
+                  <dd className="mt-1 text-xl font-black text-gray-900">{report.structured.deadlineNotificationReady.toLocaleString()}</dd>
+                </div>
+              </dl>
             </div>
 
             <div className="mt-6 rounded-2xl border border-blue-100 bg-blue-50/40 p-5">

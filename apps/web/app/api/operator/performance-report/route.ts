@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "../../../../lib/supabase-server";
+import { getPosterStructuredReadiness } from "../../../../lib/posterStructuredTrust";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,6 +19,19 @@ type PosterRow = {
   poster_status: string | null;
   created_at: string | null;
   application_end_at: string | null;
+  deadline_type: string | null;
+  event_start_at: string | null;
+  event_end_at: string | null;
+  organizer_name: string | null;
+  application_organization_name: string | null;
+  eligibility_summary: string | null;
+  benefits_summary: string | null;
+  application_method: string | null;
+  required_documents: string | null;
+  contact_info: string | null;
+  event_location: string | null;
+  verification_status: string | null;
+  verified_at: string | null;
 };
 
 function createAdminClient() {
@@ -71,13 +85,37 @@ function createCsvResponse(rows: Array<{
   engagementScore: number;
   clickThroughRate: number;
   saveRate: number;
+  verificationStatus: string;
+  structuredVerified: boolean;
+  seoReady: boolean;
+  calendarReady: boolean;
+  deadlineNotificationReady: boolean;
 }>, days: number) {
-  const header = ["title", "status", "views", "clicks", "favorites", "engagement_score", "click_through_rate", "save_rate"];
+  const header = [
+    "title",
+    "status",
+    "verification_status",
+    "structured_verified",
+    "seo_ready",
+    "calendar_ready",
+    "deadline_notification_ready",
+    "views",
+    "clicks",
+    "favorites",
+    "engagement_score",
+    "click_through_rate",
+    "save_rate",
+  ];
   const csv = [
     header.join(","),
     ...rows.map((row) => [
       row.title,
       row.status,
+      row.verificationStatus,
+      row.structuredVerified,
+      row.seoReady,
+      row.calendarReady,
+      row.deadlineNotificationReady,
       row.views,
       row.clicks,
       row.favorites,
@@ -107,10 +145,12 @@ function buildFallbackInsights({
   totals,
   topPosters,
   rangeDays,
+  structured,
 }: {
   totals: { views: number; clicks: number; favorites: number; published: number };
   topPosters: Array<{ title: string; views: number; clicks: number; favorites: number; score: number }>;
   rangeDays: number;
+  structured: { verified: number; needsReview: number; unverified: number };
 }) {
   const top = topPosters[0];
   const ctr = totals.views > 0 ? Math.round((totals.clicks / totals.views) * 1000) / 10 : 0;
@@ -121,6 +161,11 @@ function buildFallbackInsights({
   ];
   if (top) {
     lines.push(`가장 반응이 높은 공고는 "${top.title}"이며, 후속 홍보 소재로 재활용하기 좋습니다.`);
+  }
+  if (structured.verified === 0) {
+    lines.push(`사람 검증을 마친 구조화 공고가 없어 SEO 확장, 캘린더, 마감 알림에는 아직 구조화 값을 사용하지 않습니다.`);
+  } else {
+    lines.push(`사람 검증 완료 ${structured.verified}건만 SEO 확장, 캘린더, 마감 알림의 신뢰 데이터로 사용합니다.`);
   }
   return lines;
 }
@@ -200,7 +245,7 @@ export async function GET(request: NextRequest) {
 
   const { data: posters, error: posterError } = await admin
     .from("posters")
-    .select("id,title,poster_status,created_at,application_end_at")
+    .select("id,title,poster_status,created_at,application_end_at,deadline_type,event_start_at,event_end_at,organizer_name,application_organization_name,eligibility_summary,benefits_summary,application_method,required_documents,contact_info,event_location,verification_status,verified_at")
     .eq("created_by", user.id)
     .order("created_at", { ascending: false })
     .limit(MAX_POSTERS);
@@ -217,6 +262,16 @@ export async function GET(request: NextRequest) {
       generatedAt: new Date().toISOString(),
       totals: { posters: 0, published: 0, review: 0, rejected: 0, views: 0, clicks: 0, favorites: 0, engagementScore: 0 },
       rates: { clickThroughRate: 0, saveRate: 0 },
+      structured: {
+        verified: 0,
+        needsReview: 0,
+        unverified: 0,
+        rejected: 0,
+        verificationMissingTimestamp: 0,
+        seoReady: 0,
+        calendarReady: 0,
+        deadlineNotificationReady: 0,
+      },
       insights: [`최근 ${days}일 기준으로 분석할 운영자 등록 공고가 없습니다.`],
       aiGenerated: false,
       topPosters: [],
@@ -245,6 +300,7 @@ export async function GET(request: NextRequest) {
     const views = viewCounts[poster.id] ?? 0;
     const clicks = clickCounts[poster.id] ?? 0;
     const favorites = favoriteCounts[poster.id] ?? 0;
+    const readiness = getPosterStructuredReadiness(poster);
     return {
       id: poster.id,
       title: poster.title ?? "제목 없음",
@@ -257,6 +313,11 @@ export async function GET(request: NextRequest) {
       engagementScore: views + clicks * 3 + favorites * 5,
       clickThroughRate: views > 0 ? clicks / views : 0,
       saveRate: views > 0 ? favorites / views : 0,
+      verificationStatus: poster.verification_status ?? "unverified",
+      structuredVerified: readiness.verified,
+      seoReady: readiness.seoReady,
+      calendarReady: readiness.calendarReady,
+      deadlineNotificationReady: readiness.deadlineNotificationReady,
     };
   });
 
@@ -274,6 +335,18 @@ export async function GET(request: NextRequest) {
     clickThroughRate: totals.views > 0 ? totals.clicks / totals.views : 0,
     saveRate: totals.views > 0 ? totals.favorites / totals.views : 0,
   };
+  const structured = {
+    verified: rows.filter((row) => row.structuredVerified).length,
+    needsReview: rows.filter((row) => row.verificationStatus === "needs_review").length,
+    unverified: rows.filter((row) => row.verificationStatus === "unverified").length,
+    rejected: rows.filter((row) => row.verificationStatus === "rejected").length,
+    verificationMissingTimestamp: rows.filter(
+      (row) => row.verificationStatus === "verified" && !row.structuredVerified,
+    ).length,
+    seoReady: rows.filter((row) => row.seoReady).length,
+    calendarReady: rows.filter((row) => row.calendarReady).length,
+    deadlineNotificationReady: rows.filter((row) => row.deadlineNotificationReady).length,
+  };
   const topPosters = [...rows].sort((a, b) => b.engagementScore - a.engagementScore).slice(0, 10);
   const fallback = buildFallbackInsights({ totals, topPosters: topPosters.map((row) => ({
     title: row.title,
@@ -281,8 +354,11 @@ export async function GET(request: NextRequest) {
     clicks: row.clicks,
     favorites: row.favorites,
     score: row.engagementScore,
-  })), rangeDays: days });
-  const { insights, aiGenerated } = await generateAiInsights({ rangeDays: days, totals, rates, topPosters }, fallback);
+  })), rangeDays: days, structured });
+  const { insights, aiGenerated } = await generateAiInsights(
+    { rangeDays: days, totals, rates, structured, topPosters },
+    fallback,
+  );
 
   if (format === "csv") {
     return createCsvResponse(rows, days);
@@ -293,6 +369,7 @@ export async function GET(request: NextRequest) {
     generatedAt: new Date().toISOString(),
     totals,
     rates,
+    structured,
     insights,
     aiGenerated,
     topPosters,
