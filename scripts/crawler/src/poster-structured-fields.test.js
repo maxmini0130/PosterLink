@@ -59,3 +59,50 @@ test("structured fields preserve organization and readable notice facts", () => 
   assert.equal(fields.event_location, "마포구청");
   assert.equal(fields.data_confidence, 0.91);
 });
+
+test("unsafe readable facts never reach structured poster columns", () => {
+  const fields = buildStructuredPosterFields({
+    fieldVerification: {
+      confidence: 0.95,
+      readableNotice: {
+        facts: {
+          target: "서울 청년 ● 모집인원: 20명",
+          application: "온라인 신청 https://www",
+          contact: "02-1234-5678 4. 진행일정: 2026.9.1",
+          location: "마포구청 ● 문의처: 02-0000-0000",
+        },
+      },
+    },
+  });
+
+  assert.equal(fields.eligibility_summary, "서울 청년");
+  assert.equal(fields.application_method, null);
+  assert.equal(fields.contact_info, "02-1234-5678");
+  assert.equal(fields.event_location, "마포구청");
+});
+
+test("LLM-filled facts remain review suggestions instead of public fields", () => {
+  const fields = buildStructuredPosterFields({
+    fieldVerification: {
+      confidence: 0.88,
+      readableNotice: {
+        facts: {
+          period: "2026. 8. 1. ~ 8. 31.",
+          target: "서울 거주 청년",
+          content: "친환경 생활 실천",
+          application: "텀블러를 지참해 참여",
+          contact: "02-1234-5678",
+        },
+        factsLlmMeta: {
+          filledByLlm: ["period", "content", "application"],
+        },
+      },
+    },
+  });
+
+  assert.equal(fields.deadline_type, "unknown");
+  assert.equal(fields.eligibility_summary, "서울 거주 청년");
+  assert.equal(fields.benefits_summary, null);
+  assert.equal(fields.application_method, null);
+  assert.equal(fields.contact_info, "02-1234-5678");
+});

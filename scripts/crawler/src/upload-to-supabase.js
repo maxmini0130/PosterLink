@@ -47,6 +47,11 @@ import { resolveImageContentType } from "./image-content-type.js";
 import { computeImagePhash, selectRepresentativeImage } from "./image-phash.js";
 import { extractNoticeFactsWithLlm } from "./notice-facts-extractor.js";
 import {
+  restoreNoticeSectionBreaks,
+  sanitizeNoticeFacts,
+  sanitizeNoticeFactValue,
+} from "./notice-fact-normalizer.js";
+import {
   inferPosterLinkType,
   isLikelyApplicationLink,
   resolveCanonicalSource,
@@ -609,7 +614,7 @@ function removeTrailingFormUiNoise(value) {
 }
 
 function restoreSemanticLineBreaks(value) {
-  return removeTrailingFormUiNoise(value)
+  const restored = removeTrailingFormUiNoise(value)
     .replace(
       new RegExp(`\\s*📌\\s*(${STRUCTURED_MARKER_LABEL_PATTERN.source})\\s*(?:☑️|✅)?\\s*`, "giu"),
       "\n$1: ",
@@ -619,6 +624,7 @@ function restoreSemanticLineBreaks(value) {
     .replace(/\s*※\s*/gu, "\n참고: ")
     .replace(/\s*([■□◆▶])\s*/gu, "\n$1 ")
     .replace(/([.!?。])(?=[📌🚨❤️])/gu, "$1\n");
+  return restoreNoticeSectionBreaks(restored);
 }
 
 function splitReadableLines(value) {
@@ -767,7 +773,7 @@ function pickField(text, labels) {
   for (const label of labels) {
     // 줄 시작 라벨: 라벨 뒤에 콜론 또는 공백(실제 구분자)이 있어야 값으로 인정한다.
     // "내용은 ...", "대상으로 ..." 처럼 라벨이 단어 일부인 경우를 배제한다.
-    const linePattern = new RegExp(`^[■□◆▶]?\\s*${escapeRegExp(label)}(?:\\s*[:：]\\s*|\\s+)(.{4,140})$`, "iu");
+    const linePattern = new RegExp(`^(?:\\d{1,2}\\s*[.)]\\s*)?[●○■□◆◇▶▷▸▹▪▫]?\\s*${escapeRegExp(label)}(?:\\s*[:：]\\s*|\\s+)(.{4,140})$`, "iu");
     for (const line of lines) {
       const lineMatch = line.match(linePattern);
       if (isUsefulValue(lineMatch?.[1])) return lineMatch[1].replace(/\s+/g, " ").trim();
@@ -840,13 +846,23 @@ export function buildReadableNoticeInfo(post = {}) {
 
   const source = `${title}\n${content}`;
   const parts = [];
-  const period = pickDateRange(source)
-    ?? pickField(source, ["신청기간", "접수기간", "모집기간", "운영기간", "교육기간", "기간"]);
-  const target = pickField(source, ["교육대상", "지원대상", "모집대상", "참여대상", "신청대상", "대상"]);
-  const benefit = pickField(source, ["내용", "지원내용", "주요내용", "사업내용", "교육내용", "프로그램", "모집내용"]);
-  const application = pickField(source, ["신청방법", "접수방법", "신청", "접수", "지원방법"]);
-  const contact = pickField(source, ["문의처", "연락처", "문의"]);
-  const location = pickField(source, ["장소", "교육장소", "행사장소", "진행장소", "주소"]);
+  const period = [
+    pickDateRange(source),
+    pickField(source, ["신청기간", "접수기간", "모집기간", "운영기간", "교육기간", "기간"]),
+  ].map((value) => sanitizeNoticeFactValue(value, "period")).find(Boolean) ?? null;
+  const facts = sanitizeNoticeFacts({
+    period,
+    target: pickField(source, ["교육대상", "지원대상", "모집대상", "참여대상", "신청대상", "지원자격", "신청자격", "모집자격", "대상"]),
+    content: pickField(source, ["지원내용", "주요내용", "사업내용", "교육내용", "활동내용", "진행내용", "프로그램내용", "참여혜택", "내용", "프로그램", "모집내용"]),
+    application: pickField(source, ["신청방법", "접수방법", "지원방법", "모집방법", "신청", "접수"]),
+    contact: pickField(source, ["문의방법", "문의처", "연락처", "문의"]),
+    location: pickField(source, ["교육장소", "행사장소", "진행장소", "활동장소", "접수장소", "장소", "주소"]),
+  });
+  const target = facts.target ?? null;
+  const benefit = facts.content ?? null;
+  const application = facts.application ?? null;
+  const contact = facts.contact ?? null;
+  const location = facts.location ?? null;
 
   const acceptedFactValues = [];
   for (const [label, value] of [
@@ -861,15 +877,6 @@ export function buildReadableNoticeInfo(post = {}) {
     acceptedFactValues.push(value);
     parts.push(`${label}: ${compactFactValue(value)}`);
   }
-
-  const facts = Object.fromEntries(Object.entries({
-    target,
-    period,
-    content: benefit,
-    application,
-    location,
-    contact,
-  }).filter(([, value]) => Boolean(value)));
 
   if (parts.length > 0) {
     return {

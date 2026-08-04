@@ -1,3 +1,8 @@
+import {
+  sanitizeNoticeFacts,
+  sanitizeNoticeFactValue,
+} from "./notice-fact-normalizer.js";
+
 function asObject(value) {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value
@@ -17,6 +22,28 @@ function firstText(values, limit) {
     if (text) return text;
   }
   return null;
+}
+
+function firstSafeFactText(values, key, limit) {
+  for (const value of values) {
+    const safeValue = sanitizeNoticeFactValue(value, key);
+    const text = compactText(safeValue, limit);
+    if (text) return text;
+  }
+  return null;
+}
+
+function excludeLlmFilledFacts(facts, readableNotice) {
+  const factsLlmMeta = asObject(readableNotice.factsLlmMeta);
+  const filledByLlm = new Set(
+    Array.isArray(factsLlmMeta.filledByLlm)
+      ? factsLlmMeta.filledByLlm.map((key) => String(key))
+      : [],
+  );
+
+  return Object.fromEntries(
+    Object.entries(facts).filter(([key]) => !filledByLlm.has(key)),
+  );
 }
 
 function normalizeIsoDate(value) {
@@ -82,10 +109,15 @@ export function buildStructuredPosterFields({
   const verification = asObject(fieldVerification);
   const organization = asObject(verification.organization);
   const readableNotice = asObject(verification.readableNotice);
-  const facts = {
+  const rawFacts = {
     ...asObject(readableNotice.facts),
     ...asObject(readableFacts),
   };
+  const facts = sanitizeNoticeFacts({
+    ...rawFacts,
+    content: rawFacts.content ?? rawFacts.benefits,
+  });
+  const trustedFacts = excludeLlmFilledFacts(facts, readableNotice);
   const normalizedEndAt = normalizeIsoDate(applicationEndAt);
   const confidence = Number(verification.confidence ?? organization.confidence);
 
@@ -110,19 +142,32 @@ export function buildStructuredPosterFields({
     deadline_type: inferStructuredDeadlineType({
       deadlineType,
       applicationEndAt: normalizedEndAt,
-      periodText: facts.period,
+      periodText: trustedFacts.period,
       sourceText,
     }),
     application_start_at: normalizeIsoDate(applicationStartAt),
     application_end_at: normalizedEndAt,
-    eligibility_summary: firstText([target, facts.target], 2000),
-    benefits_summary: firstText(
-      [supportScale, facts.benefits, facts.content],
+    eligibility_summary: firstSafeFactText(
+      [target, trustedFacts.target],
+      "target",
+      2000,
+    ),
+    benefits_summary: firstSafeFactText(
+      [supportScale, trustedFacts.benefits, trustedFacts.content],
+      "content",
       4000,
     ),
-    application_method: firstText([facts.application], 4000),
-    contact_info: firstText([facts.contact], 1000),
-    event_location: firstText([facts.location], 1000),
+    application_method: firstSafeFactText(
+      [trustedFacts.application],
+      "application",
+      4000,
+    ),
+    contact_info: firstSafeFactText([trustedFacts.contact], "contact", 1000),
+    event_location: firstSafeFactText(
+      [trustedFacts.location],
+      "location",
+      1000,
+    ),
     verification_status: verificationStatus,
     data_confidence: Number.isFinite(confidence)
       ? Math.max(0, Math.min(1, confidence))

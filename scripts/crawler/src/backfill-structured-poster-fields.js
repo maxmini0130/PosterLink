@@ -14,9 +14,9 @@ const REPO_ROOT = path.resolve(__dirname, "../../..");
 const DEFAULT_OUTPUT = "data/results/structured-poster-backfill.json";
 const DEFAULT_MIN_CONFIDENCE = 0.8;
 const STRUCTURED_SELECT =
-  "id,title,source_org_name,summary_short,summary_long,poster_status,application_start_at,application_end_at,field_verification,organizer_name,application_organization_name,deadline_type,eligibility_summary,benefits_summary,application_method,contact_info,event_location,verification_status,data_confidence,created_at";
+  "id,title,source_org_name,source_key,summary_short,summary_long,poster_status,application_start_at,application_end_at,field_verification,organizer_name,application_organization_name,deadline_type,eligibility_summary,benefits_summary,application_method,contact_info,event_location,verification_status,data_confidence,created_at";
 const LEGACY_SELECT =
-  "id,title,source_org_name,summary_short,summary_long,poster_status,application_start_at,application_end_at,field_verification,created_at";
+  "id,title,source_org_name,source_key,summary_short,summary_long,poster_status,application_start_at,application_end_at,field_verification,created_at";
 const STRUCTURED_FIELDS = [
   "organizer_name",
   "application_organization_name",
@@ -172,6 +172,7 @@ function buildPlan(
   return {
     id: row.id,
     title: row.title,
+    source_key: row.source_key,
     poster_status: row.poster_status,
     before: schemaReady
       ? Object.fromEntries(
@@ -185,6 +186,9 @@ function buildPlan(
       has_readable_notice: Boolean(
         row.field_verification?.readableNotice?.facts,
       ),
+      readable_facts: row.field_verification?.readableNotice?.facts ?? null,
+      llm_filled_fields:
+        row.field_verification?.readableNotice?.factsLlmMeta?.filledByLlm ?? [],
       has_review_issues: reviewIssues,
       verified_text_eligible: canBackfillVerifiedText,
     },

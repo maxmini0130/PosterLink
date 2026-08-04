@@ -11,6 +11,11 @@
 import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
+import {
+  NOTICE_FACT_KEYS,
+  sanitizeNoticeFacts,
+  sanitizeNoticeFactValue,
+} from "./notice-fact-normalizer.js";
 
 const CACHE_PATH = process.env.NOTICE_FACTS_CACHE_PATH?.trim() || "data/notice_facts_llm.json";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY?.trim();
@@ -23,10 +28,16 @@ const MAX_CONTEXT_CHARS = Number(process.env.NOTICE_FACTS_CONTEXT_CHARS ?? "4500
 const MIN_REGEX_FACTS_BEFORE_LLM = Number(process.env.NOTICE_FACTS_MIN_REGEX_FIELDS ?? "3");
 const OPENAI_REQUEST_TIMEOUT_MS = Number(process.env.OPENAI_REQUEST_TIMEOUT_MS ?? "45000");
 
-const FACT_KEYS = ["period", "target", "content", "application", "location", "contact"];
+const FACT_KEYS = NOTICE_FACT_KEYS;
 // 필드값의 몇 %가 원문에 실제로 등장해야 "근거 있음"으로 볼지 — LLM의 자기 판단
 // (allFactsGroundedInText)만 믿지 않고, 여기서 독립적으로 재확인한다.
 const GROUNDING_BIGRAM_OVERLAP_THRESHOLD = 0.4;
+
+function completeFactShape(facts = {}) {
+  return Object.fromEntries(
+    FACT_KEYS.map((key) => [key, facts[key] ?? null]),
+  );
+}
 
 function bigrams(text) {
   const compact = text.replace(/\s+/g, "");
@@ -94,9 +105,10 @@ function normalizeText(value, maxLength = 300) {
  * @returns {Promise<{facts: Record<string,string|null>, allFactsGroundedInText: boolean|null, filledByLlm: string[], reason: string, model: string}>}
  */
 export async function extractNoticeFactsWithLlm(source = {}, existingFacts = {}) {
-  const missingKeys = FACT_KEYS.filter((key) => !existingFacts[key]);
+  const safeExistingFacts = sanitizeNoticeFacts(existingFacts);
+  const missingKeys = FACT_KEYS.filter((key) => !safeExistingFacts[key]);
   const filledByRegexCount = FACT_KEYS.length - missingKeys.length;
-  const baseResult = { facts: { ...existingFacts }, allFactsGroundedInText: null, filledByLlm: [], rejectedUngrounded: [], reason: "", model: "none" };
+  const baseResult = { facts: completeFactShape(safeExistingFacts), allFactsGroundedInText: null, filledByLlm: [], rejectedUngrounded: [], reason: "", model: "none" };
 
   // 정규식이 이미 충분히 채웠으면(임계값 이상) 굳이 LLM을 부르지 않는다 — 남은 빈 필드는
   // 대개 본문에 정말 없는 정보(예: 장소가 필요 없는 정책 안내문)이지 추출 실패가 아니다.
@@ -112,8 +124,10 @@ export async function extractNoticeFactsWithLlm(source = {}, existingFacts = {})
   if (!content && !title) return baseResult;
 
   const cache = await loadCache();
-  const key = cacheKey(title, content, existingFacts);
-  if (cache[key]) return cache[key];
+  const key = cacheKey(title, content, safeExistingFacts);
+  if (cache[key]) {
+    return { ...cache[key], facts: completeFactShape(sanitizeNoticeFacts(cache[key].facts)) };
+  }
 
   try {
     const prompt = [
@@ -127,7 +141,7 @@ export async function extractNoticeFactsWithLlm(source = {}, existingFacts = {})
       content,
       "",
       "이미 채워진 필드(그대로 유지):",
-      JSON.stringify(existingFacts),
+      JSON.stringify(safeExistingFacts),
       "",
       "출력 필드: period(모집/신청 기간), target(지원 대상 — 거주지/연령/자격요건),",
       "content(사업/프로그램 내용 요약), application(신청 방법),",
@@ -179,11 +193,11 @@ export async function extractNoticeFactsWithLlm(source = {}, existingFacts = {})
 
     const filledByLlm = [];
     const rejectedUngrounded = [];
-    const facts = { ...existingFacts };
+    const facts = completeFactShape(safeExistingFacts);
     const fullSourceText = `${title}\n${content}`;
     for (const key of FACT_KEYS) {
       if (facts[key]) continue; // 정규식 값이 있으면 절대 덮어쓰지 않는다
-      const value = normalizeText(parsed[key]);
+      const value = sanitizeNoticeFactValue(normalizeText(parsed[key]), key);
       if (!value) continue;
       // LLM의 자가보고(allFactsGroundedInText)만 믿지 않고, 값이 실제로 원문에 등장하는지
       // 문자열 오버랩으로 독립 검증한다 — 통과 못 하면 환각으로 간주해 버린다(null 유지).
@@ -196,7 +210,7 @@ export async function extractNoticeFactsWithLlm(source = {}, existingFacts = {})
     }
 
     const result = {
-      facts,
+      facts: completeFactShape(sanitizeNoticeFacts(facts)),
       allFactsGroundedInText: Boolean(parsed.allFactsGroundedInText) && rejectedUngrounded.length === 0,
       filledByLlm,
       rejectedUngrounded,

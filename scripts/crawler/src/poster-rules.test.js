@@ -347,6 +347,45 @@ test("application period outranks an earlier education period", () => {
   assert.equal(result.facts.period, "2026.6.15.(월) ~ 2026.7.16.(목)");
 });
 
+test("collapsed numbered facts stop before the next labeled section", () => {
+  const result = buildReadableNoticeInfo({
+    title: "여성 재취업 교육생 모집",
+    content: [
+      "1. 목적: 출판에 필요한 디자인 실무 교육",
+      "2. 신청대상: 취업 및 창업을 희망하는 여성 누구나",
+      "3. 신청기간: 2026.7.1~2026.8.21",
+      "4. 진행일정: 2026.9.1~2026.11.27",
+      "5. 진행내용: 디자인 툴 완벽 마스터",
+      "6. 문의처: 02-2186-5823",
+    ].join(" "),
+  });
+
+  assert.equal(result.facts.target, "취업 및 창업을 희망하는 여성 누구나");
+  assert.equal(result.facts.period, "2026.7.1~2026.8.21");
+  assert.equal(result.facts.content, "디자인 툴 완벽 마스터");
+  assert.equal(result.facts.contact, "02-2186-5823");
+  assert.ok(!result.summaryShort.includes("4. 진행일정"));
+});
+
+test("circle bullet facts remain separate and readable", () => {
+  const result = buildReadableNoticeInfo({
+    title: "강남구민의 상 후보자 모집",
+    content: [
+      "● 모집대상 : 5년 이상 강남구 거주 주민",
+      "● 모집인원 : 12개 부문",
+      "● 모집기간 : 2026. 6. 8.(월) ~ 2026. 8. 7.(금)",
+      "● 접수방법 : 전자우편, 우편, 방문 제출",
+      "● 문의방법 : 담당자 02-3423-5198",
+    ].join(" "),
+  });
+
+  assert.equal(result.facts.target, "5년 이상 강남구 거주 주민");
+  assert.equal(result.facts.period, "2026. 6. 8.(월) ~ 2026. 8. 7.(금)");
+  assert.equal(result.facts.application, "전자우편, 우편, 방문 제출");
+  assert.equal(result.facts.contact, "담당자 02-3423-5198");
+  assert.ok(!result.facts.target.includes("모집인원"));
+});
+
 test("attachment failure reasons are standardized", () => {
   assert.equal(
     getAttachmentFailureCode({ kind: "hwp", status: "unsupported", reason: "legacy hwp requires converter" }),
