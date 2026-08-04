@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "../../../../../lib/supabase-server";
+import { sanitizeNoticeFactValue } from "../../../../../../../scripts/crawler/src/notice-fact-normalizer.js";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -159,6 +160,14 @@ function firstCompactText(values: unknown[], limit = 2000) {
   return null;
 }
 
+function firstSafeFactText(values: unknown[], key: string, limit = 2000) {
+  for (const value of values) {
+    const text = sanitizeNoticeFactValue(value, key);
+    if (text) return text.slice(0, limit);
+  }
+  return null;
+}
+
 function normalizeDeadlineType(value: unknown, applicationEndAt: string | null) {
   switch (compactText(value).toLowerCase()) {
     case "고정":
@@ -188,6 +197,14 @@ function getCandidateStructuredFields(
   const organization = asPlainObject(verification.organization);
   const readableNotice = asPlainObject(verification.readableNotice);
   const facts = asPlainObject(readableNotice.facts);
+  const llmMeta = asPlainObject(readableNotice.factsLlmMeta);
+  const llmFilledFields = new Set(
+    Array.isArray(llmMeta.filledByLlm)
+      ? llmMeta.filledByLlm.map((key) => String(key))
+      : []
+  );
+  const trustedFact = (key: string) =>
+    llmFilledFields.has(key) ? null : facts[key];
   const confidence = Number(verification.confidence ?? organization.confidence);
 
   return {
@@ -206,11 +223,30 @@ function getCandidateStructuredFields(
     deadline_type: normalizeDeadlineType(candidate.deadline_type, applicationEndAt),
     application_start_at: applicationStartAt,
     application_end_at: applicationEndAt,
-    eligibility_summary: firstCompactText([candidate.target, facts.target]),
-    benefits_summary: firstCompactText([candidate.support_scale, facts.benefits, facts.content], 4000),
-    application_method: firstCompactText([facts.application], 4000),
-    contact_info: firstCompactText([candidate.contact, facts.contact], 1000),
-    event_location: firstCompactText([facts.location], 1000),
+    eligibility_summary: firstSafeFactText(
+      [candidate.target, trustedFact("target")],
+      "target"
+    ),
+    benefits_summary: firstSafeFactText(
+      [candidate.support_scale, trustedFact("benefits"), trustedFact("content")],
+      "content",
+      4000
+    ),
+    application_method: firstSafeFactText(
+      [trustedFact("application")],
+      "application",
+      4000
+    ),
+    contact_info: firstSafeFactText(
+      [candidate.contact, trustedFact("contact")],
+      "contact",
+      1000
+    ),
+    event_location: firstSafeFactText(
+      [trustedFact("location")],
+      "location",
+      1000
+    ),
     verification_status: "needs_review",
     data_confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : null,
   };

@@ -146,13 +146,6 @@ function getPosterOrgDisplayName(poster: PosterDetailPoster) {
   return poster.organizer_name || getOrganizationVerification(poster)?.displayOrgName || poster.source_org_name || null;
 }
 
-function getReadableNoticeFacts(poster: PosterDetailPoster) {
-  const readableNotice = poster.field_verification?.readableNotice;
-  if (!readableNotice || typeof readableNotice !== "object" || Array.isArray(readableNotice)) return {};
-  const facts = (readableNotice as Record<string, any>).facts;
-  return facts && typeof facts === "object" && !Array.isArray(facts) ? (facts as Record<string, unknown>) : {};
-}
-
 function formatTargetAge(min?: number | null, max?: number | null) {
   if (min != null && max != null) return `만 ${min}세 ~ ${max}세`;
   if (min != null) return `만 ${min}세 이상`;
@@ -640,11 +633,10 @@ export function PosterDetailClient({
           : applicationState.status === "due_today" || applicationState.status === "closing_soon"
             ? "bg-rose-50 text-rose-600 border-rose-100"
             : "bg-emerald-50 text-emerald-700 border-emerald-100";
-  const readableFacts = getReadableNoticeFacts(poster);
   const coreFacts = [
     {
       label: "신청 대상",
-      value: poster.eligibility_summary || normalizeOrgDisplayValue(readableFacts.target) || "공식 공고 확인 필요"
+      value: poster.eligibility_summary || "공식 공고 확인 필요"
     },
     { label: "신청 기간", value: applicationPeriodLabel },
     { label: "대상 지역", value: poster.regionName || "지역 확인 필요" },
@@ -655,11 +647,11 @@ export function PosterDetailClient({
     { label: "비용", value: poster.participation_fee || "기관 문의 필요" },
     {
       label: "혜택",
-      value: poster.benefits_summary || normalizeOrgDisplayValue(readableFacts.content) || "정보 확인 중"
+      value: poster.benefits_summary || "정보 확인 중"
     },
     {
       label: "신청 방법",
-      value: poster.application_method || normalizeOrgDisplayValue(readableFacts.application) || "공식 공고 확인 필요"
+      value: poster.application_method || "공식 공고 확인 필요"
     },
     {
       label: "준비 서류",
