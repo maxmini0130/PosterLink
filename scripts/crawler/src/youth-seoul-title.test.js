@@ -1,7 +1,29 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { inferSpecificTitle } from "./adapters/youth-seoul.js";
+import {
+  inferSpecificTitle,
+  shouldUseExternalNoticeDetail,
+} from "./adapters/youth-seoul.js";
+
+test("application forms are links only, not canonical notice content", () => {
+  assert.equal(
+    shouldUseExternalNoticeDetail({
+      url: "https://forms.gle/example",
+      title: "전체 프로그램 신청",
+      content: "다른 프로그램이 함께 섞인 신청서 본문",
+      images: ["https://example.com/form-header.png"],
+    }),
+    false,
+  );
+  assert.equal(
+    shouldUseExternalNoticeDetail({
+      url: "https://example.org/notices/123",
+      title: "공식 공고",
+    }),
+    true,
+  );
+});
 
 test("generic provider title is enriched from a quoted program name", () => {
   assert.equal(

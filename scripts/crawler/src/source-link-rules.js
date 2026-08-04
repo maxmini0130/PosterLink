@@ -22,6 +22,15 @@ export function isLikelyApplicationLink(value, label = "") {
   try {
     const url = new URL(text);
     if (/^(?:pf|open)\.kakao\.com$/i.test(url.hostname)) return false;
+    if (
+      /(^|\.)google\.com$/i.test(url.hostname)
+      && (
+        /^\/forms\/about\/?$/i.test(url.pathname)
+        || /\/abuse\/?$/i.test(url.pathname)
+      )
+    ) {
+      return false;
+    }
     if (APPLICATION_LABEL_PATTERN.test(String(label ?? ""))) return true;
     if (
       APPLICATION_HOST_PATTERNS.some((pattern) => pattern.test(url.hostname))

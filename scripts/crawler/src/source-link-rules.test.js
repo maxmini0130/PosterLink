@@ -41,6 +41,23 @@ test("notice pages are not mistaken for application forms", () => {
   );
 });
 
+test("Google Forms product and abuse links are not application destinations", () => {
+  assert.equal(
+    isLikelyApplicationLink(
+      "https://www.google.com/forms/about/?utm_source=product",
+      "Forms",
+    ),
+    false,
+  );
+  assert.equal(
+    isLikelyApplicationLink(
+      "https://docs.google.com/forms/d/e/example/abuse",
+      "신고서 제출",
+    ),
+    false,
+  );
+});
+
 test("untyped application links are promoted without changing notice links", () => {
   assert.equal(
     inferPosterLinkType("other", "https://forms.gle/abc123", ""),

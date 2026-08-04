@@ -20,6 +20,11 @@ function isMeaningfulContent(value) {
   return Boolean(text) && !["상세정보", "상세 정보"].includes(text);
 }
 
+export function shouldUseExternalNoticeDetail(detail) {
+  if (!detail?.url) return false;
+  return !isLikelyApplicationLink(detail.url, detail.originalLink?.label);
+}
+
 function extractInfoId(onclick) {
   return onclick?.match(/goView\('([^']+)'\)/)?.[1] ?? null;
 }
@@ -230,6 +235,11 @@ export default {
           viaLinkTitle: "\uCCAD\uB144\uBABD\uB545\uC815\uBCF4\uD1B5 \uACBD\uC720 \uCD9C\uCC98",
         });
     const externalDetail = externalOriginalResult.detail;
+    const externalIsApplication = isLikelyApplicationLink(
+      externalDetail?.url,
+      externalDetail?.originalLink?.label,
+    );
+    const useExternalNoticeDetail = shouldUseExternalNoticeDetail(externalDetail);
 
     const baseContent = isMeaningfulContent(detailText)
       ? detailText
@@ -239,22 +249,20 @@ export default {
           ? IMAGE_ONLY_CONTENT
           : "";
 
-    if (externalDetail?.images?.length) {
+    if (useExternalNoticeDetail && externalDetail?.images?.length) {
       images.unshift(...externalDetail.images.filter((imageUrl) => !images.includes(imageUrl)));
       detailImages.unshift(...externalDetail.images.filter((imageUrl) => !detailImages.includes(imageUrl)));
     }
 
-    if (externalDetail?.attachments?.length) {
+    if (useExternalNoticeDetail && externalDetail?.attachments?.length) {
       attachments.push(...externalDetail.attachments);
     }
 
-    const content = externalDetail?.content && externalDetail.content.length > baseContent.length
+    const content = useExternalNoticeDetail
+      && externalDetail?.content
+      && externalDetail.content.length > baseContent.length
       ? externalDetail.content
       : baseContent;
-    const externalIsApplication = isLikelyApplicationLink(
-      externalDetail?.url,
-      externalDetail?.originalLink?.label,
-    );
     const sourceUrl = externalIsApplication
       ? postUrl
       : externalDetail?.url ?? postUrl;
@@ -271,7 +279,10 @@ export default {
           is_primary: true,
         }]
       : externalDetail?.viaLink ? [externalDetail.viaLink] : [];
-    const preferredTitle = choosePreferredDetailTitle(title, externalDetail?.title);
+    const preferredTitle = choosePreferredDetailTitle(
+      title,
+      useExternalNoticeDetail ? externalDetail?.title : null,
+    );
     const inferredTitle = inferSpecificTitle(preferredTitle, content, attachments);
     const mergedImageCandidates = mergeAttachmentImageCandidates(
       images,

@@ -19,7 +19,6 @@ import { inferPosterClassification } from "./poster-classifier.js";
 import { getPostExclusionReason } from "./post-candidate-filter.js";
 import { evaluatePosterQuality, summarizeQualityIssues } from "./poster-quality-gate.js";
 import { verifyPosterFields, applyFieldVerification } from "./poster-field-verifier.js";
-import { resolveSourceOrgName } from "./poster-org.js";
 import {
   chooseDeadlineForStorage,
   evaluatePosterDateQuality,
@@ -1090,9 +1089,10 @@ function enrichOrganizationVerification(verification = {}, post = {}, sourceUrl 
     ? verification.organization
     : {};
   const sourceOrgName = normalizeOrgInfoText(
+    post.site ??
     existing.sourceOrgName ??
     verification.sourceOrgName ??
-    post.site
+    null
   );
   const organizerName = normalizeOrgInfoText(
     existing.organizerName ??
@@ -1287,7 +1287,7 @@ async function upsertNoticeCandidate(post, {
     source_key: sourceKey,
     source_url: sourceUrl,
     title: readableInfo.title,
-    source_org_name: resolveSourceOrgName(post.title, verifiedOrgName || post.site) || null,
+    source_org_name: enrichedFieldVerification?.organization?.sourceOrgName ?? post.site ?? null,
     summary_short: summaryShort,
     summary_long: summaryLong,
     candidate_status: "pending",
@@ -1712,7 +1712,7 @@ function addNoticeDuplicateCandidate(candidates, candidateId, post, sourceKey, s
     id: candidateId,
     duplicateTargetType: "notice_candidate",
     title: readableInfo.title,
-    source_org_name: resolveSourceOrgName(post.title, verifiedOrgName || post.site) || null,
+    source_org_name: fieldVerification?.organization?.sourceOrgName ?? post.site ?? null,
     poster_status: "pending",
     application_end_at: finalDeadline ?? post.deadline ?? null,
     source_key: sourceKey,
