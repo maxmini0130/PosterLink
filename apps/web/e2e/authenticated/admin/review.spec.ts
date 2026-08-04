@@ -53,6 +53,23 @@ test.describe("관리자 포스터 검수 목록", () => {
     }
   });
 
+  test("마감 유형·검증 상태 필터와 정렬을 함께 적용", async ({ page }) => {
+    await gotoAdminPosters(page);
+
+    await page.getByTestId("admin-poster-deadline-filter").selectOption("fixed");
+    await page.getByTestId("admin-poster-verification-filter").selectOption("unverified");
+    await page.getByTestId("admin-poster-sort").selectOption("deadline_asc");
+    await page.getByRole("button", { name: "조회", exact: true }).click();
+
+    await expect(page.getByTestId("admin-posters-ready")).not.toContainText(
+      "불러오는 중",
+      { timeout: 15000 },
+    );
+    await expect(page.getByTestId("admin-poster-deadline-filter")).toHaveValue("fixed");
+    await expect(page.getByTestId("admin-poster-verification-filter")).toHaveValue("unverified");
+    await expect(page.getByTestId("admin-poster-sort")).toHaveValue("deadline_asc");
+  });
+
   test("검수 대기 포스터 존재 시 미리보기 버튼 표시", async ({ page }) => {
     await gotoAdminPosters(page);
 

@@ -22,6 +22,18 @@ import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
 import { resolvePosterImageUrl } from "../../../lib/posterImage";
 import { getRegionLabel, getRegionScopeIds } from "../../../lib/regionHelpers";
 import { formatApplicationPeriod, formatPosterDate } from "../../../lib/posterApplication";
+import {
+  ADMIN_POSTER_DEADLINE_LABELS,
+  ADMIN_POSTER_VERIFICATION_LABELS,
+  countAdminPosterConditions,
+  getAdminPosterSortOrders,
+  isAdminPosterDeadlineFilter,
+  isAdminPosterSort,
+  isAdminPosterVerificationFilter,
+  type AdminPosterDeadlineFilter,
+  type AdminPosterSort,
+  type AdminPosterVerificationFilter,
+} from "../../../lib/adminPosterFilters";
 import { PosterImageFallback } from "../../components/PosterImageFallback";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -35,6 +47,9 @@ type PosterSearchFilters = {
   categoryId: string;
   regionId: string;
   media: PosterMediaFilter;
+  deadlineType: AdminPosterDeadlineFilter;
+  verificationStatus: AdminPosterVerificationFilter;
+  sort: AdminPosterSort;
 };
 
 const EMPTY_FILTERS: PosterSearchFilters = {
@@ -43,6 +58,9 @@ const EMPTY_FILTERS: PosterSearchFilters = {
   categoryId: "",
   regionId: "",
   media: "",
+  deadlineType: "",
+  verificationStatus: "",
+  sort: "default",
 };
 
 const POSTER_STATUS_VALUES = new Set<PosterStatus>(["review", "published", "rejected", "draft"]);
@@ -295,13 +313,6 @@ function getPosterOrgDisplayName(poster: any) {
   const organization = getOrganizationVerification(poster);
   return poster?.organizer_name || organization?.displayOrgName || poster?.source_org_name || "기관 미상";
 }
-
-const VERIFICATION_STATUS_LABELS: Record<string, string> = {
-  unverified: "미검증",
-  needs_review: "추가 검토 필요",
-  verified: "사람 검증 완료",
-  rejected: "데이터 사용 불가",
-};
 
 function getStructuredPosterFacts(poster: any) {
   const eventStart = formatPosterDate(poster?.event_start_at);
@@ -603,8 +614,7 @@ export default function AdminPostersPage() {
     let query = supabase
       .from("posters")
       .select("*", { count: "exact" })
-      .eq("poster_status", status)
-      .order("created_at", { ascending: status === "review" });
+      .eq("poster_status", status);
 
     const text = normalizeSearchValue(filters.text);
     const org = normalizeSearchValue(filters.org);
@@ -620,8 +630,20 @@ export default function AdminPostersPage() {
     } else if (filters.media === "poster_image") {
       query = query.not("thumbnail_url", "is", null);
     }
+    if (filters.deadlineType) {
+      query = query.eq("deadline_type", filters.deadlineType);
+    }
+    if (filters.verificationStatus) {
+      query = query.eq("verification_status", filters.verificationStatus);
+    }
     if (scopedPosterIds) {
       query = query.in("id", scopedPosterIds);
+    }
+    for (const order of getAdminPosterSortOrders(filters.sort, status)) {
+      query = query.order(order.column, {
+        ascending: order.ascending,
+        ...(order.nullsFirst == null ? {} : { nullsFirst: order.nullsFirst }),
+      });
     }
 
     const { data, error, count } = await query.range(from, to);
@@ -655,11 +677,17 @@ export default function AdminPostersPage() {
     const statusParam = params.get("status");
     const textParam = (params.get("q") ?? params.get("source") ?? "").trim();
     const mediaParam = params.get("media");
+    const deadlineParam = params.get("deadline");
+    const verificationParam = params.get("verification");
+    const sortParam = params.get("sort");
     const initialFilters: PosterSearchFilters = { ...EMPTY_FILTERS };
 
     if (isPosterStatus(statusParam)) setCurrentFilter(statusParam);
     if (textParam) initialFilters.text = textParam;
     if (isPosterMediaFilter(mediaParam)) initialFilters.media = mediaParam;
+    if (isAdminPosterDeadlineFilter(deadlineParam)) initialFilters.deadlineType = deadlineParam;
+    if (isAdminPosterVerificationFilter(verificationParam)) initialFilters.verificationStatus = verificationParam;
+    if (isAdminPosterSort(sortParam)) initialFilters.sort = sortParam;
     setDraftFilters(initialFilters);
     setAppliedFilters(initialFilters);
     if (posterId) setFocusedPosterId(posterId);
@@ -871,7 +899,7 @@ export default function AdminPostersPage() {
   const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const pageStart = totalCount === 0 ? 0 : page * PAGE_SIZE + 1;
   const pageEnd = Math.min(totalCount, (page + 1) * PAGE_SIZE);
-  const activeFilterCount = Object.values(appliedFilters).filter((value) => value.trim()).length;
+  const activeFilterCount = countAdminPosterConditions(appliedFilters);
   const previewImageSrc = previewPoster ? getPosterImageSrc(previewPoster) : null;
   const previewIsTextNotice = previewPoster ? isTextNoticePoster(previewPoster) : false;
   const previewGeneratedPosterInfo = previewPoster ? getGeneratedPosterInfo(previewPoster) : null;
@@ -1124,7 +1152,7 @@ export default function AdminPostersPage() {
           <div>
             <h2 className="text-sm font-black text-gray-900 dark:text-white">조회 조건</h2>
             <p className="mt-1 text-xs font-bold text-gray-400 dark:text-slate-500">
-              제목, 요약, 기관, 카테고리, 지역으로 검수 대상을 좁혀봅니다.
+              공고 정보와 마감 유형, 검증 상태를 함께 비교해 검수 대상을 좁혀봅니다.
             </p>
           </div>
           {activeFilterCount > 0 && (
@@ -1134,7 +1162,7 @@ export default function AdminPostersPage() {
           )}
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <label className="block">
             <span className="mb-1.5 block text-[11px] font-black text-gray-400">텍스트 검색</span>
             <input
@@ -1199,6 +1227,66 @@ export default function AdminPostersPage() {
               <option value="">전체</option>
               <option value="poster_image">이미지 공고</option>
               <option value="text_notice">텍스트 공고</option>
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-[11px] font-black text-gray-400">마감 유형</span>
+            <select
+              data-testid="admin-poster-deadline-filter"
+              value={draftFilters.deadlineType}
+              onChange={(event) => setDraftFilters((filters) => ({
+                ...filters,
+                deadlineType: event.target.value as AdminPosterDeadlineFilter,
+              }))}
+              className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-900 outline-none transition-all focus:border-indigo-200 focus:ring-4 focus:ring-indigo-50 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:focus:ring-indigo-950"
+            >
+              <option value="">전체 마감 유형</option>
+              <option value="fixed">마감일 고정</option>
+              <option value="ongoing">상시 모집</option>
+              <option value="until_exhausted">소진 시 마감</option>
+              <option value="scheduled">모집 예정</option>
+              <option value="unknown">일정 확인 필요</option>
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-[11px] font-black text-gray-400">검증 상태</span>
+            <select
+              data-testid="admin-poster-verification-filter"
+              value={draftFilters.verificationStatus}
+              onChange={(event) => setDraftFilters((filters) => ({
+                ...filters,
+                verificationStatus: event.target.value as AdminPosterVerificationFilter,
+              }))}
+              className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-900 outline-none transition-all focus:border-indigo-200 focus:ring-4 focus:ring-indigo-50 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:focus:ring-indigo-950"
+            >
+              <option value="">전체 검증 상태</option>
+              <option value="unverified">미검증</option>
+              <option value="needs_review">추가 검토 필요</option>
+              <option value="verified">사람 검증 완료</option>
+              <option value="rejected">데이터 사용 불가</option>
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-[11px] font-black text-gray-400">정렬</span>
+            <select
+              data-testid="admin-poster-sort"
+              value={draftFilters.sort}
+              onChange={(event) => setDraftFilters((filters) => ({
+                ...filters,
+                sort: event.target.value as AdminPosterSort,
+              }))}
+              className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-900 outline-none transition-all focus:border-indigo-200 focus:ring-4 focus:ring-indigo-50 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:focus:ring-indigo-950"
+            >
+              <option value="default">기본 순서</option>
+              <option value="created_desc">최근 등록순</option>
+              <option value="created_asc">오래된 등록순</option>
+              <option value="deadline_asc">마감일 빠른순</option>
+              <option value="deadline_desc">마감일 늦은순</option>
+              <option value="deadline_type">마감 유형순</option>
+              <option value="verification_status">검증 상태순</option>
             </select>
           </label>
         </div>
@@ -1328,6 +1416,13 @@ export default function AdminPostersPage() {
             const generatedPosterInfo = getGeneratedPosterInfo(poster);
             const approvalProblems = getApprovalProblemChecks(poster);
             const approvalBlocked = approvalProblems.some((check) => check.status === "block");
+            const deadlineTypeLabel = ADMIN_POSTER_DEADLINE_LABELS[poster.deadline_type] || "일정 확인 필요";
+            const verificationStatusLabel = ADMIN_POSTER_VERIFICATION_LABELS[poster.verification_status] || "미검증";
+            const applicationPeriodLabel = formatApplicationPeriod({
+              applicationStartAt: poster.application_start_at,
+              applicationEndAt: poster.application_end_at,
+              deadlineType: poster.deadline_type,
+            });
 
             return (
             <div
@@ -1423,7 +1518,23 @@ export default function AdminPostersPage() {
                     분야: {poster.categoryName || "기타"}
                   </span>
                   <span className="rounded-full border border-gray-100 bg-gray-50 px-3 py-1 text-[11px] font-black text-gray-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
-                    마감: {poster.application_end_at ? new Date(poster.application_end_at).toLocaleDateString() : "상시"}
+                    기간: {applicationPeriodLabel}
+                  </span>
+                  <span className="rounded-full border border-gray-100 bg-gray-50 px-3 py-1 text-[11px] font-black text-gray-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+                    마감 유형: {deadlineTypeLabel}
+                  </span>
+                  <span
+                    className={`rounded-full border px-3 py-1 text-[11px] font-black ${
+                      poster.verification_status === "verified"
+                        ? "border-emerald-100 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
+                        : poster.verification_status === "rejected"
+                          ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
+                          : poster.verification_status === "needs_review"
+                          ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
+                          : "border-gray-100 bg-gray-50 text-gray-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
+                    }`}
+                  >
+                    검증: {verificationStatusLabel}
                   </span>
                   {isTextNotice && (
                     <span className="flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-[11px] font-black text-blue-600 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300">
@@ -1729,7 +1840,7 @@ export default function AdminPostersPage() {
                     </p>
                     <div className="flex flex-wrap gap-2 text-[11px] font-black">
                       <span className={previewPoster.verification_status === "verified" ? "rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" : "rounded-full bg-amber-100 px-2.5 py-1 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"}>
-                        {VERIFICATION_STATUS_LABELS[previewPoster.verification_status] || "미검증"}
+                        {ADMIN_POSTER_VERIFICATION_LABELS[previewPoster.verification_status] || "미검증"}
                       </span>
                       {previewPoster.data_confidence != null && (
                         <span className="rounded-full bg-gray-100 px-2.5 py-1 text-gray-600 dark:bg-slate-800 dark:text-slate-300">
