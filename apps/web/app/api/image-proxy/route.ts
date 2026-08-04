@@ -33,10 +33,12 @@ export async function GET(request: NextRequest) {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const targetUrl = new URL(imageUrl);
     const response = await fetch(imageUrl, {
       headers: {
-        "User-Agent": "PosterLink/1.0 image proxy",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/138.0.0.0 Safari/537.36",
         "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        ...(targetUrl.hostname === "docs.google.com" ? { Referer: "https://docs.google.com/forms/" } : {}),
       },
       cache: "no-store",
       signal: controller.signal,

@@ -4,7 +4,17 @@ export function resolvePosterImageUrl(imageUrl?: string | null, sourceUrl?: stri
 
   if (/^(data:|blob:)/i.test(value)) return value;
   if (/^http:\/\//i.test(value)) return `/api/image-proxy?url=${encodeURIComponent(value)}`;
-  if (/^https:\/\//i.test(value)) return value;
+  if (/^https:\/\//i.test(value)) {
+    try {
+      const url = new URL(value);
+      if (url.hostname === "docs.google.com" && url.pathname.startsWith("/forms-images-rt/")) {
+        return `/api/image-proxy?url=${encodeURIComponent(value)}`;
+      }
+    } catch {
+      return value;
+    }
+    return value;
+  }
   if (value.startsWith("//")) return `https:${value}`;
 
   if (sourceUrl && /^https?:\/\//i.test(sourceUrl)) {

@@ -33,7 +33,13 @@ const feedTabs = [
   { key: "popular", label: "많이 본 공고" },
 ] as const;
 
-const regionShortcuts = ["마포구", "은평구", "서대문구", "영등포구", "강서구"];
+const regionShortcuts = [
+  { name: "마포구", slug: "seoul-mapo" },
+  { name: "은평구", slug: "seoul-eunpyeong" },
+  { name: "서대문구", slug: "seoul-seodaemun" },
+  { name: "영등포구", slug: "seoul-yeongdeungpo" },
+  { name: "강서구", slug: "seoul-gangseo" },
+];
 const organizationHighlights = ["마포구청", "마포문화재단", "서울청년센터", "서울경제진흥원", "소상공인시장진흥공단"];
 const serviceCategories = ["청년", "소상공인", "창업", "교육", "문화·행사", "복지", "채용", "주거"];
 
@@ -452,7 +458,7 @@ export default function Home() {
         <section className="mt-12">
           <SectionTitle eyebrow="Local Search" title="내 지역 공고를 찾아보세요" />
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-            <Link href="/posters?region=서울특별시" className="flex items-center justify-between border border-slate-300 bg-white px-4 py-4 text-sm font-black text-slate-900 transition-colors hover:border-blue-500 hover:text-blue-700 lg:col-span-2">
+            <Link href="/regions/seoul" className="flex items-center justify-between border border-slate-300 bg-white px-4 py-4 text-sm font-black text-slate-900 transition-colors hover:border-blue-500 hover:text-blue-700 lg:col-span-2">
               <span className="inline-flex items-center gap-2">
                 <MapPin size={17} />
                 서울특별시
@@ -461,11 +467,11 @@ export default function Home() {
             </Link>
             {regionShortcuts.map((region) => (
               <Link
-                key={region}
-                href={`/posters?region=${encodeURIComponent(region)}`}
+                key={region.slug}
+                href={`/regions/${region.slug}`}
                 className="border border-slate-300 bg-white px-4 py-4 text-sm font-black text-slate-700 transition-colors hover:border-blue-500 hover:text-blue-700"
               >
-                {region}
+                {region.name}
               </Link>
             ))}
           </div>
@@ -486,7 +492,7 @@ export default function Home() {
             {organizationHighlights.map((org) => (
               <Link
                 key={org}
-                href={`/posters?q=${encodeURIComponent(org)}`}
+                href={`/institutions?q=${encodeURIComponent(org)}`}
                 className="border border-slate-300 bg-white p-4 transition-colors hover:border-blue-500"
               >
                 <p className="text-sm font-black text-slate-950">{org}</p>

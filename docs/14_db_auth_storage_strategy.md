@@ -44,6 +44,14 @@
 - `comments`
 - `comment_reports`
 - `poster_views`
+- `institution_follows`
+
+### 기관 계층
+- `institutions`
+- `collection_sources`
+- `posters.organizer_id`
+- `posters.source_institution_id`
+- `posters.application_institution_id`
 
 ### 운영 계층
 - `operator_uploads`
@@ -98,6 +106,8 @@ RLS를 적극 사용해 아래를 통제한다.
 - 운영자는 본인이 등록한 초안만 수정 가능
 - 관리자는 모든 검수/신고/정책 데이터 접근 가능
 - 공개 포스터만 사용자에게 노출
+- 공개 기관만 비로그인 사용자에게 노출
+- 사용자는 본인의 기관 팔로우만 조회·추가·삭제 가능
 
 ## 6. 스토리지 전략
 

@@ -1,0 +1,572 @@
+"use client";
+
+import { Suspense, useState, useEffect, useRef } from "react";
+import { supabase } from "../lib/supabase";
+import { Header } from "../components/Header";
+import { BottomNav } from "../components/BottomNav";
+import { Footer } from "../components/Footer";
+import { PosterCard } from "../components/PosterCard";
+import { fetchCategoryRegionNames, fetchPosterImages } from "../lib/posterHelpers";
+import { fetchPosterMetricCounts } from "../lib/posterMetrics";
+import { getCityRegions, getDistrictRegions, getRegionLabel, getRegionScopeIds, getSelectedCityId } from "../lib/regionHelpers";
+import { buildPosterSearchPath, type DiscoveryPoster, type DiscoverySort, type DiscoveryTaxonomy } from "../../lib/discoveryRoutes";
+import { Search, X, History, TrendingUp, ArrowLeft, ChevronDown } from "lucide-react";
+
+const PAGE_SIZE = 12;
+const QUICK_SEARCH_TERMS = ["청년", "취업", "무료교육", "주거", "창업", "곧 마감"];
+
+type PosterListClientProps = {
+  initialPosters: DiscoveryPoster[];
+  initialCategories: DiscoveryTaxonomy[];
+  initialRegions: DiscoveryTaxonomy[];
+  initialQuery: string;
+  initialCategoryId: string | null;
+  initialRegionId: string | null;
+  initialSort: DiscoverySort;
+  initialIncludeClosed: boolean;
+};
+
+export function PosterListClient(props: PosterListClientProps) {
+  return (
+    <Suspense fallback={null}>
+      <PosterListPageContent {...props} />
+    </Suspense>
+  );
+}
+
+function PosterListPageContent({
+  initialPosters,
+  initialCategories,
+  initialRegions,
+  initialQuery,
+  initialCategoryId,
+  initialRegionId,
+  initialSort,
+  initialIncludeClosed,
+}: PosterListClientProps) {
+  const [loading, setLoading] = useState(false);
+  const [posters, setPosters] = useState<any[]>(initialPosters);
+  const [categories, setCategories] = useState<any[]>(initialCategories);
+  const [regions, setRegions] = useState<any[]>(initialRegions);
+
+  // Search & Filter States
+  const [searchQuery, setSearchQuery] = useState(initialQuery);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [popularKeywords, setPopularKeywords] = useState<string[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(initialCategoryId);
+  const [selectedRegionId, setSelectedRegionId] = useState<string | null>(initialRegionId);
+  const [sortBy, setSortBy] = useState<DiscoverySort>(initialSort);
+  const [hideClosedPosters, setHideClosedPosters] = useState(!initialIncludeClosed);
+  const [myMatchesOnly, setMyMatchesOnly] = useState(false);
+  const [semanticSearchActive, setSemanticSearchActive] = useState(false);
+
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const pendingSearchLogRef = useRef<string | null>(null);
+  const skipInitialFetchRef = useRef(true);
+  const skipInitialUrlSyncRef = useRef(true);
+
+  // 1. Initial Data Load
+  useEffect(() => {
+    const fetchBase = async () => {
+      const { data: catData } = await supabase.from("categories").select("*").order("sort_order");
+      const { data: regData } = await supabase
+        .from("regions")
+        .select("*")
+        .in("level", ["nation", "sido", "sigungu"])
+        .order("level", { ascending: false })
+        .order("full_name", { ascending: true });
+      if (catData && initialCategories.length === 0) setCategories(catData);
+      if (regData && initialRegions.length === 0) setRegions(regData);
+      
+      // Load recent searches from localStorage
+      try {
+        const saved = localStorage.getItem("recent_searches");
+        if (saved) setRecentSearches(JSON.parse(saved));
+      } catch {
+        localStorage.removeItem("recent_searches");
+      }
+
+      // 인기 검색어 DB에서 로드
+      const { data: kwData } = await supabase.rpc("get_popular_keywords", { p_limit: 5 });
+      if (kwData && kwData.length > 0) {
+        setPopularKeywords(kwData.map((r: any) => r.keyword));
+      } else {
+        setPopularKeywords(["청년수당", "소상공인 지원", "내일배움카드", "디지털 교육", "창업 지원"]);
+      }
+    };
+    fetchBase();
+  }, [initialCategories.length, initialRegions.length]);
+
+  // 2. Fetch Posters with Filters
+  const fetchPosters = async (queryStr = searchQuery) => {
+    setLoading(true);
+    try {
+      const normalizedQuery = queryStr.trim();
+      let data: any[] = [];
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user ?? null;
+      let userPrimaryRegionId: string | null = null;
+      let userInterestCategoryIds: string[] = [];
+
+      if (user && myMatchesOnly) {
+        const [profileRes, interestRes] = await Promise.all([
+          supabase.from("profiles").select("primary_region_id").eq("id", user.id).maybeSingle(),
+          supabase.from("user_interest_categories").select("category_id").eq("user_id", user.id),
+        ]);
+        userPrimaryRegionId = profileRes.data?.primary_region_id ?? null;
+        userInterestCategoryIds = (interestRes.data ?? []).map((row: any) => row.category_id).filter(Boolean);
+      }
+
+      let semanticSearchUsed = false;
+      const selectedRegionScopeIds = getRegionScopeIds(selectedRegionId, regions);
+
+      if (hideClosedPosters) {
+        if (normalizedQuery.length >= 2) {
+          const semanticResponse = await fetch("/api/posters/semantic-search", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              query: normalizedQuery,
+              limit: 80,
+              categoryId: selectedCategoryId,
+              regionIds: selectedRegionScopeIds ? Array.from(selectedRegionScopeIds) : null,
+            }),
+          }).catch(() => null);
+
+          if (semanticResponse?.ok) {
+            const payload = await semanticResponse.json().catch(() => null);
+            if (payload?.semantic && Array.isArray(payload.posters) && payload.posters.length > 0) {
+              data = payload.posters;
+              semanticSearchUsed = true;
+            }
+          }
+        }
+
+        if (!semanticSearchUsed) {
+          const { data: rpcData, error } = await supabase.rpc("search_posters_with_synonyms", {
+            p_query: normalizedQuery,
+            p_category_id: selectedCategoryId,
+            p_region_id: null,
+          });
+
+          if (error) throw error;
+          data = rpcData ?? [];
+        }
+      } else {
+        let query = supabase
+          .from("posters")
+          .select("id, title, source_org_name, application_end_at, poster_status, thumbnail_url, source_key, summary_short, created_at")
+          .eq("poster_status", "published");
+
+        if (normalizedQuery) {
+          query = query.or(`title.ilike.%${normalizedQuery}%,source_org_name.ilike.%${normalizedQuery}%,summary_short.ilike.%${normalizedQuery}%`);
+        }
+
+        const { data: directData, error } = await query
+          .order("created_at", { ascending: false })
+          .limit(100);
+
+        if (error) throw error;
+        data = directData ?? [];
+      }
+
+      const now = Date.now();
+      const dateFilteredData = hideClosedPosters
+        ? data.filter((poster: any) => {
+            if (!poster.application_end_at) return true;
+            return new Date(poster.application_end_at).getTime() >= now;
+          })
+        : data;
+
+      const basePosterIds = dateFilteredData.map((poster: any) => poster.id);
+      const [baseMetaMap, baseMetricCounts, baseImageMap] = await Promise.all([
+        fetchCategoryRegionNames(basePosterIds),
+        fetchPosterMetricCounts(basePosterIds),
+        fetchPosterImages(basePosterIds),
+      ]);
+
+      const enrichedData = dateFilteredData.map((poster: any) => ({
+        ...poster,
+        ...baseMetaMap[poster.id],
+        images: baseImageMap[poster.id] ?? [],
+        viewCount: baseMetricCounts.viewCounts[poster.id] ?? 0,
+        linkClickCount: baseMetricCounts.linkClickCounts[poster.id] ?? 0,
+        favoriteCount: baseMetricCounts.favoriteCounts[poster.id] ?? 0,
+        semanticScore: poster.semantic_score ?? null,
+      }));
+
+      const userRegionScopeIds = getRegionScopeIds(userPrimaryRegionId, regions);
+
+      const filteredData = enrichedData.filter((poster: any) => (
+        (!selectedCategoryId || poster.categoryIds?.includes(selectedCategoryId)) &&
+        (!selectedRegionScopeIds || poster.regionIds?.some((regionId: string) => selectedRegionScopeIds.has(regionId))) &&
+        (!myMatchesOnly || (user && (
+          (userRegionScopeIds && poster.regionIds?.some((regionId: string) => userRegionScopeIds.has(regionId))) ||
+          poster.categoryIds?.some((categoryId: string) => userInterestCategoryIds.includes(categoryId))
+        )))
+      ));
+
+      const sortedData = [...filteredData].sort((a: any, b: any) => {
+        if (semanticSearchUsed && normalizedQuery && sortBy === "latest") {
+          return (b.semanticScore ?? 0) - (a.semanticScore ?? 0);
+        }
+        if (sortBy === "deadline") {
+          const deadlineRank = (poster: any) => {
+            if (!poster.application_end_at) return Number.MAX_SAFE_INTEGER;
+            const time = new Date(poster.application_end_at).getTime();
+            return time < now ? Number.MAX_SAFE_INTEGER - 1 : time;
+          };
+          const aTime = deadlineRank(a);
+          const bTime = deadlineRank(b);
+          return aTime - bTime;
+        }
+        if (sortBy === "popular") {
+          const score = (poster: any) => (poster.viewCount ?? 0) + ((poster.linkClickCount ?? 0) * 2) + ((poster.favoriteCount ?? 0) * 3);
+          return score(b) - score(a);
+        }
+        if (sortBy === "views") {
+          return (b.viewCount ?? 0) - (a.viewCount ?? 0);
+        }
+        if (sortBy === "favorites") {
+          return (b.favoriteCount ?? 0) - (a.favoriteCount ?? 0);
+        }
+        return new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime();
+      });
+
+      setPosters(sortedData);
+      setSemanticSearchActive(semanticSearchUsed);
+      setDisplayCount(PAGE_SIZE);
+
+      if (normalizedQuery && pendingSearchLogRef.current === normalizedQuery) {
+        pendingSearchLogRef.current = null;
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          supabase.rpc("log_search", {
+            p_user_id: session?.user?.id ?? null,
+            p_query: normalizedQuery,
+            p_result_count: sortedData.length,
+          });
+        });
+      }
+    } catch (err) {
+      console.error("Error fetching posters:", err);
+      setPosters([]);
+      setSemanticSearchActive(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (skipInitialFetchRef.current) {
+      skipInitialFetchRef.current = false;
+      return;
+    }
+    const timer = setTimeout(() => fetchPosters(), 300);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, selectedCategoryId, selectedRegionId, sortBy, hideClosedPosters, myMatchesOnly]);
+
+  useEffect(() => {
+    if (skipInitialUrlSyncRef.current) {
+      skipInitialUrlSyncRef.current = false;
+      return;
+    }
+    const category = categories.find((item) => item.id === selectedCategoryId) ?? null;
+    const region = regions.find((item) => item.id === selectedRegionId) ?? null;
+    const path = buildPosterSearchPath({
+      query: searchQuery,
+      category,
+      region,
+      sort: sortBy,
+      includeClosed: !hideClosedPosters,
+    });
+    window.history.replaceState(null, "", path);
+  }, [categories, hideClosedPosters, regions, searchQuery, selectedCategoryId, selectedRegionId, sortBy]);
+
+  // 3. Search Actions
+  const handleSearchSubmit = (e?: React.FormEvent, term?: string) => {
+    e?.preventDefault();
+    const finalTerm = term || searchQuery;
+    if (!finalTerm.trim()) return;
+
+    // Save to recent searches
+    const updated = [finalTerm, ...recentSearches.filter(s => s !== finalTerm)].slice(0, 5);
+    setRecentSearches(updated);
+    localStorage.setItem("recent_searches", JSON.stringify(updated));
+
+    const normalizedTerm = finalTerm.trim();
+    pendingSearchLogRef.current = normalizedTerm;
+    setSearchQuery(normalizedTerm);
+    setIsSearchFocused(false);
+    searchInputRef.current?.blur();
+  };
+
+  const removeRecentSearch = (term: string) => {
+    const updated = recentSearches.filter(s => s !== term);
+    setRecentSearches(updated);
+    localStorage.setItem("recent_searches", JSON.stringify(updated));
+  };
+
+  const cityRegions = getCityRegions(regions);
+  const selectedCityId = getSelectedCityId(selectedRegionId, regions);
+  const districtRegions = getDistrictRegions(regions, selectedCityId || null);
+
+  return (
+    <div className="min-h-screen bg-white pb-24">
+      <Header />
+      
+      <main className="container mx-auto px-4 py-6 max-w-4xl">
+        {/* Search Section */}
+        <div className={`fixed inset-0 z-[60] bg-white transition-all duration-300 ${isSearchFocused ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}>
+          <div className="p-4 flex items-center gap-3 border-b">
+            <button onClick={() => setIsSearchFocused(false)} className="p-2 hover:bg-gray-100 rounded-full">
+              <ArrowLeft size={24} />
+            </button>
+            <form onSubmit={handleSearchSubmit} className="flex-1 relative">
+              <input 
+                ref={searchInputRef}
+                type="text" 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="검색어를 입력하세요"
+                className="w-full py-3 px-4 bg-gray-50 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-100 text-gray-900 placeholder:text-gray-400"
+              />
+              {searchQuery && (
+                <button type="button" onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400">
+                  <X size={16} />
+                </button>
+              )}
+            </form>
+          </div>
+          
+          <div className="p-6">
+            {recentSearches.length > 0 && (
+              <section className="mb-10">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                    <History size={14} /> 최근 검색어
+                  </h3>
+                  <button onClick={() => {setRecentSearches([]); localStorage.removeItem("recent_searches");}} className="text-xs font-bold text-gray-300 hover:text-rose-500">모두 삭제</button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {recentSearches.map(s => (
+                    <div key={s} className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                      <button onClick={() => handleSearchSubmit(undefined, s)} className="text-sm font-bold text-gray-700">{s}</button>
+                      <button onClick={() => removeRecentSearch(s)} className="text-gray-300 hover:text-gray-600"><X size={14} /></button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <section>
+              <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-4">
+                <TrendingUp size={14} /> 인기 검색어
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {popularKeywords.map(k => (
+                  <button key={k} onClick={() => handleSearchSubmit(undefined, k)} className="px-4 py-2 border border-gray-100 rounded-xl text-sm font-bold text-gray-500 hover:border-blue-200 hover:text-blue-600 transition-all">
+                    {k}
+                  </button>
+                ))}
+              </div>
+            </section>
+          </div>
+        </div>
+
+        {/* Main List UI */}
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+             <div>
+               <h1 className="text-2xl font-black text-gray-900">공공 공고 찾기</h1>
+               <p className="mt-1 max-w-2xl text-sm font-bold leading-6 text-gray-500">
+                 정부·지자체·공공기관의 지원사업, 교육, 행사, 채용·모집 공고와 공식 신청 링크를 찾아보세요.
+               </p>
+             </div>
+             <div className="flex flex-wrap items-center justify-end gap-2">
+             <button
+               type="button"
+               role="switch"
+               aria-checked={myMatchesOnly}
+               onClick={() => setMyMatchesOnly((value) => !value)}
+               className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-[11px] font-black transition-colors ${
+                 myMatchesOnly ? "bg-indigo-50 text-indigo-600" : "bg-gray-50 text-gray-400"
+               }`}
+             >
+                <span className={`flex h-5 w-9 items-center rounded-full p-0.5 transition-colors ${myMatchesOnly ? "bg-indigo-600" : "bg-gray-300"}`}>
+                  <span className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${myMatchesOnly ? "translate-x-4" : ""}`} />
+                </span>
+                내 맞춤
+             </button>
+             <button
+               type="button"
+               role="switch"
+               aria-checked={hideClosedPosters}
+               onClick={() => setHideClosedPosters((value) => !value)}
+               className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-[11px] font-black transition-colors ${
+                 hideClosedPosters ? "bg-blue-50 text-blue-600" : "bg-gray-50 text-gray-400"
+               }`}
+             >
+                <span className={`flex h-5 w-9 items-center rounded-full p-0.5 transition-colors ${hideClosedPosters ? "bg-blue-600" : "bg-gray-300"}`}>
+                  <span className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${hideClosedPosters ? "translate-x-4" : ""}`} />
+                </span>
+                접수 중인 공고만 보기
+             </button>
+             </div>
+          </div>
+          
+          {/* Main Search Bar (Trigger) */}
+          <div 
+            onClick={() => {setIsSearchFocused(true); setTimeout(() => searchInputRef.current?.focus(), 100);}}
+            className="group flex items-center gap-3 px-5 py-4 bg-gray-50 rounded-[1.5rem] border border-transparent hover:border-blue-100 cursor-pointer transition-all"
+          >
+            <Search className="text-gray-300 group-hover:text-blue-500 transition-colors" size={20} />
+            <span className="text-sm font-bold text-gray-400">
+              {searchQuery || "어떤 공고를 찾으시나요?"}
+            </span>
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            {QUICK_SEARCH_TERMS.map((term) => (
+              <button
+                key={term}
+                type="button"
+                onClick={() => handleSearchSubmit(undefined, term)}
+                className={`whitespace-nowrap rounded-2xl px-4 py-2 text-xs font-black transition-colors ${
+                  searchQuery === term
+                    ? "bg-blue-600 text-white shadow-lg shadow-blue-100"
+                    : "bg-gray-50 text-gray-500 hover:bg-blue-50 hover:text-blue-600"
+                }`}
+              >
+                {term}
+              </button>
+            ))}
+          </div>
+
+          {/* Active Filter Badges */}
+          {(selectedCategoryId || selectedRegionId || searchQuery || myMatchesOnly) && (
+            <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-top-1">
+              {myMatchesOnly && (
+                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs font-black rounded-lg shadow-lg shadow-indigo-100">
+                  내 맞춤 <button onClick={() => setMyMatchesOnly(false)}><X size={12}/></button>
+                </span>
+              )}
+              {searchQuery && (
+                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-black rounded-lg shadow-lg shadow-blue-100">
+                  &ldquo;{searchQuery}&rdquo; <button onClick={() => setSearchQuery("")}><X size={12}/></button>
+                </span>
+              )}
+              {selectedRegionId && (
+                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 text-xs font-black rounded-lg border border-indigo-100">
+                  {getRegionLabel(regions.find(r => r.id === selectedRegionId))} <button onClick={() => setSelectedRegionId(null)}><X size={12}/></button>
+                </span>
+              )}
+              {selectedCategoryId && (
+                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 text-xs font-black rounded-lg border border-emerald-100">
+                  {categories.find(c => c.id === selectedCategoryId)?.name} <button onClick={() => setSelectedCategoryId(null)}><X size={12}/></button>
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Quick Filters */}
+          <div className="space-y-3">
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+              <button onClick={() => setSelectedCategoryId(null)} className={`px-5 py-2.5 rounded-2xl text-[13px] font-black whitespace-nowrap transition-all ${!selectedCategoryId ? 'bg-gray-900 text-white shadow-xl shadow-gray-200' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>전체 분야</button>
+              {categories.map(cat => (
+                <button key={cat.id} onClick={() => setSelectedCategoryId(cat.id)} className={`px-5 py-2.5 rounded-2xl text-[13px] font-black whitespace-nowrap transition-all ${selectedCategoryId === cat.id ? 'bg-gray-900 text-white shadow-xl shadow-gray-200' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>{cat.name}</button>
+              ))}
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+              <button onClick={() => setSelectedRegionId(null)} className={`px-5 py-2.5 rounded-2xl text-[13px] font-black whitespace-nowrap transition-all ${!selectedRegionId ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : 'bg-blue-50 text-blue-400 hover:bg-blue-100'}`}>전체 지역</button>
+              {cityRegions.map(region => (
+                <button key={region.id} onClick={() => setSelectedRegionId(region.id)} className={`px-5 py-2.5 rounded-2xl text-[13px] font-black whitespace-nowrap transition-all ${selectedCityId === region.id && selectedRegionId === region.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : selectedCityId === region.id ? 'bg-blue-100 text-blue-700' : 'bg-blue-50 text-blue-400 hover:bg-blue-100'}`}>{getRegionLabel(region)}</button>
+              ))}
+            </div>
+            {districtRegions.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                <button onClick={() => setSelectedRegionId(selectedCityId)} className={`px-4 py-2 rounded-2xl text-xs font-black whitespace-nowrap transition-all ${selectedRegionId === selectedCityId ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-indigo-50 text-indigo-400 hover:bg-indigo-100'}`}>
+                  {getRegionLabel(regions.find((region) => region.id === selectedCityId))} 전체
+                </button>
+                {districtRegions.map(region => (
+                  <button key={region.id} onClick={() => setSelectedRegionId(region.id)} className={`px-4 py-2 rounded-2xl text-xs font-black whitespace-nowrap transition-all ${selectedRegionId === region.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-indigo-50 text-indigo-400 hover:bg-indigo-100'}`}>{region.name}</button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Sort & Result Count */}
+          <div className="flex items-center justify-between border-b border-gray-50 pb-4">
+             <span className="text-[11px] font-black text-gray-300 uppercase tracking-widest">
+               총 {posters.length.toLocaleString()}건 {hideClosedPosters ? "· 접수 중" : "· 전체"} {myMatchesOnly ? "· 내 맞춤" : ""}
+               {semanticSearchActive ? " · 의미순" : ""}
+             </span>
+
+             <div className="flex flex-wrap justify-end gap-3">
+               <button onClick={() => setSortBy("latest")} className={`text-xs font-black transition-colors ${sortBy === 'latest' ? 'text-blue-600' : 'text-gray-300'}`}>최신</button>
+               <button onClick={() => setSortBy("deadline")} className={`text-xs font-black transition-colors ${sortBy === 'deadline' ? 'text-blue-600' : 'text-gray-300'}`}>마감임박</button>
+               <button onClick={() => setSortBy("popular")} className={`text-xs font-black transition-colors ${sortBy === 'popular' ? 'text-blue-600' : 'text-gray-300'}`}>인기</button>
+               <button onClick={() => setSortBy("views")} className={`text-xs font-black transition-colors ${sortBy === 'views' ? 'text-blue-600' : 'text-gray-300'}`}>조회</button>
+               <button onClick={() => setSortBy("favorites")} className={`text-xs font-black transition-colors ${sortBy === 'favorites' ? 'text-blue-600' : 'text-gray-300'}`}>찜</button>
+             </div>
+          </div>
+        </div>
+
+        {/* Results Grid */}
+        {loading ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-8">
+            {[1,2,3,4].map(i => <div key={i} className="aspect-[3/4] bg-gray-50 rounded-3xl animate-pulse" />)}
+          </div>
+        ) : posters.length > 0 ? (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-5 gap-y-10 mt-8">
+              {posters.slice(0, displayCount).map((poster) => (
+                <PosterCard
+                  key={poster.id}
+                  poster={{
+                    id: poster.id,
+                    title: poster.title,
+                    org: poster.verification_status === "verified" && poster.verified_at
+                      ? poster.organizer_name || poster.source_org_name
+                      : poster.source_org_name,
+                    deadline: poster.application_end_at,
+                    deadlineType: poster.deadline_type,
+                    image: poster.thumbnail_url,
+                    images: poster.images,
+                    sourceUrl: poster.source_key,
+                    viewCount: poster.viewCount,
+                    linkClickCount: poster.linkClickCount,
+                    favoriteCount: poster.favoriteCount,
+                    similarityScore: poster.semanticScore,
+                    tags: [poster.categoryName, poster.regionName].filter((tag): tag is string => Boolean(tag))
+                  }}
+                />
+              ))}
+            </div>
+            {displayCount < posters.length && (
+              <div className="flex justify-center mt-10">
+                <button
+                  onClick={() => setDisplayCount(prev => prev + PAGE_SIZE)}
+                  className="flex items-center gap-2 px-8 py-4 bg-gray-50 hover:bg-blue-50 text-gray-500 hover:text-blue-600 font-black text-sm rounded-[1.5rem] transition-all border border-gray-100 hover:border-blue-100"
+                >
+                  <ChevronDown size={18} /> 더 보기 ({posters.length - displayCount}개 남음)
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="py-32 text-center bg-gray-50/50 rounded-[3rem] border border-dashed border-gray-100 mt-8">
+            <Search className="mx-auto text-gray-200 mb-4" size={48} />
+            <p className="text-gray-400 font-black">검색 결과가 없습니다.</p>
+            <p className="text-gray-300 text-xs font-bold mt-1">다른 검색어나 필터를 시도해보세요.</p>
+          </div>
+        )}
+      </main>
+
+      <Footer />
+      <BottomNav />
+    </div>
+  );
+}

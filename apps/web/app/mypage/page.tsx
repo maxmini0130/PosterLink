@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
 import Link from "next/link";
-import { User, MessageSquare, Heart, Bell, LogOut, ChevronRight, MapPin, Calendar, Trash2, Star, PlusCircle } from "lucide-react";
+import { User, MessageSquare, Heart, Bell, LogOut, ChevronRight, MapPin, Calendar, Trash2, Star, PlusCircle, Building2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
@@ -122,6 +122,16 @@ export default function MyPage() {
                 <Heart size={22} fill="currentColor" />
               </div>
               <span className="font-black text-gray-700">내가 찜한 포스터</span>
+            </div>
+            <ChevronRight className="text-gray-200 group-hover:text-blue-600 transition-colors" />
+          </Link>
+
+          <Link href="/institutions/following" className="flex items-center justify-between p-6 bg-white rounded-3xl border border-gray-100 hover:border-blue-100 transition-all group shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-50 text-blue-700 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Building2 size={22} />
+              </div>
+              <span className="font-black text-gray-700">팔로우한 기관</span>
             </div>
             <ChevronRight className="text-gray-200 group-hover:text-blue-600 transition-colors" />
           </Link>

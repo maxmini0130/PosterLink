@@ -271,6 +271,26 @@ PostgreSQL
 - `rejected`: 반려
 - `expired`: 마감 종료
 
+---
+
+## 12. 현재 운영 확장 모델 (2026-08-04)
+
+### 기관 정본
+- `institutions`: 공개 기관명, slug, 유형, 지역, 홈페이지, 기관 검증 상태, 신뢰도, 최종 수집일
+- `collection_sources.institution_id`: 내부 수집 채널과 공개 기관 정본의 연결
+- `institution_follows`: `(user_id, institution_id)` 복합 PK로 중복 팔로우 방지
+
+### 공고와 기관 관계
+- `posters.organizer_id`: 실제 주최·주관기관
+- `posters.source_institution_id`: 게시·수집 출처 기관
+- `posters.application_institution_id`: 신청 접수기관
+
+세 관계는 서로 대체하지 않는다. 수집 출처는 정확히 일치하는 기존 채널만 연결하고, 실제 주최·접수기관은 사람 검증 완료 공고만 자동 연결한다.
+
+### 공개 검색
+- `search_public_posters(...)`: 공개 RLS를 유지하면서 검색어·지역·분야·마감·정렬을 DB에서 조인하는 `SECURITY INVOKER` 함수
+- 지역·분야 관계 ID를 브라우저 URL에 대량 전달하지 않는다.
+
 ### comment.status
 - `normal`: 정상 노출
 - `hidden`: 관리자 숨김

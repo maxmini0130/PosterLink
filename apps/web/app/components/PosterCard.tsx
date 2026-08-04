@@ -10,6 +10,7 @@ interface PosterCardProps {
     title: string;
     org?: string;
     deadline?: string;
+    deadlineType?: string | null;
     tags?: string[];
     image?: string;
     images?: string[];
@@ -67,7 +68,7 @@ export function PosterCard({ poster }: PosterCardProps) {
           <div className="mt-4 space-y-2 text-xs font-bold text-slate-500">
             <p className={`inline-flex items-center gap-1.5 font-black ${soon && !closed ? "text-rose-700" : "text-slate-700"}`}>
               <CalendarClock size={14} />
-              {deadlineLabel(poster.deadline, dDay)}
+              {deadlineLabel(poster.deadline, poster.deadlineType, dDay)}
             </p>
             {region && (
               <p className="flex items-center gap-1.5">
@@ -121,8 +122,13 @@ export function PosterCard({ poster }: PosterCardProps) {
   );
 }
 
-function deadlineLabel(deadline: string | undefined, dDay: string) {
-  if (!deadline) return "상시 모집";
+function deadlineLabel(deadline: string | undefined, deadlineType: string | null | undefined, dDay: string) {
+  if (!deadline) {
+    if (deadlineType === "ongoing") return "상시 모집";
+    if (deadlineType === "until_exhausted") return "소진 시 마감";
+    if (deadlineType === "scheduled") return "모집 예정";
+    return "일정 확인 필요";
+  }
   if (dDay === "마감") return "신청 마감";
   if (dDay === "D-Day") return "오늘 마감";
 

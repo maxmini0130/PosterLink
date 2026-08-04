@@ -46,6 +46,16 @@
 - 신고 내역
 - 알림 설정
 - 로그아웃
+- 팔로우한 기관
+
+### 검색 유입 랜딩
+- 지역별 공고: `/regions/[region]`
+- 분야별 공고: `/categories/[category]`
+- 지역·분야 조합: `/regions/[region]/[category]`
+- 기관 목록·검색: `/institutions`
+- 기관 상세: `/institutions/[slug]`
+
+기관 상세에서는 실제 주최·주관 공고와 해당 기관 채널에서 게시·수집한 공고를 분리한다.
 
 ## 3. 포스터 상세 IA
 
