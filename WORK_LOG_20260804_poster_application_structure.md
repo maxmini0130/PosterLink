@@ -241,3 +241,9 @@
   - 크롤러 단위 테스트 `128/128` 통과
   - 웹 lint 경고·오류 없음
   - 웹 production build와 TypeScript 검사 성공
+- 운영 반영:
+  - 기능 변경 커밋 `5b3e6b9`를 `main`에 푸시했다.
+  - 운영 DB에 마이그레이션 `20260804010000`을 적용하고 `supabase_migrations.schema_migrations` 이력을 등록했다.
+  - `posters` 승인 강제 트리거 1개와 링크·분야·지역·이미지 변경 무효화 트리거 4개, 총 5개 설치를 확인했다.
+  - Vercel production 배포 완료 상태를 확인했다.
+  - 구조화 필드 전체를 사람이 대조한 기록은 아직 없으므로 자동 승인 없이 `verified`는 `0건`으로 유지했다.
