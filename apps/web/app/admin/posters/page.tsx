@@ -21,6 +21,7 @@ import { supabase } from "../../lib/supabase";
 import { fetchCategoryRegionNames } from "../../lib/posterHelpers";
 import { resolvePosterImageUrl } from "../../../lib/posterImage";
 import { getRegionLabel, getRegionScopeIds } from "../../../lib/regionHelpers";
+import { formatApplicationPeriod, formatPosterDate } from "../../../lib/posterApplication";
 import { PosterImageFallback } from "../../components/PosterImageFallback";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -292,7 +293,44 @@ function getOrganizationVerification(poster: any) {
 
 function getPosterOrgDisplayName(poster: any) {
   const organization = getOrganizationVerification(poster);
-  return organization?.displayOrgName || poster?.source_org_name || "기관 미상";
+  return poster?.organizer_name || organization?.displayOrgName || poster?.source_org_name || "기관 미상";
+}
+
+const VERIFICATION_STATUS_LABELS: Record<string, string> = {
+  unverified: "미검증",
+  needs_review: "추가 검토 필요",
+  verified: "사람 검증 완료",
+  rejected: "데이터 사용 불가",
+};
+
+function getStructuredPosterFacts(poster: any) {
+  const eventStart = formatPosterDate(poster?.event_start_at);
+  const eventEnd = formatPosterDate(poster?.event_end_at);
+  const eventPeriod = eventStart && eventEnd
+    ? `${eventStart} ~ ${eventEnd}`
+    : eventStart
+      ? `${eventStart}부터`
+      : eventEnd
+        ? `${eventEnd}까지`
+        : "";
+  const ageRange = poster?.target_age_min != null || poster?.target_age_max != null
+    ? `${poster?.target_age_min ?? "제한 없음"} ~ ${poster?.target_age_max ?? "제한 없음"}세`
+    : "";
+
+  return [
+    { key: "organizer", label: "주최·주관", value: normalizeOrgDisplayValue(poster?.organizer_name) },
+    { key: "application_org", label: "접수 기관", value: normalizeOrgDisplayValue(poster?.application_organization_name) },
+    { key: "eligibility", label: "지원 자격", value: normalizeOrgDisplayValue(poster?.eligibility_summary) },
+    { key: "age", label: "대상 연령", value: ageRange },
+    { key: "event", label: "행사 기간", value: eventPeriod },
+    { key: "location", label: "행사 장소", value: normalizeOrgDisplayValue(poster?.event_location) },
+    { key: "fee", label: "참가비", value: normalizeOrgDisplayValue(poster?.participation_fee) },
+    { key: "count", label: "모집 인원", value: normalizeOrgDisplayValue(poster?.recruitment_count) },
+    { key: "benefits", label: "혜택", value: normalizeOrgDisplayValue(poster?.benefits_summary) },
+    { key: "method", label: "신청 방법", value: normalizeOrgDisplayValue(poster?.application_method) },
+    { key: "documents", label: "필요 서류", value: normalizeOrgDisplayValue(poster?.required_documents) },
+    { key: "contact", label: "문의", value: normalizeOrgDisplayValue(poster?.contact_info) },
+  ].filter((fact) => fact.value);
 }
 
 function getFieldVerificationWarningLabel(poster: any) {
@@ -842,6 +880,14 @@ export default function AdminPostersPage() {
   const previewReadableFacts = previewPoster ? getReadableNoticeFacts(previewPoster) : [];
   const previewAttachmentInfo = previewPoster ? getAttachmentAnalysisInfo(previewPoster) : null;
   const previewExternalOriginalInfo = previewPoster ? getExternalOriginalInfo(previewPoster) : null;
+  const previewStructuredFacts = previewPoster ? getStructuredPosterFacts(previewPoster) : [];
+  const previewApplicationPeriod = previewPoster
+    ? formatApplicationPeriod({
+        applicationStartAt: previewPoster.application_start_at,
+        applicationEndAt: previewPoster.application_end_at,
+        deadlineType: previewPoster.deadline_type,
+      })
+    : "";
 
   const applySearchFilters = () => {
     setPage(0);
@@ -1676,6 +1722,36 @@ export default function AdminPostersPage() {
                   </div>
                 </div>
 
+                <div className="border-y border-gray-100 py-4 dark:border-slate-800">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <p className="flex items-center gap-1.5 text-xs font-black text-gray-700 dark:text-slate-200">
+                      <FileCheck size={13} /> 구조화 신청 정보
+                    </p>
+                    <div className="flex flex-wrap gap-2 text-[11px] font-black">
+                      <span className={previewPoster.verification_status === "verified" ? "rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" : "rounded-full bg-amber-100 px-2.5 py-1 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"}>
+                        {VERIFICATION_STATUS_LABELS[previewPoster.verification_status] || "미검증"}
+                      </span>
+                      {previewPoster.data_confidence != null && (
+                        <span className="rounded-full bg-gray-100 px-2.5 py-1 text-gray-600 dark:bg-slate-800 dark:text-slate-300">
+                          신뢰도 {Math.round(Number(previewPoster.data_confidence) * 100)}%
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <dl className="grid gap-x-5 gap-y-3 text-xs sm:grid-cols-2">
+                    <div>
+                      <dt className="font-black text-gray-400">모집 기간</dt>
+                      <dd className="mt-1 font-bold leading-5 text-gray-900 dark:text-white">{previewApplicationPeriod}</dd>
+                    </div>
+                    {previewStructuredFacts.map((fact) => (
+                      <div key={fact.key}>
+                        <dt className="font-black text-gray-400">{fact.label}</dt>
+                        <dd className="mt-1 whitespace-pre-wrap font-bold leading-5 text-gray-900 dark:text-white">{fact.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+
                 {previewReadableFacts.length > 0 && (
                   <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-slate-800 dark:bg-slate-900/40">
                     <p className="mb-3 flex items-center gap-1.5 text-xs font-black text-gray-700 dark:text-slate-200">
@@ -1893,10 +1969,8 @@ export default function AdminPostersPage() {
 
                 <div className="grid gap-3 text-sm">
                   <div className="rounded-2xl border border-gray-100 p-4 dark:border-slate-800">
-                    <p className="mb-1 text-xs font-black text-gray-400">마감일</p>
-                    <p className="font-bold text-gray-900 dark:text-white">
-                      {previewPoster.application_end_at ? new Date(previewPoster.application_end_at).toLocaleDateString() : "상시"}
-                    </p>
+                    <p className="mb-1 text-xs font-black text-gray-400">신청 일정</p>
+                    <p className="font-bold text-gray-900 dark:text-white">{previewApplicationPeriod}</p>
                   </div>
                   <div className="rounded-2xl border border-gray-100 p-4 dark:border-slate-800">
                     <p className="mb-1 text-xs font-black text-gray-400">등록일</p>
@@ -2048,8 +2122,9 @@ export default function AdminPostersPage() {
                   )}
                 </div>
 
-                {previewPoster.poster_status !== "published" && (
-                  <div className="flex flex-wrap gap-2 border-t border-gray-100 pt-5 dark:border-slate-800">
+                <div className="flex flex-wrap gap-2 border-t border-gray-100 pt-5 dark:border-slate-800">
+                  {previewPoster.poster_status !== "published" && (
+                    <>
                     <button
                       onClick={() => {
                         setPreviewPoster(null);
@@ -2071,26 +2146,27 @@ export default function AdminPostersPage() {
                       <X size={17} />
                       반려
                     </button>
-                    <Link
-                      href={`/operator/posters/${previewPoster.id}/edit?returnTo=admin`}
-                      className="flex items-center gap-2 rounded-2xl bg-blue-50 px-5 py-3 text-sm font-black text-blue-600 transition-colors hover:bg-blue-100 dark:bg-blue-900/10 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                    </>
+                  )}
+                  <Link
+                    href={`/operator/posters/${previewPoster.id}/edit?returnTo=admin`}
+                    className="flex items-center gap-2 rounded-2xl bg-blue-50 px-5 py-3 text-sm font-black text-blue-600 transition-colors hover:bg-blue-100 dark:bg-blue-900/10 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                  >
+                    <PencilLine size={17} />
+                    구조화 정보 수정
+                  </Link>
+                  {previewPoster.poster_status === "rejected" && (
+                    <button
+                      onClick={() => {
+                        void handleDeleteRejected(previewPoster);
+                      }}
+                      className="flex items-center gap-2 rounded-2xl bg-red-600 px-5 py-3 text-sm font-black text-white transition-colors hover:bg-red-700"
                     >
-                      <PencilLine size={17} />
-                      수정
-                    </Link>
-                    {previewPoster.poster_status === "rejected" && (
-                      <button
-                        onClick={() => {
-                          void handleDeleteRejected(previewPoster);
-                        }}
-                        className="flex items-center gap-2 rounded-2xl bg-red-600 px-5 py-3 text-sm font-black text-white transition-colors hover:bg-red-700"
-                      >
-                        <Trash2 size={17} />
-                        완전 삭제
-                      </button>
-                    )}
-                  </div>
-                )}
+                      <Trash2 size={17} />
+                      완전 삭제
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>

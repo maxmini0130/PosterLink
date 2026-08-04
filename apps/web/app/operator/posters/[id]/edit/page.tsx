@@ -1,16 +1,111 @@
 "use client";
-import toast from "react-hot-toast";
 
-import { useState, useEffect } from "react";
-import { supabase } from "../../../../lib/supabase";
-import { fetchCategoryRegionNames } from "../../../../lib/posterHelpers";
-import { useRouter, useParams, useSearchParams } from "next/navigation";
-import { ChevronLeft, Loader2, Trash2, Camera, AlertCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import {
+  AlertCircle,
+  Camera,
+  CheckCircle2,
+  ChevronLeft,
+  ExternalLink,
+  Info,
+  Loader2,
+  Trash2,
+} from "lucide-react";
+import toast from "react-hot-toast";
 import { Button } from "@posterlink/ui";
+
 import { ImageCropper } from "../../../../components/ImageCropper";
 import { PosterImageFallback } from "../../../../components/PosterImageFallback";
+import { fetchCategoryRegionNames } from "../../../../lib/posterHelpers";
+import {
+  getCityRegions,
+  getDistrictRegions,
+  getRegionLabel,
+  getSelectedCityId,
+  getSelectedDistrictId,
+} from "../../../../lib/regionHelpers";
+import { supabase } from "../../../../lib/supabase";
+import {
+  buildPosterStructuredUpdate,
+  type PosterStructuredEditorValues,
+  type PosterStructuredTimestamps,
+  toKstDateInput,
+} from "../../../../../lib/posterStructuredEditor";
 import { resolvePosterImageUrl } from "../../../../../lib/posterImage";
-import { getCityRegions, getDistrictRegions, getRegionLabel, getSelectedCityId, getSelectedDistrictId } from "../../../../lib/regionHelpers";
+
+type EditorForm = PosterStructuredEditorValues & {
+  categoryId: string;
+  regionId: string;
+  noticeLink: string;
+  applyLink: string;
+  thumbnailUrl: string;
+  sourceKey: string;
+};
+
+type PosterLink = {
+  url: string;
+  link_type: string;
+  is_primary: boolean | null;
+};
+
+const EMPTY_FORM: EditorForm = {
+  title: "",
+  sourceOrgName: "",
+  organizerName: "",
+  applicationOrganizationName: "",
+  categoryId: "",
+  regionId: "",
+  appStartAt: "",
+  appEndAt: "",
+  deadlineType: "unknown",
+  eventStartAt: "",
+  eventEndAt: "",
+  eligibilitySummary: "",
+  targetAgeMin: "",
+  targetAgeMax: "",
+  participationFee: "",
+  benefitsSummary: "",
+  recruitmentCount: "",
+  applicationMethod: "",
+  requiredDocuments: "",
+  contactInfo: "",
+  eventLocation: "",
+  summaryShort: "",
+  verificationStatus: "unverified",
+  dataConfidence: "",
+  verifiedAt: "",
+  noticeLink: "",
+  applyLink: "",
+  thumbnailUrl: "",
+  sourceKey: "",
+};
+
+const inputClass =
+  "w-full rounded-lg border border-gray-200 bg-white px-3 py-3 text-sm font-semibold text-gray-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100";
+const labelClass = "mb-2 block text-xs font-black text-gray-600";
+
+function structuredValues(form: EditorForm): PosterStructuredEditorValues {
+  const {
+    categoryId: _categoryId,
+    regionId: _regionId,
+    noticeLink: _noticeLink,
+    applyLink: _applyLink,
+    thumbnailUrl: _thumbnailUrl,
+    sourceKey: _sourceKey,
+    ...values
+  } = form;
+  return values;
+}
+
+function text(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function httpUrlOrEmpty(value: unknown) {
+  const candidate = text(value).trim();
+  return /^https?:\/\//i.test(candidate) ? candidate : "";
+}
 
 export default function EditPosterPage() {
   const router = useRouter();
@@ -27,276 +122,485 @@ export default function EditPosterPage() {
   const [newImageBlob, setNewImageBlob] = useState<Blob | null>(null);
   const [showCropper, setShowCropper] = useState(false);
   const [rejectionReason, setRejectionReason] = useState<string | null>(null);
-
-  const [formData, setFormData] = useState({
-    title: "",
-    sourceOrgName: "",
-    categoryId: "",
-    regionId: "",
-    appEndAt: "",
-    summaryShort: "",
-    officialLink: "",
-    thumbnailUrl: "",
-    sourceKey: "",
-  });
+  const [fieldVerification, setFieldVerification] = useState<unknown>(null);
+  const [originalTimestamps, setOriginalTimestamps] = useState<PosterStructuredTimestamps>({});
+  const [formData, setFormData] = useState<EditorForm>(EMPTY_FORM);
+  const [initialFormData, setInitialFormData] = useState<EditorForm>(EMPTY_FORM);
 
   useEffect(() => {
     const fetchData = async () => {
-      const [{ data: cats }, { data: regs }, { data: poster }] = await Promise.all([
-        supabase.from("categories").select("*").order("sort_order"),
-        supabase.from("regions").select("*").in("level", ["nation", "sido", "sigungu"]).order("level", { ascending: false }).order("full_name", { ascending: true }),
-        supabase.from("posters").select("*").eq("id", id).single(),
-      ]);
+      try {
+        const [{ data: cats }, { data: regs }, { data: poster, error: posterError }] = await Promise.all([
+          supabase.from("categories").select("*").order("sort_order"),
+          supabase.from("regions").select("*").in("level", ["nation", "sido", "sigungu"]).order("level", { ascending: false }).order("full_name", { ascending: true }),
+          supabase.from("posters").select("*").eq("id", id).single(),
+        ]);
+        if (posterError) throw posterError;
+        if (cats) setCategories(cats);
+        if (regs) setRegions(regs);
 
-      if (cats) setCategories(cats);
-      if (regs) setRegions(regs);
-
-      if (poster) {
-        setRejectionReason(poster.poster_status === "rejected" ? poster.rejection_reason ?? null : null);
-
-        const [{ data: linkData }, metaMap] = await Promise.all([
-          supabase.from("poster_links").select("url").eq("poster_id", id).eq("is_primary", true).maybeSingle(),
+        const [{ data: links, error: linksError }, metaMap] = await Promise.all([
+          supabase.from("poster_links").select("url,link_type,is_primary").eq("poster_id", id),
           fetchCategoryRegionNames([id]),
         ]);
+        if (linksError) throw linksError;
+        const posterLinks = (links ?? []) as PosterLink[];
+        const noticeLink = posterLinks.find((link) => link.link_type === "official_notice")
+          ?? posterLinks.find((link) => link.link_type === "official_homepage")
+          ?? posterLinks.find((link) => link.is_primary);
+        const applyLink = posterLinks.find((link) => link.link_type === "official_apply");
         const meta = metaMap[id];
-
-        setFormData({
-          title: poster.title || "",
-          sourceOrgName: poster.source_org_name || "",
+        const nextForm: EditorForm = {
+          title: text(poster.title),
+          sourceOrgName: text(poster.source_org_name),
+          organizerName: text(poster.organizer_name),
+          applicationOrganizationName: text(poster.application_organization_name),
           categoryId: meta?.categoryId || "",
           regionId: meta?.regionId || "",
-          appEndAt: poster.application_end_at ? poster.application_end_at.slice(0, 10) : "",
-          summaryShort: poster.summary_short || "",
-          officialLink: linkData?.url || "",
-          thumbnailUrl: poster.thumbnail_url || "",
-          sourceKey: poster.source_key || "",
+          appStartAt: toKstDateInput(poster.application_start_at),
+          appEndAt: toKstDateInput(poster.application_end_at),
+          deadlineType: poster.deadline_type || "unknown",
+          eventStartAt: toKstDateInput(poster.event_start_at),
+          eventEndAt: toKstDateInput(poster.event_end_at),
+          eligibilitySummary: text(poster.eligibility_summary),
+          targetAgeMin: poster.target_age_min == null ? "" : String(poster.target_age_min),
+          targetAgeMax: poster.target_age_max == null ? "" : String(poster.target_age_max),
+          participationFee: text(poster.participation_fee),
+          benefitsSummary: text(poster.benefits_summary),
+          recruitmentCount: text(poster.recruitment_count),
+          applicationMethod: text(poster.application_method),
+          requiredDocuments: text(poster.required_documents),
+          contactInfo: text(poster.contact_info),
+          eventLocation: text(poster.event_location),
+          summaryShort: text(poster.summary_short),
+          verificationStatus: poster.verification_status || "unverified",
+          dataConfidence: poster.data_confidence == null ? "" : String(poster.data_confidence),
+          verifiedAt: text(poster.verified_at),
+          noticeLink: noticeLink?.url || httpUrlOrEmpty(poster.source_key),
+          applyLink: applyLink?.url || "",
+          thumbnailUrl: text(poster.thumbnail_url),
+          sourceKey: text(poster.source_key),
+        };
+        setRejectionReason(poster.poster_status === "rejected" ? poster.rejection_reason ?? null : null);
+        setFieldVerification(poster.field_verification);
+        setOriginalTimestamps({
+          applicationStartAt: poster.application_start_at,
+          applicationEndAt: poster.application_end_at,
+          eventStartAt: poster.event_start_at,
+          eventEndAt: poster.event_end_at,
         });
+        setFormData(nextForm);
+        setInitialFormData(nextForm);
+      } catch (error: any) {
+        toast.error(`포스터를 불러오지 못했습니다: ${error.message}`);
+      } finally {
+        setInitialLoading(false);
       }
-
-      setInitialLoading(false);
     };
 
-    fetchData();
+    void fetchData();
   }, [id]);
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setOriginalImage(reader.result as string);
-        setShowCropper(true);
-      };
-      reader.readAsDataURL(file);
-    }
+  const updateForm = <K extends keyof EditorForm>(key: K, value: EditorForm[K]) => {
+    setFormData((current) => ({ ...current, [key]: value }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setOriginalImage(reader.result as string);
+      setShowCropper(true);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setLoading(true);
     try {
-      let thumbnailUrl = formData.thumbnailUrl;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("로그인이 필요합니다.");
 
+      const taxonomyChanged = formData.categoryId !== initialFormData.categoryId
+        || formData.regionId !== initialFormData.regionId;
+      const linksChanged = formData.noticeLink.trim() !== initialFormData.noticeLink.trim()
+        || formData.applyLink.trim() !== initialFormData.applyLink.trim();
+      const extraChangedFields = [
+        ...(taxonomyChanged ? ["poster_taxonomy"] : []),
+        ...(linksChanged ? ["poster_links"] : []),
+        ...(newImageBlob ? ["thumbnail_url"] : []),
+      ];
+      const structuredUpdate = buildPosterStructuredUpdate({
+        values: structuredValues(formData),
+        initialValues: structuredValues(initialFormData),
+        fieldVerification,
+        reviewerId: user.id,
+        additionalChangedFields: extraChangedFields,
+        originalTimestamps,
+      });
+
+      let thumbnailUrl = formData.thumbnailUrl;
       if (newImageBlob) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error("인증 오류");
-        const fileName = `${Date.now()}_cropped.jpg`;
-        const filePath = `${user.id}/${fileName}`;
+        const filePath = `${user.id}/${Date.now()}_cropped.jpg`;
         const { error: uploadError } = await supabase.storage
           .from("poster-originals")
           .upload(filePath, newImageBlob, { contentType: "image/jpeg" });
         if (uploadError) throw uploadError;
-        const { data: { publicUrl } } = supabase.storage.from("poster-originals").getPublicUrl(filePath);
-        thumbnailUrl = publicUrl;
+        thumbnailUrl = supabase.storage.from("poster-originals").getPublicUrl(filePath).data.publicUrl;
       }
 
-      const { error } = await supabase.from("posters").update({
-        title: formData.title,
-        source_org_name: formData.sourceOrgName,
-        application_end_at: formData.appEndAt || null,
-        summary_short: formData.summaryShort,
-        ...(newImageBlob ? { thumbnail_url: thumbnailUrl } : {}),
-      }).eq("id", id);
+      const { error: posterUpdateError } = await supabase
+        .from("posters")
+        .update({
+          ...structuredUpdate.update,
+          ...(newImageBlob ? { thumbnail_url: thumbnailUrl } : {}),
+        })
+        .eq("id", id);
+      if (posterUpdateError) throw posterUpdateError;
 
-      if (error) throw error;
-
-      const { error: categoryDeleteError } = await supabase.from("poster_categories").delete().eq("poster_id", id);
-      if (categoryDeleteError) throw categoryDeleteError;
-
-      if (formData.categoryId) {
-        const { error: categoryInsertError } = await supabase.from("poster_categories").insert({ poster_id: id, category_id: formData.categoryId });
-        if (categoryInsertError) throw categoryInsertError;
+      if (taxonomyChanged) {
+        const [{ error: categoryDeleteError }, { error: regionDeleteError }] = await Promise.all([
+          supabase.from("poster_categories").delete().eq("poster_id", id),
+          supabase.from("poster_regions").delete().eq("poster_id", id),
+        ]);
+        if (categoryDeleteError) throw categoryDeleteError;
+        if (regionDeleteError) throw regionDeleteError;
+        if (formData.categoryId) {
+          const { error } = await supabase.from("poster_categories").insert({ poster_id: id, category_id: formData.categoryId });
+          if (error) throw error;
+        }
+        if (formData.regionId) {
+          const { error } = await supabase.from("poster_regions").insert({ poster_id: id, region_id: formData.regionId });
+          if (error) throw error;
+        }
       }
 
-      const { error: regionDeleteError } = await supabase.from("poster_regions").delete().eq("poster_id", id);
-      if (regionDeleteError) throw regionDeleteError;
-
-      if (formData.regionId) {
-        const { error: regionInsertError } = await supabase.from("poster_regions").insert({ poster_id: id, region_id: formData.regionId });
-        if (regionInsertError) throw regionInsertError;
+      if (linksChanged) {
+        const { error: linkDeleteError } = await supabase
+          .from("poster_links")
+          .delete()
+          .eq("poster_id", id)
+          .in("link_type", ["official_notice", "official_apply", "official_homepage"]);
+        if (linkDeleteError) throw linkDeleteError;
+        const linksToInsert = [
+          ...(formData.noticeLink.trim() ? [{
+            poster_id: id,
+            link_type: "official_notice",
+            url: formData.noticeLink.trim(),
+            title: "공식 공고 원문",
+            is_primary: !formData.applyLink.trim(),
+          }] : []),
+          ...(formData.applyLink.trim() ? [{
+            poster_id: id,
+            link_type: "official_apply",
+            url: formData.applyLink.trim(),
+            title: "공식 신청 페이지",
+            is_primary: true,
+          }] : []),
+        ];
+        if (linksToInsert.length > 0) {
+          const { error } = await supabase.from("poster_links").insert(linksToInsert);
+          if (error) throw error;
+        }
       }
 
-      const { error: linkDeleteError } = await supabase
-        .from("poster_links")
-        .delete()
-        .eq("poster_id", id)
-        .eq("link_type", "official_homepage");
-      if (linkDeleteError) throw linkDeleteError;
-
-      if (formData.officialLink) {
-        const { error: linkInsertError } = await supabase.from("poster_links").insert({
-          poster_id: id,
-          link_type: "official_homepage",
-          url: formData.officialLink,
-          title: "공식 홈페이지",
-          is_primary: true,
-        });
-        if (linkInsertError) throw linkInsertError;
+      if (returnPath === "/admin/posters") {
+        const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
+        if (profile?.role === "admin" || profile?.role === "super_admin") {
+          const { error: auditError } = await supabase.from("admin_actions").insert({
+            admin_id: user.id,
+            target_type: "poster",
+            target_id: id,
+            action_type: "update",
+            action_reason: "구조화 포스터 정보 교정",
+            metadata_json: {
+              changed_fields: structuredUpdate.changedFields,
+              verification_status: formData.verificationStatus,
+              editor: "poster_structured_editor",
+            },
+          });
+          if (auditError) console.error("Failed to write poster edit audit", auditError);
+        }
       }
 
-      toast.success("저장되었습니다.");
+      toast.success("포스터 정보와 검수 이력을 저장했습니다.");
       router.push(returnPath);
-    } catch (err: any) {
-      toast.error("오류 발생: " + err.message);
+      router.refresh();
+    } catch (error: any) {
+      toast.error(`저장하지 못했습니다: ${error.message}`);
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!confirm("포스터를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) return;
+    if (!confirm("포스터를 완전히 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) return;
     const response = await fetch(`/api/posters/${id}`, { method: "DELETE" });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
-      toast.error(result.error ?? "Failed to delete poster.");
+      toast.error(result.error ?? "포스터를 삭제하지 못했습니다.");
       return;
     }
     router.push(returnPath);
   };
 
-  if (initialLoading) return <div className="p-20 text-center font-bold text-blue-600">데이터 로드 중...</div>;
+  if (initialLoading) {
+    return <div className="p-20 text-center text-sm font-bold text-blue-600">포스터 정보를 불러오는 중...</div>;
+  }
 
-  const previewUrl = newImageBlob ? URL.createObjectURL(newImageBlob) : resolvePosterImageUrl(formData.thumbnailUrl, formData.sourceKey);
+  const previewUrl = newImageBlob
+    ? URL.createObjectURL(newImageBlob)
+    : resolvePosterImageUrl(formData.thumbnailUrl, formData.sourceKey);
   const selectedCityId = getSelectedCityId(formData.regionId, regions);
   const selectedDistrictId = getSelectedDistrictId(formData.regionId, regions);
   const districtRegions = getDistrictRegions(regions, selectedCityId || null);
 
   return (
-    <div className="max-w-3xl mx-auto pb-20">
+    <div className="mx-auto max-w-5xl pb-20">
       {showCropper && originalImage && (
         <ImageCropper
           image={originalImage}
-          onCropComplete={(blob) => { setNewImageBlob(blob); setShowCropper(false); }}
+          onCropComplete={(blob) => {
+            setNewImageBlob(blob);
+            setShowCropper(false);
+          }}
           onCancel={() => setShowCropper(false)}
         />
       )}
 
-      <div className="flex items-center gap-4 mb-8">
-        <button onClick={() => router.back()} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-          <ChevronLeft size={24} />
+      <header className="mb-6 flex items-start gap-3">
+        <button type="button" onClick={() => router.back()} className="mt-0.5 rounded-lg p-2 text-gray-500 hover:bg-gray-100" aria-label="뒤로">
+          <ChevronLeft size={22} />
         </button>
         <div>
-          <h1 className="text-2xl font-black text-gray-900">포스터 수정</h1>
-          {returnPath === "/admin/posters" && (
-            <p className="text-xs font-bold text-gray-400 mt-1">관리자 검수 화면에서 편집 중입니다.</p>
-          )}
+          <h1 className="text-2xl font-black text-gray-900">포스터 정보 교정</h1>
+          <p className="mt-1 text-sm font-semibold text-gray-500">원문과 포스터 이미지를 대조한 뒤 사실 정보와 검증 상태를 저장하세요.</p>
         </div>
-      </div>
+      </header>
 
       {rejectionReason && (
-        <div className="mb-8 flex gap-3 rounded-[2rem] border border-rose-100 bg-rose-50 p-5 text-rose-700">
-          <AlertCircle size={20} className="mt-0.5 shrink-0" />
+        <div className="mb-6 flex gap-3 rounded-lg border border-rose-200 bg-rose-50 p-4 text-rose-700">
+          <AlertCircle size={19} className="mt-0.5 shrink-0" />
           <div>
             <p className="text-sm font-black">관리자 반려 사유</p>
-            <p className="mt-1 text-sm font-bold leading-relaxed">{rejectionReason}</p>
+            <p className="mt-1 text-sm font-semibold leading-6">{rejectionReason}</p>
           </div>
         </div>
       )}
 
-      {previewUrl && (
-        <div className="mb-4 rounded-[2.5rem] overflow-hidden border border-gray-100 shadow-sm relative w-full h-[300px] group">
+      <div className="mb-6 grid gap-5 border-y border-gray-200 bg-white py-5 md:grid-cols-[220px_1fr]">
+        <div className="relative aspect-[3/4] overflow-hidden rounded-lg border border-gray-200 bg-gray-50 group">
           <PosterImageFallback
             src={previewUrl}
             alt="포스터 이미지"
             title={formData.title}
-            org={formData.sourceOrgName}
-            fallbackClassName="p-6"
-            imgClassName="h-full w-full object-contain bg-gray-50"
+            org={formData.organizerName || formData.sourceOrgName}
+            fallbackClassName="p-5"
+            imgClassName="h-full w-full object-contain"
           />
-          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-            <label htmlFor="edit-poster-upload" className="cursor-pointer bg-white px-4 py-2 rounded-xl text-xs font-black text-gray-900 shadow-xl flex items-center gap-2">
-              <Camera size={14} /> 이미지 교체
-            </label>
-          </div>
-        </div>
-      )}
-      <div className="mb-8">
-        <input type="file" id="edit-poster-upload" className="hidden" accept="image/*" onChange={handleImageChange} />
-        {!previewUrl && (
-          <label htmlFor="edit-poster-upload" className="flex items-center justify-center gap-2 h-24 border-2 border-dashed border-gray-200 rounded-[2rem] cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-all text-sm font-bold text-gray-400">
-            <Camera size={18} /> 포스터 이미지 업로드
+          <label htmlFor="edit-poster-upload" className="absolute inset-x-3 bottom-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-gray-950/90 px-3 py-2 text-xs font-black text-white opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+            <Camera size={15} /> 이미지 교체
           </label>
-        )}
-        {newImageBlob && (
-          <p className="text-xs font-bold text-blue-600 text-center mt-2">새 이미지가 선택되었습니다. 저장 시 반영됩니다.</p>
-        )}
+          <input type="file" id="edit-poster-upload" className="sr-only" accept="image/*" onChange={handleImageChange} />
+        </div>
+        <div className="flex flex-col justify-center">
+          <p className="text-xs font-black text-gray-500">이미지 검수</p>
+          <p className="mt-2 text-sm font-semibold leading-6 text-gray-700">실제 모집 포스터인지, 글자가 식별 가능한지, 현재 공고와 같은 내용인지 확인하세요.</p>
+          <label htmlFor="edit-poster-upload" className="mt-4 inline-flex w-fit cursor-pointer items-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-black text-gray-700 hover:bg-gray-50">
+            <Camera size={16} /> 포스터 이미지 선택
+          </label>
+          {newImageBlob && <p className="mt-3 flex items-center gap-1.5 text-xs font-black text-emerald-600"><CheckCircle2 size={14} /> 새 이미지가 저장 대기 중입니다.</p>}
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-10 rounded-[3rem] shadow-sm border border-gray-50">
+      <form onSubmit={handleSubmit} className="space-y-0 overflow-hidden rounded-lg border border-gray-200 bg-white">
+        <section className="grid gap-5 p-5 md:grid-cols-2 md:p-7">
           <div className="md:col-span-2">
-            <label className="text-xs font-black text-gray-400 uppercase mb-2 block px-1">TITLE</label>
-            <input type="text" required value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-100 text-gray-900" />
+            <h2 className="text-base font-black text-gray-900">기본 정보</h2>
+            <p className="mt-1 text-xs font-semibold text-gray-500">수집 출처와 실제 사업 기관은 서로 다를 수 있습니다.</p>
+          </div>
+          <div className="md:col-span-2">
+            <label className={labelClass}>제목</label>
+            <input required value={formData.title} onChange={(e) => updateForm("title", e.target.value)} className={inputClass} />
           </div>
           <div>
-            <label className="text-xs font-black text-gray-400 uppercase mb-2 block px-1">ORGANIZATION</label>
-            <input type="text" required value={formData.sourceOrgName} onChange={(e) => setFormData({ ...formData, sourceOrgName: e.target.value })} className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-100 text-gray-900" />
+            <label className={labelClass}>수집 출처 기관</label>
+            <input required value={formData.sourceOrgName} onChange={(e) => updateForm("sourceOrgName", e.target.value)} className={inputClass} />
+            <p className="mt-1.5 text-[11px] font-semibold text-gray-400">게시판·사이트를 운영하는 수집 출처</p>
           </div>
           <div>
-            <label className="text-xs font-black text-gray-400 uppercase mb-2 block px-1">REGION</label>
-            <select value={selectedCityId} onChange={(e) => setFormData({ ...formData, regionId: e.target.value })} className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-100 appearance-none text-gray-900">
+            <label className={labelClass}>실제 주최·주관 기관</label>
+            <input value={formData.organizerName} onChange={(e) => updateForm("organizerName", e.target.value)} className={inputClass} />
+          </div>
+          <div>
+            <label className={labelClass}>실제 신청 접수 기관</label>
+            <input value={formData.applicationOrganizationName} onChange={(e) => updateForm("applicationOrganizationName", e.target.value)} className={inputClass} />
+          </div>
+          <div>
+            <label className={labelClass}>분야</label>
+            <select value={formData.categoryId} onChange={(e) => updateForm("categoryId", e.target.value)} className={inputClass}>
+              <option value="">선택 안 함</option>
+              {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelClass}>시·도</label>
+            <select value={selectedCityId} onChange={(e) => updateForm("regionId", e.target.value)} className={inputClass}>
               <option value="">전국</option>
-              {getCityRegions(regions).map(r => <option key={r.id} value={r.id}>{getRegionLabel(r)}</option>)}
-            </select>
-            {districtRegions.length > 0 && (
-              <select value={selectedDistrictId} onChange={(e) => setFormData({ ...formData, regionId: e.target.value || selectedCityId })} className="mt-3 w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-100 appearance-none text-gray-900">
-                <option value="">{getRegionLabel(regions.find((r) => r.id === selectedCityId))} 전체</option>
-                {districtRegions.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-              </select>
-            )}
-          </div>
-          <div>
-            <label className="text-xs font-black text-gray-400 uppercase mb-2 block px-1">CATEGORY</label>
-            <select value={formData.categoryId} onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })} className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-100 appearance-none text-gray-900">
-              <option value="">선택</option>
-              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {getCityRegions(regions).map((region) => <option key={region.id} value={region.id}>{getRegionLabel(region)}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-xs font-black text-gray-400 uppercase mb-2 block px-1">DEADLINE</label>
-            <input type="date" value={formData.appEndAt} onChange={(e) => setFormData({ ...formData, appEndAt: e.target.value })} className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none text-gray-900" />
+            <label className={labelClass}>시·군·구</label>
+            <select
+              value={selectedDistrictId}
+              disabled={districtRegions.length === 0}
+              onChange={(e) => updateForm("regionId", e.target.value || selectedCityId)}
+              className={`${inputClass} disabled:bg-gray-100 disabled:text-gray-400`}
+            >
+              <option value="">{selectedCityId ? "시·도 전체" : "시·도를 먼저 선택"}</option>
+              {districtRegions.map((region) => <option key={region.id} value={region.id}>{region.name}</option>)}
+            </select>
+          </div>
+        </section>
+
+        <section className="grid gap-5 border-t border-gray-200 p-5 md:grid-cols-3 md:p-7">
+          <div className="md:col-span-3">
+            <h2 className="text-base font-black text-gray-900">일정</h2>
+          </div>
+          <div>
+            <label className={labelClass}>모집 유형</label>
+            <select value={formData.deadlineType} onChange={(e) => updateForm("deadlineType", e.target.value as EditorForm["deadlineType"])} className={inputClass}>
+              <option value="unknown">미확인</option>
+              <option value="fixed">고정 마감</option>
+              <option value="ongoing">상시 모집</option>
+              <option value="until_exhausted">소진 시 마감</option>
+              <option value="scheduled">모집 예정</option>
+            </select>
+          </div>
+          <div>
+            <label className={labelClass}>모집 시작일</label>
+            <input type="date" value={formData.appStartAt} onChange={(e) => updateForm("appStartAt", e.target.value)} className={inputClass} />
+          </div>
+          <div>
+            <label className={labelClass}>모집 종료일</label>
+            <input type="date" value={formData.appEndAt} onChange={(e) => updateForm("appEndAt", e.target.value)} className={inputClass} />
+          </div>
+          <div>
+            <label className={labelClass}>행사 시작일</label>
+            <input type="date" value={formData.eventStartAt} onChange={(e) => updateForm("eventStartAt", e.target.value)} className={inputClass} />
+          </div>
+          <div>
+            <label className={labelClass}>행사 종료일</label>
+            <input type="date" value={formData.eventEndAt} onChange={(e) => updateForm("eventEndAt", e.target.value)} className={inputClass} />
+          </div>
+        </section>
+
+        <section className="grid gap-5 border-t border-gray-200 p-5 md:grid-cols-2 md:p-7">
+          <div className="md:col-span-2">
+            <h2 className="text-base font-black text-gray-900">모집 대상과 제공 내용</h2>
           </div>
           <div className="md:col-span-2">
-            <label className="text-xs font-black text-gray-400 uppercase mb-2 block px-1">SUMMARY</label>
-            <textarea value={formData.summaryShort} onChange={(e) => setFormData({ ...formData, summaryShort: e.target.value })} rows={3} className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-100 text-gray-900 resize-none" placeholder="공고 핵심 내용을 2~3문장으로 요약해주세요." />
+            <label className={labelClass}>지원 자격·대상</label>
+            <textarea rows={3} value={formData.eligibilitySummary} onChange={(e) => updateForm("eligibilitySummary", e.target.value)} className={inputClass} />
           </div>
-          <div className="md:col-span-2 border-t border-gray-50 pt-6 mt-4">
-            <label className="text-xs font-black text-gray-400 uppercase mb-2 block px-1">OFFICIAL LINK</label>
-            <input type="url" value={formData.officialLink} onChange={(e) => setFormData({ ...formData, officialLink: e.target.value })} className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-100 text-gray-900" placeholder="https://..." />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelClass}>최소 연령</label>
+              <input type="number" min="0" max="120" value={formData.targetAgeMin} onChange={(e) => updateForm("targetAgeMin", e.target.value)} className={inputClass} />
+            </div>
+            <div>
+              <label className={labelClass}>최대 연령</label>
+              <input type="number" min="0" max="120" value={formData.targetAgeMax} onChange={(e) => updateForm("targetAgeMax", e.target.value)} className={inputClass} />
+            </div>
           </div>
+          <div>
+            <label className={labelClass}>모집 인원</label>
+            <input value={formData.recruitmentCount} onChange={(e) => updateForm("recruitmentCount", e.target.value)} className={inputClass} placeholder="예: 20명, 선착순" />
+          </div>
+          <div>
+            <label className={labelClass}>참가비</label>
+            <input value={formData.participationFee} onChange={(e) => updateForm("participationFee", e.target.value)} className={inputClass} placeholder="예: 무료, 10,000원" />
+          </div>
+          <div>
+            <label className={labelClass}>행사 장소</label>
+            <input value={formData.eventLocation} onChange={(e) => updateForm("eventLocation", e.target.value)} className={inputClass} />
+          </div>
+          <div className="md:col-span-2">
+            <label className={labelClass}>혜택·지원 내용</label>
+            <textarea rows={3} value={formData.benefitsSummary} onChange={(e) => updateForm("benefitsSummary", e.target.value)} className={inputClass} />
+          </div>
+        </section>
+
+        <section className="grid gap-5 border-t border-gray-200 p-5 md:grid-cols-2 md:p-7">
+          <div className="md:col-span-2">
+            <h2 className="text-base font-black text-gray-900">신청과 문의</h2>
+          </div>
+          <div>
+            <label className={labelClass}>신청 방법</label>
+            <textarea rows={3} value={formData.applicationMethod} onChange={(e) => updateForm("applicationMethod", e.target.value)} className={inputClass} />
+          </div>
+          <div>
+            <label className={labelClass}>필요 서류</label>
+            <textarea rows={3} value={formData.requiredDocuments} onChange={(e) => updateForm("requiredDocuments", e.target.value)} className={inputClass} />
+          </div>
+          <div className="md:col-span-2">
+            <label className={labelClass}>문의처</label>
+            <input value={formData.contactInfo} onChange={(e) => updateForm("contactInfo", e.target.value)} className={inputClass} placeholder="전화번호, 이메일, 담당 부서" />
+          </div>
+          <div>
+            <label className={labelClass}>공식 공고 원문</label>
+            <div className="relative">
+              <ExternalLink size={15} className="absolute left-3 top-3.5 text-gray-400" />
+              <input type="url" value={formData.noticeLink} onChange={(e) => updateForm("noticeLink", e.target.value)} className={`${inputClass} pl-9`} placeholder="https://..." />
+            </div>
+          </div>
+          <div>
+            <label className={labelClass}>공식 신청 페이지</label>
+            <div className="relative">
+              <ExternalLink size={15} className="absolute left-3 top-3.5 text-gray-400" />
+              <input type="url" value={formData.applyLink} onChange={(e) => updateForm("applyLink", e.target.value)} className={`${inputClass} pl-9`} placeholder="https://..." />
+            </div>
+          </div>
+        </section>
+
+        <section className="grid gap-5 border-t border-gray-200 p-5 md:grid-cols-2 md:p-7">
+          <div className="md:col-span-2">
+            <h2 className="text-base font-black text-gray-900">표시 요약과 검증</h2>
+          </div>
+          <div className="md:col-span-2">
+            <label className={labelClass}>핵심 모집 요약</label>
+            <textarea rows={5} value={formData.summaryShort} onChange={(e) => updateForm("summaryShort", e.target.value)} className={`${inputClass} resize-y whitespace-pre-wrap leading-6`} placeholder="대상, 기간, 혜택, 신청 방법을 읽기 좋은 문장과 줄바꿈으로 정리하세요." />
+          </div>
+          <div>
+            <label className={labelClass}>검증 상태</label>
+            <select value={formData.verificationStatus} onChange={(e) => updateForm("verificationStatus", e.target.value as EditorForm["verificationStatus"])} className={inputClass}>
+              <option value="unverified">미검증</option>
+              <option value="needs_review">추가 검토 필요</option>
+              <option value="verified">사람 검증 완료</option>
+              <option value="rejected">데이터 사용 불가</option>
+            </select>
+          </div>
+          <div>
+            <label className={labelClass}>데이터 신뢰도</label>
+            <input type="number" min="0" max="1" step="0.001" value={formData.dataConfidence} onChange={(e) => updateForm("dataConfidence", e.target.value)} className={inputClass} placeholder="0~1" />
+          </div>
+          <div className="md:col-span-2 flex gap-2 rounded-lg bg-blue-50 p-3 text-xs font-semibold leading-5 text-blue-700">
+            <Info size={16} className="mt-0.5 shrink-0" />
+            검증 완료로 저장하면 현재 시각과 변경 필드가 기록됩니다. AI가 남긴 기존 근거는 삭제되지 않습니다.
+          </div>
+        </section>
+
+        <div className="flex flex-col gap-3 border-t border-gray-200 bg-gray-50 p-5 sm:flex-row sm:items-center sm:justify-between md:p-7">
+          <button type="button" onClick={handleDelete} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-rose-200 px-4 text-sm font-black text-rose-600 hover:bg-rose-50">
+            <Trash2 size={17} /> 완전 삭제
+          </button>
+          <Button type="submit" disabled={loading} className="h-12 min-w-48 rounded-lg bg-gray-950 px-6 text-sm font-black text-white hover:bg-black disabled:bg-gray-300">
+            {loading ? <Loader2 className="animate-spin" size={18} /> : "교정 내용 저장"}
+          </Button>
         </div>
-
-        <Button disabled={loading} className="w-full h-16 text-lg font-black bg-gray-900 hover:bg-black rounded-[2rem] shadow-2xl transition-all disabled:bg-gray-200">
-          {loading ? <Loader2 className="animate-spin" /> : "저장하기"}
-        </Button>
-
-        <button
-          type="button"
-          onClick={handleDelete}
-          className="w-full h-14 text-sm font-black text-rose-500 border-2 border-rose-100 hover:bg-rose-50 rounded-[2rem] transition-all flex items-center justify-center gap-2"
-        >
-          <Trash2 size={18} /> 포스터 삭제
-        </button>
       </form>
     </div>
   );
