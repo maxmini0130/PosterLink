@@ -69,3 +69,23 @@ test("마감 키워드 근처의 단일 날짜는 마감일로 채택한다", ()
   assert.equal(result.suggestedDeadline, "2026-02-20");
   assert.ok(!codesOf(result).includes("date-end-before-start"));
 });
+
+test("신청 대상 앞의 바우처 사용기간을 신청 마감으로 덮어쓰지 않는다", () => {
+  const result = evaluatePosterDateQuality({
+    content:
+      "사용기간: 2026.07.01 ~ 2027.05.31 신청 대상은 수급자입니다. 신청 방법은? 2026년 12월 31일까지 주민센터에서 신청하세요.",
+    deadline: "2026-12-31",
+  });
+  assert.equal(result.suggestedDeadline, "2026-12-31");
+  assert.ok(!codesOf(result).includes("deadline-mismatch"));
+});
+
+test("종료일 없는 신청기간 뒤의 여행기간을 마감으로 사용하지 않는다", () => {
+  const result = evaluatePosterDateQuality({
+    content:
+      "신청기간: 2026. 8. 10.(월) 10:00~ 신청방법: 온라인 신청 여행기간: 2026. 8. 21.(금)~8. 23.(일)",
+    deadline: "2026-08-10",
+  });
+  assert.equal(result.suggestedDeadline, null);
+  assert.ok(codesOf(result).includes("open-ended-application-period"));
+});

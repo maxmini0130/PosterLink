@@ -4,6 +4,7 @@ import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
+import WebSocket from "ws";
 import { evaluatePosterQuality, summarizeQualityIssues } from "./poster-quality-gate.js";
 
 const DEFAULT_OUTPUT = "data/baseline/ai_kpi_report.json";
@@ -44,6 +45,7 @@ function createSupabase() {
 
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
+    realtime: { transport: WebSocket },
   });
 }
 

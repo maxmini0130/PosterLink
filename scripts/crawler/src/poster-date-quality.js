@@ -1,4 +1,5 @@
-const APPLICATION_LABEL_PATTERN = /신청|접수|모집|응모|지원|등록/i;
+const APPLICATION_LABEL_PATTERN = /(?:신청|접수|모집|응모|지원|등록)\s*(?:기간|기한|마감|일정|방법(?:은)?\s*\??)/i;
+const NON_APPLICATION_PERIOD_PATTERN = /(?:여행|행사|교육|운영|활동|사용|사업|프로그램)\s*(?:기간|일정)/i;
 const ALWAYS_OPEN_PATTERN = /상시\s*(?:모집|접수|신청|운영)?|수시\s*(?:모집|접수|신청)?/i;
 const MIDNIGHT_PATTERN = /(?:^|[^\d])00\s*:\s*00(?:[^\d]|$)/;
 const RANGE_CONNECTOR_PATTERN = /(?:~|〜|∼|-|부터|에서|까지)/;
@@ -114,9 +115,14 @@ function applicationSegments(text) {
   let match;
 
   while ((match = pattern.exec(text)) !== null) {
-    const start = Math.max(0, (match.index ?? 0) - 50);
+    const start = match.index ?? 0;
     const end = Math.min(text.length, (match.index ?? 0) + 260);
-    segments.push(text.slice(start, end));
+    const rawSegment = text.slice(start, end);
+    const trailingText = rawSegment.slice(match[0].length);
+    const stopAt = trailingText.search(NON_APPLICATION_PERIOD_PATTERN);
+    segments.push(stopAt >= 0
+      ? rawSegment.slice(0, match[0].length + stopAt)
+      : rawSegment);
   }
 
   return segments;
@@ -181,6 +187,13 @@ function findApplicationRange(text) {
   return null;
 }
 
+function hasOpenEndedApplicationPeriod(segment) {
+  const firstDate = extractFullDates(segment)[0];
+  if (!firstDate) return false;
+  const trailing = segment.slice(firstDate.endIndex, firstDate.endIndex + 40);
+  return /^(?:\s*\([월화수목금토일]\))?(?:\s*\d{1,2}\s*:\s*\d{2})?\s*(?:~|〜|∼|부터)(?!\s*[\u2018\u2019']?\d{2,4}\s*(?:년|[./-]))/.test(trailing);
+}
+
 function addIssue(issues, code, severity, reason, evidence = "") {
   issues.push({
     code,
@@ -218,6 +231,16 @@ export function evaluatePosterDateQuality(input = {}, options = {}) {
   }
 
   const appSegments = applicationSegments(text);
+  const hasOpenEndedApplication = !appRange && appSegments.some(hasOpenEndedApplicationPeriod);
+  if (hasOpenEndedApplication) {
+    addIssue(
+      issues,
+      "open-ended-application-period",
+      "medium",
+      "application/recruitment period states a start but no confirmed end date",
+      appSegments.find(hasOpenEndedApplicationPeriod)
+    );
+  }
   if (appSegments.some(hasMonthDayWithoutYear)) {
     addIssue(
       issues,
@@ -307,7 +330,11 @@ export function chooseDeadlineForStorage(extractedDeadline, dateQuality) {
   const normalizedDeadline = dateQuality?.normalizedDeadline ?? normalizeDateOnly(extractedDeadline);
   if (!normalizedDeadline) return null;
 
-  const blockingCodes = new Set(["invalid-extracted-deadline", "date-end-before-start"]);
+  const blockingCodes = new Set([
+    "invalid-extracted-deadline",
+    "date-end-before-start",
+    "open-ended-application-period",
+  ]);
   if ((dateQuality?.issues ?? []).some((issue) => blockingCodes.has(issue.code))) return null;
 
   return normalizedDeadline;

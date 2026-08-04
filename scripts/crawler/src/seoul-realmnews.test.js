@@ -119,3 +119,31 @@ test("Seoul text-only fallback keeps actionable notices and rejects administrati
     false,
   );
 });
+
+test("Seoul broad news requires public recruitment or application evidence before image review", () => {
+  for (const title of [
+    "무연고 사망자 공고",
+    "수인성·식품매개감염병 6대 예방수칙",
+    "2027년 시민참여예산 온라인 시민투표",
+    "서울배달+ 땡겨요 8월 한달 간 한강 배달존 특별한 할인 혜택!",
+    "서울 주얼리 브랜드 14개사, 더현대 서울에 모인다",
+  ]) {
+    assert.equal(
+      getPostExclusionReason({
+        title,
+        content: "서울시 분야별 새소식의 상세 안내 내용입니다.",
+        url: "https://news.seoul.go.kr/gov/archives/579999",
+      })?.rule,
+      "seoul-news-without-public-action",
+    );
+  }
+
+  assert.equal(
+    getPostExclusionReason({
+      title: "[상주서울농장] 로컬만만세-씨실과 날실처럼",
+      content: "신청기간 2026. 8. 10. 10:00부터 서울시 공공서비스예약에서 신청",
+      url: "https://news.seoul.go.kr/gov/archives/579936",
+    }),
+    null,
+  );
+});

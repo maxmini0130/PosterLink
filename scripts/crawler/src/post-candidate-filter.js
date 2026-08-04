@@ -323,6 +323,9 @@ const RESULT_ANNOUNCEMENT_RULES = new Set([
   "selected-or-result-announcement",
 ]);
 const RESULT_ANNOUNCEMENT_TITLE_PATTERN = /\uACB0\uACFC|\uD569\uACA9\uC790|\uB2F9\uCCA8\uC790|\uC120\uC815\uC790|\uBC1C\uD45C|\uBA85\uB2E8|\uC11C\uB958\s*\uC2EC\uC0AC|\uCD5C\uC885\s*\uD569\uACA9/i;
+const SEOUL_BROAD_NEWS_SOURCE_PATTERN = /(?:seoul-city|www\.seoul\.go\.kr\/news\/news_notice\.do|news\.seoul\.go\.kr)/i;
+const SEOUL_PUBLIC_ACTION_TITLE_PATTERN = /\uBAA8\uC9D1|\uC2E0\uCCAD|\uC811\uC218|\uACF5\uBAA8|\uCD94\uCC9C|\uC9C0\uC6D0\s*\uC0AC\uC5C5|\uC9C0\uC6D0\uC0AC\uC5C5|\uC218\uAC15\uC0DD|\uAD50\uC721\uC0DD|\uCC38\uC5EC\uC790|\uCC38\uAC00\uC790|\uC11C\uC6B8\uB18D\uC7A5/i;
+const SEOUL_PUBLIC_ACTION_DETAIL_PATTERN = /(?:\uBAA8\uC9D1|\uC2E0\uCCAD|\uC811\uC218|\uC81C\uCD9C)\s*(?:\uAE30\uAC04|\uBC29\uBC95|\uC11C\uB958)|\uC2E0\uCCAD\s*\uB300\uC0C1|\uBAA8\uC9D1\s*\uB300\uC0C1|\uC811\uC218\uCC98|\uC120\uCC29\uC21C/i;
 
 function isCentralTextNoticeFalsePositive(post, matchedRule, text) {
   if (!CENTRAL_TEXT_NOTICE_FALSE_POSITIVE_RULES.has(matchedRule.name)) return false;
@@ -402,6 +405,16 @@ export function getPostExclusionReason(post = {}) {
     post.url,
     post.source_key,
   ].filter(Boolean).join(" ");
+  if (
+    SEOUL_BROAD_NEWS_SOURCE_PATTERN.test(sourceText)
+    && !SEOUL_PUBLIC_ACTION_TITLE_PATTERN.test(title)
+    && !SEOUL_PUBLIC_ACTION_DETAIL_PATTERN.test(text)
+  ) {
+    return {
+      rule: "seoul-news-without-public-action",
+      reason: "Seoul news without recruitment/application evidence is not a poster notice",
+    };
+  }
   if (NEWS_BOARD_SOURCE_PATTERN.test(sourceText) && !ACTIVE_RECRUITMENT_ACTION_PATTERN.test(`${title} ${text}`)) {
     return {
       rule: "news-board-without-action",
