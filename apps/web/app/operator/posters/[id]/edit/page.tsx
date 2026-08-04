@@ -28,8 +28,13 @@ import {
 import { supabase } from "../../../../lib/supabase";
 import {
   buildPosterStructuredUpdate,
+  emptyPosterStructuredVerificationReview,
+  POSTER_STRUCTURED_VERIFICATION_CHECK_KEYS,
+  readPosterStructuredVerificationReview,
   type PosterStructuredEditorValues,
   type PosterStructuredTimestamps,
+  type PosterStructuredVerificationCheckKey,
+  type PosterStructuredVerificationReview,
   toKstDateInput,
 } from "../../../../../lib/posterStructuredEditor";
 import { resolvePosterImageUrl } from "../../../../../lib/posterImage";
@@ -84,6 +89,40 @@ const EMPTY_FORM: EditorForm = {
 const inputClass =
   "w-full rounded-lg border border-gray-200 bg-white px-3 py-3 text-sm font-semibold text-gray-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100";
 const labelClass = "mb-2 block text-xs font-black text-gray-600";
+const VERIFICATION_CHECK_LABELS: Record<PosterStructuredVerificationCheckKey, string> = {
+  imageMatchesNotice: "포스터 이미지가 원문 공고와 같고 글자를 식별할 수 있음",
+  titleAndOrganizations: "제목과 실제 주최·주관·접수 기관을 원문과 대조함",
+  applicationSchedule: "모집 기간·마감 유형·행사 일정을 원문과 대조함",
+  eligibilityAndBenefits: "신청 대상·연령·비용·혜택·모집 인원을 대조함",
+  applicationAndContact: "신청 방법·필요 서류·문의처·행사 장소를 대조함",
+  officialLinks: "공식 공고 원문과 신청 페이지 링크를 직접 열어 확인함",
+};
+const VERIFICATION_SENSITIVE_EDITOR_FIELDS = new Set<keyof EditorForm>([
+  "title",
+  "sourceOrgName",
+  "organizerName",
+  "applicationOrganizationName",
+  "categoryId",
+  "regionId",
+  "appStartAt",
+  "appEndAt",
+  "deadlineType",
+  "eventStartAt",
+  "eventEndAt",
+  "eligibilitySummary",
+  "targetAgeMin",
+  "targetAgeMax",
+  "participationFee",
+  "benefitsSummary",
+  "recruitmentCount",
+  "applicationMethod",
+  "requiredDocuments",
+  "contactInfo",
+  "eventLocation",
+  "summaryShort",
+  "noticeLink",
+  "applyLink",
+]);
 
 function structuredValues(form: EditorForm): PosterStructuredEditorValues {
   const {
@@ -124,16 +163,24 @@ export default function EditPosterPage() {
   const [rejectionReason, setRejectionReason] = useState<string | null>(null);
   const [fieldVerification, setFieldVerification] = useState<unknown>(null);
   const [originalTimestamps, setOriginalTimestamps] = useState<PosterStructuredTimestamps>({});
+  const [isAdminReviewer, setIsAdminReviewer] = useState(false);
+  const [verificationReview, setVerificationReview] = useState<PosterStructuredVerificationReview>(
+    emptyPosterStructuredVerificationReview,
+  );
   const [formData, setFormData] = useState<EditorForm>(EMPTY_FORM);
   const [initialFormData, setInitialFormData] = useState<EditorForm>(EMPTY_FORM);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [{ data: cats }, { data: regs }, { data: poster, error: posterError }] = await Promise.all([
+        const { data: { user } } = await supabase.auth.getUser();
+        const [{ data: cats }, { data: regs }, { data: poster, error: posterError }, { data: profile }] = await Promise.all([
           supabase.from("categories").select("*").order("sort_order"),
           supabase.from("regions").select("*").in("level", ["nation", "sido", "sigungu"]).order("level", { ascending: false }).order("full_name", { ascending: true }),
           supabase.from("posters").select("*").eq("id", id).single(),
+          user
+            ? supabase.from("profiles").select("role").eq("id", user.id).maybeSingle()
+            : Promise.resolve({ data: null }),
         ]);
         if (posterError) throw posterError;
         if (cats) setCategories(cats);
@@ -183,6 +230,8 @@ export default function EditPosterPage() {
         };
         setRejectionReason(poster.poster_status === "rejected" ? poster.rejection_reason ?? null : null);
         setFieldVerification(poster.field_verification);
+        setIsAdminReviewer(profile?.role === "admin" || profile?.role === "super_admin");
+        setVerificationReview(readPosterStructuredVerificationReview(poster.field_verification));
         setOriginalTimestamps({
           applicationStartAt: poster.application_start_at,
           applicationEndAt: poster.application_end_at,
@@ -202,12 +251,22 @@ export default function EditPosterPage() {
   }, [id]);
 
   const updateForm = <K extends keyof EditorForm>(key: K, value: EditorForm[K]) => {
+    if (
+      initialFormData.verificationStatus === "verified" &&
+      VERIFICATION_SENSITIVE_EDITOR_FIELDS.has(key) &&
+      formData[key] !== value
+    ) {
+      setVerificationReview(emptyPosterStructuredVerificationReview());
+    }
     setFormData((current) => ({ ...current, [key]: value }));
   };
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (initialFormData.verificationStatus === "verified") {
+      setVerificationReview(emptyPosterStructuredVerificationReview());
+    }
     const reader = new FileReader();
     reader.onloadend = () => {
       setOriginalImage(reader.result as string);
@@ -232,13 +291,27 @@ export default function EditPosterPage() {
         ...(linksChanged ? ["poster_links"] : []),
         ...(newImageBlob ? ["thumbnail_url"] : []),
       ];
+      const editorValues = structuredValues(formData);
+      const initialEditorValues = structuredValues(initialFormData);
+      const hasEditorChanges = JSON.stringify(editorValues) !== JSON.stringify(initialEditorValues)
+        || extraChangedFields.length > 0;
+      const shouldDemoteOperatorEdit = !isAdminReviewer
+        && initialEditorValues.verificationStatus === "verified"
+        && hasEditorChanges;
+      if (shouldDemoteOperatorEdit) {
+        editorValues.verificationStatus = "needs_review";
+      }
       const structuredUpdate = buildPosterStructuredUpdate({
-        values: structuredValues(formData),
-        initialValues: structuredValues(initialFormData),
+        values: editorValues,
+        initialValues: initialEditorValues,
         fieldVerification,
         reviewerId: user.id,
         additionalChangedFields: extraChangedFields,
         originalTimestamps,
+        verificationReview,
+        canVerify: isAdminReviewer,
+        officialNoticeUrl: formData.noticeLink,
+        hasPosterImage: Boolean(newImageBlob || resolvePosterImageUrl(formData.thumbnailUrl, formData.sourceKey)),
       });
 
       let thumbnailUrl = formData.thumbnailUrl;
@@ -250,15 +323,6 @@ export default function EditPosterPage() {
         if (uploadError) throw uploadError;
         thumbnailUrl = supabase.storage.from("poster-originals").getPublicUrl(filePath).data.publicUrl;
       }
-
-      const { error: posterUpdateError } = await supabase
-        .from("posters")
-        .update({
-          ...structuredUpdate.update,
-          ...(newImageBlob ? { thumbnail_url: thumbnailUrl } : {}),
-        })
-        .eq("id", id);
-      if (posterUpdateError) throw posterUpdateError;
 
       if (taxonomyChanged) {
         const [{ error: categoryDeleteError }, { error: regionDeleteError }] = await Promise.all([
@@ -306,6 +370,15 @@ export default function EditPosterPage() {
         }
       }
 
+      const { error: posterUpdateError } = await supabase
+        .from("posters")
+        .update({
+          ...structuredUpdate.update,
+          ...(newImageBlob ? { thumbnail_url: thumbnailUrl } : {}),
+        })
+        .eq("id", id);
+      if (posterUpdateError) throw posterUpdateError;
+
       if (returnPath === "/admin/posters") {
         const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
         if (profile?.role === "admin" || profile?.role === "super_admin") {
@@ -317,7 +390,8 @@ export default function EditPosterPage() {
             action_reason: "구조화 포스터 정보 교정",
             metadata_json: {
               changed_fields: structuredUpdate.changedFields,
-              verification_status: formData.verificationStatus,
+              verification_status: editorValues.verificationStatus,
+              structured_review_completed: editorValues.verificationStatus === "verified",
               editor: "poster_structured_editor",
             },
           });
@@ -325,7 +399,11 @@ export default function EditPosterPage() {
         }
       }
 
-      toast.success("포스터 정보와 검수 이력을 저장했습니다.");
+      toast.success(
+        shouldDemoteOperatorEdit
+          ? "수정 내용을 저장하고 사람 검증 상태를 재검토로 변경했습니다."
+          : "포스터 정보와 검수 이력을 저장했습니다.",
+      );
       router.push(returnPath);
       router.refresh();
     } catch (error: any) {
@@ -356,6 +434,9 @@ export default function EditPosterPage() {
   const selectedCityId = getSelectedCityId(formData.regionId, regions);
   const selectedDistrictId = getSelectedDistrictId(formData.regionId, regions);
   const districtRegions = getDistrictRegions(regions, selectedCityId || null);
+  const checkedVerificationCount = POSTER_STRUCTURED_VERIFICATION_CHECK_KEYS.filter(
+    (key) => verificationReview.checks[key],
+  ).length;
 
   return (
     <div className="mx-auto max-w-5xl pb-20">
@@ -574,12 +655,63 @@ export default function EditPosterPage() {
             <label className={labelClass}>핵심 모집 요약</label>
             <textarea rows={5} value={formData.summaryShort} onChange={(e) => updateForm("summaryShort", e.target.value)} className={`${inputClass} resize-y whitespace-pre-wrap leading-6`} placeholder="대상, 기간, 혜택, 신청 방법을 읽기 좋은 문장과 줄바꿈으로 정리하세요." />
           </div>
+          {isAdminReviewer ? (
+            <div className="md:col-span-2 border-y border-gray-200 py-5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h3 className="text-sm font-black text-gray-900">사람 검증 체크리스트</h3>
+                  <p className="mt-1 text-xs font-semibold text-gray-500">
+                    포스터와 공식 원문을 직접 대조한 항목만 선택하세요. {checkedVerificationCount}/{POSTER_STRUCTURED_VERIFICATION_CHECK_KEYS.length}
+                  </p>
+                </div>
+                {formData.noticeLink && (
+                  <a
+                    href={formData.noticeLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-black text-blue-600 hover:underline"
+                  >
+                    <ExternalLink size={14} /> 공식 원문 열기
+                  </a>
+                )}
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {POSTER_STRUCTURED_VERIFICATION_CHECK_KEYS.map((key) => (
+                  <label key={key} className="flex cursor-pointer items-start gap-3 text-sm font-semibold leading-6 text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={verificationReview.checks[key]}
+                      onChange={(event) => setVerificationReview((current) => ({
+                        ...current,
+                        checks: { ...current.checks, [key]: event.target.checked },
+                      }))}
+                      className="mt-1 h-4 w-4 shrink-0 accent-blue-600"
+                    />
+                    <span>{VERIFICATION_CHECK_LABELS[key]}</span>
+                  </label>
+                ))}
+              </div>
+              <label className={`${labelClass} mt-5`}>검토 결과 메모</label>
+              <textarea
+                rows={3}
+                value={verificationReview.note}
+                onChange={(event) => setVerificationReview((current) => ({ ...current, note: event.target.value }))}
+                className={`${inputClass} resize-y leading-6`}
+                placeholder="원문에서 확인한 내용, 비어 있는 항목의 이유, 교정한 내용을 기록하세요."
+              />
+            </div>
+          ) : (
+            <div className="md:col-span-2 flex gap-2 border-y border-gray-200 py-4 text-xs font-semibold leading-5 text-gray-600">
+              <Info size={16} className="mt-0.5 shrink-0 text-blue-600" />
+              운영자가 내용을 수정하면 기존 사람 검증은 자동으로 재검토 상태가 됩니다. 최종 검증 완료 승인은 관리자만 할 수 있습니다.
+            </div>
+          )}
           <div>
             <label className={labelClass}>검증 상태</label>
             <select value={formData.verificationStatus} onChange={(e) => updateForm("verificationStatus", e.target.value as EditorForm["verificationStatus"])} className={inputClass}>
               <option value="unverified">미검증</option>
               <option value="needs_review">추가 검토 필요</option>
-              <option value="verified">사람 검증 완료</option>
+              <option value="verified" disabled={!isAdminReviewer}>사람 검증 완료</option>
               <option value="rejected">데이터 사용 불가</option>
             </select>
           </div>
@@ -589,7 +721,7 @@ export default function EditPosterPage() {
           </div>
           <div className="md:col-span-2 flex gap-2 rounded-lg bg-blue-50 p-3 text-xs font-semibold leading-5 text-blue-700">
             <Info size={16} className="mt-0.5 shrink-0" />
-            검증 완료로 저장하면 현재 시각과 변경 필드가 기록됩니다. AI가 남긴 기존 근거는 삭제되지 않습니다.
+            검증 완료로 저장하면 체크리스트, 검토 메모, 관리자, 현재 시각과 변경 필드가 기록됩니다. AI가 남긴 기존 근거는 삭제되지 않습니다.
           </div>
         </section>
 

@@ -13,6 +13,23 @@ export type PosterStructuredTimestamps = {
   eventEndAt?: string | null;
 };
 
+export const POSTER_STRUCTURED_VERIFICATION_CHECK_KEYS = [
+  "imageMatchesNotice",
+  "titleAndOrganizations",
+  "applicationSchedule",
+  "eligibilityAndBenefits",
+  "applicationAndContact",
+  "officialLinks",
+] as const;
+
+export type PosterStructuredVerificationCheckKey =
+  (typeof POSTER_STRUCTURED_VERIFICATION_CHECK_KEYS)[number];
+
+export type PosterStructuredVerificationReview = {
+  checks: Record<PosterStructuredVerificationCheckKey, boolean>;
+  note: string;
+};
+
 export type PosterStructuredEditorValues = {
   title: string;
   sourceOrgName: string;
@@ -86,6 +103,42 @@ function asPlainObject(value: unknown): PlainObject {
     : {};
 }
 
+export function emptyPosterStructuredVerificationReview(): PosterStructuredVerificationReview {
+  return {
+    checks: Object.fromEntries(
+      POSTER_STRUCTURED_VERIFICATION_CHECK_KEYS.map((key) => [key, false]),
+    ) as Record<PosterStructuredVerificationCheckKey, boolean>,
+    note: "",
+  };
+}
+
+export function readPosterStructuredVerificationReview(
+  fieldVerification: unknown,
+): PosterStructuredVerificationReview {
+  const verification = asPlainObject(fieldVerification);
+  const completed = asPlainObject(verification.humanStructuredVerification);
+  const draft = asPlainObject(verification.humanStructuredVerificationDraft);
+  const invalidation = asPlainObject(verification.structuredVerificationInvalidation);
+  const invalidatedAt = Date.parse(typeof invalidation.invalidatedAt === "string" ? invalidation.invalidatedAt : "");
+  const reviewedAt = Date.parse(typeof completed.reviewedAt === "string" ? completed.reviewedAt : "");
+  const draftUpdatedAt = Date.parse(typeof draft.updatedAt === "string" ? draft.updatedAt : "");
+  const completedIsInvalidated = Number.isFinite(invalidatedAt) && (
+    !Number.isFinite(reviewedAt) || invalidatedAt >= reviewedAt
+  );
+  const draftIsAfterInvalidation = Number.isFinite(draftUpdatedAt) && draftUpdatedAt > invalidatedAt;
+  const source = completedIsInvalidated
+    ? draftIsAfterInvalidation ? draft : {}
+    : Object.keys(completed).length > 0 ? completed : draft;
+  const checks = asPlainObject(source.checks);
+
+  return {
+    checks: Object.fromEntries(
+      POSTER_STRUCTURED_VERIFICATION_CHECK_KEYS.map((key) => [key, checks[key] === true]),
+    ) as Record<PosterStructuredVerificationCheckKey, boolean>,
+    note: typeof source.note === "string" ? source.note : "",
+  };
+}
+
 function cleanText(value: string) {
   const trimmed = value.trim();
   return trimmed || null;
@@ -143,6 +196,10 @@ export function buildPosterStructuredUpdate(input: {
   reviewerId: string;
   additionalChangedFields?: string[];
   originalTimestamps?: PosterStructuredTimestamps;
+  verificationReview?: PosterStructuredVerificationReview;
+  canVerify?: boolean;
+  officialNoticeUrl?: string | null;
+  hasPosterImage?: boolean;
   now?: Date;
 }) {
   const { values, initialValues } = input;
@@ -167,7 +224,7 @@ export function buildPosterStructuredUpdate(input: {
   }
   const dataConfidence = parseOptionalNumber(values.dataConfidence, "데이터 신뢰도", 0, 1);
 
-  const changedFields = [
+  const initiallyChangedFields = [
     ...new Set([
       ...FIELD_MAP
         .filter(([key]) => dateValue(String(values[key])) !== dateValue(String(initialValues[key])))
@@ -188,8 +245,58 @@ export function buildPosterStructuredUpdate(input: {
     ? existingHumanReview.source
     : "";
   const verificationChanged = values.verificationStatus !== initialValues.verificationStatus;
+  const existingStructuredReview = readPosterStructuredVerificationReview(existingVerification);
+  const verificationReview = input.verificationReview
+    ? {
+        checks: Object.fromEntries(
+          POSTER_STRUCTURED_VERIFICATION_CHECK_KEYS.map((key) => [
+            key,
+            Boolean(input.verificationReview?.checks[key]),
+          ]),
+        ) as Record<PosterStructuredVerificationCheckKey, boolean>,
+        note: input.verificationReview.note.trim(),
+      }
+    : null;
+  const reviewChanged = Boolean(
+    verificationReview &&
+    JSON.stringify(verificationReview) !== JSON.stringify(existingStructuredReview),
+  );
+  const requiresFreshVerification = values.verificationStatus === "verified" && (
+    verificationChanged ||
+    !values.verifiedAt ||
+    initiallyChangedFields.length > 0 ||
+    reviewChanged
+  );
+
+  if (requiresFreshVerification) {
+    if (!input.canVerify) {
+      throw new Error("사람 검증 완료는 관리자만 승인할 수 있습니다.");
+    }
+    if (!verificationReview) {
+      throw new Error("사람 검증 체크리스트를 확인해 주세요.");
+    }
+    if (POSTER_STRUCTURED_VERIFICATION_CHECK_KEYS.some((key) => !verificationReview.checks[key])) {
+      throw new Error("원문 대조 체크리스트를 모두 확인해 주세요.");
+    }
+    if (!verificationReview.note) {
+      throw new Error("검토 결과 메모를 입력해 주세요.");
+    }
+    if (!/^https?:\/\//i.test(input.officialNoticeUrl?.trim() ?? "")) {
+      throw new Error("검증에 사용한 공식 공고 원문 URL을 확인해 주세요.");
+    }
+    if (!input.hasPosterImage) {
+      throw new Error("원문과 대조할 포스터 이미지가 필요합니다.");
+    }
+  }
+
+  const changedFields = [
+    ...new Set([
+      ...initiallyChangedFields,
+      ...(reviewChanged ? ["human_structured_verification"] : []),
+    ]),
+  ];
   const verifiedAt = values.verificationStatus === "verified"
-    ? verificationChanged || !values.verifiedAt
+    ? requiresFreshVerification
       ? now.toISOString()
       : values.verifiedAt
     : null;
@@ -229,7 +336,7 @@ export function buildPosterStructuredUpdate(input: {
   };
 
   if (changedFields.length > 0) {
-    update.field_verification = {
+    const nextVerification: PlainObject = {
       ...existingVerification,
       humanReviewCorrection: {
         ...existingHumanReview,
@@ -244,6 +351,38 @@ export function buildPosterStructuredUpdate(input: {
         fields: [...new Set([...previousFields, ...changedFields])],
       },
     };
+
+    if (verificationReview && (reviewChanged || requiresFreshVerification)) {
+      nextVerification.humanStructuredVerificationDraft = {
+        checks: verificationReview.checks,
+        note: verificationReview.note,
+        updatedAt: now.toISOString(),
+        updatedBy: input.reviewerId,
+        officialNoticeUrl: input.officialNoticeUrl?.trim() || null,
+      };
+      if (values.verificationStatus === "verified") {
+        nextVerification.humanStructuredVerification = {
+          checks: verificationReview.checks,
+          note: verificationReview.note,
+          reviewedAt: verifiedAt,
+          reviewedBy: input.reviewerId,
+          officialNoticeUrl: input.officialNoticeUrl?.trim() || null,
+        };
+      }
+    }
+
+    if (
+      initialValues.verificationStatus === "verified" &&
+      values.verificationStatus !== "verified"
+    ) {
+      nextVerification.structuredVerificationInvalidation = {
+        invalidatedAt: now.toISOString(),
+        invalidatedBy: input.reviewerId,
+        reason: "verification_status_downgraded_after_edit",
+      };
+    }
+
+    update.field_verification = nextVerification;
   }
 
   return { update, changedFields };
