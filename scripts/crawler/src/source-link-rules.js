@@ -51,6 +51,11 @@ export function isLikelyApplicationLink(value, label = "") {
   }
 }
 
+export function shouldUseExternalNoticeDetail(detail) {
+  if (!detail?.url) return false;
+  return !isLikelyApplicationLink(detail.url, detail.originalLink?.label);
+}
+
 export function sanitizeKnownShortUrl(value) {
   const text = String(value ?? "").trim();
   if (!text) return text;

@@ -219,7 +219,7 @@ const TITLE_EXCLUDE_RULES = [
   },
   {
     name: "result-or-selected-list",
-    pattern: /결과\s*안내|선정\s*결과|추첨\s*결과|합격자|당첨자|서류심사|최종\s*합격|발표|선발.*공개|공개.*선발/i,
+    pattern: /결과\s*안내|선정\s*결과|추첨\s*결과|합격자|당첨자|서류심사|최종\s*합격|선발.*공개|공개.*선발/i,
     reason: "result announcement",
   },
   {
@@ -317,6 +317,12 @@ const LOCAL_SCHOLARSHIP_FALSE_POSITIVE_RULES = new Set([
 const LOCAL_SCHOLARSHIP_SOURCE_PATTERN = /(?:mapo-scholarship|mapojh\.or\.kr|\uB9C8\uD3EC\uC778\uC7AC\uC721\uC131\uC7A5\uD559\uC7AC\uB2E8)/i;
 const LOCAL_SCHOLARSHIP_SELECTION_NOTICE_PATTERN = /(?:\uC7A5\uD559(?:\uC0DD|\uAE08)?).*(?:\uC120\uBC1C|\uBAA8\uC9D1|\uC811\uC218|\uC2E0\uCCAD|\uC9C0\uC6D0\s*\uB300\uC0C1)|(?:\uC120\uBC1C|\uBAA8\uC9D1|\uC811\uC218|\uC2E0\uCCAD|\uC9C0\uC6D0\s*\uB300\uC0C1).*(?:\uC7A5\uD559(?:\uC0DD|\uAE08)?)/i;
 const SCHOLARSHIP_RESULT_OR_CEREMONY_PATTERN = /\uACB0\uACFC|\uBC1C\uD45C|\uBA85\uB2E8|\uC218\uC5EC\uC2DD/i;
+const RESULT_ANNOUNCEMENT_RULES = new Set([
+  "result-or-selected-list",
+  "korean-result-or-selected-list",
+  "selected-or-result-announcement",
+]);
+const RESULT_ANNOUNCEMENT_TITLE_PATTERN = /\uACB0\uACFC|\uD569\uACA9\uC790|\uB2F9\uCCA8\uC790|\uC120\uC815\uC790|\uBC1C\uD45C|\uBA85\uB2E8|\uC11C\uB958\s*\uC2EC\uC0AC|\uCD5C\uC885\s*\uD569\uACA9/i;
 
 function isCentralTextNoticeFalsePositive(post, matchedRule, text) {
   if (!CENTRAL_TEXT_NOTICE_FALSE_POSITIVE_RULES.has(matchedRule.name)) return false;
@@ -420,6 +426,13 @@ export function getPostExclusionReason(post = {}) {
     rule.pattern.test(title) || (!rule.titleOnly && rule.pattern.test(text))
   ));
   if (!matchedRule) return null;
+  if (
+    RESULT_ANNOUNCEMENT_RULES.has(matchedRule.name)
+    && ACTIVE_RECRUITMENT_ACTION_PATTERN.test(title)
+    && !RESULT_ANNOUNCEMENT_TITLE_PATTERN.test(title)
+  ) {
+    return null;
+  }
   if (matchedRule.requiresNoAction && ACTIVE_RECRUITMENT_ACTION_PATTERN.test(`${title} ${text}`)) {
     return null;
   }

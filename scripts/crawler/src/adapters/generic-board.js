@@ -1,7 +1,10 @@
 import { fetchPage } from "../crawler.js";
 import { resolveExternalOriginalDetailWithTrace } from "../external-original-resolver.js";
 import { filterAndOrderPosterImages } from "../poster-image-rules.js";
-import { isLikelyApplicationLink } from "../source-link-rules.js";
+import {
+  isLikelyApplicationLink,
+  shouldUseExternalNoticeDetail,
+} from "../source-link-rules.js";
 
 const DEFAULT_SELECTORS = {
   listItem: [
@@ -141,13 +144,16 @@ function buildConfig(site = {}, board = {}) {
   const boardSelectors = mergeObjects(board.selectors);
   const selectors = { ...DEFAULT_SELECTORS, ...siteSelectors, ...boardSelectors };
   const pagination = mergeObjects(site.pagination, board.pagination);
+  const linkTransform = mergeObjects(site.linkTransform, board.linkTransform);
   const urlFilters = mergeObjects(site.urlFilters, board.urlFilters);
   const externalOriginal = mergeObjects(site.externalOriginal ?? site.external_original, board.externalOriginal ?? board.external_original);
 
   return {
     selectors,
     pagination,
+    linkTransform,
     externalOriginal,
+    forceHttps: Boolean(board.forceHttps ?? site.forceHttps ?? urlFilters.forceHttps ?? false),
     sameHostOnly: Boolean(board.sameHostOnly ?? site.sameHostOnly ?? urlFilters.sameHostOnly ?? false),
     includeUrlPatterns: [
       ...toArray(site.includeUrlPatterns ?? urlFilters.include),
@@ -172,6 +178,37 @@ function resolveUrl(base, relative) {
   } catch {
     return relative;
   }
+}
+
+function normalizeResolvedUrl(value, config) {
+  if (!config.forceHttps) return value;
+  try {
+    const url = new URL(value);
+    if (url.protocol === "http:") url.protocol = "https:";
+    return url.href;
+  } catch {
+    return value;
+  }
+}
+
+export function resolveConfiguredListUrl(href, pageUrl, config = {}) {
+  const value = String(href ?? "").trim();
+  const pattern = config.linkTransform?.pattern;
+  const template = config.linkTransform?.template;
+
+  if (pattern && template) {
+    const match = value.match(new RegExp(pattern));
+    if (match) {
+      const transformed = String(template).replace(/\{([^}]+)\}/g, (_, key) => {
+        if (match.groups?.[key] !== undefined) return match.groups[key];
+        const index = Number(key);
+        return Number.isInteger(index) && match[index] !== undefined ? match[index] : "";
+      });
+      return normalizeResolvedUrl(resolveUrl(pageUrl, transformed), config);
+    }
+  }
+
+  return normalizeResolvedUrl(resolveUrl(pageUrl, value), config);
 }
 
 function getHost(value) {
@@ -306,10 +343,56 @@ function normalizeDate(value) {
   return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
 }
 
-function extractDeadline(text) {
+function normalizeYear(value) {
+  const number = Number(value);
+  if (!Number.isInteger(number)) return null;
+  return number < 100 ? 2000 + number : number;
+}
+
+function formatDate(year, month, day) {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year
+    || date.getUTCMonth() !== month - 1
+    || date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+export function extractDeadline(text) {
   const normalized = String(text ?? "").replace(/\s+/g, " ");
-  const rangeMatch = normalized.match(/(?:\uC2E0\uCCAD\uAE30\uAC04|\uC811\uC218\uAE30\uAC04|\uBAA8\uC9D1\uAE30\uAC04|\uC2E0\uCCAD|\uC811\uC218|\uBAA8\uC9D1|\uAE30\uAC04)[^\d]{0,40}(20\d{2}[-./]\d{1,2}[-./]\d{1,2})\s*(?:~|\uBD80\uD130|[-\u2013\u2014])\s*(20\d{2}[-./]\d{1,2}[-./]\d{1,2})/i);
+  const abbreviatedRange = normalized.match(
+    /(?:\uC2E0\uCCAD\uAE30\uAC04|\uC811\uC218\uAE30\uAC04|\uBAA8\uC9D1\uAE30\uAC04|\uC2E0\uCCAD\s*[:\uFF1A]|\uC811\uC218\s*[:\uFF1A]|\uBAA8\uC9D1\s*[:\uFF1A])[^\d]{0,40}[\u2018\u2019']?(\d{2,4})\s*[-./\uB144]\s*(\d{1,2})\s*[-./\uC6D4]\s*(\d{1,2})\s*[-./\uC77C]?(?:\s*\([^)]*\))?(?:\s*\d{1,2}:\d{2})?\s*(?:~|[-\u2013\u2014]|\uBD80\uD130)\s*(?:[\u2018\u2019']?(\d{2,4})\s*[-./\uB144]\s*)?(?:(\d{1,2})\s*[-./\uC6D4]\s*)?(\d{1,2})/i,
+  );
+  if (abbreviatedRange) {
+    const year = normalizeYear(abbreviatedRange[4] ?? abbreviatedRange[1]);
+    const month = Number(abbreviatedRange[5] ?? abbreviatedRange[2]);
+    const day = Number(abbreviatedRange[6]);
+    if (year) {
+      const result = formatDate(year, month, day);
+      if (result) return result;
+    }
+  }
+
+  const rangeMatch = normalized.match(/(?:\uC2E0\uCCAD\uAE30\uAC04|\uC811\uC218\uAE30\uAC04|\uBAA8\uC9D1\uAE30\uAC04|\uC2E0\uCCAD\s*[:\uFF1A]|\uC811\uC218\s*[:\uFF1A]|\uBAA8\uC9D1\s*[:\uFF1A])[^\d]{0,40}(20\d{2}[-./]\d{1,2}[-./]\d{1,2})(?:\s*\([^)]*\))?(?:\s*\d{1,2}:\d{2})?\s*(?:~|\uBD80\uD130|[-\u2013\u2014])\s*(20\d{2}[-./]\d{1,2}[-./]\d{1,2})/i);
   if (rangeMatch?.[2]) return normalizeDate(rangeMatch[2]);
+
+  if (/(?:\uC2E0\uCCAD\uAE30\uAC04|\uC811\uC218\uAE30\uAC04|\uBAA8\uC9D1\uAE30\uAC04)/i.test(normalized)) {
+    return null;
+  }
+
+  const koreanDeadline = normalized.match(
+    /(20\d{2})\s*\uB144\s*(\d{1,2})\s*\uC6D4\s*(\d{1,2})\s*\uC77C?\s*(?:\uAE4C\uC9C0|\uB9C8\uAC10)/i,
+  );
+  if (koreanDeadline) {
+    return formatDate(
+      Number(koreanDeadline[1]),
+      Number(koreanDeadline[2]),
+      Number(koreanDeadline[3]),
+    );
+  }
 
   for (const pattern of DEADLINE_PATTERNS) {
     const match = normalized.match(pattern);
@@ -350,8 +433,8 @@ function extractListItem($, row, pageUrl, site, config) {
 
   for (const $link of candidates) {
     const href = $link.attr("href");
-    if (!href || matchesAny(href, config.excludeUrlPatterns)) continue;
-    const url = resolveUrl(pageUrl, href);
+    if (!href) continue;
+    const url = resolveConfiguredListUrl(href, pageUrl, config);
     const title = getLinkTitle($, $row, $link, selectors, site);
     if (!shouldKeepLink({ url, title, baseUrl: pageUrl, config })) continue;
 
@@ -574,22 +657,27 @@ export default {
         })
       : null;
     const externalDetail = externalOriginalResult?.detail ?? null;
-
-    if (externalDetail?.images?.length) {
-      rawImages.unshift(...externalDetail.images.filter((imageUrl) => !rawImages.includes(imageUrl)));
-    }
-
-    const finalTitle = externalDetail?.title || title;
-    const finalContent = externalDetail?.content && externalDetail.content.length > content.length
-      ? externalDetail.content
-      : content;
-    const finalAttachments = externalDetail?.attachments?.length
-      ? uniqueByUrl([...attachments, ...externalDetail.attachments])
-      : attachments;
     const externalIsApplication = isLikelyApplicationLink(
       externalDetail?.url,
       externalDetail?.originalLink?.label,
     );
+    const useExternalNoticeDetail = shouldUseExternalNoticeDetail(externalDetail);
+
+    if (useExternalNoticeDetail && externalDetail?.images?.length) {
+      rawImages.unshift(...externalDetail.images.filter((imageUrl) => !rawImages.includes(imageUrl)));
+    }
+
+    const finalTitle = useExternalNoticeDetail && externalDetail?.title
+      ? externalDetail.title
+      : title;
+    const finalContent = useExternalNoticeDetail
+      && externalDetail?.content
+      && externalDetail.content.length > content.length
+      ? externalDetail.content
+      : content;
+    const finalAttachments = useExternalNoticeDetail && externalDetail?.attachments?.length
+      ? uniqueByUrl([...attachments, ...externalDetail.attachments])
+      : attachments;
     const sourceUrl = externalIsApplication
       ? postUrl
       : externalDetail?.url ?? postUrl;
@@ -612,7 +700,7 @@ export default {
       content: finalContent,
       site: site.name,
       sourceUrl,
-      preferredImageUrls: externalDetail?.images ?? [],
+      preferredImageUrls: useExternalNoticeDetail ? externalDetail?.images ?? [] : [],
     });
 
     return {

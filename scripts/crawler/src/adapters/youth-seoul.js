@@ -8,7 +8,10 @@ import {
 } from "../external-original-resolver.js";
 import { filterAndOrderPosterImages } from "../poster-image-rules.js";
 import { mergeAttachmentImageCandidates } from "../attachment-image-candidates.js";
-import { isLikelyApplicationLink } from "../source-link-rules.js";
+import {
+  isLikelyApplicationLink,
+  shouldUseExternalNoticeDetail,
+} from "../source-link-rules.js";
 
 const BASE_URL = "https://youth.seoul.go.kr";
 const IMAGE_ONLY_CONTENT =
@@ -18,11 +21,6 @@ const IMAGE_ONLY_CONTENT =
 function isMeaningfulContent(value) {
   const text = cleanText(value);
   return Boolean(text) && !["상세정보", "상세 정보"].includes(text);
-}
-
-export function shouldUseExternalNoticeDetail(detail) {
-  if (!detail?.url) return false;
-  return !isLikelyApplicationLink(detail.url, detail.originalLink?.label);
 }
 
 function extractInfoId(onclick) {

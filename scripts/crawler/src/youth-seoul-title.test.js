@@ -3,8 +3,8 @@ import test from "node:test";
 
 import {
   inferSpecificTitle,
-  shouldUseExternalNoticeDetail,
 } from "./adapters/youth-seoul.js";
+import { shouldUseExternalNoticeDetail } from "./source-link-rules.js";
 
 test("application forms are links only, not canonical notice content", () => {
   assert.equal(

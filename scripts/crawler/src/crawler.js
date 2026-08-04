@@ -134,6 +134,10 @@ const CENTRAL_TEXT_NOTICE_SIGNAL_PATTERN = /(?:\uC2E0\uCCAD|\uC811\uC218)\s*\uAE
 const LOCAL_SCHOLARSHIP_TEXT_NOTICE_SOURCE_PATTERN = /(?:mapo-scholarship|mapojh\.or\.kr|\uB9C8\uD3EC\uC778\uC7AC\uC721\uC131\uC7A5\uD559\uC7AC\uB2E8)/i;
 const LOCAL_SCHOLARSHIP_TEXT_NOTICE_SIGNAL_PATTERN = /(?:\uC7A5\uD559(?:\uC0DD|\uAE08)?).*(?:\uC120\uBC1C|\uBAA8\uC9D1|\uC811\uC218|\uC2E0\uCCAD|\uC9C0\uC6D0\s*\uB300\uC0C1)|(?:\uC120\uBC1C|\uBAA8\uC9D1|\uC811\uC218|\uC2E0\uCCAD|\uC9C0\uC6D0\s*\uB300\uC0C1).*(?:\uC7A5\uD559(?:\uC0DD|\uAE08)?)/i;
 const SCHOLARSHIP_RESULT_OR_CEREMONY_PATTERN = /\uACB0\uACFC|\uBC1C\uD45C|\uBA85\uB2E8|\uC218\uC5EC\uC2DD/i;
+const SEOUL_TEXT_NOTICE_SOURCE_PATTERN = /(?:seoul-city|www\.seoul\.go\.kr\/news\/news_notice\.do|news\.seoul\.go\.kr)/i;
+const SEOUL_TEXT_NOTICE_TITLE_PATTERN = /\uBAA8\uC9D1|\uC2E0\uCCAD|\uC811\uC218|\uACF5\uBAA8|\uCD94\uCC9C|\uC9C0\uC6D0\s*\uC0AC\uC5C5|\uC9C0\uC6D0\uC0AC\uC5C5|\uC218\uAC15\uC0DD|\uAD50\uC721\uC0DD|\uCC38\uC5EC\uC790|\uCC38\uAC00\uC790|\uC11C\uC6B8\uB18D\uC7A5/i;
+const SEOUL_TEXT_NOTICE_DETAIL_PATTERN = /(?:\uBAA8\uC9D1|\uC2E0\uCCAD|\uC811\uC218|\uC81C\uCD9C)\s*(?:\uAE30\uAC04|\uBC29\uBC95|\uC11C\uB958)|\uC2E0\uCCAD\s*\uB300\uC0C1|\uBAA8\uC9D1\s*\uB300\uC0C1|\uC811\uC218\uCC98|\uB9C8\uAC10|\uC120\uCC29\uC21C/i;
+const SEOUL_TEXT_NOTICE_ADMIN_PATTERN = /\uD589\uC815\uCC98\uBD84|\uACF5\uC2DC\uC1A1\uB2EC|\uBB34\uC5F0\uACE0|\uB4F1\uB85D\s*\uB9D0\uC18C|\uACFC\uD0DC\uB8CC|\uC5C5\uBB34\s*\uC815\uC9C0|\uB3C4\uC2DC\uAD00\uB9AC\uACC4\uD68D|CCTV|\uC601\uC5C5\uC815\uC9C0|\uCCAD\uBB38/i;
 
 function isCentralTextNotice(post, text) {
   const sourceText = [
@@ -163,7 +167,24 @@ function isLocalScholarshipTextNotice(post, text) {
     && LOCAL_SCHOLARSHIP_TEXT_NOTICE_SIGNAL_PATTERN.test(text);
 }
 
-function isCollectableTextNotice(post) {
+function getSourceText(post) {
+  return [
+    post?.site,
+    post?.siteId,
+    post?.collectionSourceSlug,
+    post?.sourceUrl,
+    post?.url,
+  ].filter(Boolean).join(" ");
+}
+
+function isSeoulTextNotice(post, title, text) {
+  if (!SEOUL_TEXT_NOTICE_SOURCE_PATTERN.test(getSourceText(post))) return null;
+  if (SEOUL_TEXT_NOTICE_ADMIN_PATTERN.test(title)) return false;
+  return SEOUL_TEXT_NOTICE_TITLE_PATTERN.test(title)
+    && SEOUL_TEXT_NOTICE_DETAIL_PATTERN.test(text);
+}
+
+export function isCollectableTextNotice(post) {
   if (!shouldCollectTextNotices()) return false;
   const title = String(post?.title ?? "").replace(/\s+/g, " ").trim();
   const content = String(post?.content ?? "").replace(/\s+/g, " ").trim();
@@ -172,8 +193,10 @@ function isCollectableTextNotice(post) {
     : "";
   const text = `${title} ${content} ${attachmentText}`;
   const localScholarshipText = isLocalScholarshipTextNotice(post, text);
+  const seoulTextNotice = isSeoulTextNotice(post, title, text);
 
   if (title.length < 8) return false;
+  if (seoulTextNotice === false) return false;
   if (TEXT_NOTICE_NEGATIVE_PATTERN.test(text) && !isCentralTextNotice(post, text)) return false;
   if (!TEXT_NOTICE_POSITIVE_PATTERN.test(text) && !localScholarshipText) return false;
   return content.length >= 40
@@ -578,16 +601,18 @@ export async function crawlSite(site, adapter, options = {}) {
               continue;
             }
 
-            const attachmentAnalysis = await analyzePostAttachments(fullPost);
-            rememberAttachmentAnalysis(stats, fullPost, attachmentAnalysis);
-            if (attachmentAnalysis.contentAdded) {
-              fullPost.content = [fullPost.content, attachmentAnalysis.addedText].filter(Boolean).join("\n\n");
-              fullPost.attachmentAnalysis = attachmentAnalysis;
-              if (!fullPost.deadline && attachmentAnalysis.suggestedDeadline) {
-                fullPost.deadline = attachmentAnalysis.suggestedDeadline;
+            if (board.analyzeAttachments !== false && site.analyzeAttachments !== false) {
+              const attachmentAnalysis = await analyzePostAttachments(fullPost);
+              rememberAttachmentAnalysis(stats, fullPost, attachmentAnalysis);
+              if (attachmentAnalysis.contentAdded) {
+                fullPost.content = [fullPost.content, attachmentAnalysis.addedText].filter(Boolean).join("\n\n");
+                fullPost.attachmentAnalysis = attachmentAnalysis;
+                if (!fullPost.deadline && attachmentAnalysis.suggestedDeadline) {
+                  fullPost.deadline = attachmentAnalysis.suggestedDeadline;
+                }
+              } else if (attachmentAnalysis.checked > 0) {
+                fullPost.attachmentAnalysis = attachmentAnalysis;
               }
-            } else if (attachmentAnalysis.checked > 0) {
-              fullPost.attachmentAnalysis = attachmentAnalysis;
             }
 
             const staleReason = getStaleNoticeReason(fullPost);
