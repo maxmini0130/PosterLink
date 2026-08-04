@@ -1,11 +1,6 @@
 import { expect, test } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
-  if (!process.env.E2E_ADMIN_EMAIL) {
-    test.skip(true, "E2E_ADMIN_EMAIL 미설정 - 관리자 인증 테스트 스킵");
-    return;
-  }
-
   await page.goto("/admin/traffic");
   await page.waitForLoadState("networkidle");
   if (page.url().includes("/login")) {
@@ -13,9 +8,36 @@ test.beforeEach(async ({ page }) => {
   }
 });
 
-test("방문 주체 집계와 자동 검사 필터를 표시한다", async ({ page }) => {
+test("오늘 실사용자 통계를 기본으로 표시하고 내부 방문을 선택적으로 포함한다", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "방문 통계" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "방문 주체" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "오늘" })).toHaveClass(
+    /bg-gray-950|dark:bg-white/,
+  );
+  const internalSwitch = page.getByRole("switch", {
+    name: "내부·자동 방문 포함",
+  });
+  await expect(internalSwitch).toHaveAttribute("aria-checked", "false");
+  await expect(page.getByRole("button", { name: "관리자·운영자" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "자동 검사·봇" })).toHaveCount(0);
+
+  const response = await page.request.get("/api/admin/traffic");
+  expect(response.ok()).toBeTruthy();
+  const payload = await response.json();
+
+  expect(payload.rangeDays).toBe(1);
+  expect(payload.includeInternal).toBe(false);
+  expect(Array.isArray(payload.actorBreakdown)).toBeTruthy();
+  expect(
+    payload.actorBreakdown.every(
+      (actor: { key?: string; automated_pageviews?: number }) =>
+        (actor.key === "visitor" || actor.key === "member") &&
+        actor.automated_pageviews === 0,
+    ),
+  ).toBeTruthy();
+
+  await internalSwitch.click();
+  await expect(internalSwitch).toHaveAttribute("aria-checked", "true");
   await expect(
     page.getByRole("button", { name: "관리자·운영자" }),
   ).toBeVisible();
@@ -23,14 +45,17 @@ test("방문 주체 집계와 자동 검사 필터를 표시한다", async ({ pa
     page.getByRole("button", { name: "자동 검사·봇" }),
   ).toBeVisible();
 
-  const response = await page.request.get("/api/admin/traffic?days=30");
-  expect(response.ok()).toBeTruthy();
-  const payload = await response.json();
+  const internalResponse = await page.request.get(
+    "/api/admin/traffic?days=1&include_internal=1",
+  );
+  expect(internalResponse.ok()).toBeTruthy();
+  const internalPayload = await internalResponse.json();
 
-  expect(Array.isArray(payload.actorBreakdown)).toBeTruthy();
-  expect(Array.isArray(payload.recentVisits)).toBeTruthy();
+  expect(internalPayload.includeInternal).toBe(true);
+  expect(Array.isArray(internalPayload.actorBreakdown)).toBeTruthy();
+  expect(Array.isArray(internalPayload.recentVisits)).toBeTruthy();
   expect(
-    payload.recentVisits.every(
+    internalPayload.recentVisits.every(
       (visit: { actor?: { key?: string; is_automated?: boolean } }) =>
         typeof visit.actor?.key === "string" &&
         typeof visit.actor?.is_automated === "boolean",

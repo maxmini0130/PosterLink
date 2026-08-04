@@ -8,9 +8,13 @@ import {
   getVisitAutomationLabel,
   type VisitActorType,
 } from "../../../../lib/siteVisitClassification";
+import {
+  getTrafficPeriodStart,
+  isExternalHumanTraffic,
+} from "../../../../lib/trafficAnalytics";
 
 const ADMIN_ROLES = new Set(["admin", "super_admin"]);
-const DEFAULT_DAYS = 30;
+const DEFAULT_DAYS = 1;
 const MAX_ROWS = 10000;
 const ACTOR_VISIT_SELECT_COLUMNS =
   "created_at, user_id, ip_hash, visitor_key, session_key, path, query_string, referrer_url, referrer_host, utm_source, utm_medium, utm_campaign, user_agent, actor_type, is_automated, automation_source";
@@ -186,6 +190,10 @@ function getClientPlatform(row: VisitRow): ClientPlatform {
   return { key: "unknown", label: "알 수 없음" };
 }
 
+function parseIncludeInternal(value: string | null) {
+  return value === "1" || value === "true";
+}
+
 function getVisitActorContext(
   row: VisitRow,
   profiles: Map<string, ProfileIdentity>
@@ -336,11 +344,17 @@ export async function GET(request: NextRequest) {
   }
 
   const days = clampDays(request.nextUrl.searchParams.get("days"));
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const includeInternal = parseIncludeInternal(
+    request.nextUrl.searchParams.get("include_internal"),
+  );
+  const since = getTrafficPeriodStart(days);
   const admin = createAdminClient();
 
   const overviewRes = await admin
-    .rpc("get_site_visit_identity_overview", { p_days: days })
+    .rpc("get_site_visit_identity_overview", {
+      p_days: days,
+      p_include_internal: includeInternal,
+    })
     .single<OverviewRow>();
 
   if (overviewRes.error && !isMissingAnalyticsError(overviewRes.error)) {
@@ -376,6 +390,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       configured: false,
       rangeDays: days,
+      includeInternal,
       message: "site_visit_logs migration has not been applied yet.",
     });
   }
@@ -384,9 +399,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: visitsRes.error.message }, { status: 500 });
   }
 
-  const rows = normalizeVisitRows(visitsRes.data as Partial<VisitRow>[] | null);
+  const sampledRows = normalizeVisitRows(
+    visitsRes.data as Partial<VisitRow>[] | null,
+  );
   const userIds = Array.from(
-    new Set(rows.map((row) => row.user_id).filter((value): value is string => Boolean(value)))
+    new Set(sampledRows.map((row) => row.user_id).filter((value): value is string => Boolean(value)))
   );
   const profileMap = new Map<string, ProfileIdentity>();
   if (userIds.length > 0) {
@@ -401,6 +418,13 @@ export async function GET(request: NextRequest) {
       profileMap.set(profile.id, profile);
     }
   }
+
+  const rows = includeInternal
+    ? sampledRows
+    : sampledRows.filter((row) => {
+        const actor = getVisitActorContext(row, profileMap);
+        return isExternalHumanTraffic(actor.key, actor.is_automated);
+      });
 
   const ownHosts = getOwnHosts();
   const sessions = new Map<string, VisitRow>();
@@ -597,7 +621,34 @@ export async function GET(request: NextRequest) {
         .limit(MAX_ROWS);
     }
 
-    overview = buildFallbackOverview(normalizeVisitRows(allVisitsRes.data as Partial<VisitRow>[] | null), rows);
+    const allRows = normalizeVisitRows(
+      allVisitsRes.data as Partial<VisitRow>[] | null,
+    );
+    const fallbackUserIds = Array.from(
+      new Set(
+        allRows
+          .map((row) => row.user_id)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    ).filter((userId) => !profileMap.has(userId));
+
+    if (fallbackUserIds.length > 0) {
+      const { data: profiles } = await admin
+        .from("profiles")
+        .select("id, role, nickname")
+        .in("id", fallbackUserIds);
+      for (const profile of (profiles ?? []) as ProfileIdentity[]) {
+        profileMap.set(profile.id, profile);
+      }
+    }
+
+    const scopedAllRows = includeInternal
+      ? allRows
+      : allRows.filter((row) => {
+          const actor = getVisitActorContext(row, profileMap);
+          return isExternalHumanTraffic(actor.key, actor.is_automated);
+        });
+    overview = buildFallbackOverview(scopedAllRows, rows);
     overviewExact = false;
   }
 
@@ -605,7 +656,9 @@ export async function GET(request: NextRequest) {
     configured: true,
     overviewExact,
     rangeDays: days,
+    includeInternal,
     sampledRows: rows.length,
+    excludedRows: sampledRows.length - rows.length,
     generatedAt: new Date().toISOString(),
     overview,
     sources,

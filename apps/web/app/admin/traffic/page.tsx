@@ -103,7 +103,9 @@ type TrafficData = {
   configured: boolean;
   overviewExact?: boolean;
   rangeDays: number;
+  includeInternal?: boolean;
   sampledRows?: number;
+  excludedRows?: number;
   generatedAt?: string;
   message?: string;
   overview?: Overview;
@@ -116,7 +118,7 @@ type TrafficData = {
   recentVisits?: RecentVisit[];
 };
 
-const DAY_OPTIONS = [7, 30, 90, 365];
+const DAY_OPTIONS = [1, 7, 30, 90, 365];
 const ACTOR_FILTERS = [
   { key: "all", label: "전체" },
   { key: "visitor", label: "일반 방문" },
@@ -266,7 +268,8 @@ function SectionTitle({
 }
 
 export default function AdminTrafficPage() {
-  const [days, setDays] = useState(30);
+  const [days, setDays] = useState(1);
+  const [includeInternal, setIncludeInternal] = useState(false);
   const [data, setData] = useState<TrafficData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -277,7 +280,13 @@ export default function AdminTrafficPage() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/admin/traffic?days=${days}`, { cache: "no-store" });
+      const params = new URLSearchParams({
+        days: String(days),
+        include_internal: includeInternal ? "1" : "0",
+      });
+      const response = await fetch(`/api/admin/traffic?${params}`, {
+        cache: "no-store",
+      });
       const payload = (await response.json()) as TrafficData & { error?: string };
 
       if (!response.ok) {
@@ -295,7 +304,7 @@ export default function AdminTrafficPage() {
   useEffect(() => {
     void loadTraffic();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [days]);
+  }, [days, includeInternal]);
 
   const maxDailyPageviews = useMemo(
     () => Math.max(1, ...(data?.daily ?? []).map((row) => row.pageviews)),
@@ -321,8 +330,17 @@ export default function AdminTrafficPage() {
   );
   const clientPlatforms = data?.clientPlatforms ?? [];
   const actorBreakdown = data?.actorBreakdown ?? [];
+  const visibleActorFilters = includeInternal
+    ? ACTOR_FILTERS
+    : ACTOR_FILTERS.filter(
+        (filter) => filter.key !== "staff" && filter.key !== "automation",
+      );
   const mobileWebSessions = clientPlatforms.find((row) => row.key === "mobile_web")?.sessions ?? 0;
   const appSessions = clientPlatforms.find((row) => row.key === "app")?.sessions ?? 0;
+  const periodLabel = days === 1 ? "오늘" : days === 365 ? "최근 1년" : `최근 ${days}일`;
+  const scopeLabel = includeInternal
+    ? "내부·자동 방문 포함"
+    : "관리자·운영자·자동 검사 제외";
 
   return (
     <div className="space-y-8">
@@ -331,7 +349,7 @@ export default function AdminTrafficPage() {
           <p className="text-xs font-black uppercase tracking-[0.3em] text-indigo-500">Traffic</p>
           <h1 className="mt-2 text-3xl font-black tracking-tight text-gray-950 dark:text-white">방문 통계</h1>
           <p className="mt-2 text-sm font-bold text-gray-500 dark:text-slate-400">
-            누적 방문자와 유입 경로, 최근 방문 로그를 확인합니다.
+            실사용자 중심의 방문자와 유입 경로, 최근 방문 로그를 확인합니다.
           </p>
         </div>
 
@@ -348,10 +366,36 @@ export default function AdminTrafficPage() {
                     : "text-gray-400 hover:text-gray-900 dark:hover:text-white"
                 }`}
               >
-                {option === 365 ? "1년" : `${option}일`}
+                {option === 1 ? "오늘" : option === 365 ? "1년" : `${option}일`}
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={includeInternal}
+            aria-label="내부·자동 방문 포함"
+            onClick={() => {
+              const nextValue = !includeInternal;
+              setIncludeInternal(nextValue);
+              if (!nextValue) setActorFilter("all");
+            }}
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-xs font-black text-gray-600 shadow-sm transition-colors hover:bg-gray-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            <span
+              aria-hidden="true"
+              className={`relative h-5 w-9 rounded-full transition-colors ${
+                includeInternal ? "bg-indigo-600" : "bg-gray-200 dark:bg-slate-700"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                  includeInternal ? "translate-x-[18px]" : "translate-x-0.5"
+                }`}
+              />
+            </span>
+            내부·자동 포함
+          </button>
           <button
             type="button"
             onClick={loadTraffic}
@@ -368,6 +412,14 @@ export default function AdminTrafficPage() {
           <span>마지막 갱신 {formatGeneratedAt(data.generatedAt)}</span>
           <span>·</span>
           <span>분석 로그 {formatNumber(data.sampledRows)}건</span>
+          <span>·</span>
+          <span>{scopeLabel}</span>
+          {!includeInternal && Number(data.excludedRows) > 0 && (
+            <>
+              <span>·</span>
+              <span>내부 로그 {formatNumber(data.excludedRows)}건 제외</span>
+            </>
+          )}
           {data.overviewExact === false && (
             <>
               <span>·</span>
@@ -395,10 +447,10 @@ export default function AdminTrafficPage() {
       ) : (
         <>
           <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <MetricCard icon={Users} label="전체 방문자" value={overview?.total_visitors} subLabel="중복 제외 방문자 기준" />
-            <MetricCard icon={Activity} label={`${days}일 방문자`} value={overview?.period_visitors} subLabel="선택 기간 중복 제외" />
-            <MetricCard icon={MousePointerClick} label={`${days}일 세션`} value={overview?.period_sessions} subLabel="브라우저 세션 기준" />
-            <MetricCard icon={BarChart3} label={`${days}일 페이지뷰`} value={overview?.period_pageviews} subLabel="전체 페이지 이동 수" />
+            <MetricCard icon={Users} label="전체 방문자" value={overview?.total_visitors} subLabel={scopeLabel} />
+            <MetricCard icon={Activity} label={`${periodLabel} 방문자`} value={overview?.period_visitors} subLabel="선택 기간 중복 제외" />
+            <MetricCard icon={MousePointerClick} label={`${periodLabel} 세션`} value={overview?.period_sessions} subLabel="브라우저 세션 기준" />
+            <MetricCard icon={BarChart3} label={`${periodLabel} 페이지뷰`} value={overview?.period_pageviews} subLabel="전체 페이지 이동 수" />
           </section>
 
           <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -455,7 +507,7 @@ export default function AdminTrafficPage() {
             <SectionTitle
               icon={ShieldCheck}
               title="방문 주체"
-              subtitle="로그인 역할과 자동 검사 트래픽을 분리한 집계"
+              subtitle={includeInternal ? "모든 방문 주체를 포함한 집계" : "관리자·운영자·자동 검사를 제외한 집계"}
             />
             {actorBreakdown.length > 0 ? (
               <div className="divide-y divide-gray-100 dark:divide-slate-800">
@@ -625,7 +677,7 @@ export default function AdminTrafficPage() {
           <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <SectionTitle icon={Activity} title="최근 방문 로그" subtitle="최근 80건" />
             <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="방문 주체 필터">
-              {ACTOR_FILTERS.map((filter) => (
+              {visibleActorFilters.map((filter) => (
                 <button
                   key={filter.key}
                   type="button"
