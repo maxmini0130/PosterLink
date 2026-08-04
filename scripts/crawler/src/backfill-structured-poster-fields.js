@@ -7,10 +7,12 @@ import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 
 import { buildStructuredPosterFields } from "./poster-structured-fields.js";
+import { shouldBackfillStructuredField } from "./structured-backfill-policy.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "../../..");
 const DEFAULT_OUTPUT = "data/results/structured-poster-backfill.json";
+const DEFAULT_MIN_CONFIDENCE = 0.8;
 const STRUCTURED_SELECT =
   "id,title,source_org_name,summary_short,summary_long,poster_status,application_start_at,application_end_at,field_verification,organizer_name,application_organization_name,deadline_type,eligibility_summary,benefits_summary,application_method,contact_info,event_location,verification_status,data_confidence,created_at";
 const LEGACY_SELECT =
@@ -37,9 +39,11 @@ const args = Object.fromEntries(
 
 if (args.help || args.h) {
   console.log(`Usage:
-  node src/backfill-structured-poster-fields.js [--limit=2000] [--statuses=published,review] [--output=data/results/structured-poster-backfill.json] [--apply]
+  node src/backfill-structured-poster-fields.js [--limit=2000] [--statuses=published,review] [--min-confidence=0.8] [--include-user-facing-text] [--output=data/results/structured-poster-backfill.json] [--apply]
 
 Builds structured poster fields only from existing dates and field_verification evidence.
+Organization fields require the minimum confidence and no review issues.
+Target, benefits, method, contact, and location stay excluded unless --include-user-facing-text is explicitly supplied.
 Dry-run is the default. --apply requires migration 20260804000000 to be present in the DB.`);
   process.exit(0);
 }
@@ -116,8 +120,13 @@ async function fetchRows(supabase, statuses, limit) {
   return { rows: rows.slice(0, limit), schemaReady };
 }
 
-function buildPlan(row, schemaReady) {
-  const verificationStatus = hasReviewIssues(row.field_verification)
+function buildPlan(
+  row,
+  schemaReady,
+  { minConfidence, includeUserFacingText },
+) {
+  const reviewIssues = hasReviewIssues(row.field_verification);
+  const verificationStatus = reviewIssues
     ? "needs_review"
     : "unverified";
   const derived = buildStructuredPosterFields({
@@ -128,9 +137,22 @@ function buildPlan(row, schemaReady) {
     verificationStatus,
   });
   const updates = {};
+  const confidence = derived.data_confidence;
+  const canBackfillVerifiedText =
+    !reviewIssues && confidence != null && confidence >= minConfidence;
 
   for (const field of STRUCTURED_FIELDS) {
     const nextValue = derived[field];
+    if (
+      !shouldBackfillStructuredField({
+        field,
+        reviewIssues,
+        confidence,
+        minConfidence,
+        includeUserFacingText,
+      })
+    )
+      continue;
     if (
       nextValue == null ||
       nextValue === "unknown" ||
@@ -163,7 +185,8 @@ function buildPlan(row, schemaReady) {
       has_readable_notice: Boolean(
         row.field_verification?.readableNotice?.facts,
       ),
-      has_review_issues: hasReviewIssues(row.field_verification),
+      has_review_issues: reviewIssues,
+      verified_text_eligible: canBackfillVerifiedText,
     },
   };
 }
@@ -172,6 +195,11 @@ async function main() {
   const supabase = createSupabase();
   const apply = Boolean(args.apply);
   const limit = Math.max(1, Number(args.limit || 2000));
+  const minConfidence = Math.max(
+    0,
+    Math.min(1, Number(args["min-confidence"] || DEFAULT_MIN_CONFIDENCE)),
+  );
+  const includeUserFacingText = Boolean(args["include-user-facing-text"]);
   const statuses = String(args.statuses || "published,review")
     .split(",")
     .map((value) => value.trim())
@@ -184,7 +212,9 @@ async function main() {
     );
   }
 
-  const plans = rows.map((row) => buildPlan(row, schemaReady));
+  const plans = rows.map((row) =>
+    buildPlan(row, schemaReady, { minConfidence, includeUserFacingText }),
+  );
   const candidates = plans.filter(
     (plan) => Object.keys(plan.updates).length > 0,
   );
@@ -212,6 +242,8 @@ async function main() {
     generated_at: new Date().toISOString(),
     mode: apply ? "apply" : "dry-run",
     migration_ready: schemaReady,
+    min_confidence: minConfidence,
+    include_user_facing_text: includeUserFacingText,
     statuses,
     checked_count: rows.length,
     candidate_count: candidates.length,
