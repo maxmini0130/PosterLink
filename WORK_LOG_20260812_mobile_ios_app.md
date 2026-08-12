@@ -11,6 +11,7 @@
 - `apps/mobile/package.json`
   - 패키지명을 루트 스크립트와 맞춰 `@posterlink/mobile`로 변경했다.
   - iOS 시뮬레이터, 프리뷰, 프로덕션 빌드와 App Store 제출 스크립트를 추가했다.
+  - iOS development client 빌드를 위해 `expo-dev-client`를 추가했다.
 - `apps/mobile/app.json`
   - iOS `buildNumber`를 `6`으로 올렸다.
   - `expo-camera` 플러그인을 옵션형으로 바꾸고 마이크 권한 및 Android 녹음 권한을 제거했다.
@@ -24,11 +25,15 @@
 ## 검증
 
 - `pnpm --dir apps/mobile typecheck`
+- `pnpm --filter @posterlink/mobile typecheck`
+- `pnpm --dir apps/mobile exec expo config --type public`
+- `pnpm --dir apps/mobile ios:simulator -- --non-interactive`
+  - 성공 빌드: https://expo.dev/accounts/maxmini/projects/posterlink-mobile/builds/efca4206-92d4-4fe2-8273-f10373038be3
 - 추가 검증 예정:
-  - `pnpm --filter @posterlink/mobile start`
   - Apple Developer 계정으로 `pnpm --dir apps/mobile build:ios:preview`
 
 ## 남은 일
 
 - Apple Developer 인증 후 EAS iOS preview 빌드를 실행한다.
+- 내부 배포용 iOS credentials를 EAS remote credentials에 구성한다.
 - TestFlight 내부 테스트에서 OAuth 콜백, 푸시 토큰 저장, 포스터 촬영 업로드를 실제 기기에서 확인한다.

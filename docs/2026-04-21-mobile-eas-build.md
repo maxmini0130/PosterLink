@@ -95,6 +95,7 @@ PosterLink (pnpm monorepo)
 ## 2026-08-12 모바일/iOS 정리
 
 - 모바일 워크스페이스 이름을 루트 스크립트와 맞춰 `@posterlink/mobile`로 정리했다.
+- iOS development client 빌드를 위해 `expo-dev-client`를 SDK 51 호환 버전으로 추가했다.
 - iOS 빌드/제출 스크립트:
   - `pnpm --dir apps/mobile ios:simulator`
   - `pnpm --dir apps/mobile build:ios:preview`
@@ -107,3 +108,10 @@ PosterLink (pnpm monorepo)
   - App Store Connect 앱 `6769311952` 접근 권한
   - Supabase OAuth redirect URL에 `com.maxmini.posterlink://auth-callback` 및 Expo 개발 리디렉션 등록
   - TestFlight 내부 테스트 그룹 준비
+
+### iOS 빌드 결과
+
+- iOS simulator/development 빌드 성공:
+  - https://expo.dev/accounts/maxmini/projects/posterlink-mobile/builds/efca4206-92d4-4fe2-8273-f10373038be3
+- iOS preview/internal distribution 빌드는 EAS remote iOS credentials가 없어 비대화 모드에서 중단됐다.
+  - Apple Developer 계정으로 `pnpm --dir apps/mobile build:ios:preview`를 대화형으로 실행해 내부 배포용 인증서를 한 번 구성해야 한다.
