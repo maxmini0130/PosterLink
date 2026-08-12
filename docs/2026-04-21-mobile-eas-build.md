@@ -122,3 +122,10 @@ PosterLink (pnpm monorepo)
 - App Store Connect 제출은 EAS Submit까지 예약됐으나 App Store Connect API Key가 `com.maxmini.posterlink` 앱을 찾을 권한이 없어 실패했다.
   - 실패 submission: `54514071-e1b2-4ba0-b9cd-36d326266931`
   - 해결: App Store Connect에서 앱 접근 권한이 있는 API Key를 EAS credentials에 다시 등록하거나 `EXPO_ASC_API_KEY_PATH`, `EXPO_ASC_KEY_ID`, `EXPO_ASC_ISSUER_ID`로 제공한다.
+
+### 재개 포인터
+
+- 상세 인수인계는 `WORK_LOG_20260812_mobile_ios_app.md`의 `이어서 작업하기` 섹션을 기준으로 한다.
+- 제출 재시도 전에는 App Store Connect API Key 권한만 먼저 해결한다. production IPA는 이미 생성되어 있으며, 같은 빌드를 다시 제출할 수 있다.
+- API Key 해결 후 우선 실행:
+  - `pnpm --dir apps/mobile exec eas submit --platform ios --profile production --id 8f8b7d2a-3ea4-48d3-b2d2-2ae90237b2e2 --non-interactive`
