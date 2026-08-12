@@ -95,14 +95,15 @@ PosterLink (pnpm monorepo)
 ## 2026-08-12 모바일/iOS 정리
 
 - 모바일 워크스페이스 이름을 루트 스크립트와 맞춰 `@posterlink/mobile`로 정리했다.
-- iOS development client 빌드를 위해 `expo-dev-client`를 SDK 51 호환 버전으로 추가했다.
 - iOS 빌드/제출 스크립트:
   - `pnpm --dir apps/mobile ios:simulator`
   - `pnpm --dir apps/mobile build:ios:preview`
   - `pnpm --dir apps/mobile build:ios:production`
   - `pnpm --dir apps/mobile submit:ios`
-- iOS `buildNumber`를 `6`으로 올리고, 카메라·사진·Face ID 권한 문구를 명시적으로 유지했다.
+- iOS `buildNumber`를 `9`로 올리고, 카메라·사진·Face ID 권한 문구를 명시적으로 유지했다.
 - 포스터 촬영은 사진만 사용하므로 `expo-camera` 마이크 권한과 Android 녹음 권한을 제거했다.
+- EAS 원격 설치에서도 `expo-device` Xcode 26 패치가 실행되도록 루트 `postinstall`을 추가했다.
+- App Store/TestFlight 빌드에서 `expo-dev-client`/`expo-dev-menu`가 포함되지 않도록 제거했다.
 - 실제 iOS 빌드 전 확인:
   - Apple Developer Program 활성 계정
   - App Store Connect 앱 `6769311952` 접근 권한
@@ -113,5 +114,11 @@ PosterLink (pnpm monorepo)
 
 - iOS simulator/development 빌드 성공:
   - https://expo.dev/accounts/maxmini/projects/posterlink-mobile/builds/efca4206-92d4-4fe2-8273-f10373038be3
+- iOS production 빌드 성공:
+  - EAS build ID: `8f8b7d2a-3ea4-48d3-b2d2-2ae90237b2e2`
+  - IPA: https://expo.dev/artifacts/eas/bWx-rcph4K68oVLd7eim_T0aq1FqcXkR09nblyXzQyY.ipa
 - iOS preview/internal distribution 빌드는 EAS remote iOS credentials가 없어 비대화 모드에서 중단됐다.
   - Apple Developer 계정으로 `pnpm --dir apps/mobile build:ios:preview`를 대화형으로 실행해 내부 배포용 인증서를 한 번 구성해야 한다.
+- App Store Connect 제출은 EAS Submit까지 예약됐으나 App Store Connect API Key가 `com.maxmini.posterlink` 앱을 찾을 권한이 없어 실패했다.
+  - 실패 submission: `54514071-e1b2-4ba0-b9cd-36d326266931`
+  - 해결: App Store Connect에서 앱 접근 권한이 있는 API Key를 EAS credentials에 다시 등록하거나 `EXPO_ASC_API_KEY_PATH`, `EXPO_ASC_KEY_ID`, `EXPO_ASC_ISSUER_ID`로 제공한다.
