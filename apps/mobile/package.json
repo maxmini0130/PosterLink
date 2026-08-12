@@ -1,5 +1,5 @@
 {
-  "name": "mobile",
+  "name": "@posterlink/mobile",
   "version": "0.1.0",
   "private": true,
   "main": "index.js",
@@ -7,6 +7,10 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "ios:simulator": "eas build --platform ios --profile development",
+    "build:ios:preview": "eas build --platform ios --profile preview",
+    "build:ios:production": "eas build --platform ios --profile production",
+    "submit:ios": "eas submit --platform ios --profile production",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "postinstall": "node scripts/patch-expo-device-xcode26.js"

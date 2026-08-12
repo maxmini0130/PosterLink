@@ -72,7 +72,8 @@ PosterLink (pnpm monorepo)
 ## 남은 작업
 
 ### 우선순위 중간
-- [ ] iOS 빌드 (Apple Developer 계정 필요)
+- [x] iOS 빌드 설정 정리 (bundle id, EAS profiles, 빌드/제출 스크립트)
+- [ ] iOS 실제 클라우드 빌드 및 TestFlight 업로드 (Apple Developer 계정 로그인/인증서 발급 필요)
 - [ ] 생체인식 로그인 — 모바일 앱 지문/Face ID (`expo-local-authentication`)
 - [ ] 네이버 로그인 실제 구현 (현재 "준비중" placeholder)
 - [ ] pg_cron 마감 알림 (`check-deadlines`) 스케줄링 확인
@@ -90,3 +91,19 @@ PosterLink (pnpm monorepo)
 - EAS owner: `maxmini`
 - Kakao Client ID: `4f7e06ba59933885126fffd9bc629fcc`
 - Edge Functions 배포: `npx supabase functions deploy <name> --no-verify-jwt --project-ref zxndgzsfrgwahwsdbjdj`
+
+## 2026-08-12 모바일/iOS 정리
+
+- 모바일 워크스페이스 이름을 루트 스크립트와 맞춰 `@posterlink/mobile`로 정리했다.
+- iOS 빌드/제출 스크립트:
+  - `pnpm --dir apps/mobile ios:simulator`
+  - `pnpm --dir apps/mobile build:ios:preview`
+  - `pnpm --dir apps/mobile build:ios:production`
+  - `pnpm --dir apps/mobile submit:ios`
+- iOS `buildNumber`를 `6`으로 올리고, 카메라·사진·Face ID 권한 문구를 명시적으로 유지했다.
+- 포스터 촬영은 사진만 사용하므로 `expo-camera` 마이크 권한과 Android 녹음 권한을 제거했다.
+- 실제 iOS 빌드 전 확인:
+  - Apple Developer Program 활성 계정
+  - App Store Connect 앱 `6769311952` 접근 권한
+  - Supabase OAuth redirect URL에 `com.maxmini.posterlink://auth-callback` 및 Expo 개발 리디렉션 등록
+  - TestFlight 내부 테스트 그룹 준비

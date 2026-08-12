@@ -31,6 +31,11 @@ const APP_USER_AGENT_SUFFIX = `PosterLinkApp/${Constants.expoConfig?.version ?? 
 const SB_PROJECT = 'zxndgzsfrgwahwsdbjdj';
 const MOBILE_OAUTH_REDIRECT_URI = ExpoLinking.createURL('auth-callback');
 const LEGACY_MOBILE_OAUTH_REDIRECT_URI = 'com.maxmini.posterlink://auth-callback';
+const QUICK_ACTIONS = [
+  { label: '찾기', path: '/posters' },
+  { label: '마감', path: '/posters?sort=deadline' },
+  { label: '요청', path: '/posters/request' },
+];
 
 function CameraFabIcon() {
   return (
@@ -136,6 +141,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [expoPushToken, setExpoPushToken] = useState('');
   const [permission, requestPermission] = useCameraPermissions();
+  const [showQuickActions, setShowQuickActions] = useState(true);
   const webViewRef = useRef<any>(null);
   const cameraRef = useRef<CameraView>(null);
   const notificationListener = useRef<any>();
@@ -470,6 +476,11 @@ export default function App() {
     ]);
   };
 
+  const navigateInApp = useCallback((path: string) => {
+    setBrowseUrl(withAppTracking(`${HOME_URL}${path}`));
+    setView('browse');
+  }, []);
+
   const takePicture = async () => {
     if (cameraRef.current) {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.7 });
@@ -690,6 +701,7 @@ export default function App() {
 
   const showFab = Boolean(webAuthenticated && user && userRole !== null && !isAuthPage(browseUrl));
   const canCaptureDirectly = userRole !== null && ['operator', 'admin', 'super_admin'].includes(userRole);
+  const canShowQuickActions = showQuickActions && !isAuthPage(browseUrl);
 
   // ── 메인 (풀스크린 WebView) ──────────────────────────────────────
   return (
@@ -746,6 +758,28 @@ export default function App() {
           </View>
         )}
       />
+
+      {canShowQuickActions && (
+        <View style={styles.quickActions}>
+          {QUICK_ACTIONS.map((action) => (
+            <TouchableOpacity
+              key={action.path}
+              style={styles.quickAction}
+              onPress={() => navigateInApp(action.path)}
+              activeOpacity={0.82}
+            >
+              <Text style={styles.quickActionText}>{action.label}</Text>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity
+            style={styles.quickActionClose}
+            onPress={() => setShowQuickActions(false)}
+            activeOpacity={0.82}
+          >
+            <Text style={styles.quickActionCloseText}>×</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* FAB — 역할에 따라 분기 */}
       {showFab && (
@@ -829,6 +863,50 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(17,24,39,0.72)',
   },
   previewCloseText: { color: '#fff', fontSize: 14, fontWeight: '900' },
+
+  // Quick actions
+  quickActions: {
+    position: 'absolute',
+    left: 12,
+    right: 84,
+    bottom: 88,
+    minHeight: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    gap: 4,
+    elevation: 5,
+    shadowColor: '#111827',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.16,
+    shadowRadius: 8,
+  },
+  quickAction: {
+    flex: 1,
+    minHeight: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickActionText: { color: '#1f2937', fontSize: 13, fontWeight: '900' },
+  quickActionClose: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickActionCloseText: {
+    color: '#6b7280',
+    fontSize: 22,
+    lineHeight: 24,
+    fontWeight: '700',
+  },
 
   // WebView loading
   loading: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },

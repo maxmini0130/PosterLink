@@ -18,7 +18,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.maxmini.posterlink",
-      "buildNumber": "5",
+      "buildNumber": "6",
       "infoPlist": {
         "NSCameraUsageDescription": "포스터 촬영을 위해 카메라 권한이 필요합니다.",
         "NSPhotoLibraryUsageDescription": "갤러리에서 포스터를 선택하기 위해 권한이 필요합니다.",
@@ -40,12 +40,18 @@
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT",
         "android.permission.RECEIVE_BOOT_COMPLETED",
-        "android.permission.VIBRATE",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.VIBRATE"
       ]
     },
     "plugins": [
-      "expo-camera",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "포스터 촬영을 위해 카메라 권한이 필요합니다.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
       "expo-local-authentication",
       [
         "expo-notifications",
