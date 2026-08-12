@@ -11,13 +11,17 @@ function findExpoDeviceSwiftFile() {
 const swiftFile = findExpoDeviceSwiftFile();
 const source = fs.readFileSync(swiftFile, "utf8");
 
-if (source.includes("#if targetEnvironment(simulator)")) {
+if (
+  source.includes("#if targetEnvironment(simulator)") &&
+  !source.includes("TARGET_OS_SIMULATOR") &&
+  !source.includes("TARGET_IPHONE_SIMULATOR")
+) {
   process.stdout.write("expo-device Xcode 26 patch already applied\n");
   process.exit(0);
 }
 
 const patched = source.replace(
-  /var isSimulator: Bool \{\s*return TARGET_OS_SIMULATOR != 0\s*\}/m,
+  /var isSimulator: Bool \{\s*return TARGET_(?:OS|IPHONE)_SIMULATOR != 0\s*\}/m,
   `var isSimulator: Bool {
     #if targetEnvironment(simulator)
     return true
