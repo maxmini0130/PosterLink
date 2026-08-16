@@ -275,3 +275,16 @@ pnpm dlx eas-cli@latest submit --platform ios --profile production --id 8f8b7d2a
 - 처리 완료 후 App Store Connect > PosterLink > TestFlight > iOS에서 빌드 `1.0.0 (9)`를 확인한다.
 - 내부 테스터 또는 TestFlight 그룹에 빌드를 배정한다.
 - App Store 심사를 진행하려면 스크린샷, 앱 심사 정보, 개인정보 처리 항목, 수출 규정, 콘텐츠 권리, 연락처/규정 준수 항목을 완료한다.
+
+## 2026-08-16 TestFlight 실제 기기 설치
+
+- App Store Connect > TestFlight > 내부 테스팅 `Team (Expo)` 그룹에 빌드 `1.0.0 (9)`가 배정됐다.
+- 사용자 iPhone에 TestFlight를 통해 PosterLink 설치 완료.
+- 다음 단계는 실제 기기 QA:
+  - 앱 실행 및 웹뷰 로딩
+  - 로그인/로그아웃
+  - OAuth 리디렉션
+  - 포스터 촬영/사진 업로드 권한
+  - 주요 빠른 동작 버튼
+  - 푸시 토큰/알림 권한
+  - iOS 권한 문구와 화면 깨짐 여부
