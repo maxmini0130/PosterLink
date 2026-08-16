@@ -73,7 +73,7 @@ PosterLink (pnpm monorepo)
 
 ### 우선순위 중간
 - [x] iOS 빌드 설정 정리 (bundle id, EAS profiles, 빌드/제출 스크립트)
-- [ ] iOS 실제 클라우드 빌드 및 TestFlight 업로드 (Apple Developer 계정 로그인/인증서 발급 필요)
+- [x] iOS 실제 클라우드 빌드 및 App Store Connect/TestFlight 업로드
 - [ ] 생체인식 로그인 — 모바일 앱 지문/Face ID (`expo-local-authentication`)
 - [ ] 네이버 로그인 실제 구현 (현재 "준비중" placeholder)
 - [ ] pg_cron 마감 알림 (`check-deadlines`) 스케줄링 확인
@@ -122,10 +122,17 @@ PosterLink (pnpm monorepo)
 - App Store Connect 제출은 EAS Submit까지 예약됐으나 App Store Connect API Key가 `com.maxmini.posterlink` 앱을 찾을 권한이 없어 실패했다.
   - 실패 submission: `54514071-e1b2-4ba0-b9cd-36d326266931`
   - 해결: App Store Connect에서 앱 접근 권한이 있는 API Key를 EAS credentials에 다시 등록하거나 `EXPO_ASC_API_KEY_PATH`, `EXPO_ASC_KEY_ID`, `EXPO_ASC_ISSUER_ID`로 제공한다.
+- 새 로컬 App Store Connect API Key `P8X435BU66`를 `apps/mobile/private/EASSubmitPosterLink.p8`에 저장하고, `apps/mobile/eas.json` 제출 프로필에 연결했다.
+  - `.p8` 파일은 `.gitignore`에 의해 커밋하지 않는다.
+- App Store Connect 제출 성공:
+  - Submission: `ea363c52-958d-40c1-8a0e-10cb6a855563`
+  - Build ID: `8f8b7d2a-3ea4-48d3-b2d2-2ae90237b2e2`
+  - App Version: `1.0.0`
+  - Build number: `9`
+  - TestFlight: https://appstoreconnect.apple.com/apps/6769311952/testflight/ios
 
 ### 재개 포인터
 
 - 상세 인수인계는 `WORK_LOG_20260812_mobile_ios_app.md`의 `이어서 작업하기` 섹션을 기준으로 한다.
-- 제출 재시도 전에는 App Store Connect API Key 권한만 먼저 해결한다. production IPA는 이미 생성되어 있으며, 같은 빌드를 다시 제출할 수 있다.
-- API Key 해결 후 우선 실행:
-  - `pnpm --dir apps/mobile exec eas submit --platform ios --profile production --id 8f8b7d2a-3ea4-48d3-b2d2-2ae90237b2e2 --non-interactive`
+- App Store Connect에서 Apple의 빌드 처리 완료 후 PosterLink > TestFlight > iOS에서 빌드 `1.0.0 (9)`를 확인한다.
+- 다음 우선 작업은 내부 테스터 배정, 앱 심사 정보/스크린샷/개인정보 처리 항목 작성, 그리고 규정 준수 항목 완료다.

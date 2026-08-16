@@ -232,3 +232,46 @@ This request requires an in-effect agreement that has not been signed or has exp
   - 계약/세금/은행 또는 계약 관련 메뉴
   - 미해결 계약, 유료 앱 계약, Apple Developer Program License Agreement 등 표시되는 항목을 수락/완료
 - 계약 처리 후 같은 제출 명령을 다시 실행한다.
+
+## 2026-08-16 iOS 제출 성공
+
+### 재확인
+
+- `git fetch origin`, `git status --short --branch`
+  - 결과: `main...origin/main`, 작업 트리 깨끗함
+- `pnpm --dir apps/mobile typecheck`
+  - 결과: 통과
+- Apple Developer 계정 화면에서 `Apple Developer Program License Agreement` 수락 상태 확인:
+  - 발행일: `2026년 3월 31일`
+  - 수락일: `2026년 5월 14일`
+
+### 제출 결과
+
+명령:
+
+```bash
+pnpm dlx eas-cli@latest submit --platform ios --profile production --id 8f8b7d2a-3ea4-48d3-b2d2-2ae90237b2e2 --non-interactive --verbose
+```
+
+결과:
+
+- EAS Submit이 로컬 App Store Connect API Key를 사용했다.
+  - `Key ID: P8X435BU66`
+  - `Key Source: local`
+  - `Key Path: ./private/EASSubmitPosterLink.p8`
+- `ASC App ID: 6769311952` 정상 인식.
+- TestFlight 그룹 생성:
+  - `Team (Expo)`
+- iOS 제출 성공:
+  - Submission: `ea363c52-958d-40c1-8a0e-10cb6a855563`
+  - Build ID: `8f8b7d2a-3ea4-48d3-b2d2-2ae90237b2e2`
+  - App Version: `1.0.0`
+  - Build number: `9`
+  - App Store Connect TestFlight: https://appstoreconnect.apple.com/apps/6769311952/testflight/ios
+
+### 다음 단계
+
+- Apple의 빌드 처리 완료 이메일을 기다린다. 보통 5-10분 정도 걸릴 수 있다.
+- 처리 완료 후 App Store Connect > PosterLink > TestFlight > iOS에서 빌드 `1.0.0 (9)`를 확인한다.
+- 내부 테스터 또는 TestFlight 그룹에 빌드를 배정한다.
+- App Store 심사를 진행하려면 스크린샷, 앱 심사 정보, 개인정보 처리 항목, 수출 규정, 콘텐츠 권리, 연락처/규정 준수 항목을 완료한다.
