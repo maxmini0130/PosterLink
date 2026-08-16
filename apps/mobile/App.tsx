@@ -31,6 +31,7 @@ const APP_USER_AGENT_SUFFIX = `PosterLinkApp/${Constants.expoConfig?.version ?? 
 const SB_PROJECT = 'zxndgzsfrgwahwsdbjdj';
 const MOBILE_OAUTH_REDIRECT_URI = ExpoLinking.createURL('auth-callback');
 const LEGACY_MOBILE_OAUTH_REDIRECT_URI = 'com.maxmini.posterlink://auth-callback';
+const NAVER_AUTH_PATH = '/api/auth/naver';
 const QUICK_ACTIONS = [
   { label: '찾기', path: '/posters' },
   { label: '마감', path: '/posters?sort=deadline' },
@@ -162,6 +163,15 @@ export default function App() {
     url.startsWith(MOBILE_OAUTH_REDIRECT_URI) ||
     url.startsWith(LEGACY_MOBILE_OAUTH_REDIRECT_URI)
   ), []);
+  const isNaverAuthUrl = useCallback((url: string) => {
+    try {
+      const nextUrl = new URL(url);
+      return nextUrl.hostname.replace(/^www\./, '') === 'posterlink.kr' &&
+        nextUrl.pathname === NAVER_AUTH_PATH;
+    } catch {
+      return false;
+    }
+  }, []);
 
   useEffect(() => {
     registerForPushNotificationsAsync().then(token => {
@@ -196,10 +206,11 @@ export default function App() {
       const accessToken = hp.get('access_token');
       const refreshToken = hp.get('refresh_token');
       const code = qp.get('code');
+      const nextPath = hp.get('next') || qp.get('next') || '/';
       if (accessToken && refreshToken) {
-        await applyOAuthTokens(accessToken, refreshToken);
+        await applyOAuthTokens(accessToken, refreshToken, nextPath);
       } else if (code) {
-        await applyOAuthSession(code);
+        await applyOAuthSession(code, nextPath);
       }
     };
     const linkingSub = Linking.addEventListener('url', handleDeepLink);
@@ -248,12 +259,13 @@ export default function App() {
   }, [view]);
 
   // WebView에 세션 주입하는 공통 함수
-  const injectSessionToWebView = useCallback((session: any, user: any) => {
+  const injectSessionToWebView = useCallback((session: any, user: any, nextPath = '/') => {
     setUser(user);
     setWebAuthenticated(true);
     lastUserId.current = user.id;
     setView('browse');
-    setBrowseUrl(HOME_URL);
+    const nextBrowseUrl = nextPath.startsWith('/') ? `${HOME_URL}${nextPath}` : HOME_URL;
+    setBrowseUrl(nextBrowseUrl);
     const sessionStr = JSON.stringify(session);
     webViewRef.current?.injectJavaScript(`
       (function() {
@@ -293,7 +305,7 @@ export default function App() {
           }
           localStorage.setItem(KEY, SESSION_JSON);
           writeAuthCookies(SESSION_JSON);
-          window.location.replace('/');
+          window.location.replace(${JSON.stringify(nextPath.startsWith('/') ? nextPath : '/')});
         } catch(e) {}
       })();
       true;
@@ -301,20 +313,20 @@ export default function App() {
   }, []);
 
   // implicit flow: access_token + refresh_token 직접 사용
-  const applyOAuthTokens = useCallback(async (accessToken: string, refreshToken: string) => {
+  const applyOAuthTokens = useCallback(async (accessToken: string, refreshToken: string, nextPath = '/') => {
     const { data: sd, error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
     if (sd?.session && sd.user) {
-      injectSessionToWebView(sd.session, sd.user);
+      injectSessionToWebView(sd.session, sd.user, nextPath);
     } else {
       Alert.alert('로그인 실패', error?.message ?? '인증 처리 중 오류가 발생했습니다.');
     }
   }, [injectSessionToWebView]);
 
   // PKCE flow: code 교환 (fallback)
-  const applyOAuthSession = useCallback(async (code: string) => {
+  const applyOAuthSession = useCallback(async (code: string, nextPath = '/') => {
     const { data: sd, error } = await supabase.auth.exchangeCodeForSession(code);
     if (sd?.session && sd.user) {
-      injectSessionToWebView(sd.session, sd.user);
+      injectSessionToWebView(sd.session, sd.user, nextPath);
     } else {
       Alert.alert('로그인 실패', error?.message ?? '인증 처리 중 오류가 발생했습니다.');
     }
@@ -322,6 +334,22 @@ export default function App() {
 
   // WebView OAuth URL 감지 → 네이티브 PKCE + Chrome Custom Tab
   const oauthInProgress = useRef(false);
+  const completeOAuthCallback = useCallback(async (callbackUrl: string) => {
+    const hash = callbackUrl.includes('#') ? callbackUrl.split('#')[1] : '';
+    const query = callbackUrl.includes('?') ? callbackUrl.split('?')[1] : '';
+    const hp = new URLSearchParams(hash);
+    const qp = new URLSearchParams(query);
+    const accessToken = hp.get('access_token');
+    const refreshToken = hp.get('refresh_token');
+    const code = qp.get('code');
+    const nextPath = hp.get('next') || qp.get('next') || '/';
+    if (accessToken && refreshToken) {
+      await applyOAuthTokens(accessToken, refreshToken, nextPath);
+    } else if (code) {
+      await applyOAuthSession(code, nextPath);
+    }
+  }, [applyOAuthSession, applyOAuthTokens]);
+
   const handleNativeOAuth = useCallback(async (authorizeUrl: string) => {
     if (oauthInProgress.current) return;
     oauthInProgress.current = true;
@@ -347,18 +375,7 @@ export default function App() {
       if (result.type === 'success') {
         const callbackUrl = (result as any).url as string | undefined;
         if (callbackUrl) {
-          const hash = callbackUrl.includes('#') ? callbackUrl.split('#')[1] : '';
-          const query = callbackUrl.includes('?') ? callbackUrl.split('?')[1] : '';
-          const hp = new URLSearchParams(hash);
-          const qp = new URLSearchParams(query);
-          const accessToken = hp.get('access_token');
-          const refreshToken = hp.get('refresh_token');
-          const code = qp.get('code');
-          if (accessToken && refreshToken) {
-            await applyOAuthTokens(accessToken, refreshToken);
-          } else if (code) {
-            await applyOAuthSession(code);
-          }
+          await completeOAuthCallback(callbackUrl);
         }
       } else if (result.type !== 'cancel') {
         Alert.alert('로그인 실패', `${provider} 로그인 콜백을 받지 못했습니다. Redirect URL 설정을 확인해주세요.`);
@@ -367,7 +384,29 @@ export default function App() {
     } finally {
       oauthInProgress.current = false;
     }
-  }, [applyOAuthSession, applyOAuthTokens]);
+  }, [completeOAuthCallback]);
+
+  const handleNativeNaverOAuth = useCallback(async (authUrl: string) => {
+    if (oauthInProgress.current) return;
+    oauthInProgress.current = true;
+    try {
+      const nextUrl = new URL(authUrl);
+      nextUrl.searchParams.set('mobile_redirect', LEGACY_MOBILE_OAUTH_REDIRECT_URI);
+      const result = await WebBrowser.openAuthSessionAsync(nextUrl.toString(), LEGACY_MOBILE_OAUTH_REDIRECT_URI);
+      if (result.type === 'success') {
+        const callbackUrl = (result as any).url as string | undefined;
+        if (callbackUrl) {
+          await completeOAuthCallback(callbackUrl);
+        }
+      } else if (result.type !== 'cancel') {
+        Alert.alert('로그인 실패', '네이버 로그인 후 앱으로 돌아오지 못했습니다. 다시 시도해주세요.');
+      }
+    } catch (error: any) {
+      Alert.alert('로그인 실패', error?.message ?? '네이버 로그인을 시작하지 못했습니다.');
+    } finally {
+      oauthInProgress.current = false;
+    }
+  }, [completeOAuthCallback]);
 
   async function registerForPushNotificationsAsync() {
     if (!Device.isDevice) return;
@@ -733,11 +772,18 @@ export default function App() {
           if (nativeEvent.url.includes('supabase.co/auth/v1/authorize')) {
             webViewRef.current?.stopLoading();
             handleNativeOAuth(nativeEvent.url);
+          } else if (isNaverAuthUrl(nativeEvent.url)) {
+            webViewRef.current?.stopLoading();
+            handleNativeNaverOAuth(nativeEvent.url);
           }
         }}
         onShouldStartLoadWithRequest={(request) => {
           if (request.url.includes('supabase.co/auth/v1/authorize')) {
             handleNativeOAuth(request.url);
+            return false;
+          }
+          if (isNaverAuthUrl(request.url)) {
+            handleNativeNaverOAuth(request.url);
             return false;
           }
           return true;

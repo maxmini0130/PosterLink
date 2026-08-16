@@ -4,13 +4,23 @@ import { getAppOrigin } from '../../../../lib/siteUrl';
 export const dynamic = 'force-dynamic';
 
 const BASE_URL = getAppOrigin();
+const ALLOWED_MOBILE_REDIRECTS = [
+  'com.maxmini.posterlink://auth-callback',
+];
 
-export async function GET() {
+function getAllowedMobileRedirect(value: string | null) {
+  if (!value) return null;
+  return ALLOWED_MOBILE_REDIRECTS.find((redirect) => value.startsWith(redirect)) ?? null;
+}
+
+export async function GET(request: Request) {
   const clientId = process.env.NAVER_CLIENT_ID;
   if (!clientId) {
     return NextResponse.redirect(`${BASE_URL}/login?error=naver_not_configured`);
   }
 
+  const { searchParams } = new URL(request.url);
+  const mobileRedirect = getAllowedMobileRedirect(searchParams.get('mobile_redirect'));
   const state = crypto.randomUUID();
   const redirectUri = `${BASE_URL}/api/auth/naver/callback`;
 
@@ -28,6 +38,15 @@ export async function GET() {
     maxAge: 300,
     path: '/',
   });
+  if (mobileRedirect) {
+    response.cookies.set('naver_oauth_mobile_redirect', mobileRedirect, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 300,
+      path: '/',
+    });
+  }
 
   return response;
 }

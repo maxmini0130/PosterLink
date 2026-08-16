@@ -288,3 +288,31 @@ pnpm dlx eas-cli@latest submit --platform ios --profile production --id 8f8b7d2a
   - 주요 빠른 동작 버튼
   - 푸시 토큰/알림 권한
   - iOS 권한 문구와 화면 깨짐 여부
+
+## 2026-08-16 네이버 로그인 모바일 복귀 수정
+
+### 실제 기기 QA에서 확인한 문제
+
+- iPhone TestFlight 앱에서 네이버 로그인이 WebView 안에서 진행됐다.
+- 네이버 앱이 없고 아이디/비밀번호로 로그인하면 인증 후 PosterLink 앱으로 돌아오지 않고 네이버 메인 화면이 표시됐다.
+- 해당 상태에서 앱 안 뒤로가기도 어려웠다.
+
+### 수정 내용
+
+- 모바일 WebView에서 `/api/auth/naver` 접근을 감지하면 로딩을 중단하고 `WebBrowser.openAuthSessionAsync`로 네이티브 인증 세션을 연다.
+- 네이버 OAuth 시작 라우트가 모바일 요청일 때 허용된 앱 스킴 `com.maxmini.posterlink://auth-callback`을 임시 쿠키에 저장한다.
+- 네이버 OAuth 콜백이 모바일 요청이면 Supabase 세션 생성 후 앱 딥링크로 `access_token`, `refresh_token`, `next`를 돌려준다.
+- 모바일 앱은 딥링크 토큰을 받아 네이티브 Supabase 세션과 WebView 쿠키/localStorage 세션을 주입한다.
+- 신규 사용자 온보딩이 필요한 경우 `next=/onboarding` 경로로 앱 WebView를 이동할 수 있게 했다.
+- iOS `buildNumber`를 `10`으로 올려 TestFlight 재배포를 준비했다.
+
+### 검증
+
+- `pnpm --dir apps/mobile typecheck` 통과
+- `pnpm --filter web lint` 통과
+- `pnpm --filter web build` 통과
+
+### 다음 단계
+
+- 변경사항 커밋/푸시 후 iOS production build `1.0.0 (10)` 생성.
+- App Store Connect/TestFlight 업로드 후 iPhone에서 네이버 로그인 재검증.

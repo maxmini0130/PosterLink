@@ -4,6 +4,29 @@ import { createServerClient } from '@supabase/ssr';
 import { getAppOrigin } from '../../../../../lib/siteUrl';
 
 const BASE_URL = getAppOrigin();
+const ALLOWED_MOBILE_REDIRECTS = [
+  'com.maxmini.posterlink://auth-callback',
+];
+
+function getAllowedMobileRedirect(value: string | undefined) {
+  if (!value) return null;
+  return ALLOWED_MOBILE_REDIRECTS.find((redirect) => value.startsWith(redirect)) ?? null;
+}
+
+function buildMobileCallbackUrl(
+  redirectUri: string,
+  session: { access_token: string; refresh_token: string },
+  nextPath: string
+) {
+  const callbackUrl = new URL(redirectUri);
+  const fragment = new URLSearchParams({
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+    next: nextPath,
+  });
+  callbackUrl.hash = fragment.toString();
+  return callbackUrl.toString();
+}
 
 async function derivePassword(naverId: string): Promise<string> {
   const secret = process.env.NAVER_CLIENT_SECRET ?? '';
@@ -56,6 +79,9 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code');
   const state = searchParams.get('state');
   const storedState = request.cookies.get('naver_oauth_state')?.value;
+  const mobileRedirect = getAllowedMobileRedirect(
+    request.cookies.get('naver_oauth_mobile_redirect')?.value
+  );
 
   if (!code || !state || state !== storedState) {
     return NextResponse.redirect(`${BASE_URL}/login?error=invalid_state`);
@@ -179,6 +205,7 @@ export async function GET(request: NextRequest) {
     .single();
 
   let nextUrl = `${BASE_URL}/`;
+  let nextPath = '/';
   if (!profile || !profile.primary_region_id) {
     const { error: upsertError } = await supabaseAdmin.from('profiles').upsert(
       {
@@ -194,12 +221,18 @@ export async function GET(request: NextRequest) {
       );
     }
     nextUrl = `${BASE_URL}/onboarding`;
+    nextPath = '/onboarding';
   }
 
-  const response = NextResponse.redirect(nextUrl);
+  const response = NextResponse.redirect(
+    mobileRedirect
+      ? buildMobileCallbackUrl(mobileRedirect, signInData.session, nextPath)
+      : nextUrl
+  );
   pendingCookies.forEach(({ value, options }, name) => {
     response.cookies.set(name, value, options);
   });
   response.cookies.delete('naver_oauth_state');
+  response.cookies.delete('naver_oauth_mobile_redirect');
   return response;
 }
