@@ -184,3 +184,51 @@ pnpm --dir apps/mobile exec eas submit --platform ios --profile production --id 
 ```bash
 pnpm --dir apps/mobile submit:ios -- --non-interactive --latest
 ```
+
+## 2026-08-16 ASC API Key 파일 확인 및 제출 재시도
+
+### 새 키 확인
+
+- 로컬 키 파일: `apps/mobile/private/EASSubmitPosterLink.p8`
+- Key ID: `P8X435BU66`
+- Issuer ID: `540c4483-383a-44fa-a970-f22700fce50a`
+- 키 파일 형식 확인:
+  - `-----BEGIN PRIVATE KEY-----`
+  - `-----END PRIVATE KEY-----`
+- `apps/mobile/eas.json` submit profile에 local ASC API Key 경로와 ID를 명시했다.
+- `.p8` 파일은 `.gitignore`에 의해 커밋 제외된다.
+
+### 제출 재시도 결과
+
+명령:
+
+```bash
+pnpm dlx eas-cli@latest submit --platform ios --profile production --id 8f8b7d2a-3ea4-48d3-b2d2-2ae90237b2e2 --non-interactive --verbose
+```
+
+결과:
+
+- EAS Submit이 새 로컬 키를 인식했다.
+  - `Key ID: P8X435BU66`
+  - `Key Source: local`
+  - `Key Path: ./private/EASSubmitPosterLink.p8`
+- `ASC App ID: 6769311952`도 정상 인식했다.
+- 제출은 예약됐으나 App Store Connect 제출 단계에서 실패했다.
+  - Submission: `d64f1b92-93a0-4f0e-8b4b-68bf81d8044a`
+
+새 오류:
+
+```text
+Apple 403 detected - Access forbidden.
+A required agreement is missing or has expired.
+This request requires an in-effect agreement that has not been signed or has expired.
+```
+
+### 다음 진행 조건
+
+- App Store Connect에서 만료/미서명 계약을 처리해야 한다.
+- 확인 위치:
+  - App Store Connect 상단 `비즈니스`
+  - 계약/세금/은행 또는 계약 관련 메뉴
+  - 미해결 계약, 유료 앱 계약, Apple Developer Program License Agreement 등 표시되는 항목을 수락/완료
+- 계약 처리 후 같은 제출 명령을 다시 실행한다.

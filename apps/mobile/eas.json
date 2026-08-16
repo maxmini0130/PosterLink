@@ -35,7 +35,10 @@
       "ios": {
         "appleId": "maxmini0130@gmail.com",
         "ascAppId": "6769311952",
-        "appleTeamId": "4R383VX575"
+        "appleTeamId": "4R383VX575",
+        "ascApiKeyPath": "./private/EASSubmitPosterLink.p8",
+        "ascApiKeyId": "P8X435BU66",
+        "ascApiKeyIssuerId": "540c4483-383a-44fa-a970-f22700fce50a"
       }
     }
   }
