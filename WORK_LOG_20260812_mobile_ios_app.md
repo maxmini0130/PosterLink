@@ -316,3 +316,20 @@ pnpm dlx eas-cli@latest submit --platform ios --profile production --id 8f8b7d2a
 
 - 변경사항 커밋/푸시 후 iOS production build `1.0.0 (10)` 생성.
 - App Store Connect/TestFlight 업로드 후 iPhone에서 네이버 로그인 재검증.
+
+### iOS 재빌드 및 제출 결과
+
+- 커밋/푸시:
+  - `9b94edd Fix mobile Naver OAuth return flow`
+- EAS iOS production build 성공:
+  - EAS build ID: `aa1162cb-17b5-4526-b4c7-c7010772ce54`
+  - IPA: https://expo.dev/artifacts/eas/INHgm2EN8GHDnbzfaWMklD3G5hLlr8FMvIFIbqTU_3s.ipa
+  - EAS `autoIncrement`에 의해 실제 build number는 `11`이 됐다.
+- App Store Connect 제출 성공:
+  - Submission: `83ceb7b4-818e-4593-873b-c11e9a9740b5`
+  - App Version: `1.0.0`
+  - Build number: `11`
+  - TestFlight: https://appstoreconnect.apple.com/apps/6769311952/testflight/ios
+- 다음 확인:
+  - Apple 처리 완료 후 TestFlight 내부 테스팅 그룹에 빌드 `1.0.0 (11)` 배정.
+  - iPhone에서 기존 TestFlight 앱을 업데이트하고 네이버 로그인 재검증.

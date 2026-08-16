@@ -130,9 +130,15 @@ PosterLink (pnpm monorepo)
   - App Version: `1.0.0`
   - Build number: `9`
   - TestFlight: https://appstoreconnect.apple.com/apps/6769311952/testflight/ios
+- 네이버 로그인 모바일 복귀 수정 후 App Store Connect 제출 성공:
+  - Submission: `83ceb7b4-818e-4593-873b-c11e9a9740b5`
+  - Build ID: `aa1162cb-17b5-4526-b4c7-c7010772ce54`
+  - App Version: `1.0.0`
+  - Build number: `11`
 
 ### 재개 포인터
 
 - 상세 인수인계는 `WORK_LOG_20260812_mobile_ios_app.md`의 `이어서 작업하기` 섹션을 기준으로 한다.
-- App Store Connect에서 Apple의 빌드 처리 완료 후 PosterLink > TestFlight > iOS에서 빌드 `1.0.0 (9)`를 확인한다.
-- 다음 우선 작업은 내부 테스터 배정, 앱 심사 정보/스크린샷/개인정보 처리 항목 작성, 그리고 규정 준수 항목 완료다.
+- App Store Connect에서 Apple의 빌드 처리 완료 후 PosterLink > TestFlight > iOS에서 최신 빌드 `1.0.0 (11)`를 확인한다.
+- 내부 테스팅 그룹에 빌드 `1.0.0 (11)`를 배정하고 iPhone TestFlight 앱에서 업데이트한 뒤 네이버 로그인을 재검증한다.
+- 다음 우선 작업은 앱 심사 정보/스크린샷/개인정보 처리 항목 작성, 그리고 규정 준수 항목 완료다.
