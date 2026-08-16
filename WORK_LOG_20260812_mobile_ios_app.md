@@ -125,3 +125,52 @@ pnpm --dir apps/mobile exec eas submit --platform ios --profile production --id 
 - 일반 사용자 퀵 액션: `찾기`, `마감`, `요청`
 - 운영자/관리자 포스터 촬영 및 이미지 업로드
 - 카메라/갤러리/Face ID 권한 문구가 iOS에서 한국어로 표시되는지 확인
+
+## 2026-08-16 재개 확인
+
+### 확인한 상태
+
+- `git fetch origin`, `git status --short --branch`
+  - 결과: `main...origin/main`, 작업 트리 깨끗함.
+- EAS 로그인:
+  - `pnpm --dir apps/mobile exec eas whoami`
+  - 결과: `maxmini`, `maxmini0130@gmail.com`
+- 모바일 검증:
+  - `pnpm --dir apps/mobile typecheck` 통과
+  - `pnpm --dir apps/mobile exec expo config --type public` 통과
+  - iOS 설정상 `bundleIdentifier = com.maxmini.posterlink`, `buildNumber = 9` 유지 확인
+
+### 다시 막힌 지점
+
+`pnpm dlx eas-cli@latest submit:status --platform ios`를 재실행했으나 같은 오류가 유지됐다.
+
+오류 요지:
+
+- EAS credentials service의 App Store Connect API Key를 사용하려고 시도함.
+- 그러나 해당 키로 App Store Connect에서 `com.maxmini.posterlink` 앱을 찾을 수 없음.
+- 현재 세션에는 아래 환경변수도 없음:
+  - `EXPO_ASC_API_KEY_PATH`
+  - `EXPO_ASC_KEY_ID`
+  - `EXPO_ASC_ISSUER_ID`
+
+### 다음 진행 조건
+
+아래 둘 중 하나가 필요하다.
+
+1. EAS credentials에 `com.maxmini.posterlink` 앱 접근 권한이 있는 App Store Connect API Key를 다시 등록한다.
+2. 로컬/CI 제출 환경에 아래 값을 제공한다.
+   - `EXPO_ASC_API_KEY_PATH`
+   - `EXPO_ASC_KEY_ID`
+   - `EXPO_ASC_ISSUER_ID`
+
+권한 해결 후 재시도:
+
+```bash
+pnpm --dir apps/mobile exec eas submit --platform ios --profile production --id 8f8b7d2a-3ea4-48d3-b2d2-2ae90237b2e2 --non-interactive
+```
+
+또는 최신 빌드 기준:
+
+```bash
+pnpm --dir apps/mobile submit:ios -- --non-interactive --latest
+```
