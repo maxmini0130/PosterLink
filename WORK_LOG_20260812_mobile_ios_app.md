@@ -139,6 +139,10 @@ pnpm --dir apps/mobile exec eas submit --platform ios --profile production --id 
   - `pnpm --dir apps/mobile typecheck` 통과
   - `pnpm --dir apps/mobile exec expo config --type public` 통과
   - iOS 설정상 `bundleIdentifier = com.maxmini.posterlink`, `buildNumber = 9` 유지 확인
+- App Store Connect 앱 정보 사용자 확인:
+  - Apple ID: `6769311952`
+  - Bundle ID: `com.maxmini.posterlink`
+  - `apps/mobile/eas.json`의 `submit.production.ios.ascAppId`와 `expo.ios.bundleIdentifier`가 App Store Connect 값과 일치함
 
 ### 다시 막힌 지점
 
@@ -160,8 +164,14 @@ pnpm --dir apps/mobile exec eas submit --platform ios --profile production --id 
 1. EAS credentials에 `com.maxmini.posterlink` 앱 접근 권한이 있는 App Store Connect API Key를 다시 등록한다.
 2. 로컬/CI 제출 환경에 아래 값을 제공한다.
    - `EXPO_ASC_API_KEY_PATH`
-   - `EXPO_ASC_KEY_ID`
-   - `EXPO_ASC_ISSUER_ID`
+  - `EXPO_ASC_KEY_ID`
+  - `EXPO_ASC_ISSUER_ID`
+
+비밀키 보관 주의:
+
+- `.p8` App Store Connect API Key는 저장소에 커밋하지 않는다.
+- `.gitignore`에 `*.p8`, `apps/mobile/private/`를 추가했다.
+- 권장 로컬 저장 위치: `apps/mobile/private/EASSubmitPosterLink.p8`
 
 권한 해결 후 재시도:
 

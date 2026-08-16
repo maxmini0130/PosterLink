@@ -23,6 +23,8 @@ ios/
 .env
 .env.local
 .env.*.local
+*.p8
+apps/mobile/private/
 
 # OS
 .DS_Store
