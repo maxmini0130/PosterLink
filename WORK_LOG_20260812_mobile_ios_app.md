@@ -386,3 +386,32 @@ pnpm dlx eas-cli@latest submit --platform ios --profile production --id 8f8b7d2a
   - `pnpm dlx eas-cli@latest build:list --platform android --limit 1 --non-interactive`
 - 완료 후 AAB URL을 기록하고 Play Console에 업로드한다.
 - Play Console 자동 제출은 서비스 계정 JSON 준비 후 진행한다.
+
+### Android production build 완료
+
+- 2026-08-19 재확인 결과 Android production build가 완료됐다.
+  - Build ID: `fce3b843-020b-41b8-ad86-7ff713272345`
+  - App Version: `1.0.0`
+  - Version code: `3`
+  - AAB: https://expo.dev/artifacts/eas/vlqtSarJQbmqne4PQCDmt8ukqhQsLRbZw3HGiMTEFXw.aab
+  - Finished at: `2026-08-19 00:48:45 KST`
+- Google Play 자동 제출용 서비스 계정 JSON은 저장소에 커밋하지 않는다.
+- EAS Android submit profile의 서비스 계정 키 경로를 ignore된 위치로 변경했다.
+  - `apps/mobile/private/google-service-account.json`
+
+### Google Play Console 수동 업로드 경로
+
+- Play Console에서 앱 `PosterLink`를 생성한다.
+  - 패키지명: `com.maxmini.posterlink`
+  - 앱 유형: 앱
+  - 가격: 무료
+- `테스트 및 출시`에서 우선 `내부 테스트` 또는 계정 요건에 따라 `비공개 테스트` 트랙을 만든다.
+- 새 버전 만들기에서 위 AAB를 업로드한다.
+- 앱 콘텐츠 필수 항목을 완료한다.
+  - 개인정보처리방침
+  - 데이터 보안
+  - 콘텐츠 등급
+  - 타겟층/아동 대상 여부
+  - 광고 여부
+  - 앱 액세스 권한
+  - 데이터 삭제/계정 삭제 안내

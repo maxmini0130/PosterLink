@@ -143,4 +143,9 @@ PosterLink (pnpm monorepo)
 - App Store Connect에서 Apple의 빌드 처리 완료 후 PosterLink > TestFlight > iOS에서 최신 빌드 `1.0.0 (11)`를 확인한다.
 - 내부 테스팅 그룹에 빌드 `1.0.0 (11)`를 배정하고 iPhone TestFlight 앱에서 업데이트한 뒤 네이버 로그인을 재검증한다.
 - Android production build `fce3b843-020b-41b8-ad86-7ff713272345` 완료 여부를 확인하고, 완료되면 AAB를 Google Play Console 테스트 트랙에 업로드한다.
+- Android production AAB 빌드 완료:
+  - Build ID: `fce3b843-020b-41b8-ad86-7ff713272345`
+  - Version code: `3`
+  - AAB: https://expo.dev/artifacts/eas/vlqtSarJQbmqne4PQCDmt8ukqhQsLRbZw3HGiMTEFXw.aab
+- Google Play 자동 제출용 서비스 계정 JSON은 `apps/mobile/private/google-service-account.json`에 로컬로만 둔다.
 - 다음 우선 작업은 Google Play 앱 생성/테스트 트랙 준비, 앱 심사 정보/스크린샷/개인정보 처리 항목 작성, 그리고 규정 준수 항목 완료다.
