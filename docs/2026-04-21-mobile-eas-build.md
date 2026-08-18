@@ -74,8 +74,9 @@ PosterLink (pnpm monorepo)
 ### 우선순위 중간
 - [x] iOS 빌드 설정 정리 (bundle id, EAS profiles, 빌드/제출 스크립트)
 - [x] iOS 실제 클라우드 빌드 및 App Store Connect/TestFlight 업로드
+- [ ] Android Google Play production AAB 빌드 및 테스트 트랙 업로드
 - [ ] 생체인식 로그인 — 모바일 앱 지문/Face ID (`expo-local-authentication`)
-- [ ] 네이버 로그인 실제 구현 (현재 "준비중" placeholder)
+- [x] 네이버 로그인 모바일 복귀 흐름 구현
 - [ ] pg_cron 마감 알림 (`check-deadlines`) 스케줄링 확인
 
 ### 우선순위 낮음
@@ -141,4 +142,5 @@ PosterLink (pnpm monorepo)
 - 상세 인수인계는 `WORK_LOG_20260812_mobile_ios_app.md`의 `이어서 작업하기` 섹션을 기준으로 한다.
 - App Store Connect에서 Apple의 빌드 처리 완료 후 PosterLink > TestFlight > iOS에서 최신 빌드 `1.0.0 (11)`를 확인한다.
 - 내부 테스팅 그룹에 빌드 `1.0.0 (11)`를 배정하고 iPhone TestFlight 앱에서 업데이트한 뒤 네이버 로그인을 재검증한다.
-- 다음 우선 작업은 앱 심사 정보/스크린샷/개인정보 처리 항목 작성, 그리고 규정 준수 항목 완료다.
+- Android production build `fce3b843-020b-41b8-ad86-7ff713272345` 완료 여부를 확인하고, 완료되면 AAB를 Google Play Console 테스트 트랙에 업로드한다.
+- 다음 우선 작업은 Google Play 앱 생성/테스트 트랙 준비, 앱 심사 정보/스크린샷/개인정보 처리 항목 작성, 그리고 규정 준수 항목 완료다.

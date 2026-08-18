@@ -363,3 +363,26 @@ pnpm dlx eas-cli@latest submit --platform ios --profile production --id 8f8b7d2a
 - Google Play Console에서 앱 `PosterLink` 생성 후 package `com.maxmini.posterlink` 확인.
 - 처음에는 내부 테스트 또는 비공개 테스트 트랙에 AAB 업로드.
 - EAS submit 자동화를 쓰려면 Google Play service account JSON을 `apps/mobile/google-service-account.json`에 로컬로만 보관하거나 EAS credentials에 등록한다. JSON 키는 커밋하지 않는다.
+
+### Android production build 요청
+
+- 검증:
+  - `pnpm --dir apps/mobile typecheck` 통과
+  - `pnpm --dir apps/mobile exec expo config --type public`에서 Android package `com.maxmini.posterlink`, versionCode `2` 확인
+- EAS Android production build를 시작했다.
+  - Build ID: `fce3b843-020b-41b8-ad86-7ff713272345`
+  - Profile: `production`
+  - Distribution: `store`
+  - App Version: `1.0.0`
+  - EAS `autoIncrement`에 의해 실제 version code는 `3`으로 갱신됐다.
+  - Logs: https://expo.dev/accounts/maxmini/projects/posterlink-mobile/builds/fce3b843-020b-41b8-ad86-7ff713272345
+- 2026-08-19 00:10 KST 기준 상태:
+  - `in queue`
+  - Application Archive URL: 아직 없음
+
+### 이어서 할 일
+
+- 빌드 완료 확인:
+  - `pnpm dlx eas-cli@latest build:list --platform android --limit 1 --non-interactive`
+- 완료 후 AAB URL을 기록하고 Play Console에 업로드한다.
+- Play Console 자동 제출은 서비스 계정 JSON 준비 후 진행한다.
