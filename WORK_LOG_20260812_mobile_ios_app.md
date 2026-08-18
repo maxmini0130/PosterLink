@@ -333,3 +333,33 @@ pnpm dlx eas-cli@latest submit --platform ios --profile production --id 8f8b7d2a
 - 다음 확인:
   - Apple 처리 완료 후 TestFlight 내부 테스팅 그룹에 빌드 `1.0.0 (11)` 배정.
   - iPhone에서 기존 TestFlight 앱을 업데이트하고 네이버 로그인 재검증.
+
+## 2026-08-19 Android Google Play 준비
+
+### 공식 기준 확인
+
+- Google Play 신규 개인 개발자 계정은 프로덕션 접근 전에 비공개 테스트 요건이 적용될 수 있다.
+  - 최소 12명 테스터가 참여하는 closed test 요건을 확인해야 한다.
+  - 참고: https://support.google.com/googleplay/android-developer/answer/14151465
+- EAS Submit Android는 AAB를 Google Play Console의 internal/alpha/beta/production 트랙에 업로드할 수 있다.
+  - 참고: https://docs.expo.dev/submit/android/
+
+### 저장소 준비
+
+- Android production AAB 빌드 스크립트를 추가했다.
+  - `pnpm --dir apps/mobile build:android:production`
+- Android preview APK 빌드 스크립트를 추가했다.
+  - `pnpm --dir apps/mobile android:preview`
+- Android submit 스크립트를 추가했다.
+  - `pnpm --dir apps/mobile submit:android`
+- Play Console 업로드용 `versionCode`를 `2`로 올렸다.
+- 현재 Android package:
+  - `com.maxmini.posterlink`
+
+### 다음 단계
+
+- `pnpm --dir apps/mobile typecheck`로 모바일 타입 확인.
+- EAS Android production build로 AAB 생성.
+- Google Play Console에서 앱 `PosterLink` 생성 후 package `com.maxmini.posterlink` 확인.
+- 처음에는 내부 테스트 또는 비공개 테스트 트랙에 AAB 업로드.
+- EAS submit 자동화를 쓰려면 Google Play service account JSON을 `apps/mobile/google-service-account.json`에 로컬로만 보관하거나 EAS credentials에 등록한다. JSON 키는 커밋하지 않는다.
