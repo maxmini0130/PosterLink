@@ -415,3 +415,34 @@ pnpm dlx eas-cli@latest submit --platform ios --profile production --id 8f8b7d2a
   - 광고 여부
   - 앱 액세스 권한
   - 데이터 삭제/계정 삭제 안내
+
+### Google Play 개발자 계정 설정 상태
+
+- Google Play Console 개인 개발자 계정을 생성했다.
+  - 개발자명: `MMaxx`
+  - 계정 유형: 개인
+- Play Console 홈에서 앱 생성 버튼은 아직 비활성화 상태다.
+- 본인 확인:
+  - 신원 확인 문서 업로드 완료.
+  - 현재 상태: `Google에서 신원 확인 중입니다`.
+  - Google 검토 완료 후 계정 소유자 이메일로 결과가 온다.
+- 남은 계정 설정:
+  - 연락처 전화번호 인증을 완료해야 한다.
+  - Android 휴대기기 액세스 확인 항목이 완료됐는지 Play Console 모바일 앱/웹에서 확인한다.
+
+### 다음 재개 액션
+
+1. Play Console에서 연락처 전화번호 인증을 완료한다.
+2. Google 신원 확인 완료 이메일을 기다린다.
+3. `앱 만들기` 버튼이 활성화되면 앱을 생성한다.
+   - 앱 이름: `PosterLink`
+   - 기본 언어: `한국어`
+   - 앱 또는 게임: 앱
+   - 가격: 무료
+4. 패키지명 `com.maxmini.posterlink`로 AAB를 내부 테스트 또는 비공개 테스트 트랙에 업로드한다.
+5. 업로드할 AAB:
+   - Version: `1.0.0`
+   - Version code: `3`
+   - URL: https://expo.dev/artifacts/eas/vlqtSarJQbmqne4PQCDmt8ukqhQsLRbZw3HGiMTEFXw.aab
+6. 앱 콘텐츠 필수 항목과 스토어 등록정보를 작성한다.
+7. 신규 개인 개발자 계정 정책상 비공개 테스트 요건이 표시되면 해당 요건을 먼저 충족한다.

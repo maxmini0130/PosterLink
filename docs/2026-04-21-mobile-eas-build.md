@@ -148,4 +148,5 @@ PosterLink (pnpm monorepo)
   - Version code: `3`
   - AAB: https://expo.dev/artifacts/eas/vlqtSarJQbmqne4PQCDmt8ukqhQsLRbZw3HGiMTEFXw.aab
 - Google Play 자동 제출용 서비스 계정 JSON은 `apps/mobile/private/google-service-account.json`에 로컬로만 둔다.
-- 다음 우선 작업은 Google Play 앱 생성/테스트 트랙 준비, 앱 심사 정보/스크린샷/개인정보 처리 항목 작성, 그리고 규정 준수 항목 완료다.
+- Google Play 개인 개발자 계정 `MMaxx`는 신원 확인 문서 업로드 후 Google 검토 대기 상태다.
+- 다음 우선 작업은 연락처 전화번호 인증 완료, Google 신원 확인 승인 대기, Google Play 앱 생성/테스트 트랙 준비, 앱 심사 정보/스크린샷/개인정보 처리 항목 작성, 그리고 규정 준수 항목 완료다.
