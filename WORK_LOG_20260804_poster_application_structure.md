@@ -443,3 +443,24 @@
 - 모노레포 단위 테스트 `51/51` 통과
 - 웹 lint 경고·오류 없음
 - 웹 production build와 TypeScript 검사 성공
+
+## 24. PDF 5단계 기관 팔로우 알림과 추천 연결
+
+- 기관 팔로우를 기존 `new_match` 알림 파이프라인에 연결했다.
+  - 공고가 새로 `published`될 때 팔로우한 기관이 `source_institution_id`, `organizer_id`, `application_institution_id` 중 하나와 일치하면 알림을 생성한다.
+  - 실제 주최기관, 게시 출처, 신청 접수기관 FK가 모두 비어 있으면 추정 알림을 만들지 않는다.
+  - 관심 분야·지역 매칭과 기관 팔로우 매칭이 동시에 발생해도 사용자당 공고 1건의 알림만 남긴다.
+- `get_recommended_posters` RPC에 팔로우 기관 가중치 `45점`을 추가했다.
+  - 기존 지역 `50점`, 관심 분야 `30점`, 임박 마감 `20점` 규칙은 유지한다.
+  - 수집 출처 기관과 실제 주최·접수기관을 섞어 저장하지 않고 확인된 FK만 점수에 사용한다.
+- `notify-new-match` Edge Function이 DB에 저장된 알림 제목과 본문을 그대로 푸시로 발송하도록 수정했다.
+  - 팔로우 기관 알림은 모바일 푸시에서도 `팔로우 기관 새 공고`로 구분된다.
+
+### 검증
+
+- `git diff --check` 통과
+- 모노레포 단위 테스트 `53/53` 통과
+- `pnpm --filter web lint` 경고·오류 없음
+- `pnpm --filter web build`와 TypeScript 검사 성공
+- `notify-new-match` Edge Function을 esbuild로 구문 변환해 문법 오류가 없음을 확인
+- 운영 DB 마이그레이션 적용과 Edge Function 배포는 아직 수행하지 않았다.

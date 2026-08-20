@@ -85,7 +85,7 @@ serve(async (req) => {
 
     const { data: notifications, error: notifError } = await serviceClient
       .from("notifications")
-      .select("id, user_id")
+      .select("id, user_id, title, body")
       .eq("type", "new_match")
       .eq("target_id", poster_id)
       .is("push_sent_at", null);
@@ -102,10 +102,17 @@ serve(async (req) => {
     }
 
     const notificationIdsByUser = new Map<string, string[]>();
+    const notificationMessageByUser = new Map<string, { title: string; body: string }>();
     for (const notification of notifications) {
       const ids = notificationIdsByUser.get(notification.user_id) ?? [];
       ids.push(notification.id);
       notificationIdsByUser.set(notification.user_id, ids);
+      if (!notificationMessageByUser.has(notification.user_id)) {
+        notificationMessageByUser.set(notification.user_id, {
+          title: notification.title || "새 포스터 알림",
+          body: notification.body || `새 포스터가 등록됐어요: ${poster.title}`,
+        });
+      }
     }
 
     const userIds = [...notificationIdsByUser.keys()];
@@ -138,6 +145,10 @@ serve(async (req) => {
 
     for (const profile of profiles) {
       if (!profile.expo_push_token) continue;
+      const message = notificationMessageByUser.get(profile.id) ?? {
+        title: "새 포스터 알림",
+        body: `새 포스터가 등록됐어요: ${poster.title}`,
+      };
 
       const pushResponse = await fetch("https://exp.host/--/api/v2/push/send", {
         method: "POST",
@@ -147,8 +158,8 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           to: profile.expo_push_token,
-          title: "새 포스터 알림",
-          body: `관심 분야/지역에 새 포스터가 등록됐어요: ${poster.title}`,
+          title: message.title,
+          body: message.body,
           data: { posterId: poster_id },
         }),
       });
