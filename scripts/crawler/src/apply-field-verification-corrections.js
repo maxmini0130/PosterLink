@@ -23,8 +23,9 @@ if (args.help || args.h) {
   node src/apply-field-verification-corrections.js [--limit=1000] [--statuses=published,review] [--min-confidence=0.85] [--output=data/results/field-verification-corrections.json] [--apply]
 
 Applies high-confidence field_verification correctedDeadline/correctedOrgName values
-to posters.application_end_at and posters.source_org_name. Without --apply, writes
-a dry-run report only.`);
+to posters.application_end_at. Organization suggestions are reported but are no
+longer applied to source_org_name, because source_org_name is the collection
+source, not the verified organizer. Without --apply, writes a dry-run report only.`);
   process.exit(0);
 }
 
@@ -64,7 +65,7 @@ function getOrganizationCandidate(verification) {
   );
 }
 
-function getCorrection(row, minConfidence) {
+export function getCorrection(row, minConfidence) {
   const verification = row.field_verification;
   if (!verification || typeof verification !== "object") return null;
 
@@ -73,6 +74,7 @@ function getCorrection(row, minConfidence) {
 
   const updates = {};
   const changes = [];
+  const suppressed = [];
 
   const correctedDeadline = normalizeDate(verification.correctedDeadline);
   if (correctedDeadline && verification.deadlineMatches === false && dateKey(row.application_end_at) !== correctedDeadline) {
@@ -87,19 +89,20 @@ function getCorrection(row, minConfidence) {
   const orgConfidence = Number(verification.organizationConfidence ?? verification.organization?.confidence ?? confidence);
   const correctedOrgName = orgConfidence >= minConfidence ? getOrganizationCandidate(verification) : null;
   if (correctedOrgName && verification.orgNameMatches === false && correctedOrgName !== row.source_org_name) {
-    updates.source_org_name = correctedOrgName;
-    changes.push({
+    suppressed.push({
       field: "source_org_name",
       old: row.source_org_name ?? null,
       next: correctedOrgName,
+      reason: "source_org_name_is_collection_source",
     });
   }
 
-  if (changes.length === 0) return null;
+  if (changes.length === 0 && suppressed.length === 0) return null;
 
   return {
     updates,
     changes,
+    suppressed,
     confidence,
     organizationConfidence: orgConfidence,
   };
@@ -143,8 +146,9 @@ async function main() {
     .filter(({ correction }) => correction);
 
   const reportRows = [];
+  const suppressedRows = [];
   for (const { row, correction } of candidates) {
-    if (apply) {
+    if (correction.changes.length > 0 && apply) {
       const { error } = await supabase
         .from("posters")
         .update(correction.updates)
@@ -153,15 +157,20 @@ async function main() {
       if (error) throw error;
     }
 
-    reportRows.push({
+    const reportRow = {
       id: row.id,
       title: row.title,
       poster_status: row.poster_status,
       source_key: row.source_key,
       confidence: correction.confidence,
       organizationConfidence: correction.organizationConfidence,
-      changes: correction.changes,
-    });
+    };
+    if (correction.changes.length > 0) {
+      reportRows.push({ ...reportRow, changes: correction.changes });
+    }
+    if (correction.suppressed.length > 0) {
+      suppressedRows.push({ ...reportRow, suppressed: correction.suppressed });
+    }
   }
 
   const report = {
@@ -171,7 +180,9 @@ async function main() {
     min_confidence: minConfidence,
     scanned_count: rows.length,
     correction_count: reportRows.length,
+    suppressed_org_suggestion_count: suppressedRows.length,
     rows: reportRows,
+    suppressed_rows: suppressedRows,
   };
 
   await fs.mkdir(path.dirname(output), { recursive: true });
@@ -182,6 +193,7 @@ async function main() {
     mode: report.mode,
     scanned_count: report.scanned_count,
     correction_count: report.correction_count,
+    suppressed_org_suggestion_count: report.suppressed_org_suggestion_count,
     sample: reportRows.slice(0, 10).map((row) => ({
       title: row.title,
       changes: row.changes,
@@ -189,7 +201,9 @@ async function main() {
   }, null, 2));
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

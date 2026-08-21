@@ -651,3 +651,29 @@
 - `pnpm --dir apps/mobile typecheck` 통과
 - `pnpm test` 53/53 통과
 - `git diff --check` 통과
+
+## 33. 필드 보정 후보 품질 게이트 오탐 정리
+
+- 직전 AI 헬스체크에서 품질 게이트가 `field_correction_candidates=33` 때문에 fail 상태였던 원인을 확인했다.
+- `data/results/ai-healthcheck-corrections-2026-08-21T06-54-31-595Z.json`의 33건은 모두 `source_org_name` 변경 후보였다.
+  - 예: `청년몽땅정보통` → 실제 프로그램 운영기관
+  - 예: `K-Startup` → 실제 지원사업 운영기관
+- 현재 데이터 기준에서 `source_org_name`은 실제 주관기관이 아니라 수집·게시 출처를 보존하는 필드다.
+- 따라서 33건을 운영 DB에 적용하지 않았다. 적용하면 “게시 출처”와 “실제 주관기관”을 다시 섞게 된다.
+- `scripts/crawler/src/apply-field-verification-corrections.js`를 수정했다.
+  - 고신뢰 마감일 보정 후보는 계속 actionable correction으로 집계한다.
+  - `correctedOrgName`/`organization.displayOrgName` 기반 제안은 `source_org_name`에 적용하지 않는다.
+  - 주관기관 제안은 `suppressed_org_suggestion_count`와 `suppressed_rows`로 리포트에만 남긴다.
+- 회귀 테스트 `scripts/crawler/src/apply-field-verification-corrections.test.js`를 추가했다.
+  - 마감일 보정은 계속 후보로 남는지 확인
+  - 주관기관 제안이 `source_org_name` 변경으로 잡히지 않는지 확인
+- 재측정 결과 AI 헬스체크 품질 게이트가 통과했다.
+  - `field_correction_candidates`: `33` → `0`
+  - `quality_gate_status`: `fail` → `pass`
+
+### 검증
+
+- `pnpm --filter posterlink-crawler test` 142/142 통과
+- `pnpm --filter posterlink-crawler ai:healthcheck -- --output=data/results/ai-healthcheck-20260821-field-corrections.json` 통과
+- `pnpm test` 53/53 통과
+- `git diff --check` 통과
