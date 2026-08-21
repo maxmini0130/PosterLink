@@ -463,4 +463,23 @@
 - `pnpm --filter web lint` 경고·오류 없음
 - `pnpm --filter web build`와 TypeScript 검사 성공
 - `notify-new-match` Edge Function을 esbuild로 구문 변환해 문법 오류가 없음을 확인
-- 운영 DB 마이그레이션 적용과 Edge Function 배포는 아직 수행하지 않았다.
+- 운영 DB 마이그레이션 적용과 Edge Function 배포는 2026-08-21에 완료했다.
+
+## 25. 기관 팔로우 기반 알림·추천 운영 반영
+
+- 운영 Supabase 프로젝트 `zxndgzsfrgwahwsdbjdj`에 마이그레이션 `20260804027000_connect_institution_follows_to_alerts_and_recommendations.sql`을 적용했다.
+- `notify-new-match` Edge Function을 재배포했다.
+  - 배포 전 원격 함수 버전: `3`
+  - 배포 후 원격 함수 버전: `4`
+- 원격 마이그레이션 목록에서 `20260804027000`의 local·remote 적용 상태가 일치함을 확인했다.
+- 배포 후 `notify-new-match` 함수가 `ACTIVE`, `verify_jwt=true` 상태임을 확인했다.
+- 배포 중 `supabase/config.toml`의 `[inbucket]` deprecated 경고와 Docker 미실행 경고가 표시되었으나, 원격 함수 업로드와 배포는 정상 완료되었다.
+
+### 검증
+
+- `pnpm test` 53/53 통과
+- `pnpm --filter web lint` 경고·오류 없음
+- `pnpm --filter web build` 성공
+- `pnpm exec esbuild supabase/functions/notify-new-match/index.ts --bundle --platform=neutral --format=esm --outfile=NUL` 성공
+- `pnpm dlx supabase migration list --linked`에서 `20260804027000` 원격 적용 확인
+- `pnpm dlx supabase functions list --project-ref zxndgzsfrgwahwsdbjdj`에서 `notify-new-match` 버전 `4` 확인
