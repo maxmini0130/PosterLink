@@ -564,3 +564,45 @@
 
 - 같은 조건의 잔여 `deadline-mismatch` 후보가 `0건`임을 확인
 - 보정 4건 모두 `application_end_at=NULL`, `deadline_type=NULL`, `deadline-mismatch=false`, `open-ended-application-period=true` 확인
+
+## 30. 검수 후보 큐 정리와 텍스트 후보 기준 문서화
+
+- 운영 DB 기준 `posters.poster_status='review'` 큐는 비어 있고, `poster_notice_candidates.candidate_status='pending'` 큐는 `1092건`임을 확인했다.
+- pending 후보의 주요 반복 이슈를 집계했다.
+  - `text-notice-no-image`: 775건
+  - `date-without-year`: 254건
+  - `weak-summary`: 142건
+  - `duplicate-suspected`: 63건
+  - `deadline-mismatch`: 32건
+  - `employment-recruitment-notice`: 10건
+- 명확히 사용자 노출 대상이 아닌 채용·행정 모집 공고 10건과 기존 공개 포스터 중복 1건을 `dismissed`로 정리했다.
+  - 마포복지재단 직원·계약직·사회복지사·운전원 채용 공고
+  - 마포복지재단 청소년 프로그램 강사 모집 공고와 연장 공고
+  - 기존 공개 포스터와 동일한 중복 후보 1건
+- 정리 후 pending 큐에서 `employment-recruitment-notice` 이슈가 사라졌고, `duplicate-suspected`는 63건에서 52건으로 줄었다.
+- `docs/text_notice_candidate_policy.md`를 추가해 이미지 없는 텍스트 공고 후보의 승인, 보류, 반려 기준을 문서화했다.
+  - 원문 상세 URL과 신청 URL 분리
+  - 실제 주관기관, 게시 출처, 신청 접수기관 구분
+  - 열린 모집기간 처리
+  - 중복 의심 후보의 사람 검수 기준
+  - 채용·행정 공고문·결과 공지·시설 안내 반려 기준
+- `docs/ai_human_golden_set_protocol.md`에서 텍스트 후보 승인 전 해당 기준을 참조하도록 연결했다.
+
+## 31. 기관 팔로우 추천·알림 실제 검증
+
+- 운영 DB에서 실제 `institution_follows`는 여전히 `0건`임을 확인했다.
+- 실제 데이터를 남기지 않는 스모크 검증으로 팔로우 1건을 임시 생성한 뒤 즉시 삭제했다.
+  - 대상 공고 추천 점수: `59.7705392702692` → `104.770539270269`
+  - 점수 증가량: `45`
+  - 검증 후 `institution_follows`: `0건`
+- `get_recommended_posters_v2`가 홈 추천 경로에서 팔로우 기관 가중치 `45점`을 반영함을 운영 DB에서 확인했다.
+- `trg_notify_new_match` 트리거가 운영 DB에 존재하고 활성 상태(`tgenabled='O'`)임을 확인했다.
+- 원격 `notify-new-match` Edge Function은 `ACTIVE`, `verify_jwt=true`, 버전 `4` 상태임을 확인했다.
+
+### 검증
+
+- 운영 후보 11건 `dismissed` 정리 결과 확인
+- 기관 팔로우 추천 점수 `+45` 반영 확인
+- 알림 트리거와 Edge Function 배포 상태 확인
+- `git diff --check` 통과
+- `pnpm test` 53/53 통과

@@ -105,6 +105,12 @@ collection rule that produced it.
 - Check `application_source_key_count` in `ai:healthcheck`; the expected value
   is zero.
 
+For image-less notice candidates, apply
+[`text_notice_candidate_policy.md`](./text_notice_candidate_policy.md) before
+promoting a row to user-visible content. Text candidates need official source
+evidence, a clear application structure, and duplicate checks; they should not
+be promoted merely because no poster image exists.
+
 ## Score
 
 After review:

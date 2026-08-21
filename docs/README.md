@@ -38,6 +38,8 @@
   바이브코딩 시작 전후 체크리스트
 - `17_service_launch_checklist.md`
   사전 오픈 전 기능, 데이터, 운영, 배포 최종 점검표
+- `text_notice_candidate_policy.md`
+  이미지 없는 텍스트 공고 후보의 승인, 보류, 반려 기준
 
 ## 권장 1차 구현 전략
 
