@@ -545,6 +545,7 @@ for (const title of [
   "[채용공고] 마포구고용복지지원센터 신규사업 실시에 따른 계약직 직원 채용 재공고",
   "2026년 제4회 마포문화재단 직원 채용 공고( ~ 7.10.(금) 18:00 한)",
   "통장 모집 공고(제7통)",
+  "공중화장실 관리인 모집 공고",
 ]) {
   test(`reject non-poster recruitment notice: ${title}`, () => {
     const result = evaluatePosterQuality({

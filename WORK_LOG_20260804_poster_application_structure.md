@@ -509,3 +509,26 @@
 - `pnpm dlx supabase db push --linked --yes`로 운영 DB에 `20260821000000` 적용 완료
 - `pnpm dlx supabase migration list --linked`에서 `20260821000000` 원격 적용 확인
 - `information_schema.routines`에서 `get_recommended_posters_v2` 함수 존재 확인
+
+## 27. 행정 공고문 스캔 이미지 비포스터 처리
+
+- 검수대기 공고 `공중화장실 관리인 모집 공고`의 대표 이미지를 직접 확인했다.
+- 이미지는 제목, 접수기간, 근무조건, 문의처가 있는 실제 공고문이지만, 디자인된 모집 포스터가 아니라 2쪽짜리 행정 공고문 스캔 이미지였다.
+- PosterLink 대표 포스터 기준에는 맞지 않으므로 운영 DB에서 해당 공고를 `rejected`로 전환했다.
+  - PosterLink ID: `9262ae47-14a1-4837-8261-724a86c140b9`
+  - 기존 상태: `review`
+  - 변경 상태: `rejected`
+  - `field_verification.posterImageOcr.imageClassification.isPoster=false`
+  - `visualType=administrative document scan`
+- 재발 방지를 위해 포스터 이미지 분류 프롬프트에 다음 기준을 추가했다.
+  - 공식 행정문서 스캔
+  - 2단/문서형 공고문 이미지
+  - 관보·고시형 공고
+  - 평문 채용·모집 공고문 이미지
+- 품질 게이트의 비포스터 행정 모집 규칙에도 `관리인/관리원/청소원/환경미화원 모집 공고`를 추가했다.
+
+### 검증
+
+- `git diff --check` 통과
+- `pnpm --filter posterlink-crawler test` 139/139 통과
+- 운영 DB 업데이트 결과 해당 공고가 `rejected`이고 이미지 분류가 `human-review`, `isPoster=false`임을 확인
