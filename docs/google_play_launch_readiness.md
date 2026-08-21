@@ -31,6 +31,8 @@ PosterLink Android 앱을 Google Play 내부 테스트 또는 프로덕션 심�
   Google Play는 2026-08-31부터 신규 앱과 앱 업데이트에 Android 16
   API 36 이상을 요구한다. 출시 제출 전 Expo SDK와 Android target SDK
   업그레이드가 필요하다.
+- 현재 Expo SDK는 `51`이고 React Native는 `0.74`다. Expo 공식 문서 기준으로
+  API 36 제출은 Expo SDK 54 이상으로 올린 뒤 검증한다.
 - Google Play 계정 삭제 요구사항에 맞는 웹 삭제 요청 URL과 앱 내 삭제 경로를
   최종 확인해야 한다.
 - Play Console의 Data safety 답변은 앱 코드, SDK, 개인정보처리방침과
@@ -92,9 +94,14 @@ PosterLink Android 앱을 Google Play 내부 테스트 또는 프로덕션 심�
 
 ```bash
 pnpm --dir apps/mobile typecheck
+pnpm --dir apps/mobile check:play-readiness
 pnpm --filter @posterlink/mobile build:android:production
 pnpm --filter @posterlink/mobile submit:android
 ```
+
+현재 `check:play-readiness`는 Expo SDK 51, Android target SDK 34 상태를
+차단으로 보고 실패하는 것이 정상이다. Expo SDK와 Android Gradle 설정을 API 36
+기준으로 업그레이드한 뒤 이 명령이 통과해야 제출 단계로 넘어간다.
 
 `apps/mobile/private/google-service-account.json`은 커밋하지 않는다.
 

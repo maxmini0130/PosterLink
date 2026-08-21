@@ -677,3 +677,29 @@
 - `pnpm --filter posterlink-crawler ai:healthcheck -- --output=data/results/ai-healthcheck-20260821-field-corrections.json` 통과
 - `pnpm test` 53/53 통과
 - `git diff --check` 통과
+
+## 34. Google Play API 36 출시 준비 점검 자동화
+
+- Google 공식 요구사항과 Expo 공식 문서를 기준으로 Android 출시 차단 조건을 다시 확인했다.
+  - Google Play는 2026-08-31부터 신규 앱과 앱 업데이트에 Android 16, API 36 이상 target SDK를 요구한다.
+  - Expo SDK 54 changelog는 React Native Android가 API 36을 target한다고 설명한다.
+  - Expo SDK 56 업그레이드 안내도 Android API 36 지원을 명시한다.
+- 현재 모바일 앱은 Expo SDK `51`, React Native `0.74.5`, Android `compileSdkVersion=34`, `targetSdkVersion=34`, `buildToolsVersion=34.0.0`이다.
+- 단순히 Gradle 숫자만 36으로 바꾸면 현재 Expo/RN 조합과 edge-to-edge 동작 검증을 건너뛰게 되므로, 제출 전 자동 점검을 먼저 추가했다.
+- `apps/mobile/scripts/check-google-play-readiness.js`를 추가했다.
+  - Android package와 `versionCode` 확인
+  - Expo SDK 54 이상 여부 확인
+  - `compileSdkVersion`, `targetSdkVersion`, `buildToolsVersion` API 36 기준 확인
+  - 개인정보처리방침과 이용약관 URL 기준 표시
+- `apps/mobile/package.json`에 `check:play-readiness`를 추가했다.
+- `docs/google_play_launch_readiness.md`와 `docs/17_service_launch_checklist.md`에 해당 명령과 현재 실패가 정상인 이유를 기록했다.
+
+### 검증
+
+- `pnpm --dir apps/mobile check:play-readiness` 실행 결과 예상대로 fail
+  - Expo SDK: `~51.0.0`
+  - `compileSdkVersion`: `34`
+  - `targetSdkVersion`: `34`
+  - `buildToolsVersion`: `34.0.0`
+- `pnpm --dir apps/mobile typecheck` 통과
+- `pnpm test` 53/53 통과

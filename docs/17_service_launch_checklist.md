@@ -110,6 +110,7 @@
 - [ ] Open Graph 이미지/메타데이터 확인
 - [ ] 모바일 앱 EAS 빌드 프로필 확인
 - [ ] Google Play 출시 준비 체크리스트 확인 (`docs/google_play_launch_readiness.md`)
+- [ ] `pnpm --dir apps/mobile check:play-readiness` 통과
 - [ ] Android target SDK를 Google Play 최신 요구사항에 맞게 업그레이드
 - [ ] Play Console Data safety, 계정 삭제, 앱 액세스, 대상 연령 답변 최종 확인
 - [ ] Android 실기기 설치 및 카메라 권한 확인
