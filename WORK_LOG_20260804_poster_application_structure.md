@@ -483,3 +483,26 @@
 - `pnpm exec esbuild supabase/functions/notify-new-match/index.ts --bundle --platform=neutral --format=esm --outfile=NUL` 성공
 - `pnpm dlx supabase migration list --linked`에서 `20260804027000` 원격 적용 확인
 - `pnpm dlx supabase functions list --project-ref zxndgzsfrgwahwsdbjdj`에서 `notify-new-match` 버전 `4` 확인
+
+## 26. 홈 추천 v2 기관 팔로우 점수 연결
+
+- 운영 스모크 점검에서 홈 화면이 `get_recommended_posters_v2`를 호출하고 있음을 확인했다.
+- 기존 `get_recommended_posters` RPC에는 기관 팔로우 가중치 `45점`이 반영됐지만, 실제 홈 추천 경로인 `get_recommended_posters_v2`에는 아직 반영되지 않은 상태였다.
+- `get_recommended_posters_v2`에도 사용자가 팔로우한 기관이 공고의 `source_institution_id`, `organizer_id`, `application_institution_id` 중 하나와 일치하면 `45점`을 더하도록 마이그레이션을 추가했다.
+- 기존 v2 추천 신호는 유지했다.
+  - 지역 `40점`
+  - 관심 분야 `30점`
+  - 대상·성별 적합도 `+20점` 또는 `-15점`
+  - 7일 이내 마감 `10점`
+  - 찜·조회 이력 기반 의미 유사도 최대 `30점`
+  - `similarity_score` 반환 컬럼 유지
+- 운영 DB 읽기 전용 점검 결과, 2026-08-21 기준 `institution_follows`는 아직 `0건`이므로 실제 기관 팔로우 추천·알림은 사용자가 팔로우를 시작한 뒤 발생한다.
+- 운영 DB 적용은 아직 수행하지 않았다. `supabase db push --dry-run`에서 적용 후보가 새 마이그레이션 1개뿐임을 확인했다.
+
+### 검증
+
+- `git diff --check` 통과
+- `pnpm test` 53/53 통과
+- `pnpm --filter web lint` 경고·오류 없음
+- `pnpm --filter web build` 성공
+- `pnpm dlx supabase db push --linked --dry-run`에서 `20260821000000_add_institution_follow_score_to_semantic_recommendations.sql`만 적용 후보로 확인
