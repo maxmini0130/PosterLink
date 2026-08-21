@@ -547,3 +547,20 @@
 
 - `git diff --check` 통과
 - `pnpm --filter posterlink-crawler test` 140/140 통과
+
+## 29. 모집시까지 기존 후보 마감일 운영 보정
+
+- `poster_notice_candidates`에서 `모집시까지` 열린 접수기간인데 행사일·선정일이 `application_end_at`으로 저장되고 `deadline-mismatch`가 남아 있던 운영 후보 4건을 보정했다.
+- 보정 대상:
+  - `7b6161e7-4c0d-4ccd-8d49-0fe7daad57d3` 청년공간 동선이음 `<9월 요리아카데미(1인가구지원):홍소육+토달볶 만들기>` 참여자 모집
+  - `87da0301-ad71-4d5d-b699-c5ebada34d23` 청년공간 동선이음 `<9월 요리아카데미(1인가구지원):꽃게탕+무생채 만들기>` 참여자 모집
+  - `65695890-a648-456c-8fdf-b61e5b485860` 청년공간 동선이음 `<9월 문화생활:홈베이킹:휘낭시에 3종 만들기>` 참여자 모집
+  - `fe1f9c2b-2087-4622-875c-abb32db416f8` 청년공간 동선이음 `<9월 직업지원: 실전대비! 모의면접>` 참여자 모집
+- 각 후보의 `application_end_at`을 `NULL`로 되돌리고 `deadline_type`도 `NULL`로 정리했다.
+- `quality_issues`에서 잘못된 `deadline-mismatch`를 제거하고 `open-ended-application-period` 검토 이슈를 남겼다.
+- 후보 상태는 계속 `pending`으로 유지했으며, 공고 생성·공개·승인은 수행하지 않았다.
+
+### 검증
+
+- 같은 조건의 잔여 `deadline-mismatch` 후보가 `0건`임을 확인
+- 보정 4건 모두 `application_end_at=NULL`, `deadline_type=NULL`, `deadline-mismatch=false`, `open-ended-application-period=true` 확인
