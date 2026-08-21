@@ -497,7 +497,7 @@
   - 찜·조회 이력 기반 의미 유사도 최대 `30점`
   - `similarity_score` 반환 컬럼 유지
 - 운영 DB 읽기 전용 점검 결과, 2026-08-21 기준 `institution_follows`는 아직 `0건`이므로 실제 기관 팔로우 추천·알림은 사용자가 팔로우를 시작한 뒤 발생한다.
-- 운영 DB 적용은 아직 수행하지 않았다. `supabase db push --dry-run`에서 적용 후보가 새 마이그레이션 1개뿐임을 확인했다.
+- 운영 DB 적용은 2026-08-21에 완료했다. `supabase db push --dry-run`에서 적용 후보가 새 마이그레이션 1개뿐임을 확인한 뒤 적용했다.
 
 ### 검증
 
@@ -506,3 +506,6 @@
 - `pnpm --filter web lint` 경고·오류 없음
 - `pnpm --filter web build` 성공
 - `pnpm dlx supabase db push --linked --dry-run`에서 `20260821000000_add_institution_follow_score_to_semantic_recommendations.sql`만 적용 후보로 확인
+- `pnpm dlx supabase db push --linked --yes`로 운영 DB에 `20260821000000` 적용 완료
+- `pnpm dlx supabase migration list --linked`에서 `20260821000000` 원격 적용 확인
+- `information_schema.routines`에서 `get_recommended_posters_v2` 함수 존재 확인
