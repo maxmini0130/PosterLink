@@ -606,3 +606,48 @@
 - 알림 트리거와 Edge Function 배포 상태 확인
 - `git diff --check` 통과
 - `pnpm test` 53/53 통과
+
+## 32. 첫 사람 검증 표본, 품질 재측정, 출시 준비 점검
+
+- 첫 사람 검증 후보 `dd64555d-2de7-428a-8fc2-13e4200df562`를 운영 DB에서 `verified`로 전환했다.
+  - 공고명: `을지유니크팩토리 <엔딩라이팅 워크숍✒️⌛> 모집`
+  - 검증 상태: `needs_review` → `verified`
+  - `verified_at` 기록 완료
+  - 주최기관과 신청 접수기관 FK가 자동 연결됨을 확인
+  - `field_verification.humanStructuredVerification`에 공식 원문 URL, 검토자, 검토 시각, 체크리스트, 검토 메모를 남김
+- 운영 상태별 구조화 검증 집계에서 사람 검증 완료 공고가 `1건`으로 증가했다.
+- 운영 품질 게이트를 재측정했다.
+  - `pnpm --filter posterlink-crawler kpi:measure -- --days=30 --output=data/results/ai_kpi_report_20260821.json`
+  - 임베딩 커버리지: `100%`
+  - 필드 검증 커버리지: `69.3%`
+  - review 큐: `0건`
+  - review 큐 품질 게이트 reject 후보: `0건`
+  - 최근 30일 수집 실행: `1000건`
+- AI 헬스체크를 재실행했다.
+  - `pnpm --filter posterlink-crawler ai:healthcheck -- --output=data/results/ai-healthcheck-20260821.json`
+  - 이미지 AI 커버리지: `46.7%`
+  - 이미지 AI 비포스터: `0건`
+  - 이미지 AI 낮은 신뢰도: `0건`
+  - 신청 링크가 원문 출처로 잘못 저장된 건수: `0건`
+  - 비포스터 reject 후보: `0건`
+  - 품질 게이트 상태는 `field_correction_candidates=33` 때문에 계속 `fail`
+- 기관 팔로우 사용자 흐름을 로컬 웹에서 점검했다.
+  - `http://localhost:4000/institutions` 200 응답 확인
+  - `http://localhost:4000/institutions/mapo-gu`에서 hydration 후 `기관 팔로우` 버튼 1개 노출 확인
+  - 비로그인 상태에서 버튼 클릭 시 `/login?redirectTo=%2Finstitutions%2Fmapo-gu`로 이동 확인
+  - 로그인 후 DB insert/delete와 홈 추천 `+45` 반영은 앞선 운영 스모크 검증으로 확인
+- Google Play 출시 준비 문서 `docs/google_play_launch_readiness.md`를 추가했다.
+  - 현재 Android 패키지, EAS 제출 트랙, 권한, 공개 정책 URL을 정리
+  - Play Console Data safety, 앱 액세스, 계정 삭제, 내부 테스트 준비 항목을 정리
+  - 현재 `targetSdkVersion 34`는 2026-08-31부터 적용되는 Google Play API 36 요구사항에 맞지 않아 출시 전 업그레이드가 필요함을 차단 항목으로 기록
+- `docs/text_notice_candidate_policy.md`에 관리자 화면 체크 문구를 추가했다.
+
+### 검증
+
+- 첫 사람 검증 표본 `verified`, `verified_at`, 주최·접수기관 FK 연결 확인
+- `pnpm --filter posterlink-crawler kpi:measure` 실행 성공
+- `pnpm --filter posterlink-crawler ai:healthcheck` 실행 성공. 단, `field_correction_candidates=33`으로 품질 게이트는 fail 유지
+- 로컬 Playwright로 기관 팔로우 비로그인 redirect 흐름 확인
+- `pnpm --dir apps/mobile typecheck` 통과
+- `pnpm test` 53/53 통과
+- `git diff --check` 통과
