@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
+import type { ReactNode } from "react";
 import "./globals.css";
 import { ToastProvider } from "./components/ToastProvider";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -66,7 +67,7 @@ export const metadata: Metadata = {
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode;
+  children: ReactNode;
 }>) {
   return (
     <html lang="ko">

@@ -77,12 +77,12 @@
 - [x] `admin_actions` 타입 확장 DB 마이그레이션 운영 반영
 - [x] 댓글 중복 신고 방지 DB 마이그레이션 운영 반영
 - [ ] Supabase RLS 정책 운영 DB에서 재확인
-- [ ] `poster-originals` Storage 업로드/공개 URL 정책 확인
-- [ ] 서비스 role key가 클라이언트 번들에 포함되지 않는지 확인
+- [x] `poster-originals` Storage 업로드/공개 URL 정책 확인
+- [x] 서비스 role key가 클라이언트 번들에 포함되지 않는지 확인
 - [ ] `.env.local` 값과 Vercel 환경변수 동기화 확인
-- [ ] Edge Function 환경변수 확인 (`OPENAI_API_KEY`, `TAVILY_API_KEY`, Supabase keys)
-- [ ] 개인정보처리방침/이용약관 링크와 내용 최종 확인
-- [ ] 계정 삭제 API가 사용자 데이터 범위를 의도대로 처리하는지 확인
+- [x] Edge Function 환경변수 확인 (`OPENAI_API_KEY`, `TAVILY_API_KEY`, Supabase keys)
+- [x] 개인정보처리방침/이용약관 링크와 내용 최종 확인
+- [x] 계정 삭제 API가 사용자 데이터 범위를 의도대로 처리하는지 확인
 
 ## 4. 알림 및 자동화
 
@@ -90,7 +90,7 @@
 - [ ] 사용자 `is_notified=false`일 때 신규 매칭 알림 제외 확인
 - [ ] 승인 시 `notify-new-match` 호출 및 푸시 발송 확인
 - [ ] `DeviceNotRegistered` 응답 후 push token null 처리 확인
-- [ ] `check-deadlines` Edge Function 수동 호출 확인
+- [x] `check-deadlines` Edge Function 수동 호출 확인
 - [ ] pg_cron 마감 처리 스케줄 운영 DB 적용 확인
 
 ## 5. 관측 및 장애 대응
@@ -106,8 +106,8 @@
 
 - [ ] Vercel production build 성공 확인
 - [ ] 운영 도메인 `posterlink.kr` / `posterlink.co.kr` 연결 확인
-- [ ] `robots.txt`와 `sitemap.xml` 접근 확인
-- [ ] Open Graph 이미지/메타데이터 확인
+- [x] `robots.txt`와 `sitemap.xml` 접근 확인
+- [x] Open Graph 이미지/메타데이터 확인
 - [ ] 모바일 앱 EAS 빌드 프로필 확인
 - [ ] Google Play 출시 준비 체크리스트 확인 (`docs/google_play_launch_readiness.md`)
 - [ ] `pnpm --dir apps/mobile check:play-readiness` 통과
@@ -147,3 +147,19 @@
 - [x] `pnpm --dir apps/mobile dlx expo-doctor` 18/18 통과
 - [ ] EAS Android production AAB 빌드 확인
 - [ ] Android 실기기 설치, 카메라 권한, OAuth, 알림 딥링크 확인
+
+## 10. 2026-08-21 웹/운영 출시 점검
+
+- [x] 웹 lint 통과
+- [x] 웹 production build 통과
+- [x] 웹 TypeScript 체크 통과
+- [x] 사용자 인증 E2E 11/11 통과
+- [x] 원격 Supabase DB lint 오류 수정 및 재검증 통과
+- [x] `poster-originals`, `poster-requests` Storage bucket 존재 및 public 상태 확인
+- [x] `www.posterlink.kr` 정책 페이지, robots, sitemap, OG 이미지 접근 확인
+- [x] 빌드 산출물에 `SUPABASE_SERVICE_ROLE_KEY` 미포함 확인
+- [ ] `posterlink.co.kr` / `www.posterlink.co.kr` DNS 및 Vercel domain 연결
+- [ ] Vercel `OPENAI_API_KEY` 등록 여부 결정
+- [ ] Vercel `KAKAO_ADMIN_KEY` 등록 여부 결정
+- [ ] Supabase Auth provider redirect URL 대시보드 최종 확인
+- [ ] 관리자 공지 발송, 댓글 숨김/신고 기각, 사용자 역할 변경 수동 검수

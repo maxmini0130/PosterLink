@@ -39,15 +39,15 @@ test.describe("운영자 포스터 등록", () => {
   });
 
   test("외부 이미지 URL 포스터 수정 화면에서 이미지 표시", async ({ page }) => {
-    await page.goto("/operator/posters");
-    await page.waitForLoadState("networkidle");
+    await page.goto("/operator/posters", { waitUntil: "domcontentloaded" });
+    await expect(page.locator("body")).toBeVisible();
 
     // 포스터 목록에서 첫 번째 수정 링크 찾기
     const editLink = page.locator("a[href*='/operator/posters/'][href*='/edit']").first();
     if (await editLink.count() === 0) { test.skip(); return; }
 
     await editLink.click();
-    await page.waitForLoadState("networkidle");
+    await expect(page.locator("body")).toBeVisible();
 
     // 이미지가 깨진 아이콘 없이 보이는지 확인
     const img = page.locator("img").first();

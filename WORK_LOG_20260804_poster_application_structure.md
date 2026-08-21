@@ -723,3 +723,42 @@
 - `pnpm test` 53/53 통과
 - `git diff --check` 통과
 - `apps/mobile/android/gradlew.bat :app:assembleDebug`는 로컬 `JAVA_HOME`/`java` 미설정으로 실행 전 차단됨
+
+## 36. 앱 제외 웹/운영 출시 점검
+
+- 앱/EAS/Google Play 실기기 항목을 제외하고 웹, 운영 환경, DB/Storage 중심으로 출시 전 항목을 점검했다.
+- Expo SDK 54 업그레이드 이후 웹 production build에서 `React.ReactNode` 전역 타입이 React 19 타입과 섞이며 실패하는 문제를 발견했다.
+  - `apps/web/app/layout.tsx`에서 `ReactNode`를 `react`에서 명시적으로 import하도록 수정했다.
+  - `pnpm --filter web build`가 다시 통과했다.
+- Playwright E2E 1차 실행에서 `networkidle`/`load` 대기 조건 때문에 사용자/운영자 인증 테스트 일부가 타임아웃됐다.
+  - 실제 화면은 렌더링됐지만 대량 알림 및 이미지 요청 때문에 네트워크 idle 상태가 오지 않았다.
+  - 사용자/운영자 인증 E2E는 의미 있는 heading/body 요소 기준으로 수정했다.
+  - 최종 전체 E2E는 96 passed, 19 skipped로 통과했다.
+- 원격 Supabase DB lint에서 legacy RPC 오류 3건을 발견했다.
+  - `get_popular_regions` 반환 타입 불일치
+  - `get_recommended_posters` 반환 타입 불일치
+  - `get_blocked_user_ids`의 존재하지 않는 `public.blocks` 참조
+- `20260821010000_fix_launch_db_lint_functions.sql`, `20260821011000_finish_launch_db_lint_functions.sql`를 추가하고 운영 DB에 적용했다.
+  - 적용 후 `pnpm dlx supabase db lint --linked --project-ref zxndgzsfrgwahwsdbjdj` 결과 `No schema errors found`
+- Storage bucket과 RPC를 읽기 전용으로 확인했다.
+  - `poster-originals`, `poster-requests` bucket 존재 및 public 상태 확인
+  - `get_popular_regions`, `get_recommended_posters` 호출 정상
+- 빌드 산출물 `apps/web/.next`에서 `SUPABASE_SERVICE_ROLE_KEY` 실제 값이 발견되지 않음을 확인했다.
+- 운영 도메인 `www.posterlink.kr`에서 privacy, terms, robots, sitemap, opengraph-image 접근을 확인했다.
+- `posterlink.co.kr`과 `www.posterlink.co.kr`은 DNS resolve 실패로 미연결 상태임을 확인했다.
+- Vercel 환경변수 점검에서 `OPENAI_API_KEY`, `KAKAO_ADMIN_KEY`가 확인되지 않았다.
+  - `OPENAI_API_KEY` 누락 시 semantic search는 fallback되지만 운영자 AI 초안은 503을 반환한다.
+  - `KAKAO_ADMIN_KEY` 누락 시 Kakao unlink 요청은 생략되고 PosterLink 계정 삭제는 계속 진행된다.
+- 상세 결과를 `docs/web_operations_launch_audit_20260821.md`에 기록하고, `docs/17_service_launch_checklist.md`를 갱신했다.
+
+### 검증
+
+- `pnpm --filter web lint` 통과
+- `pnpm --filter web exec tsc --noEmit --pretty false` 통과
+- `pnpm --filter web build` 통과
+- `pnpm --dir apps/web exec playwright test e2e/authenticated/user/onboarding.spec.ts --project=user` 11/11 통과
+- `pnpm --dir apps/web exec playwright test e2e/authenticated/operator/posters.spec.ts --project=operator` 3 passed, 1 skipped
+- `pnpm --dir apps/web test:e2e` 96 passed, 19 skipped 통과
+- `pnpm dlx supabase db push --linked --dry-run` 통과
+- `pnpm dlx supabase db push --linked` 2건 적용 완료
+- `pnpm dlx supabase db lint --linked --project-ref zxndgzsfrgwahwsdbjdj` 통과
