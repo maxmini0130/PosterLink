@@ -89,3 +89,14 @@ test("종료일 없는 신청기간 뒤의 여행기간을 마감으로 사용�
   assert.equal(result.suggestedDeadline, null);
   assert.ok(codesOf(result).includes("open-ended-application-period"));
 });
+
+test("모집시까지 접수 뒤의 행사일을 신청 마감으로 사용하지 않는다", () => {
+  const result = evaluatePosterDateQuality({
+    content:
+      "모집기간 2026년 8월 20일(목) ~ 모집시까지 진행일시 [1차시] 2026년 9월 4일(금) 오후 2시~5시",
+    deadline: "2026-09-04",
+  });
+  assert.equal(result.suggestedDeadline, null);
+  assert.ok(codesOf(result).includes("open-ended-application-period"));
+  assert.ok(!codesOf(result).includes("deadline-mismatch"));
+});

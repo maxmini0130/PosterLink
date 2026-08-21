@@ -532,3 +532,18 @@
 - `git diff --check` 통과
 - `pnpm --filter posterlink-crawler test` 139/139 통과
 - 운영 DB 업데이트 결과 해당 공고가 `rejected`이고 이미지 분류가 `human-review`, `isPoster=false`임을 확인
+
+## 28. 모집시까지 접수기간의 행사일 마감 오인 방지
+
+- `posters.poster_status='review'` 큐는 비어 있음을 확인했다.
+- `poster_notice_candidates`의 최근 `pending` 후보를 점검하며, 이미지 없는 텍스트 공고 중 `모집시까지` 같은 열린 접수기간 뒤에 행사일이 이어지는 경우가 반복적으로 `deadline-mismatch`를 만드는 것을 확인했다.
+- 날짜 품질 검사에서 `신청기간/모집기간: YYYY. M. D. ~ 모집시까지`처럼 종료일이 없는 열린 접수기간은 `까지` 키워드나 뒤따르는 행사일을 마감일로 승격하지 않도록 보강했다.
+- 대표 회귀 케이스를 추가했다.
+  - 입력: `모집기간 2026년 8월 20일(목) ~ 모집시까지 진행일시 [1차시] 2026년 9월 4일(금) ...`
+  - 기대: `suggestedDeadline=null`, `open-ended-application-period` 이슈 유지, `deadline-mismatch` 미발생
+- 기존 운영 후보의 저장된 마감일 일괄 보정은 수행하지 않았다. 필요 시 후보별 원문 확인 후 별도 승인 절차로 처리한다.
+
+### 검증
+
+- `git diff --check` 통과
+- `pnpm --filter posterlink-crawler test` 140/140 통과

@@ -177,6 +177,12 @@ function findApplicationRange(text) {
       }
     }
 
+    // "신청기간: 2026. 8. 20. ~ 모집시까지"처럼 종료일이 없는 열린 접수기간은
+    // 뒤따르는 행사일이나 "모집시까지"의 "까지"를 마감일로 승격하지 않는다.
+    if (hasOpenEndedApplicationPeriod(segment)) {
+      continue;
+    }
+
     // 2) 범위가 없으면 마감 키워드 근처의 단일 날짜만 마감일로 채택
     if (DEADLINE_KEYWORD_PATTERN.test(segment)) {
       const deadline = pickDeadlineNearKeyword(segment, dates);
