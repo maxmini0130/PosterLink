@@ -19,6 +19,8 @@ import * as WebBrowser from 'expo-web-browser';
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
@@ -145,8 +147,8 @@ export default function App() {
   const [showQuickActions, setShowQuickActions] = useState(true);
   const webViewRef = useRef<any>(null);
   const cameraRef = useRef<CameraView>(null);
-  const notificationListener = useRef<any>();
-  const responseListener = useRef<any>();
+  const notificationListener = useRef<{ remove: () => void } | null>(null);
+  const responseListener = useRef<{ remove: () => void } | null>(null);
   const lastUserId = useRef<string | null>(null);
   const lastWebAccessToken = useRef<string | null>(null);
   const isAuthPage = useCallback((url: string) => {
@@ -217,8 +219,8 @@ export default function App() {
     Linking.getInitialURL().then(url => { if (url) handleDeepLink({ url }); });
 
     return () => {
-      Notifications.removeNotificationSubscription(notificationListener.current);
-      Notifications.removeNotificationSubscription(responseListener.current);
+      notificationListener.current?.remove();
+      responseListener.current?.remove();
       linkingSub.remove();
     };
   }, [isMobileOAuthCallback]);

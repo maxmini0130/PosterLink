@@ -15,6 +15,10 @@ function readText(filePath) {
   return fs.readFileSync(filePath, "utf8");
 }
 
+function readTextIfExists(filePath) {
+  return fs.existsSync(filePath) ? readText(filePath) : null;
+}
+
 function parseMajor(versionRange) {
   const match = String(versionRange ?? "").match(/(\d+)\./);
   return match ? Number(match[1]) : null;
@@ -32,17 +36,34 @@ function parseGradleDefaultString(source, propertyName) {
   return match ? match[1] : null;
 }
 
+function getExpoBuildPropertiesAndroid(plugins) {
+  for (const plugin of plugins ?? []) {
+    if (Array.isArray(plugin) && plugin[0] === "expo-build-properties") {
+      return plugin[1]?.android ?? {};
+    }
+  }
+
+  return {};
+}
+
 const appJson = readJson(appJsonPath);
 const packageJson = readJson(packageJsonPath);
-const buildGradle = readText(androidBuildGradlePath);
+const buildGradle = readTextIfExists(androidBuildGradlePath);
 
 const expo = appJson.expo ?? {};
 const android = expo.android ?? {};
+const buildPropertiesAndroid = getExpoBuildPropertiesAndroid(expo.plugins);
 const expoMajor = parseMajor(packageJson.dependencies?.expo);
 const reactNativeMajorMinor = String(packageJson.dependencies?.["react-native"] ?? "").match(/(\d+\.\d+)/)?.[1] ?? null;
-const compileSdkVersion = parseGradleDefaultNumber(buildGradle, "compileSdkVersion");
-const targetSdkVersion = parseGradleDefaultNumber(buildGradle, "targetSdkVersion");
-const buildToolsVersion = parseGradleDefaultString(buildGradle, "buildToolsVersion");
+const compileSdkVersion =
+  Number(buildPropertiesAndroid.compileSdkVersion) ||
+  (buildGradle ? parseGradleDefaultNumber(buildGradle, "compileSdkVersion") : null);
+const targetSdkVersion =
+  Number(buildPropertiesAndroid.targetSdkVersion) ||
+  (buildGradle ? parseGradleDefaultNumber(buildGradle, "targetSdkVersion") : null);
+const buildToolsVersion =
+  buildPropertiesAndroid.buildToolsVersion ??
+  (buildGradle ? parseGradleDefaultString(buildGradle, "buildToolsVersion") : null);
 
 const checks = [
   {
@@ -99,6 +120,7 @@ console.log(JSON.stringify({
   compileSdkVersion,
   targetSdkVersion,
   buildToolsVersion,
+  buildPropertiesAndroid,
   status: failed.length === 0 ? "pass" : "fail",
   checks,
 }, null, 2));

@@ -2,41 +2,39 @@
 
 기준일: 2026-08-21
 
-PosterLink Android 앱을 Google Play 내부 테스트 또는 프로덕션 심사로 올리기
-전에 확인할 항목이다. Google Play Console의 최신 정책 입력은 최종 제출 직전
-다시 확인한다.
+PosterLink Android 앱을 Google Play 내부 테스트 또는 프로덕션 심사로 올리기 전에 확인할 항목이다. Google Play Console의 정책 입력과 최종 심사 제출 직전 상태는 다시 확인한다.
 
 ## 현재 앱 설정
 
 - 패키지명: `com.maxmini.posterlink`
 - Expo 앱 버전: `1.0.0`
 - Android `versionCode`: `3`
+- Expo SDK: `~54.0.37`
+- React Native: `0.81.5`
+- Android `compileSdkVersion`: `36`
+- Android `targetSdkVersion`: `36`
+- Android `buildToolsVersion`: `36.0.0`
+- API 36 설정 위치: `apps/mobile/app.json`의 `expo-build-properties`
 - EAS production 빌드: Android App Bundle(`app-bundle`)
 - EAS submit 트랙: `internal`
-- 권한:
-  - `CAMERA`
-  - `READ_EXTERNAL_STORAGE`
-  - `WRITE_EXTERNAL_STORAGE`
-  - `USE_BIOMETRIC`
-  - `USE_FINGERPRINT`
-  - `RECEIVE_BOOT_COMPLETED`
-  - `VIBRATE`
 - 공개 정책 URL:
   - 개인정보처리방침: `https://www.posterlink.kr/privacy`
   - 이용약관: `https://www.posterlink.kr/terms`
 
-## 차단 항목
+## 현재 상태
 
-- Android 네이티브 설정이 현재 `targetSdkVersion 34`다.
-  Google Play는 2026-08-31부터 신규 앱과 앱 업데이트에 Android 16
-  API 36 이상을 요구한다. 출시 제출 전 Expo SDK와 Android target SDK
-  업그레이드가 필요하다.
-- 현재 Expo SDK는 `51`이고 React Native는 `0.74`다. Expo 공식 문서 기준으로
-  API 36 제출은 Expo SDK 54 이상으로 올린 뒤 검증한다.
-- Google Play 계정 삭제 요구사항에 맞는 웹 삭제 요청 URL과 앱 내 삭제 경로를
-  최종 확인해야 한다.
-- Play Console의 Data safety 답변은 앱 코드, SDK, 개인정보처리방침과
-  일치해야 한다.
+- `pnpm --dir apps/mobile check:play-readiness` 통과
+- `pnpm --dir apps/mobile exec expo install --check` 통과
+- `pnpm --dir apps/mobile typecheck` 통과
+- `pnpm --dir apps/mobile dlx expo-doctor` 18/18 통과
+- 로컬 Gradle `:app:assembleDebug`는 코드 문제가 아니라 로컬 `JAVA_HOME`/`java` 미설정 때문에 실행되지 않았다.
+
+## 남은 차단 또는 수동 확인
+
+- EAS Android production 빌드가 실제 AAB를 생성하는지 확인한다.
+- Android 실기기에서 설치, 로그인, 카메라 권한, 갤러리 선택, 포스터 촬영/업로드, push token 저장, 알림 클릭 딥링크를 확인한다.
+- Play Console에서 Data safety, 계정 삭제, 앱 액세스, 콘텐츠 등급, 대상 연령을 실제 정책과 맞춰 입력한다.
+- Google Play 계정 삭제 요구사항에 맞는 웹 계정 삭제 URL과 앱 내 계정 삭제 경로를 최종 확인한다.
 
 ## Play Console 입력
 
@@ -50,7 +48,7 @@ PosterLink Android 앱을 Google Play 내부 테스트 또는 프로덕션 심�
   - 자세한 설명
   - 앱 아이콘
   - 피처 그래픽
-  - 휴대전화 스크린샷
+  - 스마트폰 스크린샷
   - 태블릿을 지원하지 않으므로 태블릿 스크린샷은 제외 또는 미지원으로 정리
 - 앱 콘텐츠:
   - 개인정보처리방침 URL
@@ -62,19 +60,18 @@ PosterLink Android 앱을 Google Play 내부 테스트 또는 프로덕션 심�
   - 정부/뉴스/건강/금융 등 특수 카테고리 해당 여부
 - 테스트:
   - 내부 테스트 트랙 생성
-  - 테스터 이메일 목록 등록
+  - 테스트 이메일 목록 등록
   - 피드백 이메일 또는 URL 등록
   - EAS submit 결과가 Play Console 내부 테스트 릴리스에 연결되는지 확인
 
 ## Data Safety 초안
 
-정확한 답변은 Play Console에서 최종 확인한다. 현재 코드 기준으로 예상되는
-수집·처리 항목은 다음과 같다.
+정확한 답변은 Play Console에서 최종 확인한다. 현재 코드 기준으로 예상되는 수집 및 처리 항목은 다음과 같다.
 
 - 계정 정보: 이메일, 사용자 ID
-- 앱 활동: 찜, 댓글, 신고, 알림 읽음, 검색·링크 클릭 로그
+- 앱 활동: 찜, 평가, 신고, 알림 읽음, 검색/공식 링크 클릭 로그
 - 앱 정보 및 성능: Sentry가 활성화된 경우 오류/진단 정보
-- 사진/동영상: 운영자 모바일 앱에서 포스터 촬영 또는 이미지 선택 시 업로드
+- 사진/동영상: 모바일 앱에서 포스터 촬영 또는 이미지 선택 후 업로드
 - 알림 토큰: Expo push token
 - 생체 인증: 기기 로컬 인증 사용. 서버로 생체정보를 전송하지 않는다.
 
@@ -85,9 +82,9 @@ PosterLink Android 앱을 Google Play 내부 테스트 또는 프로덕션 심�
 - 갤러리 이미지 선택 확인
 - 포스터 촬영, 미리보기, 업로드 확인
 - Expo push token 저장과 알림 수신 확인
-- 알림 클릭 시 링크 이동 확인
+- 알림 클릭 후 딥링크 이동 확인
 - 생체 인증 설정과 실패 시 fallback 확인
-- 네트워크 오류, 권한 거부, 빈 데이터 화면 확인
+- 네트워크 오류, 권한 거절, 빈 데이터 화면 확인
 - 로그아웃과 계정 삭제 경로 확인
 
 ## 제출 명령
@@ -99,17 +96,13 @@ pnpm --filter @posterlink/mobile build:android:production
 pnpm --filter @posterlink/mobile submit:android
 ```
 
-현재 `check:play-readiness`는 Expo SDK 51, Android target SDK 34 상태를
-차단으로 보고 실패하는 것이 정상이다. Expo SDK와 Android Gradle 설정을 API 36
-기준으로 업그레이드한 뒤 이 명령이 통과해야 제출 단계로 넘어간다.
-
 `apps/mobile/private/google-service-account.json`은 커밋하지 않는다.
 
 ## 공식 참고 링크
 
 - Google Play 앱 생성:
   https://support.google.com/googleplay/android-developer/answer/9859152
-- 심사 준비와 앱 콘텐츠 입력:
+- 심사 준비 및 앱 콘텐츠 입력:
   https://support.google.com/googleplay/android-developer/answer/9859455
 - Data safety:
   https://support.google.com/googleplay/android-developer/answer/10787469
@@ -119,3 +112,7 @@ pnpm --filter @posterlink/mobile submit:android
   https://support.google.com/googleplay/android-developer/answer/9845334
 - Target API level 요구사항:
   https://developer.android.com/google/play/requirements/target-sdk
+- Expo SDK 54:
+  https://expo.dev/changelog/sdk-54
+- Expo Build Properties:
+  https://docs.expo.dev/versions/latest/sdk/build-properties/

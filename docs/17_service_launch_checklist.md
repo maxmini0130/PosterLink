@@ -136,3 +136,14 @@
 - [x] 댓글 신고 중복 접수 방지 UX
 - [ ] E2E에 관리자/운영자 핵심 플로우 추가
 - [ ] 모바일 OAuth 실기기 자동화 테스트 기준 정리
+
+## 9. 2026-08-21 Android API 36 업데이트
+
+- [x] Expo SDK `54`, React Native `0.81.5`로 업그레이드
+- [x] `expo-build-properties`로 Android `compileSdkVersion=36`, `targetSdkVersion=36`, `buildToolsVersion=36.0.0` 명시
+- [x] `pnpm --dir apps/mobile check:play-readiness` 통과
+- [x] `pnpm --dir apps/mobile exec expo install --check` 통과
+- [x] `pnpm --dir apps/mobile typecheck` 통과
+- [x] `pnpm --dir apps/mobile dlx expo-doctor` 18/18 통과
+- [ ] EAS Android production AAB 빌드 확인
+- [ ] Android 실기기 설치, 카메라 권한, OAuth, 알림 딥링크 확인

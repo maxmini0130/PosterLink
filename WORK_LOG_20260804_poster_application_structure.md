@@ -703,3 +703,23 @@
   - `buildToolsVersion`: `34.0.0`
 - `pnpm --dir apps/mobile typecheck` 통과
 - `pnpm test` 53/53 통과
+
+## 35. Expo SDK 54 / Android API 36 업그레이드
+
+- Google Play의 2026-08-31 신규 앱 및 업데이트 대상 API 36 요구사항과 Expo SDK 54의 Android API 36 지원을 기준으로 모바일 앱을 업그레이드했다.
+- `apps/mobile/package.json`의 Expo SDK를 `~54.0.37`, React Native를 `0.81.5`, React를 `19.1.0`으로 올리고 SDK 54 호환 Expo 패키지를 `expo install --fix`로 정렬했다.
+- `expo-build-properties`를 추가하고 `apps/mobile/app.json`에 Android `compileSdkVersion=36`, `targetSdkVersion=36`, `buildToolsVersion=36.0.0`을 명시했다.
+- `apps/mobile/scripts/check-google-play-readiness.js`는 ignored native Gradle 파일보다 추적되는 `expo-build-properties` 설정을 우선 검증하도록 수정했다.
+- Expo Notifications SDK 54 타입 변경에 맞춰 foreground 알림 동작에 `shouldShowBanner`, `shouldShowList`를 추가하고, subscription cleanup은 `.remove()` 방식으로 바꿨다.
+- `docs/google_play_launch_readiness.md`를 현재 통과 상태와 남은 EAS/실기기/Play Console 확인 항목 기준으로 다시 정리했다.
+- `docs/17_service_launch_checklist.md`에 Android API 36 업데이트 완료 항목과 남은 실기기/EAS 확인 항목을 추가했다.
+
+### 검증
+
+- `pnpm --dir apps/mobile check:play-readiness` 통과
+- `pnpm --dir apps/mobile exec expo install --check` 통과
+- `pnpm --dir apps/mobile typecheck` 통과
+- `pnpm --dir apps/mobile dlx expo-doctor` 18/18 통과
+- `pnpm test` 53/53 통과
+- `git diff --check` 통과
+- `apps/mobile/android/gradlew.bat :app:assembleDebug`는 로컬 `JAVA_HOME`/`java` 미설정으로 실행 전 차단됨
