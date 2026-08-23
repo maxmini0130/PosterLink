@@ -25,9 +25,10 @@
   - 포스터, 지역, 카테고리, 지역-카테고리, 기관 상세 URL이 포함되도록 보강했다.
 - DB
   - `supabase/migrations/20260824010000_fix_public_active_poster_filtering.sql` 마이그레이션 파일을 추가했다.
-  - 운영 DB에는 적용하지 않았다.
+  - 사용자 승인 후 `pnpm dlx supabase db push --linked`로 운영 DB에 적용했다.
 - 문서
   - `docs/posterlink_feature_guide_20260824.md`를 추가했다.
+  - `docs/google_play_launch_readiness.md`에 2026-08-24 모바일 출시 준비 재검증 결과를 추가했다.
 
 ## 검증
 
@@ -35,6 +36,11 @@
 - `pnpm --filter web exec tsc --noEmit --pretty false`
 - `pnpm --filter web lint`
 - `pnpm --filter web build`
+- `pnpm dlx supabase db push --linked`
+- `pnpm dlx supabase db lint --linked`
+- `pnpm --dir apps/mobile typecheck`
+- `pnpm --dir apps/mobile check:play-readiness`
+- `pnpm --dir apps/mobile exec expo config --type public`
 - 로컬 `next start` 후 확인
   - `/` 초기 HTML에 홈 H1과 `/posters` 검색 진입 링크 포함
   - `/sitemap.xml`에 포스터, 지역, 카테고리, 지역-카테고리, 기관 상세 URL 포함
@@ -42,6 +48,5 @@
 
 ## 남은 작업
 
-- 운영 DB 마이그레이션 적용은 사용자 승인 후 별도 진행한다.
 - Google Play Console 개발자 계정 신원 확인과 연락처 인증은 계정 소유자가 진행해야 한다.
 - 모바일 실제 기기 테스트, OAuth callback, 알림 토큰 저장 확인이 남아 있다.

@@ -129,3 +129,16 @@ pnpm --filter @posterlink/mobile submit:android
   https://expo.dev/changelog/sdk-54
 - Expo Build Properties:
   https://docs.expo.dev/versions/latest/sdk/build-properties/
+
+## 2026-08-24 재검증
+
+- `pnpm --dir apps/mobile typecheck` 통과
+- `pnpm --dir apps/mobile check:play-readiness` 통과
+- `pnpm --dir apps/mobile exec expo config --type public` 정상 출력 확인
+- Android package: `com.maxmini.posterlink`
+- Android `versionCode`: `4`
+- Android `compileSdkVersion`: `36`
+- Android `targetSdkVersion`: `36`
+- Android `buildToolsVersion`: `36.0.0`
+- iOS `buildNumber`: `11`
+- 남은 차단 항목은 Google Play Console 개발자 계정 신원 확인과 연락처 전화번호 인증이다.
