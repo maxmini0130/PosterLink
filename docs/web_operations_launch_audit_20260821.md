@@ -11,9 +11,12 @@
 - `pnpm --filter web exec tsc --noEmit --pretty false` 통과
 - `pnpm --dir apps/web exec playwright test e2e/authenticated/user/onboarding.spec.ts --project=user` 11/11 통과
 - `pnpm --dir apps/web exec playwright test e2e/authenticated/operator/posters.spec.ts --project=operator` 3 passed, 1 skipped
+- `pnpm --dir apps/web exec playwright test e2e/authenticated/admin/review.spec.ts --project=admin` 11/11 통과
+- `pnpm --dir apps/web exec playwright test e2e/authenticated/admin --project=admin` 15/15 통과
 - `pnpm --dir apps/web test:e2e` 96 passed, 19 skipped 통과
   - 최초 실패는 실제 화면이 렌더링된 뒤 `networkidle`/`load` 대기에서 타임아웃난 테스트 안정성 문제였다.
   - 사용자/운영자 인증 E2E는 의미 있는 화면 요소 기준으로 수정했다.
+  - 관리자 E2E는 루트 `.env.local`과 `apps/web/.env.local`의 테스트 계정 비밀번호 불일치를 로컬에서 동기화한 뒤 정상 통과했다.
 
 ## 운영 도메인
 
@@ -63,9 +66,9 @@
 - Vercel에 `OPENAI_API_KEY` 추가 여부 결정
 - Vercel에 `KAKAO_ADMIN_KEY` 추가 여부 결정
 - Supabase Auth provider redirect URL을 운영 도메인 기준으로 대시보드에서 최종 확인
-- Playwright 관리자 E2E 스킵 원인 확인
-  - `E2E_ADMIN_EMAIL` 계정은 현재 `Invalid login credentials`로 로그인되지 않는다.
-  - 따라서 관리자 인증 E2E는 코드 문제가 아니라 테스트 계정 자격증명 문제로 스킵된다.
-  - 운영자 E2E 계정은 로그인 가능하다.
+- Playwright 관리자 E2E 계정 자격증명 복구 확인
+  - `E2E_ADMIN_EMAIL` 계정은 루트 `.env.local` 기준으로 로그인 가능하다.
+  - 웹 E2E가 읽는 `apps/web/.env.local`의 `E2E_ADMIN_PASSWORD`를 루트 값과 로컬 동기화했다.
+  - 관리자 인증 E2E는 15/15 통과했다.
 - 실제 브라우저에서 Google/Kakao/Naver OAuth 로그인 1회씩 수동 확인
 - 관리자 공지 발송, 댓글 숨김/신고 기각, 사용자 역할 변경은 운영 데이터 변경을 수반하므로 별도 승인 절차로 실행

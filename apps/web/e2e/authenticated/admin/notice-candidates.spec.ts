@@ -76,7 +76,7 @@ test.describe("관리자 이미지 없는 공고 후보", () => {
     }
 
     await expect(page.getByRole("heading", { name: "중복 후보 비교" })).toBeVisible();
-    await expect(page.getByText("현재 후보")).toBeVisible();
+    await expect(page.getByText("현재 후보", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "닫기" }).click();
     await expect(page.getByRole("heading", { name: "중복 후보 비교" })).toBeHidden();
   });

@@ -163,5 +163,6 @@
 - [ ] Vercel `KAKAO_ADMIN_KEY` 등록 여부 결정
 - [ ] Supabase Auth provider redirect URL 대시보드 최종 확인
 - [x] Playwright 관리자 E2E 스킵 원인 확인
-- [ ] `E2E_ADMIN_EMAIL` 테스트 계정 자격증명 갱신
+- [x] `E2E_ADMIN_EMAIL` 테스트 계정 자격증명 갱신
+- [x] 관리자 인증 E2E 15/15 통과
 - [ ] 관리자 공지 발송, 댓글 숨김/신고 기각, 사용자 역할 변경 수동 검수

@@ -446,3 +446,13 @@ pnpm dlx eas-cli@latest submit --platform ios --profile production --id 8f8b7d2a
    - URL: https://expo.dev/artifacts/eas/vlqtSarJQbmqne4PQCDmt8ukqhQsLRbZw3HGiMTEFXw.aab
 6. 앱 콘텐츠 필수 항목과 스토어 등록정보를 작성한다.
 7. 신규 개인 개발자 계정 정책상 비공개 테스트 요건이 표시되면 해당 요건을 먼저 충족한다.
+
+## 2026-08-23 관리자 E2E 계정 복구
+
+- `e2e.admin@posterlink.kr` 테스트 계정의 새 비밀번호가 루트 `.env.local`에는 반영됐지만, 웹 E2E가 읽는 `apps/web/.env.local`에는 반영되지 않아 관리자 인증 E2E가 스킵됐다.
+- 비밀값을 출력하지 않고 `E2E_ADMIN_PASSWORD`만 루트 `.env.local`에서 `apps/web/.env.local`로 로컬 동기화했다.
+- 관리자 로그인은 `apps/web/.env.local` 기준으로 성공했다.
+- 검증:
+  - `pnpm --dir apps/web exec playwright test e2e/authenticated/admin/review.spec.ts --project=admin --reporter=list` 11/11 통과
+  - `pnpm --dir apps/web exec playwright test e2e/authenticated/admin --project=admin --reporter=list` 15/15 통과
+- `notice-candidates` E2E의 중복 비교 모달에서 `현재 후보` 텍스트가 `현재 후보 제외` 버튼과 함께 매칭되던 strict locator를 정확 일치로 고정했다.
