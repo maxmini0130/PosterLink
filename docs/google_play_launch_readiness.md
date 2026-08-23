@@ -8,7 +8,7 @@ PosterLink Android 앱을 Google Play 내부 테스트 또는 프로덕션 심�
 
 - 패키지명: `com.maxmini.posterlink`
 - Expo 앱 버전: `1.0.0`
-- Android `versionCode`: `3`
+- Android `versionCode`: `4`
 - Expo SDK: `~54.0.37`
 - React Native: `0.81.5`
 - Android `compileSdkVersion`: `36`
@@ -31,7 +31,6 @@ PosterLink Android 앱을 Google Play 내부 테스트 또는 프로덕션 심�
 
 ## 남은 차단 또는 수동 확인
 
-- EAS Android production 빌드가 실제 AAB를 생성하는지 확인한다.
 - Android 실기기에서 설치, 로그인, 카메라 권한, 갤러리 선택, 포스터 촬영/업로드, push token 저장, 알림 클릭 딥링크를 확인한다.
 - Play Console에서 Data safety, 계정 삭제, 앱 액세스, 콘텐츠 등급, 대상 연령을 실제 정책과 맞춰 입력한다.
 - Google Play 계정 삭제 요구사항에 맞는 웹 계정 삭제 URL과 앱 내 계정 삭제 경로를 최종 확인한다.
@@ -97,6 +96,17 @@ pnpm --filter @posterlink/mobile submit:android
 ```
 
 `apps/mobile/private/google-service-account.json`은 커밋하지 않는다.
+
+## 최신 Android production AAB
+
+- Build ID: `027bab3e-503c-498e-9fdd-3e6152d0056f`
+- Expo SDK: `54.0.0`
+- Version: `1.0.0`
+- Version code: `4`
+- Profile: `production`
+- Distribution: `store`
+- Finished at: `2026-08-23 19:13:03 KST`
+- AAB: https://expo.dev/artifacts/eas/61GHsfStsT0BeWKt0286UTtcqWQ7JXkXr2ZTsKQtUFc.aab
 
 ## 공식 참고 링크
 

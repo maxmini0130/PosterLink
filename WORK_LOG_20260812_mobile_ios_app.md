@@ -479,3 +479,21 @@ pnpm dlx eas-cli@latest submit --platform ios --profile production --id 8f8b7d2a
 - `KAKAO_ADMIN_KEY` 등록은 카카오 로그인 사용자의 탈퇴 시 Kakao 앱 연결 해제까지 처리하기 위한 선택 항목이다. 출시 블로커로 보지 않고 다음 작업으로 보류했다.
 - 관리자 공지 발송, 댓글 숨김, 신고 기각, 사용자 역할 변경 수동 검수는 운영 데이터 변경을 수반하므로 다음 작업으로 보류했다.
 - 위 관리자 수동 검수는 테스트 대상과 원복 범위를 먼저 정한 뒤 별도 승인 절차로 진행한다.
+
+## 2026-08-23 Android production AAB 재빌드
+
+- Expo SDK 54 / Android API 36 적용 이후의 최신 Android production AAB를 새로 빌드했다.
+- 검증:
+  - `pnpm --dir apps/mobile check:play-readiness` 통과
+  - `pnpm --dir apps/mobile typecheck` 통과
+  - `pnpm --dir apps/mobile exec expo install --check` 통과
+  - `pnpm --dir apps/mobile dlx expo-doctor` 18/18 통과
+- EAS Build:
+  - Build ID: `027bab3e-503c-498e-9fdd-3e6152d0056f`
+  - Expo SDK: `54.0.0`
+  - Version: `1.0.0`
+  - Version code: `4`
+  - Distribution: `store`
+  - Finished at: `2026-08-23 19:13:03 KST`
+  - AAB: https://expo.dev/artifacts/eas/61GHsfStsT0BeWKt0286UTtcqWQ7JXkXr2ZTsKQtUFc.aab
+- 다음 작업은 Play Console 계정 상태 확인, 앱 생성, 내부 테스트 또는 비공개 테스트 트랙에 최신 AAB 업로드다.

@@ -142,11 +142,11 @@ PosterLink (pnpm monorepo)
 - 상세 인수인계는 `WORK_LOG_20260812_mobile_ios_app.md`의 `이어서 작업하기` 섹션을 기준으로 한다.
 - App Store Connect에서 Apple의 빌드 처리 완료 후 PosterLink > TestFlight > iOS에서 최신 빌드 `1.0.0 (11)`를 확인한다.
 - 내부 테스팅 그룹에 빌드 `1.0.0 (11)`를 배정하고 iPhone TestFlight 앱에서 업데이트한 뒤 네이버 로그인을 재검증한다.
-- Android production build `fce3b843-020b-41b8-ad86-7ff713272345` 완료 여부를 확인하고, 완료되면 AAB를 Google Play Console 테스트 트랙에 업로드한다.
 - Android production AAB 빌드 완료:
-  - Build ID: `fce3b843-020b-41b8-ad86-7ff713272345`
-  - Version code: `3`
-  - AAB: https://expo.dev/artifacts/eas/vlqtSarJQbmqne4PQCDmt8ukqhQsLRbZw3HGiMTEFXw.aab
+  - Build ID: `027bab3e-503c-498e-9fdd-3e6152d0056f`
+  - Expo SDK: `54.0.0`
+  - Version code: `4`
+  - AAB: https://expo.dev/artifacts/eas/61GHsfStsT0BeWKt0286UTtcqWQ7JXkXr2ZTsKQtUFc.aab
 - Google Play 자동 제출용 서비스 계정 JSON은 `apps/mobile/private/google-service-account.json`에 로컬로만 둔다.
 - Google Play 개인 개발자 계정 `MMaxx`는 신원 확인 문서 업로드 후 Google 검토 대기 상태다.
-- 다음 우선 작업은 연락처 전화번호 인증 완료, Google 신원 확인 승인 대기, Google Play 앱 생성/테스트 트랙 준비, 앱 심사 정보/스크린샷/개인정보 처리 항목 작성, 그리고 규정 준수 항목 완료다.
+- 다음 우선 작업은 연락처 전화번호 인증 완료, Google 신원 확인 승인 대기, Google Play 앱 생성/테스트 트랙 준비, 최신 AAB 업로드, 앱 심사 정보/스크린샷/개인정보 처리 항목 작성, 그리고 규정 준수 항목 완료다.

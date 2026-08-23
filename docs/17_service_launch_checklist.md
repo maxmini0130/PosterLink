@@ -108,10 +108,10 @@
 - [ ] 운영 도메인 `posterlink.kr` / `posterlink.co.kr` 연결 확인
 - [x] `robots.txt`와 `sitemap.xml` 접근 확인
 - [x] Open Graph 이미지/메타데이터 확인
-- [ ] 모바일 앱 EAS 빌드 프로필 확인
-- [ ] Google Play 출시 준비 체크리스트 확인 (`docs/google_play_launch_readiness.md`)
-- [ ] `pnpm --dir apps/mobile check:play-readiness` 통과
-- [ ] Android target SDK를 Google Play 최신 요구사항에 맞게 업그레이드
+- [x] 모바일 앱 EAS 빌드 프로필 확인
+- [x] Google Play 출시 준비 체크리스트 확인 (`docs/google_play_launch_readiness.md`)
+- [x] `pnpm --dir apps/mobile check:play-readiness` 통과
+- [x] Android target SDK를 Google Play 최신 요구사항에 맞게 업그레이드
 - [ ] Play Console Data safety, 계정 삭제, 앱 액세스, 대상 연령 답변 최종 확인
 - [ ] Android 실기기 설치 및 카메라 권한 확인
 - [ ] iOS 실기기 설치 및 카메라 권한 확인
@@ -145,7 +145,7 @@
 - [x] `pnpm --dir apps/mobile exec expo install --check` 통과
 - [x] `pnpm --dir apps/mobile typecheck` 통과
 - [x] `pnpm --dir apps/mobile dlx expo-doctor` 18/18 통과
-- [ ] EAS Android production AAB 빌드 확인
+- [x] EAS Android production AAB 빌드 확인
 - [ ] Android 실기기 설치, 카메라 권한, OAuth, 알림 딥링크 확인
 
 ## 10. 2026-08-21 웹/운영 출시 점검
