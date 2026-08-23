@@ -762,3 +762,17 @@
 - `pnpm dlx supabase db push --linked --dry-run` 통과
 - `pnpm dlx supabase db push --linked` 2건 적용 완료
 - `pnpm dlx supabase db lint --linked --project-ref zxndgzsfrgwahwsdbjdj` 통과
+
+## 37. 관리자 E2E 스킵 원인 확인
+
+- `.co.kr` 도메인 연결은 후순위로 보류하고, 웹/운영 감사 문서에 남아 있던 관리자 E2E 스킵 원인을 확인했다.
+- `E2E_ADMIN_EMAIL`/`E2E_ADMIN_PASSWORD` 조합은 Supabase Auth에서 `Invalid login credentials`로 실패한다.
+- 운영자 E2E 계정은 정상 로그인된다.
+- 따라서 관리자 E2E 스킵은 관리자 화면 코드 문제가 아니라 테스트 계정 자격증명 문제로 판단했다.
+- `apps/web/e2e/global-setup.ts`를 수정해 로그인 실패 시 빈 세션을 저장하고, 더 이상 성공처럼 `세션 저장` 로그를 찍지 않도록 했다.
+- `docs/web_operations_launch_audit_20260821.md`와 `docs/17_service_launch_checklist.md`에 원인과 남은 작업을 반영했다.
+
+### 검증
+
+- Supabase Auth 로그인 확인 스크립트로 관리자 계정 실패, 운영자 계정 성공 확인
+- `pnpm --dir apps/web exec playwright test e2e/authenticated/admin/review.spec.ts --project=admin --reporter=list` 11 skipped 확인

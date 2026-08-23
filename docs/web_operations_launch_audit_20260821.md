@@ -64,6 +64,8 @@
 - Vercel에 `KAKAO_ADMIN_KEY` 추가 여부 결정
 - Supabase Auth provider redirect URL을 운영 도메인 기준으로 대시보드에서 최종 확인
 - Playwright 관리자 E2E 스킵 원인 확인
-  - 일부 관리자 테스트는 현재 세션/권한 또는 데이터 조건 때문에 스킵됐다.
+  - `E2E_ADMIN_EMAIL` 계정은 현재 `Invalid login credentials`로 로그인되지 않는다.
+  - 따라서 관리자 인증 E2E는 코드 문제가 아니라 테스트 계정 자격증명 문제로 스킵된다.
+  - 운영자 E2E 계정은 로그인 가능하다.
 - 실제 브라우저에서 Google/Kakao/Naver OAuth 로그인 1회씩 수동 확인
 - 관리자 공지 발송, 댓글 숨김/신고 기각, 사용자 역할 변경은 운영 데이터 변경을 수반하므로 별도 승인 절차로 실행

@@ -51,6 +51,13 @@ async function loginAs(email: string, password: string, storageStatePath: string
   // 홈으로 이동할 때까지 대기 (최대 10초)
   await page.waitForURL((url) => !url.toString().includes("/login"), { timeout: 10000 }).catch(() => {});
 
+  if (page.url().includes("/login")) {
+    fs.writeFileSync(storageStatePath, EMPTY_STATE);
+    await browser.close();
+    console.warn(`  ! 로그인 실패 또는 세션 미생성: ${storageStatePath}`);
+    return;
+  }
+
   await context.storageState({ path: storageStatePath });
   await browser.close();
   console.log(`  ✓ 세션 저장: ${storageStatePath}`);
