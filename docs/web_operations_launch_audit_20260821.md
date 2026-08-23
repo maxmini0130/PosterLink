@@ -42,9 +42,11 @@
   - `check-deadlines`: ACTIVE
   - `notify-new-match`: ACTIVE
 - Vercel production/preview 환경에는 `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_APP_URL`, Supabase 공개 키, Naver OAuth 키, Sentry 키가 확인됐다.
-- Vercel 환경에는 웹 API가 사용하는 `OPENAI_API_KEY`가 확인되지 않았다.
-  - 영향 범위: `/api/posters/semantic-search`, `/api/operator/posters/draft`, `/api/operator/performance-report`
-  - semantic search는 키가 없으면 fallback 응답을 반환하지만, 운영자 AI 초안은 503을 반환한다.
+- Vercel Production 환경에는 웹 API가 사용하는 `OPENAI_API_KEY`를 등록했다.
+  - 적용 배포: `dpl_6MqTKWwz4sUGifMghCzttDnn7Fk4`
+  - Production alias: `https://www.posterlink.kr`
+  - `POST /api/posters/semantic-search` 운영 호출에서 `semantic: true`, `model: text-embedding-3-small` 응답을 확인했다.
+  - Preview 환경은 Vercel CLI가 preview git branch 선택을 요구해 이번 자동 등록 범위에서 제외했다.
 - Vercel 환경에는 `KAKAO_ADMIN_KEY`가 확인되지 않았다.
   - 영향 범위: Kakao 계정 탈퇴 시 Kakao unlink 요청은 생략되고 PosterLink 계정 삭제는 계속 진행된다.
 
@@ -63,9 +65,11 @@
 ## 남은 수동/운영 작업
 
 - `posterlink.co.kr` / `www.posterlink.co.kr` DNS 및 Vercel domain 연결
-- Vercel에 `OPENAI_API_KEY` 추가 여부 결정
+- Vercel Production에 `OPENAI_API_KEY` 추가 및 production 재배포 완료
 - Vercel에 `KAKAO_ADMIN_KEY` 추가 여부 결정
 - Supabase Auth provider redirect URL을 운영 도메인 기준으로 대시보드에서 최종 확인
+  - Supabase CLI는 Auth redirect URL 읽기 명령을 제공하지 않고 `config push`만 제공한다.
+  - 운영 Naver OAuth 진입은 `https://www.posterlink.kr/api/auth/naver/callback`을 `redirect_uri`로 생성하는 것을 확인했다.
 - Playwright 관리자 E2E 계정 자격증명 복구 확인
   - `E2E_ADMIN_EMAIL` 계정은 루트 `.env.local` 기준으로 로그인 가능하다.
   - 웹 E2E가 읽는 `apps/web/.env.local`의 `E2E_ADMIN_PASSWORD`를 루트 값과 로컬 동기화했다.

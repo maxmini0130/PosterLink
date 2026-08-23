@@ -456,3 +456,17 @@ pnpm dlx eas-cli@latest submit --platform ios --profile production --id 8f8b7d2a
   - `pnpm --dir apps/web exec playwright test e2e/authenticated/admin/review.spec.ts --project=admin --reporter=list` 11/11 통과
   - `pnpm --dir apps/web exec playwright test e2e/authenticated/admin --project=admin --reporter=list` 15/15 통과
 - `notice-candidates` E2E의 중복 비교 모달에서 `현재 후보` 텍스트가 `현재 후보 제외` 버튼과 함께 매칭되던 strict locator를 정확 일치로 고정했다.
+
+## 2026-08-23 Vercel OPENAI_API_KEY 운영 반영
+
+- Vercel `poster-link-web` Production environment에 `OPENAI_API_KEY`를 등록했다.
+- Production 재배포를 실행해 새 환경변수를 운영 함수에 반영했다.
+  - Deployment ID: `dpl_6MqTKWwz4sUGifMghCzttDnn7Fk4`
+  - Production alias: `https://www.posterlink.kr`
+- 운영 검증:
+  - `POST https://www.posterlink.kr/api/posters/semantic-search`가 `semantic: true`, `model: text-embedding-3-small`로 응답했다.
+  - `GET https://www.posterlink.kr/login` 200 응답을 확인했다.
+  - `GET https://www.posterlink.kr/api/auth/naver`는 `https://www.posterlink.kr/api/auth/naver/callback`을 `redirect_uri`로 사용한다.
+- Preview environment는 Vercel CLI가 preview git branch 선택을 요구해 이번 자동 등록 범위에서 제외했다.
+- `KAKAO_ADMIN_KEY`는 로컬 env와 Vercel 모두에서 값이 확인되지 않아 등록하지 않았다.
+- Supabase Auth provider redirect URL은 CLI에서 읽을 수 없어 대시보드 최종 확인 항목으로 남겼다.

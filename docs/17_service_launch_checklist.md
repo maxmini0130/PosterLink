@@ -159,7 +159,7 @@
 - [x] `www.posterlink.kr` 정책 페이지, robots, sitemap, OG 이미지 접근 확인
 - [x] 빌드 산출물에 `SUPABASE_SERVICE_ROLE_KEY` 미포함 확인
 - [ ] `posterlink.co.kr` / `www.posterlink.co.kr` DNS 및 Vercel domain 연결
-- [ ] Vercel `OPENAI_API_KEY` 등록 여부 결정
+- [x] Vercel Production `OPENAI_API_KEY` 등록 및 운영 semantic search 확인
 - [ ] Vercel `KAKAO_ADMIN_KEY` 등록 여부 결정
 - [ ] Supabase Auth provider redirect URL 대시보드 최종 확인
 - [x] Playwright 관리자 E2E 스킵 원인 확인
