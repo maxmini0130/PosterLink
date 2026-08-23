@@ -67,8 +67,10 @@
 - `posterlink.co.kr` / `www.posterlink.co.kr` DNS 및 Vercel domain 연결
 - Vercel Production에 `OPENAI_API_KEY` 추가 및 production 재배포 완료
 - Vercel에 `KAKAO_ADMIN_KEY` 추가 여부 결정
-- Supabase Auth provider redirect URL을 운영 도메인 기준으로 대시보드에서 최종 확인
+- Supabase Auth provider redirect URL을 운영 도메인 기준으로 대시보드에서 최종 확인 완료
   - Supabase CLI는 Auth redirect URL 읽기 명령을 제공하지 않고 `config push`만 제공한다.
+  - 대시보드에서 Site URL을 `https://www.posterlink.kr`로 변경했다.
+  - Redirect URLs에 `https://www.posterlink.kr/auth/callback`, `https://www.posterlink.kr/reset-password`, `com.maxmini.posterlink://auth-callback`을 확인했다.
   - 운영 Naver OAuth 진입은 `https://www.posterlink.kr/api/auth/naver/callback`을 `redirect_uri`로 생성하는 것을 확인했다.
 - Playwright 관리자 E2E 계정 자격증명 복구 확인
   - `E2E_ADMIN_EMAIL` 계정은 루트 `.env.local` 기준으로 로그인 가능하다.

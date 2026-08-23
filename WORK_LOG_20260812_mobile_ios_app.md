@@ -469,4 +469,7 @@ pnpm dlx eas-cli@latest submit --platform ios --profile production --id 8f8b7d2a
   - `GET https://www.posterlink.kr/api/auth/naver`는 `https://www.posterlink.kr/api/auth/naver/callback`을 `redirect_uri`로 사용한다.
 - Preview environment는 Vercel CLI가 preview git branch 선택을 요구해 이번 자동 등록 범위에서 제외했다.
 - `KAKAO_ADMIN_KEY`는 로컬 env와 Vercel 모두에서 값이 확인되지 않아 등록하지 않았다.
-- Supabase Auth provider redirect URL은 CLI에서 읽을 수 없어 대시보드 최종 확인 항목으로 남겼다.
+- Supabase Auth provider redirect URL은 대시보드에서 최종 확인했다.
+  - Site URL: `https://www.posterlink.kr`
+  - Redirect URLs: `https://www.posterlink.kr/auth/callback`, `https://www.posterlink.kr/reset-password`, `com.maxmini.posterlink://auth-callback`
+  - 운영 `GET https://www.posterlink.kr/reset-password` 200 응답을 확인했다.
