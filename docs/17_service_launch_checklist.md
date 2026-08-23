@@ -99,7 +99,7 @@
 - [ ] 클라이언트 오류가 Sentry에 수집되는지 확인
 - [x] Source map 업로드 실패가 빌드를 막지 않는지 확인
 - [x] Supabase Edge Function 로그 조회 절차 확인 (`docs/edge_function_logs_runbook_20260823.md`)
-- [ ] 장애 시 임시 공지 발송 절차 확인
+- [x] 장애 시 임시 공지 발송 절차 확인 (`docs/incident_notice_runbook_20260823.md`)
 - [ ] 관리자/운영자 비상 계정 확보
 - [ ] Supabase security advisor 경고 정리
   - 1차/2차 low-risk hardening migration 운영 DB 적용 완료

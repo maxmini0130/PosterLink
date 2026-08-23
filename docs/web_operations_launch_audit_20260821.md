@@ -63,6 +63,11 @@
   - Supabase CLI는 원격 함수 로그 조회 명령을 제공하지 않아 배포 상태 확인에만 사용한다.
   - 실제 실행 로그는 Supabase Dashboard의 `Logs` 또는 `Edge Functions` 화면에서 함수 slug, 시간 범위, status, invocation id 기준으로 확인한다.
   - `check-deadlines`와 `notify-new-match`는 알림 레코드 생성 또는 실제 push 발송이 발생할 수 있어 운영 수동 호출은 별도 승인 후 진행한다.
+- 장애 시 임시 공지 발송 절차를 정리했다.
+  - runbook: `docs/incident_notice_runbook_20260823.md`
+  - 관리자 화면 `https://www.posterlink.kr/admin/notifications`에서 전체 사용자에게 `system_notice` 알림을 발송한다.
+  - 발송 이력은 `/admin/notifications`의 최근 시스템 공지와 `admin_actions.metadata_json.kind = system_notice_broadcast`로 확인한다.
+  - 현재 공지는 로그인 사용자 알림 센터에만 노출되며, 비로그인 홈 배너나 Expo push broadcast는 별도 기능이 필요하다.
 - Vercel production 배포 상태:
   - `vercel inspect www.posterlink.kr` 결과 deployment `dpl_6Zd1mAqyZEmfxHjpia8vFc4b6YNF`가 `Ready` 상태다.
   - aliases: `https://www.posterlink.kr`, `https://posterlink.kr`, `https://poster-link-web.vercel.app`
@@ -98,6 +103,9 @@
 - Supabase Edge Function 로그 조회 절차 확인 완료
   - 현재 함수 목록: `process-ocr` ACTIVE v11, `check-deadlines` ACTIVE v5, `notify-new-match` ACTIVE v4
   - 세부 절차는 `docs/edge_function_logs_runbook_20260823.md`에 기록했다.
+- 장애 시 임시 공지 발송 절차 확인 완료
+  - 세부 절차와 공지 문구 템플릿은 `docs/incident_notice_runbook_20260823.md`에 기록했다.
+  - 실제 전체 공지 발송은 운영 데이터 변경을 수반하므로 이번 점검에서는 수행하지 않았다.
 - Playwright 관리자 E2E 계정 자격증명 복구 확인
   - `E2E_ADMIN_EMAIL` 계정은 루트 `.env.local` 기준으로 로그인 가능하다.
   - 웹 E2E가 읽는 `apps/web/.env.local`의 `E2E_ADMIN_PASSWORD`를 루트 값과 로컬 동기화했다.
