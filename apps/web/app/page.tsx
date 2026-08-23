@@ -333,7 +333,7 @@ export default function Home() {
             <span>오늘 새 공고 {homeSummary.todayNew.toLocaleString()}건</span>
             <span>신청 가능한 공고 {homeSummary.activePosters.toLocaleString()}건</span>
             <span>이번 주 마감 {homeSummary.dueThisWeek.toLocaleString()}건</span>
-            {homeSummary.collectionSources > 0 && <span>{homeSummary.collectionSources.toLocaleString()}개 기관 수집 중</span>}
+            {homeSummary.collectionSources > 0 && <span>공개 기관 {homeSummary.collectionSources.toLocaleString()}개</span>}
           </div>
         </motion.section>
 

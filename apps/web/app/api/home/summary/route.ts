@@ -31,7 +31,7 @@ export async function GET() {
   const sevenDaysLater = new Date(now);
   sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
 
-  const [todayNew, activePosters, dueThisWeek, collectionSources] = await Promise.all([
+  const [todayNew, activePosters, dueThisWeek, publicInstitutions] = await Promise.all([
     safeCount(
       supabase
         .from("posters")
@@ -58,9 +58,9 @@ export async function GET() {
     ),
     safeCount(
       supabase
-        .from("collection_sources")
+        .from("institutions")
         .select("id", { count: "exact", head: true })
-        .in("status", ["active", "planned"]),
+        .eq("is_public", true),
     ),
   ]);
 
@@ -68,6 +68,6 @@ export async function GET() {
     todayNew,
     activePosters,
     dueThisWeek,
-    collectionSources,
+    collectionSources: publicInstitutions,
   });
 }

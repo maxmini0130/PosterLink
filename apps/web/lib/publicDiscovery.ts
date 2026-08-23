@@ -24,6 +24,7 @@ export type PublicDiscoveryFilters = {
 
 export type PublicDiscoveryResult = {
   posters: DiscoveryPoster[];
+  totalCount: number;
   categories: DiscoveryTaxonomy[];
   regions: DiscoveryTaxonomy[];
   selectedCategory: DiscoveryTaxonomy | null;
@@ -84,19 +85,29 @@ export async function fetchPublicDiscovery(filters: PublicDiscoveryFilters = {})
   const sort = readDiscoverySort(filters.sort);
   const search = sanitizeSearchTerm(filters.query);
   const regionIds = selectedRegion ? getRegionScopeIds(selectedRegion.id, regions) : null;
-  const { data } = await client
-    .rpc("search_public_posters", {
+  const searchArgs = {
+    p_query: search || null,
+    p_category_id: selectedCategory?.id ?? null,
+    p_region_ids: regionIds,
+    p_include_closed: Boolean(filters.includeClosed),
+    p_sort: sort === "deadline" ? "deadline" : "latest",
+    p_limit: Math.min(Math.max(filters.limit ?? 240, 1), 500),
+  };
+  const [postersRes, countRes] = await Promise.all([
+    client
+      .rpc("search_public_posters", searchArgs)
+      .select(PUBLIC_POSTER_SELECT),
+    client.rpc("count_public_posters", {
       p_query: search || null,
       p_category_id: selectedCategory?.id ?? null,
       p_region_ids: regionIds,
       p_include_closed: Boolean(filters.includeClosed),
-      p_sort: sort === "deadline" ? "deadline" : "latest",
-      p_limit: Math.min(Math.max(filters.limit ?? 60, 1), 100),
-    })
-    .select(PUBLIC_POSTER_SELECT);
-  const posters = await enrichPublicPosters(client, (data ?? []) as Record<string, unknown>[]);
+    }),
+  ]);
+  const posters = await enrichPublicPosters(client, (postersRes.data ?? []) as Record<string, unknown>[]);
   const filteredPosters = filters.includeClosed ? posters : posters.filter(isAcceptingPoster);
-  return { posters: filteredPosters, categories, regions, selectedCategory, selectedRegion, sort };
+  const totalCount = typeof countRes.data === "number" ? countRes.data : filteredPosters.length;
+  return { posters: filteredPosters, totalCount, categories, regions, selectedCategory, selectedRegion, sort };
 }
 
 export async function fetchPublicInstitutions(search?: string | null): Promise<PublicInstitution[]> {

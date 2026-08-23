@@ -18,6 +18,7 @@ const QUICK_SEARCH_TERMS = ["청년", "취업", "무료교육", "주거", "창�
 
 type PosterListClientProps = {
   initialPosters: DiscoveryPoster[];
+  initialTotalCount: number;
   initialCategories: DiscoveryTaxonomy[];
   initialRegions: DiscoveryTaxonomy[];
   initialQuery: string;
@@ -37,6 +38,7 @@ export function PosterListClient(props: PosterListClientProps) {
 
 function PosterListPageContent({
   initialPosters,
+  initialTotalCount,
   initialCategories,
   initialRegions,
   initialQuery,
@@ -47,6 +49,7 @@ function PosterListPageContent({
 }: PosterListClientProps) {
   const [loading, setLoading] = useState(false);
   const [posters, setPosters] = useState<any[]>(initialPosters);
+  const [resultTotalCount, setResultTotalCount] = useState(initialTotalCount);
   const [categories, setCategories] = useState<any[]>(initialCategories);
   const [regions, setRegions] = useState<any[]>(initialRegions);
 
@@ -67,6 +70,7 @@ function PosterListPageContent({
   const pendingSearchLogRef = useRef<string | null>(null);
   const skipInitialFetchRef = useRef(true);
   const skipInitialUrlSyncRef = useRef(true);
+  const initialSearchLoggedRef = useRef(false);
 
   // 1. Initial Data Load
   useEffect(() => {
@@ -237,18 +241,13 @@ function PosterListPageContent({
       });
 
       setPosters(sortedData);
+      setResultTotalCount(sortedData.length);
       setSemanticSearchActive(semanticSearchUsed);
       setDisplayCount(PAGE_SIZE);
 
       if (normalizedQuery && pendingSearchLogRef.current === normalizedQuery) {
         pendingSearchLogRef.current = null;
-        supabase.auth.getSession().then(({ data: { session } }) => {
-          supabase.rpc("log_search", {
-            p_user_id: session?.user?.id ?? null,
-            p_query: normalizedQuery,
-            p_result_count: sortedData.length,
-          });
-        });
+        void recordSearchLog(normalizedQuery, sortedData.length);
       }
     } catch (err) {
       console.error("Error fetching posters:", err);
@@ -268,6 +267,13 @@ function PosterListPageContent({
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, selectedCategoryId, selectedRegionId, sortBy, hideClosedPosters, myMatchesOnly]);
+
+  useEffect(() => {
+    const normalizedInitialQuery = initialQuery.trim();
+    if (initialSearchLoggedRef.current || !normalizedInitialQuery) return;
+    initialSearchLoggedRef.current = true;
+    void recordSearchLog(normalizedInitialQuery, resultTotalCount);
+  }, [initialQuery, resultTotalCount]);
 
   useEffect(() => {
     if (skipInitialUrlSyncRef.current) {
@@ -507,7 +513,7 @@ function PosterListPageContent({
           {/* Sort & Result Count */}
           <div className="flex items-center justify-between border-b border-gray-50 pb-4">
              <span className="text-[11px] font-black text-gray-300 uppercase tracking-widest">
-               총 {posters.length.toLocaleString()}건 {hideClosedPosters ? "· 접수 중" : "· 전체"} {myMatchesOnly ? "· 내 맞춤" : ""}
+               총 {resultTotalCount.toLocaleString()}건 {posters.length < resultTotalCount ? `· 현재 ${posters.length.toLocaleString()}건 표시` : ""} {hideClosedPosters ? "· 접수 중" : "· 전체"} {myMatchesOnly ? "· 내 맞춤" : ""}
                {semanticSearchActive ? " · 의미순" : ""}
              </span>
 
@@ -559,7 +565,7 @@ function PosterListPageContent({
                   onClick={() => setDisplayCount(prev => prev + PAGE_SIZE)}
                   className="flex items-center gap-2 px-8 py-4 bg-gray-50 hover:bg-blue-50 text-gray-500 hover:text-blue-600 font-black text-sm rounded-[1.5rem] transition-all border border-gray-100 hover:border-blue-100"
                 >
-                  <ChevronDown size={18} /> 더 보기 ({posters.length - displayCount}개 남음)
+                  <ChevronDown size={18} /> 불러온 목록 더 보기 ({posters.length - displayCount}개)
                 </button>
               </div>
             )}
@@ -577,4 +583,12 @@ function PosterListPageContent({
       <BottomNav />
     </div>
   );
+}
+
+async function recordSearchLog(query: string, resultCount: number) {
+  await fetch("/api/search-logs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, result_count: resultCount }),
+  }).catch(() => null);
 }
