@@ -160,9 +160,9 @@
 - [x] 빌드 산출물에 `SUPABASE_SERVICE_ROLE_KEY` 미포함 확인
 - [ ] `posterlink.co.kr` / `www.posterlink.co.kr` DNS 및 Vercel domain 연결
 - [x] Vercel Production `OPENAI_API_KEY` 등록 및 운영 semantic search 확인
-- [ ] Vercel `KAKAO_ADMIN_KEY` 등록 여부 결정
+- [ ] Vercel `KAKAO_ADMIN_KEY` 등록 여부 결정 (선택 항목, 다음 작업으로 보류)
 - [x] Supabase Auth provider redirect URL 대시보드 최종 확인
 - [x] Playwright 관리자 E2E 스킵 원인 확인
 - [x] `E2E_ADMIN_EMAIL` 테스트 계정 자격증명 갱신
 - [x] 관리자 인증 E2E 15/15 통과
-- [ ] 관리자 공지 발송, 댓글 숨김/신고 기각, 사용자 역할 변경 수동 검수
+- [ ] 관리자 공지 발송, 댓글 숨김/신고 기각, 사용자 역할 변경 수동 검수 (운영 데이터 변경 수반, 다음 작업으로 보류)

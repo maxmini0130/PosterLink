@@ -473,3 +473,9 @@ pnpm dlx eas-cli@latest submit --platform ios --profile production --id 8f8b7d2a
   - Site URL: `https://www.posterlink.kr`
   - Redirect URLs: `https://www.posterlink.kr/auth/callback`, `https://www.posterlink.kr/reset-password`, `com.maxmini.posterlink://auth-callback`
   - 운영 `GET https://www.posterlink.kr/reset-password` 200 응답을 확인했다.
+
+## 2026-08-23 다음 작업으로 보류한 운영 항목
+
+- `KAKAO_ADMIN_KEY` 등록은 카카오 로그인 사용자의 탈퇴 시 Kakao 앱 연결 해제까지 처리하기 위한 선택 항목이다. 출시 블로커로 보지 않고 다음 작업으로 보류했다.
+- 관리자 공지 발송, 댓글 숨김, 신고 기각, 사용자 역할 변경 수동 검수는 운영 데이터 변경을 수반하므로 다음 작업으로 보류했다.
+- 위 관리자 수동 검수는 테스트 대상과 원복 범위를 먼저 정한 뒤 별도 승인 절차로 진행한다.

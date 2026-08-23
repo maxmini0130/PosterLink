@@ -67,6 +67,8 @@
 - `posterlink.co.kr` / `www.posterlink.co.kr` DNS 및 Vercel domain 연결
 - Vercel Production에 `OPENAI_API_KEY` 추가 및 production 재배포 완료
 - Vercel에 `KAKAO_ADMIN_KEY` 추가 여부 결정
+  - Kakao 앱 연결 해제까지 탈퇴 UX를 정리하기 위한 선택 항목이다.
+  - 현재는 출시 블로커로 보지 않고 다음 작업으로 보류한다.
 - Supabase Auth provider redirect URL을 운영 도메인 기준으로 대시보드에서 최종 확인 완료
   - Supabase CLI는 Auth redirect URL 읽기 명령을 제공하지 않고 `config push`만 제공한다.
   - 대시보드에서 Site URL을 `https://www.posterlink.kr`로 변경했다.
@@ -77,4 +79,5 @@
   - 웹 E2E가 읽는 `apps/web/.env.local`의 `E2E_ADMIN_PASSWORD`를 루트 값과 로컬 동기화했다.
   - 관리자 인증 E2E는 15/15 통과했다.
 - 실제 브라우저에서 Google/Kakao/Naver OAuth 로그인 1회씩 수동 확인
-- 관리자 공지 발송, 댓글 숨김/신고 기각, 사용자 역할 변경은 운영 데이터 변경을 수반하므로 별도 승인 절차로 실행
+- 관리자 공지 발송, 댓글 숨김/신고 기각, 사용자 역할 변경은 운영 데이터 변경을 수반하므로 다음 작업으로 보류한다.
+  - 실행 시 테스트 대상과 원복 범위를 먼저 정한 뒤 별도 승인 절차로 진행한다.
