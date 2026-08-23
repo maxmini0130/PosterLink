@@ -58,6 +58,11 @@
   - `apps/web/next.config.mjs`의 `withSentryConfig`는 `org: posterlink`, `project: posterlink-web`를 사용한다.
   - `errorHandler`가 source map 업로드 실패를 빌드 실패로 전파하지 않고 경고로 처리한다.
   - 서버/클라이언트 instrumentation은 production이고 DSN이 `https://`로 시작할 때만 활성화된다.
+- Supabase Edge Function 로그 조회 절차를 정리했다.
+  - runbook: `docs/edge_function_logs_runbook_20260823.md`
+  - Supabase CLI는 원격 함수 로그 조회 명령을 제공하지 않아 배포 상태 확인에만 사용한다.
+  - 실제 실행 로그는 Supabase Dashboard의 `Logs` 또는 `Edge Functions` 화면에서 함수 slug, 시간 범위, status, invocation id 기준으로 확인한다.
+  - `check-deadlines`와 `notify-new-match`는 알림 레코드 생성 또는 실제 push 발송이 발생할 수 있어 운영 수동 호출은 별도 승인 후 진행한다.
 - Vercel production 배포 상태:
   - `vercel inspect www.posterlink.kr` 결과 deployment `dpl_6Zd1mAqyZEmfxHjpia8vFc4b6YNF`가 `Ready` 상태다.
   - aliases: `https://www.posterlink.kr`, `https://posterlink.kr`, `https://poster-link-web.vercel.app`
@@ -90,6 +95,9 @@
   - 대시보드에서 Site URL을 `https://www.posterlink.kr`로 변경했다.
   - Redirect URLs에 `https://www.posterlink.kr/auth/callback`, `https://www.posterlink.kr/reset-password`, `com.maxmini.posterlink://auth-callback`을 확인했다.
   - 운영 Naver OAuth 진입은 `https://www.posterlink.kr/api/auth/naver/callback`을 `redirect_uri`로 생성하는 것을 확인했다.
+- Supabase Edge Function 로그 조회 절차 확인 완료
+  - 현재 함수 목록: `process-ocr` ACTIVE v11, `check-deadlines` ACTIVE v5, `notify-new-match` ACTIVE v4
+  - 세부 절차는 `docs/edge_function_logs_runbook_20260823.md`에 기록했다.
 - Playwright 관리자 E2E 계정 자격증명 복구 확인
   - `E2E_ADMIN_EMAIL` 계정은 루트 `.env.local` 기준으로 로그인 가능하다.
   - 웹 E2E가 읽는 `apps/web/.env.local`의 `E2E_ADMIN_PASSWORD`를 루트 값과 로컬 동기화했다.
