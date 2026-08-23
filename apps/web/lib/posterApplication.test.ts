@@ -5,6 +5,7 @@ import {
   formatApplicationPeriod,
   formatPosterDate,
   getPosterApplicationState,
+  isPosterAcceptingApplications,
   normalizePosterDeadlineType,
 } from "./posterApplication";
 
@@ -43,21 +44,88 @@ test("deadline labels use the Asia/Seoul calendar day", () => {
   assert.equal(formatPosterDate("2026-08-04T15:30:00.000Z"), "2026.08.05");
 });
 
-test("fixed deadlines expose D-day and closed states", () => {
-  assert.deepEqual(
-    getPosterApplicationState({
-      applicationEndAt: "2026-08-06T14:59:59.000Z",
-      now,
-    }),
-    { status: "closing_soon", label: "마감 임박", daysLeft: 2 },
-  );
-  assert.equal(
-    getPosterApplicationState({
-      applicationEndAt: "2026-08-02T14:59:59.000Z",
-      now,
-    }).status,
-    "closed",
-  );
+test("fixed deadlines expose today, soon, open and closed states", () => {
+  const cases = [
+    {
+      name: "today start",
+      input: {
+        applicationStartAt: "2026-08-03T15:00:00.000Z",
+        applicationEndAt: "2026-08-10T14:59:59.000Z",
+        now,
+      },
+      status: "open",
+      accepting: true,
+    },
+    {
+      name: "today end",
+      input: {
+        applicationEndAt: "2026-08-04T14:59:59.000Z",
+        now,
+      },
+      status: "due_today",
+      accepting: true,
+    },
+    {
+      name: "one day left",
+      input: {
+        applicationEndAt: "2026-08-05T14:59:59.000Z",
+        now,
+      },
+      status: "closing_soon",
+      accepting: true,
+    },
+    {
+      name: "three days left",
+      input: {
+        applicationEndAt: "2026-08-07T14:59:59.000Z",
+        now,
+      },
+      status: "closing_soon",
+      accepting: true,
+    },
+    {
+      name: "already closed",
+      input: {
+        applicationEndAt: "2026-08-02T14:59:59.000Z",
+        now,
+      },
+      status: "closed",
+      accepting: false,
+    },
+    {
+      name: "scheduled",
+      input: {
+        applicationStartAt: "2026-08-05T00:00:00.000Z",
+        applicationEndAt: "2026-08-10T14:59:59.000Z",
+        now,
+      },
+      status: "scheduled",
+      accepting: false,
+    },
+    {
+      name: "end only",
+      input: {
+        applicationEndAt: "2026-08-10T14:59:59.000Z",
+        now,
+      },
+      status: "open",
+      accepting: true,
+    },
+    {
+      name: "utc date near seoul midnight",
+      input: {
+        applicationEndAt: "2026-08-04T15:30:00.000Z",
+        now: new Date("2026-08-04T16:00:00.000Z"),
+      },
+      status: "due_today",
+      accepting: true,
+    },
+  ] as const;
+
+  for (const testCase of cases) {
+    assert.equal(getPosterApplicationState(testCase.input).status, testCase.status, testCase.name);
+    assert.equal(isPosterAcceptingApplications(testCase.input), testCase.accepting, testCase.name);
+  }
 });
 
 test("start-only periods do not imply always open", () => {
@@ -65,4 +133,58 @@ test("start-only periods do not imply always open", () => {
     formatApplicationPeriod({ applicationStartAt: "2026-08-01T00:00:00.000Z" }),
     "2026.08.01부터 · 종료 일정 확인 필요",
   );
+  assert.equal(
+    getPosterApplicationState({ applicationStartAt: "2026-08-01T00:00:00.000Z", now }).status,
+    "needs_confirmation",
+  );
+  assert.equal(
+    isPosterAcceptingApplications({ applicationStartAt: "2026-08-01T00:00:00.000Z", now }),
+    false,
+  );
+});
+
+test("unknown, invalid, null and explicitly ongoing periods stay distinct", () => {
+  const cases = [
+    {
+      name: "ongoing",
+      input: { deadlineType: "ongoing", now },
+      status: "ongoing",
+      accepting: true,
+    },
+    {
+      name: "until exhausted",
+      input: { deadlineType: "until_exhausted", now },
+      status: "until_exhausted",
+      accepting: true,
+    },
+    {
+      name: "no dates",
+      input: { now },
+      status: "needs_confirmation",
+      accepting: false,
+    },
+    {
+      name: "null values",
+      input: { applicationStartAt: null, applicationEndAt: null, deadlineType: null, now },
+      status: "needs_confirmation",
+      accepting: false,
+    },
+    {
+      name: "invalid start",
+      input: { applicationStartAt: "not-a-date", applicationEndAt: "2026-08-10T14:59:59.000Z", now },
+      status: "needs_confirmation",
+      accepting: false,
+    },
+    {
+      name: "invalid end",
+      input: { applicationEndAt: "not-a-date", now },
+      status: "needs_confirmation",
+      accepting: false,
+    },
+  ] as const;
+
+  for (const testCase of cases) {
+    assert.equal(getPosterApplicationState(testCase.input).status, testCase.status, testCase.name);
+    assert.equal(isPosterAcceptingApplications(testCase.input), testCase.accepting, testCase.name);
+  }
 });

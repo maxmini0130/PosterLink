@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { isPosterAcceptingApplications } from "../../../../lib/posterApplication";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -89,8 +90,16 @@ export async function POST(request: Request) {
 
     if (error) throw error;
 
+    const posters = (data ?? []).filter((poster: any) =>
+      isPosterAcceptingApplications({
+        applicationStartAt: poster.application_start_at,
+        applicationEndAt: poster.application_end_at,
+        deadlineType: poster.deadline_type,
+      }),
+    );
+
     return NextResponse.json({
-      posters: data ?? [],
+      posters,
       semantic: true,
       model: MODEL,
     });

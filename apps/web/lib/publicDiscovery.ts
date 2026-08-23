@@ -8,9 +8,10 @@ import {
   type DiscoverySort,
   type DiscoveryTaxonomy,
 } from "./discoveryRoutes";
+import { isPosterAcceptingApplications } from "./posterApplication";
 
 const PUBLIC_POSTER_SELECT =
-  "id,title,source_org_name,organizer_name,organizer_id,source_institution_id,application_institution_id,application_end_at,deadline_type,verification_status,verified_at,thumbnail_url,source_key,summary_short,created_at,updated_at";
+  "id,title,source_org_name,organizer_name,organizer_id,source_institution_id,application_institution_id,application_start_at,application_end_at,deadline_type,verification_status,verified_at,thumbnail_url,source_key,summary_short,created_at,updated_at";
 
 export type PublicDiscoveryFilters = {
   query?: string | null;
@@ -94,7 +95,8 @@ export async function fetchPublicDiscovery(filters: PublicDiscoveryFilters = {})
     })
     .select(PUBLIC_POSTER_SELECT);
   const posters = await enrichPublicPosters(client, (data ?? []) as Record<string, unknown>[]);
-  return { posters, categories, regions, selectedCategory, selectedRegion, sort };
+  const filteredPosters = filters.includeClosed ? posters : posters.filter(isAcceptingPoster);
+  return { posters: filteredPosters, categories, regions, selectedCategory, selectedRegion, sort };
 }
 
 export async function fetchPublicInstitutions(search?: string | null): Promise<PublicInstitution[]> {
@@ -113,14 +115,13 @@ export async function fetchPublicInstitutions(search?: string | null): Promise<P
     query,
     client
       .from("posters")
-      .select("organizer_id,source_institution_id,application_end_at")
+      .select("organizer_id,source_institution_id,application_start_at,application_end_at,deadline_type")
       .eq("poster_status", "published")
       .limit(2000),
   ]);
 
   if (error) return [];
 
-  const now = Date.now();
   return (institutions ?? []).map((institution: any) => {
     let organizedPosterCount = 0;
     let sourcedPosterCount = 0;
@@ -130,7 +131,7 @@ export async function fetchPublicInstitutions(search?: string | null): Promise<P
       const sourced = poster.source_institution_id === institution.id;
       if (organized) organizedPosterCount += 1;
       if (sourced) sourcedPosterCount += 1;
-      if ((organized || sourced) && (!poster.application_end_at || new Date(poster.application_end_at).getTime() >= now)) {
+      if ((organized || sourced) && isAcceptingPoster(poster)) {
         activePosterCount += 1;
       }
     }
@@ -161,18 +162,27 @@ export async function fetchPublicInstitution(slug: string) {
     .limit(60);
 
   const enriched = await enrichPublicPosters(client, (posters ?? []) as Record<string, unknown>[]);
-  const now = Date.now();
   return {
     institution: {
       ...data,
       organizedPosterCount: (posters ?? []).filter((poster: any) => poster.organizer_id === data.id).length,
       sourcedPosterCount: (posters ?? []).filter((poster: any) => poster.source_institution_id === data.id).length,
-      activePosterCount: (posters ?? []).filter(
-        (poster: any) => !poster.application_end_at || new Date(poster.application_end_at).getTime() >= now,
-      ).length,
+      activePosterCount: (posters ?? []).filter((poster: any) => isAcceptingPoster(poster)).length,
     } as PublicInstitution,
     posters: enriched,
   };
+}
+
+function isAcceptingPoster(poster: {
+  application_start_at?: string | null;
+  application_end_at?: string | null;
+  deadline_type?: string | null;
+}) {
+  return isPosterAcceptingApplications({
+    applicationStartAt: poster.application_start_at,
+    applicationEndAt: poster.application_end_at,
+    deadlineType: poster.deadline_type,
+  });
 }
 
 function getRegionScopeIds(regionId: string, regions: DiscoveryTaxonomy[]) {

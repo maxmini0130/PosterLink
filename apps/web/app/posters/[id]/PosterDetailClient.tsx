@@ -155,17 +155,10 @@ function formatTargetAge(min?: number | null, max?: number | null) {
   return "연령 조건 확인 필요";
 }
 
-function verificationStatusLabel(status?: string | null) {
-  switch (status) {
-    case "verified":
-      return "검증 완료";
-    case "needs_review":
-      return "검수 필요";
-    case "rejected":
-      return "반려";
-    default:
-      return "검증 기록 확인 필요";
-  }
+function publicInformationCheckLabel(poster: PosterDetailPoster) {
+  const checkedAt = formatPosterDateTime(poster.verified_at);
+  if (poster.verification_status === "verified" && checkedAt) return checkedAt;
+  return "공식 공고 확인 권장";
 }
 
 function downloadPosterCalendar(poster: PosterDetailPoster, link?: string | null) {
@@ -580,7 +573,7 @@ export function PosterDetailClient({
     applicationEndAt: poster.application_end_at,
     deadlineType: poster.deadline_type
   });
-  const lastCheckedLabel = formatPosterDateTime(poster.verified_at) || "검증 기록 확인 필요";
+  const lastCheckedLabel = publicInformationCheckLabel(poster);
   const sourceHostLabel = sourceLink ? formatHostName(sourceLink.url) : null;
   const organizationInfo = getOrganizationVerification(poster);
   const displayOrgName = getPosterOrgDisplayName(poster);
@@ -790,16 +783,12 @@ export function PosterDetailClient({
               </dd>
             </div>
             <div>
-              <dt className="mb-1 font-black text-gray-400">최종 확인</dt>
+              <dt className="mb-1 font-black text-gray-400">정보 확인</dt>
               <dd className="font-bold text-gray-900">{lastCheckedLabel}</dd>
             </div>
             <div>
               <dt className="mb-1 font-black text-gray-400">공고 상태</dt>
               <dd className="font-bold text-gray-900">{statusLabel}</dd>
-            </div>
-            <div>
-              <dt className="mb-1 font-black text-gray-400">검수 상태</dt>
-              <dd className="font-bold text-gray-900">{verificationStatusLabel(poster.verification_status)}</dd>
             </div>
           </dl>
         </section>

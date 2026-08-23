@@ -25,6 +25,7 @@ async function safeCount(query: PromiseLike<{ count: number | null; error: unkno
 export async function GET() {
   const supabase = getAdminClient();
   const now = new Date();
+  const nowIso = now.toISOString();
   const todayStart = new Date(now);
   todayStart.setHours(0, 0, 0, 0);
   const sevenDaysLater = new Date(now);
@@ -43,14 +44,16 @@ export async function GET() {
         .from("posters")
         .select("id", { count: "exact", head: true })
         .eq("poster_status", "published")
-        .or(`application_end_at.is.null,application_end_at.gte.${now.toISOString()}`),
+        .or(`application_start_at.is.null,application_start_at.lte.${nowIso}`)
+        .or(`application_end_at.gte.${nowIso},and(application_end_at.is.null,deadline_type.in.(ongoing,until_exhausted))`),
     ),
     safeCount(
       supabase
         .from("posters")
         .select("id", { count: "exact", head: true })
         .eq("poster_status", "published")
-        .gte("application_end_at", now.toISOString())
+        .or(`application_start_at.is.null,application_start_at.lte.${nowIso}`)
+        .gte("application_end_at", nowIso)
         .lte("application_end_at", sevenDaysLater.toISOString()),
     ),
     safeCount(

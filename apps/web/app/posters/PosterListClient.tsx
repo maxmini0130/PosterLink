@@ -10,6 +10,7 @@ import { fetchCategoryRegionNames, fetchPosterImages } from "../lib/posterHelper
 import { fetchPosterMetricCounts } from "../lib/posterMetrics";
 import { getCityRegions, getDistrictRegions, getRegionLabel, getRegionScopeIds, getSelectedCityId } from "../lib/regionHelpers";
 import { buildPosterSearchPath, type DiscoveryPoster, type DiscoverySort, type DiscoveryTaxonomy } from "../../lib/discoveryRoutes";
+import { isPosterAcceptingApplications } from "../../lib/posterApplication";
 import { Search, X, History, TrendingUp, ArrowLeft, ChevronDown } from "lucide-react";
 
 const PAGE_SIZE = 12;
@@ -157,7 +158,7 @@ function PosterListPageContent({
       } else {
         let query = supabase
           .from("posters")
-          .select("id, title, source_org_name, application_end_at, poster_status, thumbnail_url, source_key, summary_short, created_at")
+          .select("id, title, source_org_name, application_start_at, application_end_at, deadline_type, poster_status, thumbnail_url, source_key, summary_short, created_at")
           .eq("poster_status", "published");
 
         if (normalizedQuery) {
@@ -172,12 +173,12 @@ function PosterListPageContent({
         data = directData ?? [];
       }
 
-      const now = Date.now();
       const dateFilteredData = hideClosedPosters
-        ? data.filter((poster: any) => {
-            if (!poster.application_end_at) return true;
-            return new Date(poster.application_end_at).getTime() >= now;
-          })
+        ? data.filter((poster: any) => isPosterAcceptingApplications({
+            applicationStartAt: poster.application_start_at,
+            applicationEndAt: poster.application_end_at,
+            deadlineType: poster.deadline_type,
+          }))
         : data;
 
       const basePosterIds = dateFilteredData.map((poster: any) => poster.id);
@@ -216,7 +217,7 @@ function PosterListPageContent({
           const deadlineRank = (poster: any) => {
             if (!poster.application_end_at) return Number.MAX_SAFE_INTEGER;
             const time = new Date(poster.application_end_at).getTime();
-            return time < now ? Number.MAX_SAFE_INTEGER - 1 : time;
+            return Number.isNaN(time) ? Number.MAX_SAFE_INTEGER : time;
           };
           const aTime = deadlineRank(a);
           const bTime = deadlineRank(b);
@@ -298,9 +299,13 @@ function PosterListPageContent({
 
     const normalizedTerm = finalTerm.trim();
     pendingSearchLogRef.current = normalizedTerm;
+    const shouldFetchImmediately = normalizedTerm === searchQuery.trim();
     setSearchQuery(normalizedTerm);
     setIsSearchFocused(false);
     searchInputRef.current?.blur();
+    if (shouldFetchImmediately) {
+      void fetchPosters(normalizedTerm);
+    }
   };
 
   const removeRecentSearch = (term: string) => {
@@ -533,6 +538,7 @@ function PosterListPageContent({
                     org: poster.verification_status === "verified" && poster.verified_at
                       ? poster.organizer_name || poster.source_org_name
                       : poster.source_org_name,
+                    applicationStartAt: poster.application_start_at,
                     deadline: poster.application_end_at,
                     deadlineType: poster.deadline_type,
                     image: poster.thumbnail_url,
