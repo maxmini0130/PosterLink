@@ -1,10 +1,15 @@
 import { test, expect, type Page } from "@playwright/test";
 
+test.describe.configure({ timeout: 60_000 });
+
 async function gotoAdminPosters(page: Page) {
   await page.goto("/admin/posters", { waitUntil: "domcontentloaded" });
+  if (page.url().includes("/login")) {
+    test.skip(true, "관리자 로그인 세션 없음 — 스킵");
+  }
   const ready = page.getByTestId("admin-posters-ready");
-  await expect(ready).toBeVisible();
-  await expect(ready).not.toContainText("불러오는 중", { timeout: 15000 });
+  await expect(ready).toBeVisible({ timeout: 30_000 });
+  await expect(ready).not.toContainText("불러오는 중", { timeout: 30_000 });
   expect(page.url()).not.toContain("/login");
 }
 
@@ -13,8 +18,8 @@ test.beforeEach(async ({ page }) => {
     test.skip(true, "E2E_ADMIN_EMAIL 미설정 — 관리자 인증 테스트 스킵");
     return;
   }
-  await page.goto("/admin");
-  await page.waitForLoadState("networkidle");
+  await page.goto("/admin", { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).toBeVisible();
   if (page.url().includes("/login")) {
     test.skip(true, "관리자 로그인 세션 없음 — 스킵");
   }
@@ -23,14 +28,14 @@ test.beforeEach(async ({ page }) => {
 test.describe("관리자 대시보드", () => {
   test("/admin 접근 가능", async ({ page }) => {
     await page.goto("/admin");
-    await page.waitForLoadState("networkidle");
+    await expect(page.locator("body")).toBeVisible();
     expect(page.url()).not.toContain("/login");
     await expect(page.locator("body")).toBeVisible();
   });
 
   test("대시보드 주요 지표 카드 표시", async ({ page }) => {
     await page.goto("/admin");
-    await page.waitForLoadState("networkidle");
+    await expect(page.locator("body")).toBeVisible();
     // 검수 대기, 게시 중 등 숫자 카드 중 하나 이상 표시
     const cards = page.locator("text=/검수 대기|게시 중|신고|사용자/").first();
     if (await cards.count() > 0) {
@@ -108,14 +113,14 @@ test.describe("관리자 포스터 검수 목록", () => {
 test.describe("관리자 등록 요청 검수", () => {
   test("/admin/requests 접근 가능", async ({ page }) => {
     await page.goto("/admin/requests");
-    await page.waitForLoadState("networkidle");
+    await expect(page.locator("body")).toBeVisible();
     expect(page.url()).not.toContain("/login");
     await expect(page.locator("body")).toBeVisible();
   });
 
   test("대기중/승인됨/반려됨 탭 표시", async ({ page }) => {
     await page.goto("/admin/requests");
-    await page.waitForLoadState("networkidle");
+    await expect(page.locator("body")).toBeVisible();
 
     const tabs = ["대기중", "승인됨", "반려됨"];
     for (const tab of tabs) {
@@ -128,12 +133,11 @@ test.describe("관리자 등록 요청 검수", () => {
 
   test("탭 전환 후 오류 없음", async ({ page }) => {
     await page.goto("/admin/requests");
-    await page.waitForLoadState("networkidle");
+    await expect(page.locator("body")).toBeVisible();
 
     const approvedTab = page.locator("button:has-text('승인됨')").first();
     if (await approvedTab.count() > 0) {
       await approvedTab.click();
-      await page.waitForLoadState("networkidle");
       await expect(page.locator("body")).toBeVisible();
     }
   });

@@ -327,6 +327,7 @@ function PosterListPageContent({
             <form onSubmit={handleSearchSubmit} className="flex-1 relative">
               <input 
                 ref={searchInputRef}
+                data-testid="poster-search-input"
                 type="text" 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -419,6 +420,7 @@ function PosterListPageContent({
           
           {/* Main Search Bar (Trigger) */}
           <div 
+            data-testid="poster-search-trigger"
             onClick={() => {setIsSearchFocused(true); setTimeout(() => searchInputRef.current?.focus(), 100);}}
             className="group flex items-center gap-3 px-5 py-4 bg-gray-50 rounded-[1.5rem] border border-transparent hover:border-blue-100 cursor-pointer transition-all"
           >

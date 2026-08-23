@@ -4,10 +4,12 @@ import path from "path";
 const authDir = path.join(__dirname, "e2e/.auth");
 const baseURL = process.env.E2E_BASE_URL || "http://localhost:4000";
 const usesRemoteServer = /^https?:\/\//i.test(process.env.E2E_BASE_URL || "");
+const workers = Number(process.env.E2E_WORKERS || "1");
 
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
+  workers: Number.isFinite(workers) && workers > 0 ? workers : 1,
   retries: 0,
   globalSetup: "./e2e/global-setup.ts",
   use: {

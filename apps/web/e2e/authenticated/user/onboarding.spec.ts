@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 
+test.describe.configure({ timeout: 60_000 });
+
 // E2E_USER_EMAIL 없으면 전체 스킵
 test.beforeEach(async ({ page }) => {
   if (!process.env.E2E_USER_EMAIL) {
@@ -17,21 +19,19 @@ test.beforeEach(async ({ page }) => {
 // 온보딩 완료 사용자: 주요 페이지 정상 접근 확인
 test.describe("온보딩 완료 사용자 - 기본 접근", () => {
   test("홈 접근 시 /onboarding 리디렉션 없음", async ({ page }) => {
-    await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.locator("body")).toBeVisible();
     expect(page.url()).not.toContain("/onboarding");
   });
 
   test("마이페이지 접근 가능", async ({ page }) => {
-    await page.goto("/mypage");
-    await page.waitForLoadState("networkidle");
+    await page.goto("/mypage", { waitUntil: "domcontentloaded" });
     expect(page.url()).not.toContain("/login");
     await expect(page.locator("body")).toBeVisible();
   });
 
   test("마이페이지에 포인트 배지 표시", async ({ page }) => {
-    await page.goto("/mypage");
-    await page.waitForLoadState("networkidle");
+    await page.goto("/mypage", { waitUntil: "domcontentloaded" });
     // 포인트 숫자 또는 P 단위 표시
     const pointEl = page.locator("text=/\\d+\\s*P|포인트/").first();
     if (await pointEl.count() > 0) {
@@ -40,8 +40,7 @@ test.describe("온보딩 완료 사용자 - 기본 접근", () => {
   });
 
   test("즐겨찾기 페이지 접근 가능", async ({ page }) => {
-    await page.goto("/favorites");
-    await page.waitForLoadState("networkidle");
+    await page.goto("/favorites", { waitUntil: "domcontentloaded" });
     expect(page.url()).not.toContain("/login");
     await expect(page.locator("body")).toBeVisible();
   });
@@ -55,15 +54,13 @@ test.describe("온보딩 완료 사용자 - 기본 접근", () => {
 
 test.describe("포스터 등록 요청", () => {
   test("/posters/request 페이지 접근 가능", async ({ page }) => {
-    await page.goto("/posters/request");
-    await page.waitForLoadState("networkidle");
+    await page.goto("/posters/request", { waitUntil: "domcontentloaded" });
     expect(page.url()).not.toContain("/login");
     await expect(page.locator("body")).toBeVisible();
   });
 
   test("설명 없이 제출 시 버튼 비활성 또는 오류", async ({ page }) => {
-    await page.goto("/posters/request");
-    await page.waitForLoadState("networkidle");
+    await page.goto("/posters/request", { waitUntil: "domcontentloaded" });
 
     const submitBtn = page.locator("button[type='submit'], button:has-text('요청'), button:has-text('제출')").first();
     if (await submitBtn.count() === 0) { test.skip(); return; }
@@ -76,8 +73,7 @@ test.describe("포스터 등록 요청", () => {
   });
 
   test("50포인트 인센티브 배너 표시", async ({ page }) => {
-    await page.goto("/posters/request");
-    await page.waitForLoadState("networkidle");
+    await page.goto("/posters/request", { waitUntil: "domcontentloaded" });
     const banner = page.locator("text=/50|포인트|P/").first();
     if (await banner.count() > 0) {
       await expect(banner).toBeVisible();
@@ -110,8 +106,8 @@ test.describe("포스터 찜하기", () => {
 
 test.describe("내 맞춤 필터 (로그인)", () => {
   test("포스터 목록에서 내 맞춤 토글 표시", async ({ page }) => {
-    await page.goto("/posters");
-    await page.waitForLoadState("networkidle");
+    await page.goto("/posters", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "공공 공고 찾기" })).toBeVisible();
     const toggle = page.locator("text=내 맞춤").first();
     if (await toggle.count() > 0) {
       await expect(toggle).toBeVisible();

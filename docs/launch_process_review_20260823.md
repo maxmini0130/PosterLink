@@ -38,6 +38,21 @@ PosterLink의 웹 운영, DB/보안, 관리자 검수, 알림, 모바일 앱 출
   - Vercel production deployment `dpl_6CmCAAmzDNojbjSGGzkXs2Q2s6Hv` Ready
   - `https://www.posterlink.kr/privacy`, `/terms`, `/robots.txt`, `/sitemap.xml`, `/opengraph-image` 200 확인
 
+## 2026-08-23 추가 자동 처리 완료
+
+- 공개 포스터, 사용자, 관리자, 운영자 E2E의 불안정한 대기 조건을 정리했다.
+  - `networkidle`에 과하게 의존하던 테스트를 실제 heading/body/버튼 표시 기준으로 바꿨다.
+  - 포스터 상세 E2E는 목록의 UUID 상세 링크를 여러 개 확인해 현재 데이터에서 실제 렌더링되는 상세 페이지를 사용하도록 보강했다.
+  - 포스터 목록 검색 트리거에는 안정적인 테스트 식별자를 추가했다.
+- Playwright 전체 실행이 Next dev server를 과도하게 병렬 압박하지 않도록 기본 worker를 1로 고정했다.
+  - 필요하면 `E2E_WORKERS=2`처럼 환경변수로 조정할 수 있다.
+- 재검증 결과:
+  - `pnpm --dir apps/web test:e2e` 통과, 114 passed, 4 skipped
+  - `pnpm --filter web lint` 통과
+  - `pnpm --filter web exec tsc --noEmit --pretty false` 통과
+  - `pnpm test` 통과, 53 passed
+  - `pnpm --filter web build` 통과
+
 ## 바로 고친 코드 리스크
 
 이번 점검 중 운영 검수에서 터질 수 있는 작은 불일치를 발견해 수정했다.

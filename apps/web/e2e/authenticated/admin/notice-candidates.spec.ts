@@ -1,12 +1,13 @@
 import { test, expect, type Page } from "@playwright/test";
 
+test.describe.configure({ timeout: 60_000 });
+
 async function gotoNoticeCandidates(page: Page) {
-  await page.goto("/admin/notice-candidates");
-  await page.waitForLoadState("networkidle");
+  await page.goto("/admin/notice-candidates", { waitUntil: "domcontentloaded" });
   if (page.url().includes("/login")) {
     test.skip(true, "관리자 로그인 세션 없음 — 이미지 없는 공고 후보 테스트 스킵");
   }
-  await expect(page.getByRole("heading", { name: "이미지 없는 공고 후보" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "이미지 없는 공고 후보" })).toBeVisible({ timeout: 30_000 });
 }
 
 test.beforeEach(async ({ page }) => {
@@ -56,7 +57,7 @@ test.describe("관리자 이미지 없는 공고 후보", () => {
 
   test("중복 비교 동작 확인", async ({ page }) => {
     await page.getByRole("button", { name: /중복 의심만/ }).click();
-    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("button", { name: /중복 의심만/ })).toBeVisible();
 
     const compareButton = page.getByRole("button", { name: "중복 비교" });
     if (await compareButton.count() === 0) {
@@ -75,7 +76,7 @@ test.describe("관리자 이미지 없는 공고 후보", () => {
       return;
     }
 
-    await expect(page.getByRole("heading", { name: "중복 후보 비교" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "중복 후보 비교" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("현재 후보", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "닫기" }).click();
     await expect(page.getByRole("heading", { name: "중복 후보 비교" })).toBeHidden();

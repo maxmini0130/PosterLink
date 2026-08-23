@@ -10,6 +10,7 @@
 - [x] 웹 린트 통과 (`pnpm.cmd --filter web lint`)
 - [x] 웹 타입 체크 통과 (`pnpm.cmd --filter web exec tsc --noEmit --pretty false`)
 - [x] E2E 테스트 통과 (`pnpm.cmd --filter web test:e2e`, 42 passed, 2 skipped)
+- [x] 전체 웹 E2E 안정화 및 재검증 (`pnpm --dir apps/web test:e2e`, 114 passed, 4 skipped)
 - [x] 운영/관리 보호 라우트 비로그인 접근 제어 E2E 추가
 - [x] 비밀번호 재설정 화면 구현
 - [x] 마이페이지 알림 설정 토글 구현
@@ -141,7 +142,9 @@
 - [ ] 동의어 사전 초기 데이터 보강
 - [x] 포스터 반려 사유 운영자 화면 노출 개선
 - [x] 댓글 신고 중복 접수 방지 UX
-- [ ] E2E에 관리자/운영자 핵심 플로우 추가
+- [x] E2E에 관리자/운영자 핵심 플로우 추가
+- [x] Playwright 기본 worker를 1로 고정해 로컬 Next dev server 연쇄 실패 방지 (`E2E_WORKERS`로 override 가능)
+- [ ] 검수 대상/후보/외부 이미지 수정 데이터가 있을 때 조건부 skip E2E를 실제 데이터로 재확인
 - [ ] 모바일 OAuth 실기기 자동화 테스트 기준 정리
 
 ## 9. 2026-08-21 Android API 36 업데이트
@@ -173,4 +176,5 @@
 - [x] `E2E_ADMIN_EMAIL` 테스트 계정 자격증명 갱신
 - [x] 관리자 인증 E2E 15/15 통과
 - [x] 관리자 운영 화면 비파괴 E2E 추가 (공지 발송 화면, 신고 관리, 기준정보 관리)
+- [x] 공개/사용자/관리자/운영자 전체 E2E 재검증 통과 (114 passed, 4 skipped)
 - [ ] 관리자 공지 발송, 댓글 숨김/신고 기각, 사용자 역할 변경 수동 검수 (운영 데이터 변경 수반, 다음 작업으로 보류)
