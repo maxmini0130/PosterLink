@@ -113,6 +113,7 @@ export async function DiscoveryLanding({ title, description, filters, eyebrow, c
                     org: poster.verification_status === "verified" && poster.verified_at
                       ? poster.organizer_name || poster.source_org_name || undefined
                       : poster.source_org_name || undefined,
+                    applicationStartAt: poster.application_start_at,
                     deadline: poster.application_end_at || undefined,
                     deadlineType: poster.deadline_type,
                     tags: [poster.categoryName, poster.regionName].filter((value): value is string => Boolean(value)),

@@ -17,6 +17,7 @@ export type DiscoveryPoster = {
   organizer_id?: string | null;
   source_institution_id?: string | null;
   application_institution_id?: string | null;
+  application_start_at?: string | null;
   application_end_at: string | null;
   deadline_type?: string | null;
   verification_status?: string | null;

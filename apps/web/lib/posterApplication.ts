@@ -22,6 +22,13 @@ export type PosterApplicationState = {
   daysLeft: number | null;
 };
 
+export type PosterApplicationInput = {
+  applicationStartAt?: string | null;
+  applicationEndAt?: string | null;
+  deadlineType?: string | null;
+  now?: Date;
+};
+
 const datePartsFormatter = new Intl.DateTimeFormat("en-CA", {
   timeZone: POSTER_TIME_ZONE,
   year: "numeric",
@@ -74,12 +81,7 @@ export function normalizePosterDeadlineType(
   }
 }
 
-export function getPosterApplicationState(input: {
-  applicationStartAt?: string | null;
-  applicationEndAt?: string | null;
-  deadlineType?: string | null;
-  now?: Date;
-}): PosterApplicationState {
+export function getPosterApplicationState(input: PosterApplicationInput): PosterApplicationState {
   const nowTime = (input.now ?? new Date()).getTime();
   const startTime = parseTime(input.applicationStartAt);
   const endTime = parseTime(input.applicationEndAt);
@@ -130,6 +132,17 @@ export function getPosterApplicationState(input: {
         daysLeft: null,
       };
   }
+}
+
+export function isPosterAcceptingApplications(input: PosterApplicationInput) {
+  const state = getPosterApplicationState(input);
+  return (
+    state.status === "open" ||
+    state.status === "closing_soon" ||
+    state.status === "due_today" ||
+    state.status === "ongoing" ||
+    state.status === "until_exhausted"
+  );
 }
 
 export function formatPosterDate(value?: string | null) {

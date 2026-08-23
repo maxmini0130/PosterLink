@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { getDDay, isDeadlineSoon } from "@posterlink/lib";
 import { Building2, CalendarClock, Eye, Heart, MapPin } from "lucide-react";
 import { resolvePosterImageGallery } from "../../lib/posterImage";
+import { formatPosterDate, getPosterApplicationState } from "../../lib/posterApplication";
 import { PosterImageCarousel } from "./PosterImageCarousel";
 
 interface PosterCardProps {
@@ -9,6 +9,7 @@ interface PosterCardProps {
     id: string;
     title: string;
     org?: string;
+    applicationStartAt?: string | null;
     deadline?: string;
     deadlineType?: string | null;
     tags?: string[];
@@ -23,9 +24,13 @@ interface PosterCardProps {
 }
 
 export function PosterCard({ poster }: PosterCardProps) {
-  const dDay = getDDay(poster.deadline);
-  const soon = isDeadlineSoon(poster.deadline);
-  const closed = dDay === "마감";
+  const applicationState = getPosterApplicationState({
+    applicationStartAt: poster.applicationStartAt,
+    applicationEndAt: poster.deadline,
+    deadlineType: poster.deadlineType,
+  });
+  const soon = applicationState.status === "due_today" || applicationState.status === "closing_soon";
+  const closed = applicationState.status === "closed";
   const tags = poster.tags ?? [];
   const [category, region] = tags;
   const imageUrls = resolvePosterImageGallery(poster.images ?? [], poster.image, poster.sourceUrl);
@@ -68,7 +73,7 @@ export function PosterCard({ poster }: PosterCardProps) {
           <div className="mt-4 space-y-2 text-xs font-bold text-slate-500">
             <p className={`inline-flex items-center gap-1.5 font-black ${soon && !closed ? "text-rose-700" : "text-slate-700"}`}>
               <CalendarClock size={14} />
-              {deadlineLabel(poster.deadline, poster.deadlineType, dDay)}
+              {deadlineLabel(poster.deadline, applicationState)}
             </p>
             {region && (
               <p className="flex items-center gap-1.5">
@@ -122,29 +127,21 @@ export function PosterCard({ poster }: PosterCardProps) {
   );
 }
 
-function deadlineLabel(deadline: string | undefined, deadlineType: string | null | undefined, dDay: string) {
-  if (!deadline) {
-    if (deadlineType === "ongoing") return "상시 모집";
-    if (deadlineType === "until_exhausted") return "소진 시 마감";
-    if (deadlineType === "scheduled") return "모집 예정";
-    return "일정 확인 필요";
+function deadlineLabel(
+  deadline: string | undefined,
+  state: ReturnType<typeof getPosterApplicationState>,
+) {
+  if (!deadline) return state.label;
+  if (state.status === "closed") return "신청 마감";
+  if (state.status === "due_today") return "오늘 마감";
+  if (state.status === "needs_confirmation") return state.label;
+
+  const formatted = formatPosterDate(deadline);
+  if (!formatted) return "기관 공고 확인";
+  if (typeof state.daysLeft === "number" && state.daysLeft > 0) {
+    return `${formatted}까지 · D-${state.daysLeft}`;
   }
-  if (dDay === "마감") return "신청 마감";
-  if (dDay === "D-Day") return "오늘 마감";
-
-  const date = new Date(deadline);
-  if (Number.isNaN(date.getTime())) return "기관 공고 확인";
-
-  const formatted = formatKoreanDate(date);
-
-  return `${formatted}까지 · ${dDay}`;
-}
-
-function formatKoreanDate(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}.${month}.${day}`;
+  return `${formatted}까지 · ${state.label}`;
 }
 
 function compactNumber(value?: number) {
