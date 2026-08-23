@@ -173,7 +173,7 @@ export default function AdminReportsPage() {
         actor_user_id: user?.id ?? null,
         target_type: "comment",
         target_id: commentId,
-        action_type: status === "hidden" ? "hide" : "restore",
+        action_type: status === "hidden" ? "hide" : "update",
         metadata_json: { status },
       });
     }

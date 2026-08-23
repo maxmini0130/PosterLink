@@ -46,12 +46,33 @@ export async function PATCH(
   }
 
   const sa = adminClient();
+  const { data: previousProfile, error: previousProfileError } = await sa
+    .from("profiles")
+    .select("role")
+    .eq("id", targetId)
+    .single();
+
+  if (previousProfileError) {
+    return NextResponse.json({ error: previousProfileError.message }, { status: 500 });
+  }
+
   const { error } = await sa
     .from("profiles")
     .update({ role: newRole, updated_at: new Date().toISOString() })
     .eq("id", targetId);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await sa.from("admin_actions").insert({
+    actor_user_id: caller.id,
+    target_type: "user",
+    target_id: targetId,
+    action_type: "update",
+    metadata_json: {
+      previousRole: previousProfile?.role ?? null,
+      newRole,
+    },
+  });
 
   return NextResponse.json({ success: true, role: newRole });
 }

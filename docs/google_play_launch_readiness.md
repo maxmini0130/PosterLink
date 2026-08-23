@@ -28,6 +28,9 @@ PosterLink Android 앱을 Google Play 내부 테스트 또는 프로덕션 심�
 - `pnpm --dir apps/mobile typecheck` 통과
 - `pnpm --dir apps/mobile dlx expo-doctor` 18/18 통과
 - 로컬 Gradle `:app:assembleDebug`는 코드 문제가 아니라 로컬 `JAVA_HOME`/`java` 미설정 때문에 실행되지 않았다.
+- Google Play Console은 개발자 신원 확인 심사 중이다.
+  - 신원 확인 완료 전에는 첫 앱 생성과 연락처 전화번호 인증이 막혀 있다.
+  - Google 승인 메일 수신 후 앱 생성, 정책 입력, 내부 테스트 트랙 생성을 이어간다.
 
 ## 남은 차단 또는 수동 확인
 

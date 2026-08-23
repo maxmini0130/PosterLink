@@ -42,6 +42,8 @@
   이미지 없는 텍스트 공고 후보의 승인, 보류, 반려 기준
 - `google_play_launch_readiness.md`
   Google Play 내부 테스트와 출시 심사 전 Android 제출 준비 기준
+- `launch_process_review_20260823.md`
+  출시/운영 프로세스 전체 점검 결과와 우선순위별 남은 ToDo
 
 ## 권장 1차 구현 전략
 
