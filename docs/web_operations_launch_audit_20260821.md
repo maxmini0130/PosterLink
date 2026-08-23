@@ -87,3 +87,4 @@
   - 실행 시 테스트 대상과 원복 범위를 먼저 정한 뒤 별도 승인 절차로 진행한다.
 - Supabase security advisor 경고 정리
   - RLS 활성화 상태와 별개로 함수/권한/Auth 보안 설정을 후속 점검한다.
+  - 1차 hardening migration은 준비했으며, 운영 DB 적용은 별도 승인 후 진행한다.

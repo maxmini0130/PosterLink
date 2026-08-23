@@ -512,3 +512,14 @@ pnpm dlx eas-cli@latest submit --platform ios --profile production --id 8f8b7d2a
   - 일부 `SECURITY DEFINER` 함수의 anon/authenticated 실행 권한
   - Auth leaked password protection 비활성화
 - 위 advisor 경고는 후속 보안 정리 항목으로 남겼다.
+
+## 2026-08-23 security advisor 1차 migration 준비
+
+- `supabase/migrations/20260823010000_harden_security_advisor_warnings.sql`을 추가했다.
+- 포함 범위:
+  - 오래된 `SECURITY DEFINER` 함수의 `search_path` 고정
+  - 트리거 전용 함수의 직접 RPC 실행 권한 회수
+  - 내부 유지보수/기관 해석 함수의 직접 RPC 실행 권한 회수
+  - 관리자 트래픽 집계 RPC와 semantic embedding match RPC를 service role 전용으로 제한
+- 공개 검색/추천 RPC, `increment_points`, extension schema 이동, Auth leaked password protection은 영향 범위가 달라 별도 후속으로 남겼다.
+- 운영 DB 적용은 migration push를 수반하므로 별도 승인 후 진행한다.
