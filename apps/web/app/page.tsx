@@ -25,6 +25,7 @@ import { Header } from "./components/Header";
 import { PosterCard } from "./components/PosterCard";
 import { fetchCategoryRegionNames, fetchPosterImages } from "./lib/posterHelpers";
 import { fetchPosterMetricCounts } from "./lib/posterMetrics";
+import { getPosterApplicationState, isPosterAcceptingApplications } from "../lib/posterApplication";
 
 const categories = ["전체", "청년", "소상공인", "창업", "교육", "문화·행사", "복지", "채용", "주거"] as const;
 const feedTabs = [
@@ -64,7 +65,7 @@ const emptyHomeSummary: HomeSummary = {
 };
 
 export default function Home() {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [posters, setPosters] = useState<any[]>([]);
   const [urgentPosters, setUrgentPosters] = useState<any[]>([]);
@@ -140,11 +141,13 @@ export default function Home() {
         const fetchPublicPosters = async () => {
           let publicQuery = supabase
             .from("posters")
-            .select("id, title, source_org_name, application_end_at, created_at, poster_status, thumbnail_url, source_key, summary_short")
+            .select("id, title, source_org_name, application_start_at, application_end_at, deadline_type, created_at, poster_status, thumbnail_url, source_key, summary_short")
             .eq("poster_status", "published");
 
           if (hideClosedPosters) {
-            publicQuery = publicQuery.or(`application_end_at.is.null,application_end_at.gte.${nowIso}`);
+            publicQuery = publicQuery
+              .or(`application_start_at.is.null,application_start_at.lte.${nowIso}`)
+              .or(`application_end_at.gte.${nowIso},and(application_end_at.is.null,deadline_type.in.(ongoing,until_exhausted))`);
           }
 
           const { data: publicData, error: publicError } = await publicQuery
@@ -152,7 +155,14 @@ export default function Home() {
             .limit(36);
 
           if (publicError) throw publicError;
-          return publicData ?? [];
+          const posters = publicData ?? [];
+          return hideClosedPosters
+            ? posters.filter((poster) => isPosterAcceptingApplications({
+                applicationStartAt: poster.application_start_at,
+                applicationEndAt: poster.application_end_at,
+                deadlineType: poster.deadline_type,
+              })).slice(0, 36)
+            : posters;
         };
 
         const fetchUrgentPosters = async () => {
@@ -161,15 +171,21 @@ export default function Home() {
 
           const { data: urgentData } = await supabase
             .from("posters")
-            .select("id, title, source_org_name, application_end_at, created_at, poster_status, thumbnail_url, source_key, summary_short")
+            .select("id, title, source_org_name, application_start_at, application_end_at, deadline_type, created_at, poster_status, thumbnail_url, source_key, summary_short")
             .eq("poster_status", "published")
             .gte("application_end_at", nowIso)
             .lte("application_end_at", sevenDaysLater.toISOString())
             .order("application_end_at", { ascending: true })
             .limit(8);
 
-          if (urgentData && urgentData.length > 0) {
-            return { urgentData, urgentPosters: await attachPosterMeta(urgentData) };
+          const acceptingUrgentData = (urgentData ?? []).filter((poster) => isPosterAcceptingApplications({
+            applicationStartAt: poster.application_start_at,
+            applicationEndAt: poster.application_end_at,
+            deadlineType: poster.deadline_type,
+          }));
+
+          if (acceptingUrgentData.length > 0) {
+            return { urgentData: acceptingUrgentData, urgentPosters: await attachPosterMeta(acceptingUrgentData) };
           }
           return { urgentData: [] as any[], urgentPosters: [] as any[] };
         };
@@ -210,8 +226,11 @@ export default function Home() {
   }, [hideClosedPosters]);
 
   const isClosed = (poster: any) => {
-    if (!poster.application_end_at) return false;
-    return new Date(poster.application_end_at).getTime() < Date.now();
+    return !isPosterAcceptingApplications({
+      applicationStartAt: poster.application_start_at,
+      applicationEndAt: poster.application_end_at,
+      deadlineType: poster.deadline_type,
+    });
   };
 
   const availablePosters = useMemo(() => {
@@ -222,7 +241,11 @@ export default function Home() {
     if (activeFeed === "urgent") {
       const urgent = urgentPosters.length > 0 ? urgentPosters : availablePosters;
       return urgent
-        .filter((poster) => !poster.application_end_at || new Date(poster.application_end_at).getTime() >= Date.now())
+        .filter((poster) => isPosterAcceptingApplications({
+          applicationStartAt: poster.application_start_at,
+          applicationEndAt: poster.application_end_at,
+          deadlineType: poster.deadline_type,
+        }))
         .sort((a, b) => {
           const aTime = a.application_end_at ? new Date(a.application_end_at).getTime() : Number.MAX_SAFE_INTEGER;
           const bTime = b.application_end_at ? new Date(b.application_end_at).getTime() : Number.MAX_SAFE_INTEGER;
@@ -242,14 +265,6 @@ export default function Home() {
     userProfile?.regions?.level === "sigungu"
       ? userProfile?.regions?.full_name || userProfile?.regions?.name
       : userProfile?.regions?.name || "전국";
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="h-10 w-10 rounded-full border-4 border-slate-200 border-t-blue-700" />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-[#f6f8fb] pb-24 text-slate-950">
@@ -374,7 +389,13 @@ export default function Home() {
             ))}
           </div>
 
-          {feedPosters.length > 0 ? (
+          {loading && feedPosters.length === 0 ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {[1, 2, 3, 4].map((item) => (
+                <div key={item} className="h-80 animate-pulse border border-slate-200 bg-white" />
+              ))}
+            </div>
+          ) : feedPosters.length > 0 ? (
             <motion.div
               initial="hidden"
               whileInView="visible"
@@ -392,7 +413,9 @@ export default function Home() {
                       id: poster.id,
                       title: poster.title,
                       org: poster.source_org_name,
+                      applicationStartAt: poster.application_start_at,
                       deadline: poster.application_end_at,
+                      deadlineType: poster.deadline_type,
                       image: poster.thumbnail_url,
                       images: poster.images,
                       sourceUrl: poster.source_key,
@@ -432,7 +455,12 @@ export default function Home() {
               </div>
               <div className="grid gap-0 divide-y divide-slate-200 md:grid-cols-2 md:divide-x md:divide-y-0">
                 {urgentPosters.slice(0, 4).map((poster) => {
-                  const daysLeft = Math.ceil((new Date(poster.application_end_at).getTime() - Date.now()) / 86400000);
+                  const applicationState = getPosterApplicationState({
+                    applicationStartAt: poster.application_start_at,
+                    applicationEndAt: poster.application_end_at,
+                    deadlineType: poster.deadline_type,
+                  });
+                  const daysLeft = applicationState.daysLeft ?? 0;
                   return (
                     <Link
                       key={`urgent-${poster.id}`}

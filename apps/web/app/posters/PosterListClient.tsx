@@ -299,9 +299,13 @@ function PosterListPageContent({
 
     const normalizedTerm = finalTerm.trim();
     pendingSearchLogRef.current = normalizedTerm;
+    const shouldFetchImmediately = normalizedTerm === searchQuery.trim();
     setSearchQuery(normalizedTerm);
     setIsSearchFocused(false);
     searchInputRef.current?.blur();
+    if (shouldFetchImmediately) {
+      void fetchPosters(normalizedTerm);
+    }
   };
 
   const removeRecentSearch = (term: string) => {

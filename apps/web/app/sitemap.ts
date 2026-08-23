@@ -2,6 +2,7 @@ import { MetadataRoute } from "next";
 import { createServerClient } from "@supabase/ssr";
 import { getAppOrigin } from "../lib/siteUrl";
 import { taxonomySlug, type DiscoveryTaxonomy } from "../lib/discoveryRoutes";
+import { isPosterAcceptingApplications } from "../lib/posterApplication";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const { data: posters } = await supabase
     .from("posters")
-    .select("id, updated_at, application_end_at")
+    .select("id, updated_at, application_start_at, application_end_at, deadline_type")
     .eq("poster_status", "published")
     .order("updated_at", { ascending: false })
     .limit(1000);
@@ -42,9 +43,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${appOrigin}/terms`, lastModified: new Date(), changeFrequency: "yearly", priority: 0.3 },
   ];
 
-  const now = Date.now();
   const posterRoutes: MetadataRoute.Sitemap = (posters ?? []).map((poster) => {
-    const active = !poster.application_end_at || new Date(poster.application_end_at).getTime() >= now;
+    const active = isPosterAcceptingApplications({
+      applicationStartAt: poster.application_start_at,
+      applicationEndAt: poster.application_end_at,
+      deadlineType: poster.deadline_type,
+    });
     return {
       url: `${appOrigin}/posters/${poster.id}`,
       lastModified: new Date(poster.updated_at ?? Date.now()),
@@ -58,25 +62,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const categoryById = new Map(categories.map((category) => [category.id, category]));
   const regionById = new Map(regions.map((region) => [region.id, region]));
   const publishedIds = new Set(posterIds);
-  const categoryIds = new Set(
-    (categoryLinksRes.data ?? []).filter((link: any) => publishedIds.has(link.poster_id)).map((link: any) => link.category_id),
-  );
-  const regionIds = new Set(
-    (regionLinksRes.data ?? []).filter((link: any) => publishedIds.has(link.poster_id)).map((link: any) => link.region_id),
-  );
 
-  const categoryRoutes: MetadataRoute.Sitemap = [...categoryIds]
-    .map((id) => categoryById.get(id))
-    .filter((item): item is DiscoveryTaxonomy => Boolean(item))
+  const categoryRoutes: MetadataRoute.Sitemap = categories
     .map((category) => ({
       url: `${appOrigin}/categories/${taxonomySlug(category, "CAT")}`,
       lastModified: new Date(),
       changeFrequency: "daily",
       priority: 0.7,
     }));
-  const regionRoutes: MetadataRoute.Sitemap = [...regionIds]
-    .map((id) => regionById.get(id))
-    .filter((item): item is DiscoveryTaxonomy => Boolean(item))
+  const regionRoutes: MetadataRoute.Sitemap = regions
     .map((region) => ({
       url: `${appOrigin}/regions/${taxonomySlug(region, "REG")}`,
       lastModified: new Date(),
@@ -91,6 +85,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     for (const regionId of regionsByPoster.get(posterId) ?? []) {
       for (const categoryId of categoriesByPoster.get(posterId) ?? []) {
         combinationKeys.add(`${regionId}:${categoryId}`);
+      }
+    }
+  }
+  if (combinationKeys.size === 0) {
+    for (const region of regions.filter((item) => item.level !== "nation").slice(0, 50)) {
+      for (const category of categories.slice(0, 10)) {
+        combinationKeys.add(`${region.id}:${category.id}`);
       }
     }
   }
