@@ -76,7 +76,7 @@
 - [x] `poster_link_click_logs` DB 마이그레이션 운영 반영
 - [x] `admin_actions` 타입 확장 DB 마이그레이션 운영 반영
 - [x] 댓글 중복 신고 방지 DB 마이그레이션 운영 반영
-- [ ] Supabase RLS 정책 운영 DB에서 재확인
+- [x] Supabase RLS 정책 운영 DB에서 재확인
 - [x] `poster-originals` Storage 업로드/공개 URL 정책 확인
 - [x] 서비스 role key가 클라이언트 번들에 포함되지 않는지 확인
 - [ ] `.env.local` 값과 Vercel 환경변수 동기화 확인
@@ -101,6 +101,11 @@
 - [ ] Supabase Edge Function 로그 조회 절차 확인
 - [ ] 장애 시 임시 공지 발송 절차 확인
 - [ ] 관리자/운영자 비상 계정 확보
+- [ ] Supabase security advisor 경고 정리
+  - 함수 `search_path` 고정
+  - 공개 schema extension 점검
+  - 불필요한 `SECURITY DEFINER` RPC 실행 권한 회수
+  - Auth leaked password protection 활성화 여부 결정
 
 ## 6. 배포
 

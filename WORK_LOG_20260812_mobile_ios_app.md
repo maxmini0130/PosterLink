@@ -497,3 +497,18 @@ pnpm dlx eas-cli@latest submit --platform ios --profile production --id 8f8b7d2a
   - Finished at: `2026-08-23 19:13:03 KST`
   - AAB: https://expo.dev/artifacts/eas/61GHsfStsT0BeWKt0286UTtcqWQ7JXkXr2ZTsKQtUFc.aab
 - 다음 작업은 Play Console 계정 상태 확인, 앱 생성, 내부 테스트 또는 비공개 테스트 트랙에 최신 AAB 업로드다.
+
+## 2026-08-23 운영 DB RLS 재확인
+
+- 운영 DB 카탈로그 조회로 `public`/`storage`의 앱 사용 테이블 RLS 활성화를 확인했다.
+- 핵심 테이블에는 정책이 존재한다.
+  - `profiles`, `posters`, `poster_links`, `poster_images`, `comments`, `favorites`, `notifications`
+  - `poster_requests`, `point_logs`, `institution_follows`, `collection_sources`, `poster_notice_candidates`
+  - `poster_view_logs`, `poster_link_click_logs`, `site_visit_logs`, `admin_actions`, `search_logs`
+- `storage.objects`에는 업로드/공개 읽기 정책이 존재한다.
+- Supabase security advisor는 RLS 누락이 아닌 별도 경고를 보고했다.
+  - 함수 `search_path` 미고정
+  - `pg_net`, `vector` extension의 public schema 설치
+  - 일부 `SECURITY DEFINER` 함수의 anon/authenticated 실행 권한
+  - Auth leaked password protection 비활성화
+- 위 advisor 경고는 후속 보안 정리 항목으로 남겼다.

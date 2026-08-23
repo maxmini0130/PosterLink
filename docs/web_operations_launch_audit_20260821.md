@@ -61,6 +61,10 @@
   - `poster-originals`: public bucket
   - `poster-requests`: public bucket
 - `get_popular_regions`, `get_recommended_posters` RPC는 service role 읽기 호출에서 정상 응답을 반환했다.
+- 운영 DB RLS 재확인:
+  - `public`/`storage`의 앱 사용 테이블 전체에서 RLS 활성화를 확인했다.
+  - 핵심 테이블(`profiles`, `posters`, `poster_links`, `poster_images`, `comments`, `favorites`, `notifications`, `poster_requests`, `institution_follows`, `collection_sources`, `poster_notice_candidates` 등)에 정책이 존재한다.
+  - Supabase security advisor는 RLS 누락이 아닌 함수 `search_path`, 공개 schema extension, `SECURITY DEFINER` RPC 실행 권한, Auth leaked password protection 경고를 별도 후속 항목으로 보고했다.
 
 ## 남은 수동/운영 작업
 
@@ -81,3 +85,5 @@
 - 실제 브라우저에서 Google/Kakao/Naver OAuth 로그인 1회씩 수동 확인
 - 관리자 공지 발송, 댓글 숨김/신고 기각, 사용자 역할 변경은 운영 데이터 변경을 수반하므로 다음 작업으로 보류한다.
   - 실행 시 테스트 대상과 원복 범위를 먼저 정한 뒤 별도 승인 절차로 진행한다.
+- Supabase security advisor 경고 정리
+  - RLS 활성화 상태와 별개로 함수/권한/Auth 보안 설정을 후속 점검한다.
