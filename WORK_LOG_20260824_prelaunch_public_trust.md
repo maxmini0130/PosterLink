@@ -41,6 +41,7 @@
 - `pnpm --dir apps/mobile typecheck`
 - `pnpm --dir apps/mobile check:play-readiness`
 - `pnpm --dir apps/mobile exec expo config --type public`
+- `pnpm --dir apps/web test:e2e -- e2e/posters-list.spec.ts e2e/seo.spec.ts e2e/home.spec.ts` 통과: 35 passed
 - 로컬 `next start` 후 확인
   - `/` 초기 HTML에 홈 H1과 `/posters` 검색 진입 링크 포함
   - `/sitemap.xml`에 포스터, 지역, 카테고리, 지역-카테고리, 기관 상세 URL 포함
