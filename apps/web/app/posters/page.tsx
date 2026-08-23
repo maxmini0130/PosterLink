@@ -57,7 +57,7 @@ export default async function PosterListPage({ searchParams }: { searchParams: P
     "@context": "https://schema.org",
     "@type": "ItemList",
     name: "PosterLink 공공 공고",
-    numberOfItems: discovery.posters.length,
+    numberOfItems: discovery.totalCount,
     itemListElement: discovery.posters.slice(0, 24).map((poster, index) => ({
       "@type": "ListItem",
       position: index + 1,
@@ -74,6 +74,7 @@ export default async function PosterListPage({ searchParams }: { searchParams: P
       />
       <PosterListClient
         initialPosters={discovery.posters}
+        initialTotalCount={discovery.totalCount}
         initialCategories={discovery.categories}
         initialRegions={discovery.regions}
         initialQuery={filters.query}
