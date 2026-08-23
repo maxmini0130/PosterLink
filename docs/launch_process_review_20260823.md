@@ -15,6 +15,29 @@ PosterLink의 웹 운영, DB/보안, 관리자 검수, 알림, 모바일 앱 출
 - Android production AAB는 API 36 기준으로 준비되어 있다.
 - Google Play Console은 개발자 신원 확인 심사 중이라 앱 생성/제출을 진행할 수 없다.
 
+## 2026-08-23 자동 처리 완료
+
+- 관리자 기준정보 관리에서 예전 사용자 권한 탭을 제거했다.
+  - 사용자 권한 변경은 슈퍼관리자 전용 `/admin/users`로 일원화했다.
+- 관리자 운영 화면 비파괴 E2E를 추가하고 통과를 확인했다.
+  - `공지 발송 화면과 최근 공지 API`
+  - `기준정보 관리 카테고리/지역 탭`
+  - `신고 관리 화면`
+- 자동 검증을 다시 수행했다.
+  - `pnpm --filter web lint` 통과
+  - `pnpm --filter web exec tsc --noEmit --pretty false` 통과
+  - `pnpm test` 통과, 53 passed
+  - `pnpm --dir apps/web exec playwright test e2e/authenticated/admin/operations.spec.ts --project=admin` 통과, 3 passed
+  - `pnpm --filter web build` 통과
+  - `pnpm --dir apps/mobile typecheck` 통과
+  - `pnpm --dir apps/mobile check:play-readiness` 통과
+  - `pnpm --dir apps/mobile dlx expo-doctor` 통과, 18/18 checks
+  - `pnpm dlx supabase db lint --linked` 통과
+- 운영 조회성 점검을 수행했다.
+  - Supabase Edge Functions: `process-ocr` ACTIVE v11, `check-deadlines` ACTIVE v5, `notify-new-match` ACTIVE v4
+  - Vercel production deployment `dpl_6CmCAAmzDNojbjSGGzkXs2Q2s6Hv` Ready
+  - `https://www.posterlink.kr/privacy`, `/terms`, `/robots.txt`, `/sitemap.xml`, `/opengraph-image` 200 확인
+
 ## 바로 고친 코드 리스크
 
 이번 점검 중 운영 검수에서 터질 수 있는 작은 불일치를 발견해 수정했다.
@@ -24,6 +47,12 @@ PosterLink의 웹 운영, DB/보안, 관리자 검수, 알림, 모바일 앱 출
   - 복구 기록은 `action_type = update`, `metadata_json.status = normal`로 남기도록 수정했다.
 - 슈퍼관리자 사용자 권한 변경 API(`/api/admin/users/[id]`)가 실제 역할 변경은 수행하지만 `admin_actions` 로그를 남기지 않았다.
   - 이전 역할과 새 역할을 `metadata_json.previousRole`, `metadata_json.newRole`로 기록하도록 수정했다.
+- 관리자 기준정보 관리(`/admin/settings`)에 예전 사용자 권한 탭이 남아 있었다.
+  - 실제 권한 변경은 슈퍼관리자 전용 `/admin/users` API와 화면으로 일원화했다.
+  - 기준정보 관리 화면에서는 카테고리와 지역만 다루도록 정리했다.
+- 관리자 운영 화면의 비파괴 E2E를 추가했다.
+  - 공지 발송 화면과 최근 공지 API, 신고 관리 화면, 기준정보 관리 탭 구성을 확인한다.
+  - 전체 공지 발송, 신고 처리, 권한 변경처럼 운영 데이터가 바뀌는 버튼은 수동 승인 검수로 남겼다.
 
 ## 출시 전 필수 ToDo
 
@@ -64,6 +93,12 @@ PosterLink의 웹 운영, DB/보안, 관리자 검수, 알림, 모바일 앱 출
 - 시스템 공지 발송과 사용자 알림 노출
 - 슈퍼관리자 사용자 역할 변경과 작업 로그 기록
 - 카테고리/지역 기준정보 추가, 수정, 삭제
+
+자동으로 완료한 부분:
+
+- 공지 발송 화면 접근, 입력 폼, 최근 공지 API 응답
+- 신고 관리 화면 접근과 주요 탭 노출
+- 기준정보 관리 화면에서 카테고리/지역 탭만 노출
 
 ### 4. 알림/자동화 검수
 
@@ -113,8 +148,8 @@ Google Play Console 신원 확인이 끝난 뒤 이어서 진행한다.
   - 비로그인 사용자용 홈 배너, 점검 페이지, 모바일 push broadcast는 별도 기능이 필요하다.
 - 관리자 운영 변경 작업 일부는 E2E보다 수동 검수에 의존한다.
   - 공지 발송, 신고 처리, 역할 변경, 기준정보 변경의 Playwright 커버리지를 보강하는 편이 좋다.
-- 관리자 기준정보 관리(`/admin/settings`)와 슈퍼관리자 권한 관리(`/admin/users`)가 역할 변경 기능을 일부 중복 제공한다.
-  - 실제 권한 변경은 슈퍼관리자 전용 API로 통일하는 편이 안전하다.
+- 사용자 권한 관리는 슈퍼관리자 전용 `/admin/users`로 일원화했다.
+  - 실제 역할 변경 버튼 검수는 운영 데이터 변경을 수반하므로 테스트 대상 계정 지정 후 수동으로 진행한다.
 - 공개 검색/추천 RPC는 브라우저 직접 호출 구조가 일부 남아 있다.
   - 보안 advisor 경고를 완전히 줄이려면 API route 경유 또는 `SECURITY INVOKER` 전환 설계가 필요하다.
 - `pg_net`, `vector` extension public schema 경고는 아직 남아 있다.

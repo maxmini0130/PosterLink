@@ -71,6 +71,10 @@
 - Vercel production 배포 상태:
   - `vercel inspect www.posterlink.kr` 결과 deployment `dpl_6Zd1mAqyZEmfxHjpia8vFc4b6YNF`가 `Ready` 상태다.
   - aliases: `https://www.posterlink.kr`, `https://posterlink.kr`, `https://poster-link-web.vercel.app`
+- 2026-08-23 재확인:
+  - `vercel inspect www.posterlink.kr` 결과 deployment `dpl_6CmCAAmzDNojbjSGGzkXs2Q2s6Hv`가 `Ready` 상태다.
+  - aliases: `https://www.posterlink.kr`, `https://posterlink.kr`, `https://poster-link-web.vercel.app`, `https://poster-link-web-git-main-maxmini0130s-projects.vercel.app`
+  - `https://www.posterlink.kr/privacy`, `/terms`, `/robots.txt`, `/sitemap.xml`, `/opengraph-image` 200 응답을 확인했다.
 
 ## Supabase DB/Storage
 
@@ -103,6 +107,9 @@
 - Supabase Edge Function 로그 조회 절차 확인 완료
   - 현재 함수 목록: `process-ocr` ACTIVE v11, `check-deadlines` ACTIVE v5, `notify-new-match` ACTIVE v4
   - 세부 절차는 `docs/edge_function_logs_runbook_20260823.md`에 기록했다.
+- Supabase 운영 DB와 Edge Function 상태 재확인
+  - `pnpm dlx supabase db lint --linked` 통과
+  - `process-ocr` ACTIVE v11, `check-deadlines` ACTIVE v5, `notify-new-match` ACTIVE v4
 - 장애 시 임시 공지 발송 절차 확인 완료
   - 세부 절차와 공지 문구 템플릿은 `docs/incident_notice_runbook_20260823.md`에 기록했다.
   - 실제 전체 공지 발송은 운영 데이터 변경을 수반하므로 이번 점검에서는 수행하지 않았다.
