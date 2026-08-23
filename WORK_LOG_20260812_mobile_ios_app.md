@@ -523,3 +523,28 @@ pnpm dlx eas-cli@latest submit --platform ios --profile production --id 8f8b7d2a
   - 관리자 트래픽 집계 RPC와 semantic embedding match RPC를 service role 전용으로 제한
 - 공개 검색/추천 RPC, `increment_points`, extension schema 이동, Auth leaked password protection은 영향 범위가 달라 별도 후속으로 남겼다.
 - 운영 DB 적용은 migration push를 수반하므로 별도 승인 후 진행한다.
+
+## 2026-08-23 security advisor hardening 운영 적용
+
+- 사용자 승인 후 운영 DB에 security hardening migration을 적용했다.
+  - `20260823010000_harden_security_advisor_warnings.sql`
+  - `20260823011000_finish_low_risk_security_hardening.sql`
+- 적용 내용:
+  - 오래된 helper/RPC 함수의 `search_path` 고정
+  - 트리거 전용 함수의 직접 RPC 실행 권한 회수
+  - 내부 유지보수/기관 해석 함수의 직접 RPC 실행 권한 회수
+  - 관리자 트래픽 집계 RPC와 semantic embedding match RPC를 service role 전용으로 제한
+  - 구버전 추천/지역 RPC의 브라우저 실행 권한 회수
+  - `increment_points` anonymous 실행 권한 회수
+- 검증:
+  - `pnpm dlx supabase db lint --linked` 통과
+  - 운영 semantic search smoke test 통과
+  - 관리자 트래픽 E2E 통과
+  - `pnpm --filter web lint` 통과
+  - `pnpm --filter web exec tsc --noEmit --pretty false` 통과
+  - `pnpm test` 통과
+- 남은 보안 후속:
+  - 공개 검색/추천 RPC 구조 개선 또는 `SECURITY INVOKER` 전환 검토
+  - `increment_points`를 관리자 API route 경유로 이전
+  - `pg_net`, `vector` extension schema 이동 영향 검토
+  - Supabase Auth leaked password protection 활성화 여부 결정

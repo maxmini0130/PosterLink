@@ -21,6 +21,21 @@
 - 내부 유지보수/기관 해석 함수의 직접 RPC 실행 권한을 `anon`, `authenticated`, `PUBLIC`에서 회수한다.
 - 관리자 트래픽 집계 RPC와 semantic embedding match RPC는 service role 실행만 남긴다.
 
+운영 DB 적용: 2026-08-23
+
+## 2차 low-risk migration
+
+`supabase/migrations/20260823011000_finish_low_risk_security_hardening.sql`
+
+- `posterlink_url_host`, `posterlink_url_directory`, `update_updated_at_column`의 `search_path`를 고정한다.
+- 직접 사용하지 않는 구버전/보조 RPC의 브라우저 실행 권한을 회수한다.
+  - `get_popular_regions`
+  - `get_recommended_posters`
+- 현재 추천 RPC `get_recommended_posters_v2`는 로그인 사용자와 service role만 실행 가능하게 제한한다.
+- `increment_points`는 anonymous 실행 권한을 회수하고 authenticated/service role 실행만 남긴다. 함수 내부의 관리자 역할 검사는 유지한다.
+
+운영 DB 적용: 2026-08-23
+
 ## 의도적으로 1차 범위에서 제외
 
 - 공개 검색/추천 RPC 전체 폐쇄
@@ -28,18 +43,21 @@
   - 권한을 더 줄이려면 API route 경유로 구조를 바꾸거나 `SECURITY INVOKER` 전환 검증이 필요하다.
 - `increment_points`
   - 관리자 화면이 직접 호출하지만 함수 내부에서 `auth.uid()`의 `admin`/`super_admin` 역할을 확인한다.
+  - anonymous 실행 권한은 회수했고, authenticated/service role 실행만 남겼다.
   - 장기적으로는 관리자 API route로 옮겨 service role만 호출하게 정리하는 편이 낫다.
 - `pg_net`, `vector` extension의 public schema 경고
   - extension schema 이동은 의존 SQL과 타입 참조 영향이 커서 별도 migration으로 다룬다.
 - Auth leaked password protection
   - Supabase Auth 대시보드 설정 항목이다. 코드 migration으로 처리하지 않는다.
 
-## 운영 적용 전 확인
+## 적용 후 확인
 
-- migration SQL은 운영 DB 쓰기를 수반하므로 적용 전 별도 승인이 필요하다.
-- 적용 후 확인:
-  - `pnpm dlx supabase db push --linked`
-  - `pnpm dlx supabase db advisors --linked --type security`
-  - `pnpm --filter web lint`
-  - `pnpm --filter web exec tsc --noEmit --pretty false`
-  - 관리자 트래픽 API와 semantic search 운영 smoke test
+- `pnpm dlx supabase db push --linked`로 두 migration을 운영 DB에 적용했다.
+- `pnpm dlx supabase db lint --linked` 통과
+- `POST https://www.posterlink.kr/api/posters/semantic-search` 운영 smoke test 통과
+- 관리자 트래픽 E2E 통과
+- `pnpm --filter web lint` 통과
+- `pnpm --filter web exec tsc --noEmit --pretty false` 통과
+- `pnpm test` 통과
+
+남은 advisor 경고는 공개 검색/추천 RPC, extension schema, Auth leaked password protection처럼 별도 설계 또는 대시보드 설정이 필요한 항목이다.

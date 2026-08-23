@@ -102,11 +102,11 @@
 - [ ] 장애 시 임시 공지 발송 절차 확인
 - [ ] 관리자/운영자 비상 계정 확보
 - [ ] Supabase security advisor 경고 정리
-  - 1차 migration 준비: `supabase/migrations/20260823010000_harden_security_advisor_warnings.sql`
-  - 운영 DB 적용은 별도 승인 후 진행
-  - 함수 `search_path` 고정
+  - 1차/2차 low-risk hardening migration 운영 DB 적용 완료
+  - 공개 검색/추천 RPC, extension schema, Auth 설정은 후속으로 분리
+  - 함수 `search_path` 고정 일부 완료
   - 공개 schema extension 점검
-  - 불필요한 `SECURITY DEFINER` RPC 실행 권한 회수
+  - 불필요한 `SECURITY DEFINER` RPC 실행 권한 일부 회수
   - Auth leaked password protection 활성화 여부 결정
 
 ## 6. 배포
