@@ -548,3 +548,21 @@ pnpm dlx eas-cli@latest submit --platform ios --profile production --id 8f8b7d2a
   - `increment_points`를 관리자 API route 경유로 이전
   - `pg_net`, `vector` extension schema 이동 영향 검토
   - Supabase Auth leaked password protection 활성화 여부 결정
+
+## 2026-08-23 Vercel/Sentry 환경 동기화 재확인
+
+- Vercel `poster-link-web` 환경변수 목록과 로컬 env 존재 여부를 값 출력 없이 비교했다.
+- Production 런타임 필수 키는 Vercel에 존재한다.
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+  - `SUPABASE_SERVICE_ROLE_KEY`
+  - `NEXT_PUBLIC_APP_URL`
+  - `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`
+  - `OPENAI_API_KEY`
+- Sentry 배포/런타임 설정을 확인했다.
+  - Vercel에 `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`, `NEXT_PUBLIC_SENTRY_DSN` 존재
+  - `withSentryConfig`의 `errorHandler`가 source map 업로드 실패를 빌드 실패로 전파하지 않는다.
+  - 서버/클라이언트 instrumentation은 production + 유효한 DSN에서만 활성화된다.
+- `vercel inspect www.posterlink.kr` 결과 production deployment `dpl_6Zd1mAqyZEmfxHjpia8vFc4b6YNF`가 `Ready` 상태다.
+- `KAKAO_ADMIN_KEY`는 선택 항목으로 계속 보류한다.
+- `OPENAI_API_KEY` Preview 등록은 Vercel CLI preview branch 요구로 보류하고, Production 동작만 출시 기준으로 확인했다.

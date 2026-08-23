@@ -72,14 +72,14 @@
 
 ## 3. 데이터 및 보안
 
-- [ ] Supabase Auth provider redirect URL 운영 도메인 반영
+- [x] Supabase Auth provider redirect URL 운영 도메인 반영
 - [x] `poster_link_click_logs` DB 마이그레이션 운영 반영
 - [x] `admin_actions` 타입 확장 DB 마이그레이션 운영 반영
 - [x] 댓글 중복 신고 방지 DB 마이그레이션 운영 반영
 - [x] Supabase RLS 정책 운영 DB에서 재확인
 - [x] `poster-originals` Storage 업로드/공개 URL 정책 확인
 - [x] 서비스 role key가 클라이언트 번들에 포함되지 않는지 확인
-- [ ] `.env.local` 값과 Vercel 환경변수 동기화 확인
+- [x] `.env.local` 값과 Vercel 환경변수 동기화 확인
 - [x] Edge Function 환경변수 확인 (`OPENAI_API_KEY`, `TAVILY_API_KEY`, Supabase keys)
 - [x] 개인정보처리방침/이용약관 링크와 내용 최종 확인
 - [x] 계정 삭제 API가 사용자 데이터 범위를 의도대로 처리하는지 확인
@@ -95,9 +95,9 @@
 
 ## 5. 관측 및 장애 대응
 
-- [ ] Sentry 프로젝트/조직 설정 확인
+- [x] Sentry 프로젝트/조직 설정 확인
 - [ ] 클라이언트 오류가 Sentry에 수집되는지 확인
-- [ ] Source map 업로드 실패가 빌드를 막지 않는지 확인
+- [x] Source map 업로드 실패가 빌드를 막지 않는지 확인
 - [ ] Supabase Edge Function 로그 조회 절차 확인
 - [ ] 장애 시 임시 공지 발송 절차 확인
 - [ ] 관리자/운영자 비상 계정 확보
@@ -111,7 +111,7 @@
 
 ## 6. 배포
 
-- [ ] Vercel production build 성공 확인
+- [x] Vercel production build 성공 확인
 - [ ] 운영 도메인 `posterlink.kr` / `posterlink.co.kr` 연결 확인
 - [x] `robots.txt`와 `sitemap.xml` 접근 확인
 - [x] Open Graph 이미지/메타데이터 확인

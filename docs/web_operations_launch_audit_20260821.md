@@ -49,6 +49,18 @@
   - Preview 환경은 Vercel CLI가 preview git branch 선택을 요구해 이번 자동 등록 범위에서 제외했다.
 - Vercel 환경에는 `KAKAO_ADMIN_KEY`가 확인되지 않았다.
   - 영향 범위: Kakao 계정 탈퇴 시 Kakao unlink 요청은 생략되고 PosterLink 계정 삭제는 계속 진행된다.
+- 2026-08-23 환경변수 동기화 재확인:
+  - Production 런타임 필수 키(`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_APP_URL`, `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `OPENAI_API_KEY`)는 Vercel에 존재한다.
+  - Sentry 배포 키(`SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`)와 Production DSN(`NEXT_PUBLIC_SENTRY_DSN`)이 Vercel에 존재한다.
+  - `KAKAO_ADMIN_KEY`는 선택 항목으로 보류 중이다.
+  - `OPENAI_API_KEY` Preview 등록은 Vercel CLI preview branch 요구로 보류 중이며, Production 동작은 smoke test로 확인했다.
+- Sentry 설정 재확인:
+  - `apps/web/next.config.mjs`의 `withSentryConfig`는 `org: posterlink`, `project: posterlink-web`를 사용한다.
+  - `errorHandler`가 source map 업로드 실패를 빌드 실패로 전파하지 않고 경고로 처리한다.
+  - 서버/클라이언트 instrumentation은 production이고 DSN이 `https://`로 시작할 때만 활성화된다.
+- Vercel production 배포 상태:
+  - `vercel inspect www.posterlink.kr` 결과 deployment `dpl_6Zd1mAqyZEmfxHjpia8vFc4b6YNF`가 `Ready` 상태다.
+  - aliases: `https://www.posterlink.kr`, `https://posterlink.kr`, `https://poster-link-web.vercel.app`
 
 ## Supabase DB/Storage
 
