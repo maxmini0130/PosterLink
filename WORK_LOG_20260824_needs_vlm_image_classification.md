@@ -179,3 +179,34 @@ Post-apply tier dry-run:
 - `critical_missing_is_real_poster`: 212
 - `critical_missing_deadline_type`: 261
 - calendar/deadlineAlert gate: 119
+
+## Batch 5 production apply
+
+Applied after explicit user approval:
+
+- Approved phrase:
+  `needs-vlm 이미지 분류 batch5 20건 운영 DB 적용 승인합니다.`
+- Command:
+  `pnpm --filter posterlink-crawler image:backfill -- --limit=20 --concurrency=1 "--statuses=published,review" --needs-vlm-only --apply --output=data/results/needs-vlm-image-classification-batch5-apply.json`
+- Candidate count: 20
+- Applied count: 20
+- Failed count: 0
+- `isPoster=true`: 19
+- `isPoster=false`: 1
+- Confidence range: 0.92 to 0.98
+
+Non-poster classification:
+
+- `마포구·금천구 청소년, '행복한 도시 조건 TOP5' 선정(2026.06.14.)`
+  - `news article webpage screenshot`, confidence 0.94
+
+Post-apply poster-detection dry-run:
+
+- Evidence rows: 358
+- `is_real_poster=true`: 353
+- `is_real_poster=false`: 5
+- Ambiguous: 192
+- `needs_vlm`: 192
+
+No batch5 `is_real_poster` evidence rows were applied in this step. That
+conversion requires a separate operating DB approval.
