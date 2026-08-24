@@ -31,9 +31,41 @@ export const FIELD_KEYS = [
   "venue",
 ];
 
+function stripInvalidUnicode(value) {
+  let text = "";
+  const source = String(value ?? "");
+
+  for (let index = 0; index < source.length; index += 1) {
+    const code = source.charCodeAt(index);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = source.charCodeAt(index + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        text += source[index] + source[index + 1];
+        index += 1;
+      }
+      continue;
+    }
+    if (code >= 0xdc00 && code <= 0xdfff) {
+      continue;
+    }
+    text += source[index];
+  }
+
+  return text;
+}
+
+function truncateText(value, limit) {
+  const text = value.slice(0, limit);
+  const lastCode = text.charCodeAt(text.length - 1);
+  if (lastCode >= 0xd800 && lastCode <= 0xdbff) {
+    return text.slice(0, -1);
+  }
+  return text;
+}
+
 function compactText(value, limit = 300) {
-  const text = String(value ?? "").replace(/\s+/g, " ").trim();
-  return text ? text.slice(0, limit) : null;
+  const text = stripInvalidUnicode(value).replace(/\s+/g, " ").trim();
+  return text ? truncateText(text, limit) : null;
 }
 
 function normalizeForMatch(value) {

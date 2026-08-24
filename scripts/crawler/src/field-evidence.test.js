@@ -107,6 +107,38 @@ test("normalizeEvidenceRow canonicalizes known structured fields", () => {
   );
 });
 
+test("normalizeEvidenceRow strips lone surrogate characters", () => {
+  const row = normalizeEvidenceRow({
+    posterId: "poster-1",
+    fieldKey: "deadline_date",
+    valueText: "2026-05-18",
+    valueJson: { date: "2026-05-18" },
+    evidenceText: "Apply by 2026-05-18 \ud83d",
+    evidenceSrc: "body",
+    extractor: "deadline-date-grounded-v1",
+    confidence: 0.9,
+  });
+
+  assert.equal(row.evidence_text, "Apply by 2026-05-18");
+});
+
+test("normalizeEvidenceRow does not split surrogate pairs when truncating", () => {
+  const prefix = "A".repeat(299);
+  const row = normalizeEvidenceRow({
+    posterId: "poster-1",
+    fieldKey: "deadline_date",
+    valueText: "2026-05-18",
+    valueJson: { date: "2026-05-18" },
+    evidenceText: `${prefix}😀 trailing`,
+    evidenceSrc: "body",
+    extractor: "deadline-date-grounded-v1",
+    confidence: 0.9,
+  });
+
+  assert.equal(row.evidence_text.length, 299);
+  assert.equal(row.evidence_text, prefix);
+});
+
 test("readable facts become grounded evidence rows", () => {
   const rows = evidenceRowsFromReadableFacts({
     posterId: "poster-1",
