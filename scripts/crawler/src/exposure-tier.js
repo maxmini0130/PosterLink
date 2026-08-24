@@ -80,6 +80,14 @@ function deadlineTypeAllowsAlerts(value) {
   ].some((token) => normalized.includes(token));
 }
 
+function requiredCriticalFields(fields, thresholds) {
+  const deadlineTypePassed = passesField(fields, "deadline_type", thresholds);
+  const deadlineType = fieldValue(fields.deadline_type);
+  const requiresDeadlineDate = !deadlineTypePassed || deadlineTypeAllowsAlerts(deadlineType);
+
+  return CRITICAL_FIELDS.filter((fieldKey) => fieldKey !== "deadline_date" || requiresDeadlineDate);
+}
+
 export function computeTier(input, thresholds = DEFAULT_EXTRACTION_THRESHOLDS) {
   const fields = input?.fields ?? {};
   const reason = [];
@@ -90,8 +98,9 @@ export function computeTier(input, thresholds = DEFAULT_EXTRACTION_THRESHOLDS) {
   }
   if (input?.hasPosterImage === false) reason.push("poster_image_missing");
 
-  const missingCritical = CRITICAL_FIELDS.filter((fieldKey) => !fields[fieldKey]);
-  const lowCritical = CRITICAL_FIELDS.filter(
+  const criticalFields = requiredCriticalFields(fields, thresholds);
+  const missingCritical = criticalFields.filter((fieldKey) => !fields[fieldKey]);
+  const lowCritical = criticalFields.filter(
     (fieldKey) => fields[fieldKey] && !passesField(fields, fieldKey, thresholds),
   );
   for (const fieldKey of missingCritical) reason.push(`critical_missing_${fieldKey}`);

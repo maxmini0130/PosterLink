@@ -102,3 +102,36 @@ test("deadline gates require fixed deadline type while SEO can still pass", () =
   assert.equal(result.gates.deadlineAlert, false);
   assert.equal(result.gates.calendar, false);
 });
+
+test("non-fixed deadline types do not require a deadline date", () => {
+  const result = computeTier({
+    fields: completeCritical({
+      deadline_date: undefined,
+      deadline_type: { value_json: { type: "until_exhausted" }, confidence: 0.95 },
+    }),
+    contentType: "recruit",
+    isDuplicate: false,
+    hasPosterImage: true,
+  });
+
+  assert.equal(result.tier, "A");
+  assert.equal(result.reason.includes("critical_missing_deadline_date"), false);
+  assert.equal(result.gates.deadlineAlert, false);
+  assert.equal(result.gates.calendar, false);
+});
+
+test("missing deadline type still requires a deadline date", () => {
+  const result = computeTier({
+    fields: completeCritical({
+      deadline_date: undefined,
+      deadline_type: undefined,
+    }),
+    contentType: "recruit",
+    isDuplicate: false,
+    hasPosterImage: true,
+  });
+
+  assert.equal(result.tier, "C");
+  assert.ok(result.reason.includes("critical_missing_deadline_date"));
+  assert.ok(result.reason.includes("critical_missing_deadline_type"));
+});
