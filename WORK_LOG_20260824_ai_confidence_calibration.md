@@ -44,3 +44,24 @@
   a more specific deadline reconciliation step.
 - Applying the updated evidence rows requires explicit operating DB approval.
 
+## Operational Update
+
+- User approved applying the updated field evidence rows.
+- Before apply:
+  - `deadline_date` confidence distribution: 0.42=63, 0.55=4, 0.60=120, 0.75=187, 0.90=23.
+  - `deadline_type` confidence distribution: 0.48=128, 0.80=93.
+- Ran:
+  - `pnpm --filter posterlink-crawler evidence:backfill -- --limit=5000 "--statuses=published,review" --output=data/results/field-evidence-confidence-fix-apply.json --apply`
+- Apply result:
+  - Checked posters: 550.
+  - Evidence rows applied: 3,295.
+  - Failed chunks: 0.
+- Verified on the linked remote project:
+  - `deadline_date` confidence distribution: 0.42=21, 0.55=4, 0.60=160, 0.75=187, 1.00=25.
+  - `deadline_type` confidence distribution: 0.90=221.
+- Re-ran Phase 3 tier dry-run:
+  - `pnpm tier:compute -- --limit=5000 "--statuses=published,review" --output=data/eval/reports/exposure-tier-after-confidence-fix-dryrun.json`
+  - Checked posters: 550.
+  - Evidence rows read: 3,553.
+  - Tier distribution: A 6 / B 0 / C 544.
+  - Gate distribution: SEO 264 / calendar 21 / deadline alert 21 / recommendation 0.
