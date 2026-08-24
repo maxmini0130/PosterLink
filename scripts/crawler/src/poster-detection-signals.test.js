@@ -50,6 +50,34 @@ test("decidePosterDetection rejects tiny images and wide banners without VLM", (
   );
 });
 
+test("low text density rejects only when OCR text exists", () => {
+  assert.equal(
+    decidePosterDetection({
+      megapixels: 1,
+      aspectRatio: 1.4,
+      ocrTextLength: 0,
+      textDensity: 0,
+      titleSimilarity: 0.5,
+      hasDateToken: true,
+      hasContactToken: false,
+    }).route,
+    "needs_vlm",
+  );
+
+  assert.equal(
+    decidePosterDetection({
+      megapixels: 1,
+      aspectRatio: 1.4,
+      ocrTextLength: 5,
+      textDensity: 5,
+      titleSimilarity: 0.5,
+      hasDateToken: true,
+      hasContactToken: false,
+    }).route,
+    "reject",
+  );
+});
+
 test("decidePosterDetection accepts strong rule signals or high-confidence classifier results", () => {
   assert.equal(
     decidePosterDetection({

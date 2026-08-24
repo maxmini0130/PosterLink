@@ -54,6 +54,7 @@ export function extractPosterSignals({
   return {
     aspectRatio,
     megapixels,
+    ocrTextLength: visibleTextLength,
     textDensity,
     fontSizeVariance: null,
     titleSimilarity: similarity,
@@ -102,6 +103,7 @@ export function decidePosterDetection(signals) {
   if (
     signals.textDensity !== null &&
     signals.textDensity < 10 &&
+    Number(signals.ocrTextLength) > 0 &&
     !signals.hasClassifierPoster
   ) {
     return {

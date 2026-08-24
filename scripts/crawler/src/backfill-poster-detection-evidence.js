@@ -11,6 +11,7 @@ import {
   decidePosterDetection,
   extractPosterSignals,
 } from "./poster-detection-signals.js";
+import { probeImage } from "./poster-image-rules.js";
 
 const DEFAULT_OUTPUT = "data/results/poster-detection-evidence-dryrun.json";
 const DEFAULT_LIMIT = 5000;
@@ -26,12 +27,15 @@ const args = Object.fromEntries(
 
 if (args.help || args.h) {
   console.log(`Usage:
-  node src/backfill-poster-detection-evidence.js [--limit=5000] [--statuses=published,review] [--output=data/results/poster-detection-evidence-dryrun.json] [--apply]
+  node src/backfill-poster-detection-evidence.js [--limit=5000] [--statuses=published,review] [--output=data/results/poster-detection-evidence-dryrun.json] [--apply] [--probe-missing-dimensions] [--probe-limit=0]
 
 Builds poster_field_evidence.is_real_poster rows from cheap geometry/text
 signals and existing imageClassification results. Dry-run is the default.
 --apply upserts only poster_field_evidence rows; it does not change poster_status
-or exposure_tier.`);
+or exposure_tier.
+
+--probe-missing-dimensions fetches image headers when poster_images has no
+width/height. --probe-limit caps network probes; 0 means no cap.`);
   process.exit(0);
 }
 
@@ -112,9 +116,42 @@ function selectImage(row, images) {
   );
 }
 
-function buildPlan(row, images) {
+async function resolveImageDimensions(selectedImage, options) {
+  if (!selectedImage || !options.probeMissingDimensions) return selectedImage;
+  if (selectedImage.width && selectedImage.height) return selectedImage;
+  if (options.probeLimit > 0 && options.probeCount.count >= options.probeLimit) {
+    return selectedImage;
+  }
+  options.probeCount.count += 1;
+
+  try {
+    const probe = await probeImage(selectedImage.storage_path);
+    if (!probe?.dimensions) return {
+      ...selectedImage,
+      probe_error: null,
+      probe_content_type: probe?.contentType ?? null,
+      probe_content_length: probe?.contentLength ?? null,
+    };
+    return {
+      ...selectedImage,
+      width: selectedImage.width ?? probe.dimensions.width,
+      height: selectedImage.height ?? probe.dimensions.height,
+      probe_content_type: probe.contentType,
+      probe_content_length: probe.contentLength,
+      probe_dimensions: probe.dimensions,
+    };
+  } catch (error) {
+    return {
+      ...selectedImage,
+      probe_error: error.message,
+    };
+  }
+}
+
+async function buildPlan(row, images, options) {
   const selectedImage = selectImage(row, images);
-  const signals = extractPosterSignals({
+  let resolvedImage = selectedImage;
+  let signals = extractPosterSignals({
     width: selectedImage?.width,
     height: selectedImage?.height,
     title: row.title,
@@ -122,7 +159,23 @@ function buildPlan(row, images) {
     sourceText: compact([row.summary_short, row.summary_long].filter(Boolean).join("\n")),
     imageClassification: imageClassification(row),
   });
-  const decision = decidePosterDetection(signals);
+  let decision = decidePosterDetection(signals);
+
+  if (decision.needsVlm && selectedImage && (!selectedImage.width || !selectedImage.height)) {
+    resolvedImage = await resolveImageDimensions(selectedImage, options);
+    if (resolvedImage !== selectedImage) {
+      signals = extractPosterSignals({
+        width: resolvedImage?.width,
+        height: resolvedImage?.height,
+        title: row.title,
+        ocrText: ocrText(row),
+        sourceText: compact([row.summary_short, row.summary_long].filter(Boolean).join("\n")),
+        imageClassification: imageClassification(row),
+      });
+      decision = decidePosterDetection(signals);
+    }
+  }
+
   const evidence = buildPosterDetectionEvidence({
     posterId: row.id,
     signals,
@@ -133,11 +186,25 @@ function buildPlan(row, images) {
     title: row.title,
     poster_status: row.poster_status,
     thumbnail_url: row.thumbnail_url,
-    selected_image: selectedImage,
+    selected_image: resolvedImage,
     signals,
     decision,
     evidence,
   };
+}
+
+async function mapWithConcurrency(items, concurrency, mapper) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 async function applyEvidenceRows(supabase, rows) {
@@ -181,10 +248,19 @@ async function main() {
     .map((value) => value.trim())
     .filter(Boolean);
   const output = path.resolve(REPO_ROOT, args.output || DEFAULT_OUTPUT);
+  const probeOptions = {
+    probeMissingDimensions: Boolean(args["probe-missing-dimensions"]),
+    probeLimit: Math.max(0, Number(args["probe-limit"] || 0)),
+    probeCount: { count: 0 },
+  };
 
   const posters = await fetchPosters(supabase, statuses, limit);
   const imagesByPoster = await fetchImages(supabase, posters.map((poster) => poster.id));
-  const plans = posters.map((poster) => buildPlan(poster, imagesByPoster.get(poster.id) ?? []));
+  const plans = await mapWithConcurrency(
+    posters,
+    8,
+    (poster) => buildPlan(poster, imagesByPoster.get(poster.id) ?? [], probeOptions),
+  );
   const evidenceRows = plans.map((plan) => plan.evidence).filter(Boolean);
   const results = apply ? await applyEvidenceRows(supabase, evidenceRows) : [];
   const summary = summarize(plans);
@@ -195,6 +271,7 @@ async function main() {
     statuses,
     checked_count: posters.length,
     evidence_row_count: evidenceRows.length,
+    probed_image_count: probeOptions.probeCount.count,
     ...summary,
     applied_count: results
       .filter((result) => result.status === "applied")
@@ -214,6 +291,7 @@ async function main() {
     decisions: report.decisions,
     routes: report.routes,
     needsVlm: report.needsVlm,
+    probed_image_count: probeOptions.probeCount.count,
     applied_count: report.applied_count,
     failed_count: report.failed_count,
   }, null, 2));

@@ -221,7 +221,7 @@ function parseImageSize(buffer) {
   );
 }
 
-async function probeImage(imageUrl) {
+export async function probeImage(imageUrl) {
   const requestOptions = {
     responseType: "arraybuffer",
     timeout: 12000,
