@@ -25,3 +25,11 @@ body {
   font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
+
+.admin-light-surface {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  color-scheme: light;
+  color: #0f172a;
+  background: #f8fafc;
+}

@@ -111,14 +111,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   );
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
+    <div className="admin-light-surface flex min-h-screen bg-slate-50 transition-colors duration-300">
       {/* Mobile Header */}
-      <div className="fixed top-0 left-0 right-0 z-30 lg:hidden bg-indigo-950 text-white px-4 h-14 flex items-center justify-between shadow-lg">
+      <div className="fixed top-0 left-0 right-0 z-30 lg:hidden bg-white text-gray-950 px-4 h-14 flex items-center justify-between border-b border-gray-200 shadow-sm">
         <div className="flex items-center gap-2">
-          <ShieldCheck className="text-indigo-400" size={22} />
+          <ShieldCheck className="text-indigo-600" size={22} />
           <span className="font-black text-sm">ADMIN</span>
         </div>
-        <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 hover:bg-white/10 rounded-xl transition-colors">
+        <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 text-gray-600 hover:bg-gray-100 rounded-xl transition-colors">
           {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
         </button>
       </div>
@@ -126,12 +126,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-20 lg:hidden">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setMobileMenuOpen(false)} />
-          <nav className="absolute top-14 left-0 right-0 bg-indigo-950 p-4 space-y-1 shadow-2xl">
+          <div className="absolute inset-0 bg-slate-950/20" onClick={() => setMobileMenuOpen(false)} />
+          <nav className="absolute top-14 left-0 right-0 max-h-[calc(100vh-3.5rem)] overflow-y-auto border-b border-gray-200 bg-white p-4 space-y-1 shadow-xl">
             {navLinks}
             <button
               onClick={() => supabase.auth.signOut().then(() => router.push("/"))}
-              className="w-full flex items-center gap-4 p-4 rounded-2xl hover:bg-rose-500/20 text-rose-400 transition-all font-black text-sm group"
+              className="w-full flex items-center gap-4 p-4 rounded-2xl text-rose-600 hover:bg-rose-50 transition-all font-black text-sm group"
             >
               <LogOut size={20} className="group-hover:translate-x-1 transition-transform" />
               <span>로그아웃</span>
@@ -171,7 +171,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </aside>
 
-      <main className="flex-1 p-6 pt-20 lg:pt-16 lg:p-16 overflow-y-auto bg-background transition-colors duration-300">
+      <main className="flex-1 p-4 pt-20 sm:p-6 lg:pt-16 lg:p-16 overflow-y-auto bg-slate-50 transition-colors duration-300">
         <div className="max-w-6xl mx-auto">
           {children}
         </div>
