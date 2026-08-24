@@ -14,7 +14,7 @@ test("creates high-confidence host org evidence from title prefix", () => {
   assert.equal(row.field_key, "host_org");
   assert.equal(row.value_text, "서울청년센터 성북");
   assert.equal(row.confidence, 0.95);
-  assert.equal(row.evidence_src, "title");
+  assert.equal(row.evidence_src, "body");
 });
 
 test("creates host org evidence when organizer appears in the title body", () => {

@@ -58,11 +58,11 @@ function findGroundedEvidence({ value, title, sourceText }) {
       normalizedOrg.includes(normalizeForMatch(titlePrefix))
     )
   ) {
-    return { evidenceText: safeTitle, evidenceSrc: "title", confidence: 0.95 };
+    return { evidenceText: safeTitle, evidenceSrc: "body", confidence: 0.95 };
   }
 
   if (safeTitle && normalizeForMatch(safeTitle).includes(normalizedOrg)) {
-    return { evidenceText: safeTitle, evidenceSrc: "title", confidence: 0.93 };
+    return { evidenceText: safeTitle, evidenceSrc: "body", confidence: 0.93 };
   }
 
   const source = compact(sourceText);
