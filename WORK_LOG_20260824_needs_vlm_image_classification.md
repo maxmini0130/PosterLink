@@ -156,3 +156,26 @@ Post-apply poster-detection dry-run:
 
 No batch4 `is_real_poster` evidence rows were applied in this step. That
 conversion requires a separate operating DB approval.
+
+## Batch 4 is_real_poster evidence apply
+
+Applied after explicit user approval:
+
+- Approved phrase:
+  `VLM batch4 20건 결과를 is_real_poster evidence로 운영 DB 적용 승인합니다.`
+- Applied rows: 20
+- Field: `is_real_poster`
+- Extractor: `poster-detection-signals-v1`
+- Value: `true` x 20
+- Confidence range: 0.93 to 0.98
+
+Post-apply DB verification confirmed 20 rows for the batch4 poster ids.
+
+Post-apply tier dry-run:
+
+- A: 122
+- B: 3
+- C: 425
+- `critical_missing_is_real_poster`: 212
+- `critical_missing_deadline_type`: 261
+- calendar/deadlineAlert gate: 119
