@@ -60,12 +60,16 @@ async function fetchEvidence(supabase, posterIds) {
   const rows = [];
   for (let index = 0; index < posterIds.length; index += 200) {
     const chunk = posterIds.slice(index, index + 200);
-    const { data, error } = await supabase
-      .from("poster_field_evidence")
-      .select("poster_id,field_key,value_text,value_json,confidence,evidence_text,evidence_src,extractor")
-      .in("poster_id", chunk);
-    if (error) throw error;
-    rows.push(...(data ?? []));
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await supabase
+        .from("poster_field_evidence")
+        .select("poster_id,field_key,value_text,value_json,confidence,evidence_text,evidence_src,extractor")
+        .in("poster_id", chunk)
+        .range(offset, offset + 999);
+      if (error) throw error;
+      rows.push(...(data ?? []));
+      if (!data || data.length < 1000) break;
+    }
   }
   return rows;
 }

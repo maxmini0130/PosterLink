@@ -14,6 +14,7 @@
     "audit:phase1": "node scripts/audit-phase1.mjs",
     "eval:sample": "pnpm --filter posterlink-crawler eval:sample",
     "eval:extraction": "pnpm --filter posterlink-crawler eval:extraction",
+    "tier:compute": "pnpm --filter posterlink-crawler tier:compute",
     "collect": "tsx scripts/collect-posters.ts",
     "collect:youth": "tsx scripts/collect-posters.ts youth",
     "collect:central": "tsx scripts/collect-posters.ts central",

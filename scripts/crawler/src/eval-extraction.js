@@ -100,18 +100,20 @@ async function fetchEvidence(supabase, posterIds, extractorMode) {
   const rows = [];
   for (let index = 0; index < posterIds.length; index += 200) {
     const chunk = posterIds.slice(index, index + 200);
-    let query = supabase
-      .from("poster_field_evidence")
-      .select("poster_id,field_key,value_text,value_json,confidence,evidence_text,evidence_src,extractor,extracted_at")
-      .in("poster_id", chunk);
-
-    if (extractorMode && extractorMode !== "current") {
-      query = query.eq("extractor", extractorMode);
+    for (let offset = 0; ; offset += 1000) {
+      let query = supabase
+        .from("poster_field_evidence")
+        .select("poster_id,field_key,value_text,value_json,confidence,evidence_text,evidence_src,extractor,extracted_at")
+        .in("poster_id", chunk)
+        .range(offset, offset + 999);
+      if (extractorMode && extractorMode !== "current") {
+        query = query.eq("extractor", extractorMode);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      rows.push(...(data ?? []));
+      if (!data || data.length < 1000) break;
     }
-
-    const { data, error } = await query;
-    if (error) throw error;
-    rows.push(...(data ?? []));
   }
   return rows;
 }
