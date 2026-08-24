@@ -53,6 +53,72 @@ test("infers until_exhausted from explicit exhaustion wording", () => {
   assert.deepEqual(row.value_json, { type: "until_exhausted" });
 });
 
+test("infers fixed type from high-confidence application deadline evidence", () => {
+  const row = inferDeadlineTypeEvidence({
+    posterId: "poster-1",
+    existingDeadlineType: "unknown",
+    deadlineDateEvidence: {
+      value_text: "2026-08-31",
+      value_json: { date: "2026-08-31" },
+      confidence: 0.9,
+      evidence_text: "신청기간: 2026년 8월 1일(토) ~ 8월 31일(월) 18:00",
+    },
+  });
+
+  assert.equal(row.field_key, "deadline_type");
+  assert.equal(row.value_text, "fixed");
+  assert.deepEqual(row.value_json, {
+    type: "fixed",
+    deadline_date: "2026-08-31",
+  });
+  assert.equal(row.extractor, "deadline-type-from-date-evidence-v1");
+});
+
+test("does not infer fixed type from a travel period after an open application period", () => {
+  const row = inferDeadlineTypeEvidence({
+    posterId: "poster-1",
+    existingDeadlineType: "unknown",
+    deadlineDateEvidence: {
+      value_text: "2026-09-06",
+      value_json: { date: "2026-09-06" },
+      confidence: 0.9,
+      evidence_text: "신청기간 : 2026. 8. 24.(월) 10:00~ 신청방법 : 공공서비스예약 여행기간 : 2026. 9. 5.(토)~9. 6.(일)",
+    },
+  });
+
+  assert.equal(row, null);
+});
+
+test("does not infer fixed type when the date is only the start of an open application period", () => {
+  const row = inferDeadlineTypeEvidence({
+    posterId: "poster-1",
+    existingDeadlineType: "unknown",
+    deadlineDateEvidence: {
+      value_text: "2026-06-18",
+      value_json: { date: "2026-06-18" },
+      confidence: 0.9,
+      evidence_text: "신청기간 2026-06-18 ~ 진행일정 대상 담당기관 기타",
+    },
+  });
+
+  assert.equal(row, null);
+});
+
+test("does not infer fixed type from a selection notice date after the application window", () => {
+  const row = inferDeadlineTypeEvidence({
+    posterId: "poster-1",
+    existingDeadlineType: "unknown",
+    deadlineDateEvidence: {
+      value_text: "2026-08-31",
+      value_json: { date: "2026-08-31" },
+      confidence: 0.9,
+      evidence_text: "모집기간 ~ 8/30(일) 선발안내 - 8/31(월)",
+    },
+  });
+
+  assert.equal(row, null);
+});
+
 test("keeps existing non-unknown deadline types untouched", () => {
   const row = inferDeadlineTypeEvidence({
     posterId: "poster-1",

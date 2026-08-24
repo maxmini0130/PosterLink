@@ -142,14 +142,15 @@ function buildEvidenceRowsForPoster(row, links = []) {
   }));
 
   const endDate = isoDateText(row.application_end_at);
-  addRow(rows, inferDeadlineDateEvidence({
+  const inferredDeadlineDateEvidence = inferDeadlineDateEvidence({
     posterId: row.id,
     title: row.title,
     sourceText: compactBodyText(row),
     applicationEndAt: row.application_end_at,
     fieldVerification: row.field_verification,
     createdAt: row.created_at,
-  }));
+  });
+  addRow(rows, inferredDeadlineDateEvidence);
   if (endDate) {
     addRow(rows, normalizeEvidenceRow({
       posterId: row.id,
@@ -175,12 +176,16 @@ function buildEvidenceRowsForPoster(row, links = []) {
       extractor: "deadline-type-v1",
     }));
   } else {
+    const deadlineDateEvidence = rows
+      .filter((evidenceRow) => evidenceRow.field_key === "deadline_date")
+      .sort((left, right) => Number(right.confidence) - Number(left.confidence))[0];
     addRow(rows, inferDeadlineTypeEvidence({
       posterId: row.id,
       sourceText,
       periodText: readableFacts.period,
       applicationEndAt: row.application_end_at,
       existingDeadlineType: row.deadline_type,
+      deadlineDateEvidence,
     }));
   }
 
