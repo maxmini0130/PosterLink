@@ -11,6 +11,7 @@ import {
   findEvidenceSentence,
   normalizeEvidenceRow,
 } from "./field-evidence.js";
+import { inferDeadlineTypeEvidence } from "./deadline-type-evidence.js";
 
 const DEFAULT_OUTPUT = "data/results/field-evidence-backfill.json";
 const DEFAULT_LIMIT = 2000;
@@ -147,6 +148,14 @@ function buildEvidenceRowsForPoster(row, links = []) {
       evidenceText: readableFacts.period ?? findEvidenceSentence(sourceText, row.deadline_type) ?? row.deadline_type,
       evidenceSrc: "rule",
       extractor: "deadline-type-v1",
+    }));
+  } else {
+    addRow(rows, inferDeadlineTypeEvidence({
+      posterId: row.id,
+      sourceText,
+      periodText: readableFacts.period,
+      applicationEndAt: row.application_end_at,
+      existingDeadlineType: row.deadline_type,
     }));
   }
 
