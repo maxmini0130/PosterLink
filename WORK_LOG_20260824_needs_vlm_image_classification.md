@@ -288,3 +288,36 @@ Post-apply tier dry-run:
 - `critical_missing_deadline_type`: 261
 - `critical_low_confidence_is_real_poster`: 3
 - calendar/deadlineAlert gate: 119
+
+## Batch 7 production apply
+
+Applied after explicit user approval:
+
+- Approved phrase:
+  `needs-vlm 이미지 분류 batch7 20건 운영 DB 적용 승인합니다.`
+- Command:
+  `pnpm --filter posterlink-crawler image:backfill -- --limit=20 --concurrency=1 "--statuses=published,review" --needs-vlm-only --apply --output=data/results/needs-vlm-image-classification-batch7-apply.json`
+- Candidate count: 20
+- Applied count: 20
+- Failed count: 0
+- `isPoster=true`: 18
+- `isPoster=false`: 2
+- Confidence range: 0.92 to 0.98
+
+Non-poster classifications:
+
+- `3층 종합체육관 내 농구대 부품 교체·설치 안내`
+  - `facility maintenance notice`, confidence 0.92
+- `센터 1층 정문 쪽 점자블럭 양생에 따른 안내`
+  - `facility_notice`, confidence 0.92
+
+Post-apply poster-detection dry-run:
+
+- Evidence rows: 398
+- `is_real_poster=true`: 390
+- `is_real_poster=false`: 8
+- Ambiguous: 152
+- `needs_vlm`: 152
+
+No batch7 `is_real_poster` evidence rows were applied in this step. That
+conversion requires a separate operating DB approval.
