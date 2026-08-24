@@ -40,9 +40,9 @@
 ## Remaining Operational Steps
 
 - Applied the migration to the linked Supabase project after explicit approval.
-- Deploy `process-ocr` after the migration exists in the database.
-- Run the full backfill in dry-run mode for all published/review posters and inspect the report.
-- Run backfill with `--apply` only after explicit approval.
+- Deployed `process-ocr` after the migration existed in the database.
+- Ran the full backfill in dry-run mode for all published/review posters and inspected the report.
+- Ran backfill with `--apply` after explicit user direction.
 
 ## Operational Update
 
@@ -55,3 +55,37 @@
   - `posters.exposure_tier`, `posters.tier_computed_at`, and `posters.tier_reason` exist.
   - `poster_field_evidence_select_public_published` RLS SELECT policy exists.
   - `poster_field_evidence` has 0 rows before backfill.
+
+## Process OCR Deployment And Backfill
+
+- User requested continuing from step 2 through the remaining Phase 1 operational steps.
+- Deployed `process-ocr` to the linked Supabase project.
+  - Previous version: 11.
+  - Deployed version: 12.
+- Re-ran crawler tests after deployment.
+  - `pnpm --filter posterlink-crawler test`: 149 passed.
+- Updated the backfill script to fetch `poster_links` in 200-poster chunks.
+  - Reason: full dry-run initially hit Supabase/PostgREST header limits when querying links for all poster IDs in one request.
+- Full dry-run:
+  - Command: `pnpm --filter posterlink-crawler evidence:backfill -- --limit=5000 "--statuses=published,review" --output=data/results/field-evidence-backfill-phase1-full-dryrun.json`
+  - Checked posters: 550.
+  - Evidence rows planned: 3,295.
+  - Failed chunks: 0.
+- Applied backfill:
+  - Command: `pnpm --filter posterlink-crawler evidence:backfill -- --limit=5000 "--statuses=published,review" --output=data/results/field-evidence-backfill-phase1-apply.json --apply`
+  - Checked posters: 550.
+  - Evidence rows applied: 3,295.
+  - Failed chunks: 0.
+- Verified on the linked remote project:
+  - `poster_field_evidence` row count after backfill: 3,295.
+  - Field distribution:
+    - `host_org`: 550
+    - `official_url`: 549
+    - `deadline_date`: 397
+    - `target_desc`: 349
+    - `venue`: 296
+    - `apply_method`: 270
+    - `contact`: 261
+    - `benefit`: 224
+    - `deadline_type`: 221
+    - `apply_url`: 178

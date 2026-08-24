@@ -228,17 +228,21 @@ async function fetchRows(supabase, statuses, limit) {
 
 async function fetchLinks(supabase, posterIds) {
   if (posterIds.length === 0) return new Map();
-  const { data, error } = await supabase
-    .from("poster_links")
-    .select("poster_id,url,link_type,is_primary")
-    .in("poster_id", posterIds);
-  if (error) throw error;
 
   const byPosterId = new Map();
-  for (const link of data ?? []) {
-    const rows = byPosterId.get(link.poster_id) ?? [];
-    rows.push(link);
-    byPosterId.set(link.poster_id, rows);
+  for (let index = 0; index < posterIds.length; index += 200) {
+    const chunk = posterIds.slice(index, index + 200);
+    const { data, error } = await supabase
+      .from("poster_links")
+      .select("poster_id,url,link_type,is_primary")
+      .in("poster_id", chunk);
+    if (error) throw error;
+
+    for (const link of data ?? []) {
+      const rows = byPosterId.get(link.poster_id) ?? [];
+      rows.push(link);
+      byPosterId.set(link.poster_id, rows);
+    }
   }
   return byPosterId;
 }
