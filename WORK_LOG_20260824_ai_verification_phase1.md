@@ -39,8 +39,19 @@
 
 ## Remaining Operational Steps
 
-- Apply the migration to the linked Supabase project after explicit approval.
+- Applied the migration to the linked Supabase project after explicit approval.
 - Deploy `process-ocr` after the migration exists in the database.
 - Run the full backfill in dry-run mode for all published/review posters and inspect the report.
 - Run backfill with `--apply` only after explicit approval.
 
+## Operational Update
+
+- User approved operating DB migration application.
+- Ran `pnpm dlx supabase db push --linked --yes`.
+- Applied migration:
+  - `20260824030000_add_poster_field_evidence.sql`
+- Verified on the linked remote project:
+  - `public.poster_field_evidence` exists.
+  - `posters.exposure_tier`, `posters.tier_computed_at`, and `posters.tier_reason` exist.
+  - `poster_field_evidence_select_public_published` RLS SELECT policy exists.
+  - `poster_field_evidence` has 0 rows before backfill.
