@@ -12,6 +12,7 @@ import {
   normalizeEvidenceRow,
 } from "./field-evidence.js";
 import { inferDeadlineTypeEvidence } from "./deadline-type-evidence.js";
+import { inferHostOrgEvidence } from "./host-org-evidence.js";
 
 const DEFAULT_OUTPUT = "data/results/field-evidence-backfill.json";
 const DEFAULT_LIMIT = 2000;
@@ -122,6 +123,14 @@ function buildEvidenceRowsForPoster(row, links = []) {
     evidenceText: orgEvidence,
     evidenceSrc: "body",
     extractor: row.field_verification?.model ?? "field-verifier-v1",
+  }));
+  addRow(rows, inferHostOrgEvidence({
+    posterId: row.id,
+    title: row.title,
+    sourceText,
+    organizerName: row.organizer_name,
+    verifiedOrganization: organization,
+    sourceOrgName: row.source_org_name,
   }));
 
   const endDate = isoDateText(row.application_end_at);
