@@ -23,3 +23,29 @@
 - VLM calls should be run in small approved batches, then followed by
   `poster-detection:backfill` to convert high-confidence classifier results into
   `is_real_poster` evidence.
+
+## Batch 2 production apply
+
+Applied after explicit user approval:
+
+- Approved phrase:
+  `needs-vlm 이미지 분류 batch2 20건 운영 DB 적용 승인합니다.`
+- Command:
+  `pnpm --filter posterlink-crawler image:backfill -- --limit=20 --concurrency=1 "--statuses=published,review" --needs-vlm-only --apply --output=data/results/needs-vlm-image-classification-batch2-apply.json`
+- Candidate count: 20
+- Applied count: 20
+- Failed count: 0
+- Non-poster count: 0
+- `isPoster=true`: 20
+- Confidence range: 0.92 to 0.98
+
+Post-apply poster-detection dry-run:
+
+- Evidence rows: 298
+- `is_real_poster=true`: 297
+- `is_real_poster=false`: 1
+- Ambiguous: 252
+- `needs_vlm`: 252
+
+No `is_real_poster` evidence rows were applied in this step. That conversion
+requires a separate operating DB approval.
