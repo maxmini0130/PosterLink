@@ -43,6 +43,55 @@ function normalizeForMatch(value) {
     .replace(/[^\p{Letter}\p{Number}]+/gu, "");
 }
 
+function parseIsoDate(value) {
+  const match = String(value ?? "").match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+  };
+}
+
+function hasEquivalentDateEvidence(evidenceText, valueText) {
+  const value = parseIsoDate(valueText);
+  if (!value) return false;
+
+  const normalized = String(evidenceText ?? "").normalize("NFKC");
+  const dateMatches = normalized.matchAll(
+    /(?:(20\d{2})\s*[년.\-/]\s*)?(\d{1,2})\s*[월.\-/]\s*(\d{1,2})\s*(?:일)?/g,
+  );
+
+  for (const match of dateMatches) {
+    const year = match[1] ? Number(match[1]) : null;
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if (
+      month === value.month &&
+      day === value.day &&
+      (year === null || year === value.year)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function valueAppearsInEvidence({ fieldKey, valueText, evidenceText, extractor }) {
+  if (!valueText) return true;
+  if (normalizeForMatch(evidenceText).includes(normalizeForMatch(valueText))) {
+    return true;
+  }
+  if (["deadline_date", "apply_start"].includes(fieldKey)) {
+    return hasEquivalentDateEvidence(evidenceText, valueText);
+  }
+  if (fieldKey === "deadline_type" && String(extractor ?? "").startsWith("deadline-type")) {
+    return true;
+  }
+  return false;
+}
+
 function clampConfidence(value) {
   const confidence = Number(value);
   if (!Number.isFinite(confidence)) return 0.5;
@@ -61,7 +110,12 @@ export function adjustConfidence(raw = {}) {
   if (
     evidenceText &&
     valueText &&
-    !normalizeForMatch(evidenceText).includes(normalizeForMatch(valueText))
+    !valueAppearsInEvidence({
+      fieldKey: raw.fieldKey,
+      valueText,
+      evidenceText,
+      extractor: raw.extractor,
+    })
   ) {
     confidence *= 0.6;
   }
@@ -107,6 +161,7 @@ export function normalizeEvidenceRow({
   const safeValueText = compactText(valueText, 2000);
   const safeEvidenceText = compactText(evidenceText, 300);
   const adjustedConfidence = adjustConfidence({
+    fieldKey: canonicalKey,
     modelConfidence: confidence,
     valueText: safeValueText,
     evidenceText: safeEvidenceText,

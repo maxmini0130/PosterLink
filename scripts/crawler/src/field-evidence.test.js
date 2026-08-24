@@ -23,6 +23,32 @@ test("adjustConfidence penalizes values not present in evidence", () => {
   );
 });
 
+test("adjustConfidence accepts equivalent Korean date evidence", () => {
+  assert.equal(
+    adjustConfidence({
+      fieldKey: "deadline_date",
+      modelConfidence: 0.85,
+      valueText: "2026-08-31",
+      evidenceText: "신청기간 2026년 8월 1일~8월 31일",
+      extractor: "regex-date-v1",
+    }),
+    1,
+  );
+});
+
+test("adjustConfidence does not penalize deterministic deadline type enums", () => {
+  assert.equal(
+    adjustConfidence({
+      fieldKey: "deadline_type",
+      modelConfidence: 0.9,
+      valueText: "fixed",
+      evidenceText: "신청기간 2026년 8월 1일~8월 31일",
+      extractor: "deadline-type-v1",
+    }),
+    0.9,
+  );
+});
+
 test("adjustConfidence boosts regex extractors and corroborated fields", () => {
   assert.equal(
     adjustConfidence({
