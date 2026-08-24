@@ -51,3 +51,32 @@
 - Applying the 258 positive evidence rows would unblock a second Phase 3
   `tier:compute` dry-run, but operating DB writes require explicit approval.
 
+## Operational Update
+
+- User approved applying the positive `is_real_poster` evidence rows.
+- Before apply:
+  - Existing `is_real_poster` evidence rows: 0.
+- Ran:
+  - `pnpm poster-detection:backfill -- --limit=5000 "--statuses=published,review" --output=data/results/poster-detection-evidence-phase4-apply.json --apply`
+- Apply result:
+  - Checked posters: 550.
+  - Applied evidence rows: 258.
+  - Failed chunks: 0.
+  - `is_real_poster=true`: 258.
+  - `is_real_poster=false`: 0.
+  - Ambiguous / needs VLM: 292.
+- Verified on the linked remote project:
+  - `poster_field_evidence` has 258 `is_real_poster=true` rows.
+- Re-ran Phase 3 tier dry-run:
+  - `pnpm tier:compute -- --limit=5000 "--statuses=published,review" --output=data/eval/reports/exposure-tier-after-poster-detection-dryrun.json`
+  - Checked posters: 550.
+  - Evidence rows read: 3,553.
+  - Tier distribution: A 0 / B 0 / C 550.
+  - Gate distribution: SEO 218 / calendar 0 / deadline alert 0 / recommendation 0.
+  - Remaining top blockers:
+    - `critical_missing_deadline_type`: 367
+    - `critical_missing_deadline_date`: 326
+    - `critical_missing_is_real_poster`: 292
+    - `critical_low_confidence_host_org`: 281
+    - `critical_low_confidence_deadline_date`: 202
+    - `critical_low_confidence_deadline_type`: 183
