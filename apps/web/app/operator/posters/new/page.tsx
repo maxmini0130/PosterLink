@@ -179,6 +179,7 @@ export default function NewPosterPage() {
   const [croppedImageBlobs, setCroppedImageBlobs] = useState<Blob[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const imagePreviewsRef = useRef<string[]>([]);
+  const [imageSubmitError, setImageSubmitError] = useState("");
   const [showCropper, setShowCropper] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   
@@ -223,6 +224,7 @@ export default function NewPosterPage() {
     setImagePreviews([]);
     setCroppedImageBlobs([]);
     setOriginalImage(null);
+    setImageSubmitError("");
     setShowCropper(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -234,6 +236,7 @@ export default function NewPosterPage() {
       return next;
     });
     setCroppedImageBlobs((blobs) => blobs.filter((_, blobIndex) => blobIndex !== index));
+    setImageSubmitError("");
   };
 
   const compressForCropper = (file: File): Promise<string> =>
@@ -286,6 +289,7 @@ export default function NewPosterPage() {
   const onCropComplete = (blob: Blob) => {
     setCroppedImageBlobs((blobs) => [...blobs, blob].slice(0, 2));
     setImagePreviews((previews) => [...previews, URL.createObjectURL(blob)].slice(0, 2));
+    setImageSubmitError("");
     setShowCropper(false);
     if (croppedImageBlobs.length === 0) runOcr(blob);
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -427,7 +431,12 @@ export default function NewPosterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (croppedImageBlobs.length === 0) return void toast.error("포스터 이미지를 보정하여 등록해주세요.");
+    if (croppedImageBlobs.length === 0) {
+      const message = "포스터 이미지를 포함하여 등록해주세요. 상단에서 이미지를 업로드하거나 자동 제작을 먼저 실행하세요.";
+      setImageSubmitError(message);
+      toast.error(message, { duration: 6000 });
+      return;
+    }
     
     setLoading(true);
     try {
@@ -500,9 +509,9 @@ export default function NewPosterPage() {
       if (formData.officialLink) {
         const { error: linkError } = await supabase.from("poster_links").insert({
           poster_id: poster.id,
-          link_type: "official_homepage",
+          link_type: "official_notice",
           url: formData.officialLink,
-          title: "공식 홈페이지",
+          title: "공식 공고 원문",
           is_primary: true
         });
         if (linkError) throw linkError;
@@ -708,7 +717,12 @@ export default function NewPosterPage() {
           </div>
         </div>
 
-        <Button disabled={loading} className="w-full h-16 text-lg font-black bg-gray-900 hover:bg-black rounded-[2rem] shadow-2xl transition-all disabled:bg-gray-200">
+        {imageSubmitError && (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-bold text-rose-700">
+            {imageSubmitError}
+          </div>
+        )}
+        <Button disabled={loading} className="w-full h-16 rounded-[2rem] bg-gray-950 text-lg font-black text-white shadow-2xl transition-all hover:bg-black disabled:bg-gray-200 disabled:text-gray-500">
           {loading ? <Loader2 className="animate-spin" /> : "보정된 포스터 등록하기"}
         </Button>
       </form>

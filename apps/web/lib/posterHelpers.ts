@@ -31,21 +31,18 @@ export async function fetchCategoryRegionNames(posterIds: string[]): Promise<Rec
   const regionIds = [...new Set(regionLinks.map((link: any) => link.region_id).filter(Boolean))];
 
   const [cats, regs] = await Promise.all([
-    categoryIds.length ? supabase.from("categories").select("id, name").in("id", categoryIds) : { data: [] },
+    categoryIds.length ? supabase.from("categories").select("id, name, code").in("id", categoryIds) : { data: [] },
     regionIds.length ? supabase.from("regions").select("id, name, full_name, level").in("id", regionIds) : { data: [] },
   ]);
 
   const catMap = Object.fromEntries((cats.data ?? []).map((c: any) => [c.id, c.name]));
+  const categoryRank = Object.fromEntries((cats.data ?? []).map((c: any) => [c.id, rankCategory(c)]));
   const regMap = Object.fromEntries((regs.data ?? []).map((r: any) => [r.id, r.level === "sigungu" ? r.full_name || r.name : r.name]));
-  const firstCategoryByPoster = new Map<string, string>();
-  const firstRegionByPoster = new Map<string, string>();
+  const regionRank = Object.fromEntries((regs.data ?? []).map((r: any) => [r.id, rankRegion(r)]));
   const categoryIdsByPoster = new Map<string, string[]>();
   const regionIdsByPoster = new Map<string, string[]>();
 
   for (const link of categoryLinks as any[]) {
-    if (!firstCategoryByPoster.has(link.poster_id)) {
-      firstCategoryByPoster.set(link.poster_id, link.category_id);
-    }
     categoryIdsByPoster.set(link.poster_id, [
       ...(categoryIdsByPoster.get(link.poster_id) ?? []),
       link.category_id,
@@ -53,9 +50,6 @@ export async function fetchCategoryRegionNames(posterIds: string[]): Promise<Rec
   }
 
   for (const link of regionLinks as any[]) {
-    if (!firstRegionByPoster.has(link.poster_id)) {
-      firstRegionByPoster.set(link.poster_id, link.region_id);
-    }
     regionIdsByPoster.set(link.poster_id, [
       ...(regionIdsByPoster.get(link.poster_id) ?? []),
       link.region_id,
@@ -64,18 +58,36 @@ export async function fetchCategoryRegionNames(posterIds: string[]): Promise<Rec
 
   const result: Record<string, PosterWithMeta> = {};
   for (const posterId of ids) {
-    const categoryId = firstCategoryByPoster.get(posterId) ?? null;
-    const regionId = firstRegionByPoster.get(posterId) ?? null;
+    const categoryList = categoryIdsByPoster.get(posterId) ?? [];
+    const regionList = regionIdsByPoster.get(posterId) ?? [];
+    const categoryId = pickPrimaryId(categoryList, categoryRank);
+    const regionId = pickPrimaryId(regionList, regionRank);
     result[posterId] = {
       categoryId,
       regionId,
-      categoryIds: categoryIdsByPoster.get(posterId) ?? [],
-      regionIds: regionIdsByPoster.get(posterId) ?? [],
+      categoryIds: categoryList,
+      regionIds: regionList,
       categoryName: categoryId ? catMap[categoryId] ?? null : null,
       regionName: regionId ? regMap[regionId] ?? null : null,
     };
   }
   return result;
+}
+
+function pickPrimaryId(ids: string[], ranks: Record<string, number>) {
+  return [...ids].sort((a, b) => (ranks[b] ?? 0) - (ranks[a] ?? 0))[0] ?? null;
+}
+
+function rankCategory(category: any) {
+  const name = String(category?.name ?? "");
+  const code = String(category?.code ?? "");
+  return name === "기타" || /OTHER/i.test(code) ? 0 : 10;
+}
+
+function rankRegion(region: any) {
+  if (region?.level === "sigungu") return 30;
+  if (region?.level === "sido") return 20;
+  return 10;
 }
 
 export async function fetchPosterImages(posterIds: string[]): Promise<Record<string, string[]>> {

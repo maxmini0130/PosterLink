@@ -36,8 +36,8 @@ export default function OperatorPostersPage() {
     fetchPosters();
   }, []);
 
-  const handleRequestReview = async (id: string) => {
-    if (!confirm("관리자에게 검수를 요청하시겠습니까?")) return;
+  const handleRequestReview = async (id: string, status?: string) => {
+    if (!confirm(status === "rejected" ? "수정한 내용으로 관리자에게 재검수를 요청하시겠습니까?" : "관리자에게 검수를 요청하시겠습니까?")) return;
 
     const { error } = await supabase
       .from("posters")
@@ -46,7 +46,7 @@ export default function OperatorPostersPage() {
 
     if (error) toast.error(error.message);
     else {
-      toast.success("검수 요청이 완료되었습니다.");
+      toast.success(status === "rejected" ? "재검수 요청이 완료되었습니다." : "검수 요청이 완료되었습니다.");
       fetchPosters();
     }
   };
@@ -140,10 +140,10 @@ export default function OperatorPostersPage() {
                   </td>
                   <td className="px-6 py-5 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      {p.poster_status === 'draft' && (
+                      {(p.poster_status === 'draft' || p.poster_status === 'rejected') && (
                         <button
-                          onClick={() => handleRequestReview(p.id)}
-                          title="검수 요청"
+                          onClick={() => handleRequestReview(p.id, p.poster_status)}
+                          title={p.poster_status === "rejected" ? "재검수 요청" : "검수 요청"}
                           className="p-2 text-blue-600 hover:bg-blue-100 rounded-xl transition-colors"
                         >
                           <Send size={18} />

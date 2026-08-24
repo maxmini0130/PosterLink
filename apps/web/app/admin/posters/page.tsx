@@ -405,6 +405,45 @@ function isValidHttpUrl(value: any) {
   }
 }
 
+function getPrimarySourceUrl(poster: any) {
+  const primarySourceUrl = normalizeOrgDisplayValue(poster?.primarySourceUrl);
+  if (isValidHttpUrl(primarySourceUrl)) return primarySourceUrl;
+  const sourceKey = normalizeOrgDisplayValue(poster?.source_key);
+  if (isValidHttpUrl(sourceKey)) return sourceKey;
+  return "";
+}
+
+async function fetchPosterSourceUrlMap(posterIds: string[]) {
+  const ids = [...new Set(posterIds.filter(Boolean))];
+  if (ids.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from("poster_links")
+    .select("poster_id,url,link_type,is_primary")
+    .in("poster_id", ids)
+    .in("link_type", ["official_notice", "official_homepage", "official_apply"]);
+
+  if (error) {
+    console.error("Failed to load poster source links:", error);
+    return {};
+  }
+
+  const map: Record<string, { url: string; priority: number }> = {};
+  for (const link of data ?? []) {
+    if (!link.poster_id || !isValidHttpUrl(link.url)) continue;
+    const priority =
+      link.link_type === "official_notice" ? 3 :
+      link.is_primary ? 2 :
+      link.link_type === "official_homepage" ? 1 :
+      0;
+    const current = map[link.poster_id];
+    if (!current || priority > current.priority) {
+      map[link.poster_id] = { url: link.url, priority };
+    }
+  }
+  return Object.fromEntries(Object.entries(map).map(([posterId, source]) => [posterId, source.url]));
+}
+
 function createApprovalCheck(key: string, label: string, status: ApprovalCheckStatus, detail: string): ApprovalCheck {
   return { key, label, status, detail };
 }
@@ -426,6 +465,7 @@ function getApprovalChecklist(poster: any): ApprovalCheck[] {
   const isTextNotice = isTextNoticePoster(poster);
   const externalOriginal = getExternalOriginalInfo(poster);
   const attachmentInfo = getAttachmentAnalysisInfo(poster);
+  const sourceUrl = getPrimarySourceUrl(poster);
   const deadlineTime = poster?.application_end_at ? new Date(poster.application_end_at).getTime() : null;
   const deadlineInvalid = Boolean(poster?.application_end_at && Number.isNaN(deadlineTime));
   const deadlineExpired = typeof deadlineTime === "number" && !Number.isNaN(deadlineTime) && deadlineTime < Date.now();
@@ -446,8 +486,8 @@ function getApprovalChecklist(poster: any): ApprovalCheck[] {
   checks.push(createApprovalCheck(
     "source",
     "원문 URL",
-    isValidHttpUrl(poster?.source_key) ? "pass" : "block",
-    isValidHttpUrl(poster?.source_key) ? "원문 URL이 있습니다." : "원문 URL이 없거나 올바르지 않습니다."
+    sourceUrl ? "pass" : "block",
+    sourceUrl ? `원문 URL이 있습니다: ${sourceUrl}` : "원문 URL이 없거나 올바르지 않습니다. 운영자 편집 화면의 공식 공고 원문 값을 확인하세요."
   ));
   if (externalOriginal) {
     checks.push(createApprovalCheck(
@@ -658,8 +698,16 @@ export default function AdminPostersPage() {
 
     setTotalCount(count ?? 0);
     if (data) {
-      const metaMap = await fetchCategoryRegionNames(data.map((poster: any) => poster.id));
-      setPosters(data.map((poster: any) => ({ ...poster, ...metaMap[poster.id] })));
+      const posterIds = data.map((poster: any) => poster.id);
+      const [metaMap, sourceUrlMap] = await Promise.all([
+        fetchCategoryRegionNames(posterIds),
+        fetchPosterSourceUrlMap(posterIds),
+      ]);
+      setPosters(data.map((poster: any) => ({
+        ...poster,
+        ...metaMap[poster.id],
+        primarySourceUrl: sourceUrlMap[poster.id] ?? null,
+      })));
     }
 
     setSelectedIds([]);
@@ -719,10 +767,13 @@ export default function AdminPostersPage() {
         return;
       }
 
-      const metaMap = await fetchCategoryRegionNames([data.id]);
+      const [metaMap, sourceUrlMap] = await Promise.all([
+        fetchCategoryRegionNames([data.id]),
+        fetchPosterSourceUrlMap([data.id]),
+      ]);
       if (cancelled) return;
 
-      const focusedPoster = { ...data, ...metaMap[data.id] };
+      const focusedPoster = { ...data, ...metaMap[data.id], primarySourceUrl: sourceUrlMap[data.id] ?? null };
       setPreviewPoster(focusedPoster);
       if (isPosterStatus(data.poster_status) && data.poster_status !== currentFilter) {
         setCurrentFilter(data.poster_status);
@@ -799,7 +850,10 @@ export default function AdminPostersPage() {
     const warningChecks = approvalChecks.filter((check) => check.status === "warning");
 
     if (blockingChecks.length > 0) {
-      toast.error(`승인 차단: ${blockingChecks.map((check) => check.label).join(", ")} 확인 필요`);
+      toast.error(
+        `승인할 수 없습니다. ${blockingChecks.map((check) => `${check.label}: ${check.detail}`).join(" / ")}`,
+        { duration: 7000 },
+      );
       if (posterForApproval) setPreviewPoster(posterForApproval);
       return;
     }
@@ -908,6 +962,7 @@ export default function AdminPostersPage() {
   const previewReadableFacts = previewPoster ? getReadableNoticeFacts(previewPoster) : [];
   const previewAttachmentInfo = previewPoster ? getAttachmentAnalysisInfo(previewPoster) : null;
   const previewExternalOriginalInfo = previewPoster ? getExternalOriginalInfo(previewPoster) : null;
+  const previewSourceUrl = previewPoster ? getPrimarySourceUrl(previewPoster) : "";
   const previewStructuredFacts = previewPoster ? getStructuredPosterFacts(previewPoster) : [];
   const previewApplicationPeriod = previewPoster
     ? formatApplicationPeriod({
@@ -2220,9 +2275,9 @@ export default function AdminPostersPage() {
                       </p>
                     </div>
                   )}
-                  {previewPoster.source_key && (
+                  {previewSourceUrl && (
                     <a
-                      href={previewPoster.source_key}
+                      href={previewSourceUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex w-fit items-center gap-2 rounded-2xl bg-gray-900 px-4 py-3 text-xs font-black text-white transition-colors hover:bg-black dark:bg-white dark:text-slate-950"
