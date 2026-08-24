@@ -47,5 +47,22 @@ Local tier simulation with the 26 new rows merged into current DB evidence:
 
 ## Production note
 
-No operating DB write has been performed for this extractor yet. Applying the
-26 evidence rows to production requires explicit approval.
+Applied to the operating DB after explicit user approval:
+
+- Approved phrase:
+  `deadline-type-from-date-evidence-v1 evidence 26건 운영 DB 적용 승인합니다.`
+- Applied rows: 26
+- Field: `deadline_type`
+- Extractor: `deadline-type-from-date-evidence-v1`
+- Value: `fixed` x 26
+- Confidence: 0.90 x 26
+
+Post-apply DB verification confirmed 26 rows for this extractor.
+
+Post-apply tier dry-run:
+
+- A: 97
+- B: 2
+- C: 451
+- calendar/deadlineAlert gate: 119
+- `critical_missing_deadline_type`: 261
