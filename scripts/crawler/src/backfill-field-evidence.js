@@ -13,6 +13,7 @@ import {
 } from "./field-evidence.js";
 import { inferDeadlineTypeEvidence } from "./deadline-type-evidence.js";
 import { inferHostOrgEvidence } from "./host-org-evidence.js";
+import { inferDeadlineDateEvidence } from "./deadline-date-evidence.js";
 
 const DEFAULT_OUTPUT = "data/results/field-evidence-backfill.json";
 const DEFAULT_LIMIT = 2000;
@@ -79,6 +80,13 @@ function compactSourceText(row) {
     .slice(0, 12_000);
 }
 
+function compactBodyText(row) {
+  return [row.summary_short, row.summary_long]
+    .filter(Boolean)
+    .join("\n")
+    .slice(0, 12_000);
+}
+
 function isoDateText(value) {
   if (!value) return null;
   const date = new Date(value);
@@ -134,6 +142,14 @@ function buildEvidenceRowsForPoster(row, links = []) {
   }));
 
   const endDate = isoDateText(row.application_end_at);
+  addRow(rows, inferDeadlineDateEvidence({
+    posterId: row.id,
+    title: row.title,
+    sourceText: compactBodyText(row),
+    applicationEndAt: row.application_end_at,
+    fieldVerification: row.field_verification,
+    createdAt: row.created_at,
+  }));
   if (endDate) {
     addRow(rows, normalizeEvidenceRow({
       posterId: row.id,
