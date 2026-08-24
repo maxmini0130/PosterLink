@@ -5,6 +5,10 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import { classifyPosterImage } from "./poster-image-classifier.js";
+import {
+  decidePosterDetection,
+  extractPosterSignals,
+} from "./poster-detection-signals.js";
 
 const DEFAULT_OUTPUT = "data/results/image-classification-backfill.json";
 const DEFAULT_LIMIT = 25;
@@ -20,11 +24,14 @@ const args = Object.fromEntries(
 
 if (args.help || args.h) {
   console.log(`Usage:
-  node src/backfill-image-classification.js [--limit=25] [--concurrency=1] [--statuses=published,review] [--output=data/results/image-classification-backfill.json] [--apply]
+  node src/backfill-image-classification.js [--limit=25] [--concurrency=1] [--statuses=published,review] [--needs-vlm-only] [--output=data/results/image-classification-backfill.json] [--apply]
 
 Backfills field_verification.posterImageOcr.imageClassification for posters that
 have a thumbnail but no stored image classification. Without --apply, only writes
-a dry-run candidate report.`);
+a dry-run candidate report.
+
+Use --needs-vlm-only to restrict candidates to rows that the cheap poster
+detection signal layer routes to VLM.`);
   process.exit(0);
 }
 
@@ -42,7 +49,67 @@ function hasImageClassification(fieldVerification) {
   return Boolean(fieldVerification?.posterImageOcr?.imageClassification);
 }
 
-async function fetchCandidates(supabase, limit, statuses) {
+function posterImageOcr(row) {
+  return row.field_verification?.posterImageOcr && typeof row.field_verification.posterImageOcr === "object"
+    ? row.field_verification.posterImageOcr
+    : {};
+}
+
+function storedImageClassification(row) {
+  const ocr = posterImageOcr(row);
+  return ocr.imageClassification && typeof ocr.imageClassification === "object"
+    ? ocr.imageClassification
+    : null;
+}
+
+function ocrText(row) {
+  const ocr = posterImageOcr(row);
+  return ocr.ocrText ?? ocr.text ?? "";
+}
+
+async function fetchImages(supabase, posterIds) {
+  const byPoster = new Map();
+  for (let index = 0; index < posterIds.length; index += 200) {
+    const chunk = posterIds.slice(index, index + 200);
+    const { data, error } = await supabase
+      .from("poster_images")
+      .select("poster_id,storage_path,image_type,width,height,created_at")
+      .in("poster_id", chunk);
+    if (error) throw error;
+    for (const image of data ?? []) {
+      const list = byPoster.get(image.poster_id) ?? [];
+      list.push(image);
+      byPoster.set(image.poster_id, list);
+    }
+  }
+  return byPoster;
+}
+
+function selectImage(row, images) {
+  if (!images || images.length === 0) return null;
+  return (
+    images.find((image) => image.image_type === "thumbnail" && image.storage_path === row.thumbnail_url) ??
+    images.find((image) => image.image_type === "thumbnail") ??
+    images[0]
+  );
+}
+
+function buildDetectionDecision(row, selectedImage) {
+  const signals = extractPosterSignals({
+    width: selectedImage?.width,
+    height: selectedImage?.height,
+    title: row.title,
+    ocrText: ocrText(row),
+    sourceText: compact([row.summary_short, row.summary_long].filter(Boolean).join("\n")),
+    imageClassification: storedImageClassification(row),
+  });
+  return {
+    signals,
+    decision: decidePosterDetection(signals),
+  };
+}
+
+async function fetchCandidates(supabase, limit, statuses, { needsVlmOnly = false } = {}) {
   const rows = [];
   const pageSize = 1000;
 
@@ -57,8 +124,20 @@ async function fetchCandidates(supabase, limit, statuses) {
     if (error) throw error;
     if (!data || data.length === 0) break;
 
+    const imagesByPoster = needsVlmOnly
+      ? await fetchImages(supabase, data.map((row) => row.id))
+      : new Map();
+
     for (const row of data) {
-      if (!hasImageClassification(row.field_verification)) rows.push(row);
+      if (hasImageClassification(row.field_verification)) continue;
+      const selectedImage = needsVlmOnly ? selectImage(row, imagesByPoster.get(row.id) ?? []) : null;
+      const detection = needsVlmOnly ? buildDetectionDecision(row, selectedImage) : null;
+      if (needsVlmOnly && !detection.decision.needsVlm) continue;
+      rows.push({
+        ...row,
+        selected_image: selectedImage,
+        detection,
+      });
       if (rows.length >= limit) break;
     }
     if (data.length < pageSize) break;
@@ -101,11 +180,12 @@ async function main() {
   const limit = Math.max(1, Number(args.limit || DEFAULT_LIMIT));
   const concurrency = Math.max(1, Math.min(5, Number(args.concurrency || 1)));
   const apply = Boolean(args.apply);
+  const needsVlmOnly = Boolean(args["needs-vlm-only"]);
   const statuses = String(args.statuses || "published,review")
     .split(/[,\s]+/)
     .map((status) => status.trim())
     .filter(Boolean);
-  const rows = await fetchCandidates(supabase, limit, statuses);
+  const rows = await fetchCandidates(supabase, limit, statuses, { needsVlmOnly });
   const results = [];
   const startedAt = new Date().toISOString();
   let writeChain = Promise.resolve();
@@ -118,6 +198,7 @@ async function main() {
       statuses,
       requested_limit: limit,
       concurrency,
+      needs_vlm_only: needsVlmOnly,
       candidate_count: rows.length,
       processed_count: results.length,
       applied_count: apply ? results.filter((row) => row.status === "applied").length : 0,
@@ -147,6 +228,9 @@ async function main() {
       poster_status: row.poster_status,
       thumbnail_url: row.thumbnail_url,
       source_key: row.source_key,
+      detection_route: row.detection?.decision?.route ?? null,
+      detection_reasons: row.detection?.decision?.reasons ?? [],
+      selected_image: row.selected_image ?? null,
       status: apply ? "pending" : "dry-run",
       started_at: new Date().toISOString(),
     };
@@ -196,6 +280,7 @@ async function main() {
   console.log(JSON.stringify({
     output,
     mode: report.mode,
+    needs_vlm_only: report.needs_vlm_only,
     candidate_count: report.candidate_count,
     applied_count: report.applied_count,
     failed_count: report.failed_count,
