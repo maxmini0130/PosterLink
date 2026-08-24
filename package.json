@@ -12,6 +12,8 @@
     "postinstall": "node apps/mobile/scripts/patch-expo-device-xcode26.js",
     "test": "tsx --test \"apps/web/app/admin/collection-sources/config-schema.test.ts\" \"apps/web/lib/adminPosterFilters.test.ts\" \"apps/web/lib/discoveryRoutes.test.ts\" \"apps/web/lib/posterApplication.test.ts\" \"apps/web/lib/posterCalendar.test.ts\" \"apps/web/lib/posterImage.test.ts\" \"apps/web/lib/posterStructuredEditor.test.ts\" \"apps/web/lib/posterStructuredSeo.test.ts\" \"apps/web/lib/posterStructuredTrust.test.ts\" \"apps/web/lib/posterSummaryFacts.test.ts\" \"apps/web/lib/siteVisitClassification.test.ts\" \"apps/web/lib/trafficAnalytics.test.ts\"",
     "audit:phase1": "node scripts/audit-phase1.mjs",
+    "eval:sample": "pnpm --filter posterlink-crawler eval:sample",
+    "eval:extraction": "pnpm --filter posterlink-crawler eval:extraction",
     "collect": "tsx scripts/collect-posters.ts",
     "collect:youth": "tsx scripts/collect-posters.ts youth",
     "collect:central": "tsx scripts/collect-posters.ts central",
