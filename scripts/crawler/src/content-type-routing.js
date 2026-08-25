@@ -25,6 +25,11 @@ const NEWS_TITLE_RE = /(?:소식|보도자료|결과\s*(?:발표|공지|안내)|
 const RECRUIT_ACTION_RE = /(?:모집|신청|접수|참여자|참가자|수강생|교육생|지원\s*대상|대상자\s*모집|공모|선착순|접수\s*중|apply|register|registration)/i;
 const PROGRAM_RE = /(?:프로그램|교육|행사|강좌|특강|멘토링|컨설팅|창업|지원사업|바우처|공모전|네트워킹|워크숍|캠프|상담|클리닉)/i;
 
+const KOREAN_ADMIN_TITLE_RE = /(?:민방위|무연고\s*사망자|공시송달|재결서|공중화장실\s*관리인|수상후보자\s*추천\s*공고|예방수칙|교육문화사업\s*온라인접수\s*안내|통장\s*모집\s*공고|채용\s*공고|직원\s*채용|입찰\s*공고|행정\s*예고|고시\s*공고)/i;
+const KOREAN_NEWS_TITLE_RE = /(?:소식|보도자료|할인\s*혜택|팝업|시민투표|걷기모임|공동체상영회|조합원교육|건강돌봄학교|결과\s*(?:발표|공지|안내)|행사\s*(?:개최\s*)?안내|페스티벌|축제|캠페인|이벤트)/i;
+const KOREAN_RECRUIT_ACTION_RE = /(?:참여자|수강생|신청자|교육생|셀러|팀|후보자)?\s*(?:모집|신청|접수|공모)|참가자\s*모집|참여\s*신청|온라인\s*신청|수강신청/u;
+const KOREAN_PROGRAM_RE = /(?:프로그램|교육|강좌|특강|워크숍|멘토링|컨설팅|창업|취업|공모|대회|클래스|캠프|상담|체험|토크콘서트|플리마켓)/u;
+
 function compact(value, limit = 300) {
   return Array.from(String(value ?? "").replace(/\s+/g, " ").trim()).slice(0, limit).join("");
 }
@@ -76,15 +81,6 @@ export function classifyPosterContentType(row = {}) {
     };
   }
 
-  if (row.poster_status === "rejected") {
-    return {
-      contentType: "discard",
-      confidence: 0.8,
-      reason: "poster_rejected",
-      evidenceText: compact(row.title),
-    };
-  }
-
   const issueRoute = routeFromIssues(issueCodesFrom(row));
   if (issueRoute) {
     const [contentType, confidence, reason] = issueRoute;
@@ -98,10 +94,12 @@ export function classifyPosterContentType(row = {}) {
 
   const title = compact(row.title);
   const text = textBundle(row);
-  const hasRecruitAction = RECRUIT_ACTION_RE.test(text);
-  const hasProgramSignal = PROGRAM_RE.test(text);
+  const hasRecruitAction = RECRUIT_ACTION_RE.test(text) || KOREAN_RECRUIT_ACTION_RE.test(text);
+  const hasProgramSignal = PROGRAM_RE.test(text) || KOREAN_PROGRAM_RE.test(text);
+  const hasAdminTitle = ADMIN_TITLE_RE.test(title) || KOREAN_ADMIN_TITLE_RE.test(title);
+  const hasNewsTitle = NEWS_TITLE_RE.test(title) || KOREAN_NEWS_TITLE_RE.test(title);
 
-  if (ADMIN_TITLE_RE.test(title) && !(hasRecruitAction && hasProgramSignal)) {
+  if (hasAdminTitle && !(hasRecruitAction && hasProgramSignal)) {
     return {
       contentType: "admin",
       confidence: 0.85,
@@ -110,7 +108,7 @@ export function classifyPosterContentType(row = {}) {
     };
   }
 
-  if (NEWS_TITLE_RE.test(title) && !hasRecruitAction) {
+  if (hasNewsTitle && !hasRecruitAction) {
     return {
       contentType: "news",
       confidence: 0.8,
@@ -137,7 +135,16 @@ export function classifyPosterContentType(row = {}) {
     };
   }
 
-  if (NEWS_TITLE_RE.test(text)) {
+  if (row.poster_status === "rejected") {
+    return {
+      contentType: "discard",
+      confidence: 0.8,
+      reason: "poster_rejected",
+      evidenceText: compact(row.title),
+    };
+  }
+
+  if (NEWS_TITLE_RE.test(text) || KOREAN_NEWS_TITLE_RE.test(text)) {
     return {
       contentType: "news",
       confidence: 0.65,

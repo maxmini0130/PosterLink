@@ -86,6 +86,58 @@ function parseIsoDate(value) {
   };
 }
 
+function makeIsoDate(year, month, day) {
+  const y = Number(year);
+  const m = Number(month);
+  const d = Number(day);
+  if (!y || !m || !d || m < 1 || m > 12 || d < 1 || d > 31) return null;
+  const date = new Date(Date.UTC(y, m - 1, d));
+  if (
+    date.getUTCFullYear() !== y ||
+    date.getUTCMonth() !== m - 1 ||
+    date.getUTCDate() !== d
+  ) {
+    return null;
+  }
+  return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+function extractLastDate(value, referenceYear = null) {
+  const dates = [];
+  let lastYear = referenceYear;
+  const text = String(value ?? "").normalize("NFKC");
+  const re = /(?:(20\d{2})\s*(?:년|[.\-/])\s*)?(\d{1,2})\s*(?:월|[.\-/])\s*(\d{1,2})\s*(?:일)?/gu;
+  let match;
+  while ((match = re.exec(text)) !== null) {
+    const year = match[1] ? Number(match[1]) : lastYear;
+    if (!year) continue;
+    const iso = makeIsoDate(year, match[2], match[3]);
+    if (!iso) continue;
+    if (match[1]) lastYear = Number(match[1]);
+    dates.push(iso);
+  }
+  return dates.at(-1) ?? null;
+}
+
+function normalizeReadableDeadlinePeriod({ value, evidenceText, sourceText }) {
+  const evidence = compactText(evidenceText ?? "", 700) ?? "";
+  const source = compactText(sourceText ?? "", 700) ?? "";
+  const combined = `${evidence} ${source}`;
+  const normalized = combined.normalize("NFKC");
+
+  const hasApplicationCue = /(?:신청|접수|모집|응모|지원)\s*(?:기간|기한|마감|일정)?/u.test(normalized);
+  const hasNonApplicationCue = /(?:진행|교육|행사|운영|활동|프로그램|강좌|공연|전시|여행)\s*(?:기간|일정|일시)/u.test(normalized);
+  const openEnded = /(?:상시|수시|연중)\s*(?:모집|접수|신청)|(?:마감|모집)\s*시(?:까지)?|선착순\s*마감/u.test(normalized);
+
+  if (!hasApplicationCue || openEnded) return null;
+  if (hasNonApplicationCue && !/(?:신청기간|접수기간|모집기간|응모기간|지원기간)/u.test(normalized)) {
+    return null;
+  }
+
+  const referenceYear = Number(normalized.match(/\b(20\d{2})\b/)?.[1]) || null;
+  return extractLastDate(value, referenceYear) ?? extractLastDate(evidence, referenceYear);
+}
+
 function hasEquivalentDateEvidence(evidenceText, valueText) {
   const value = parseIsoDate(valueText);
   if (!value) return false;
@@ -235,13 +287,32 @@ export function evidenceRowsFromReadableFacts({
     .map(([factKey, fieldKey]) => {
       const value = facts?.[factKey];
       if (!value) return null;
+      const evidenceText = findEvidenceSentence(sourceText, value) ?? value;
+      if (fieldKey === "deadline_date") {
+        const deadlineDate = normalizeReadableDeadlinePeriod({
+          value,
+          evidenceText,
+          sourceText,
+        });
+        if (!deadlineDate) return null;
+        return normalizeEvidenceRow({
+          posterId,
+          fieldKey,
+          valueText: deadlineDate,
+          valueJson: { date: deadlineDate },
+          confidence,
+          evidenceText,
+          evidenceSrc: "body",
+          extractor,
+        });
+      }
       return normalizeEvidenceRow({
         posterId,
         fieldKey,
         valueText: value,
         valueJson: null,
         confidence,
-        evidenceText: findEvidenceSentence(sourceText, value) ?? value,
+        evidenceText,
         evidenceSrc: "body",
         extractor,
       });

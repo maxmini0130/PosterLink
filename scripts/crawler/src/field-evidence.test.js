@@ -155,6 +155,35 @@ test("readable facts become grounded evidence rows", () => {
   assert.equal(rows[1].field_key, "apply_method");
 });
 
+test("readable period facts become ISO deadline date only with application context", () => {
+  const rows = evidenceRowsFromReadableFacts({
+    posterId: "poster-1",
+    facts: {
+      period: "2026. 8. 18.(화) ~ 8. 27.(목) 자정까지",
+      application: "신청폼 접수",
+    },
+    sourceText: "모집 일정: 2026. 8. 18.(화) ~ 8. 27.(목) 자정까지 신청폼으로 접수합니다.",
+  });
+
+  const deadline = rows.find((row) => row.field_key === "deadline_date");
+  assert.equal(deadline.value_text, "2026-08-27");
+  assert.deepEqual(deadline.value_json, { date: "2026-08-27" });
+});
+
+test("readable period facts skip event or education periods without application context", () => {
+  const rows = evidenceRowsFromReadableFacts({
+    posterId: "poster-1",
+    facts: {
+      period: "2026.09.03.(목)~11.12.(목)",
+      application: "구글폼 신청",
+    },
+    sourceText: "진행기간: 2026.09.03.(목)~11.12.(목) 매주 목요일. 신청방법: 구글폼 신청",
+  });
+
+  assert.equal(rows.some((row) => row.field_key === "deadline_date"), false);
+  assert.equal(rows.some((row) => row.field_key === "apply_method"), true);
+});
+
 test("findEvidenceSentence returns the matching source sentence", () => {
   assert.equal(
     findEvidenceSentence("첫 문장입니다. 이수 시 참여수당 50만원을 지급합니다.", "참여수당 50만원"),

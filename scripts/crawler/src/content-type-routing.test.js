@@ -45,6 +45,26 @@ test("classifyPosterContentType routes rejected posters to discard", () => {
   assert.equal(result.reason, "poster_rejected");
 });
 
+test("classifyPosterContentType separates rejected admin and news documents", () => {
+  assert.equal(
+    classifyPosterContentType({
+      poster_status: "rejected",
+      title: "무연고 사망자 공고",
+      summary_short: "서울특별시 강서구청 무연고 사망자 공고",
+    }).contentType,
+    "admin",
+  );
+
+  assert.equal(
+    classifyPosterContentType({
+      poster_status: "rejected",
+      title: "4월 걷기모임 소식",
+      summary_short: "마포구노동자종합지원센터 활동 소식입니다.",
+    }).contentType,
+    "news",
+  );
+});
+
 test("classifyPosterContentType honors known quality issue routes", () => {
   assert.equal(
     classifyPosterContentType({

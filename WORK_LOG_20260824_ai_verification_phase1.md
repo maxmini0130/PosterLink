@@ -1951,3 +1951,42 @@ DB writes were performed.
     tiers.
   - Re-run `pnpm eval:extraction` and `pnpm eval:thresholds` after rule changes
     until a production-ready threshold plan is produced.
+
+## Phase 2 Evaluation Rule Fixes 01
+
+Tightened the first set of extraction rules surfaced by the 120-item golden-set
+evaluation. No operating DB writes were performed.
+
+- Deadline-date evidence:
+  - `readable-notice-v1` period facts no longer flow into `deadline_date` as raw
+    Korean period strings.
+  - Period facts now emit an ISO date only when the surrounding evidence has an
+    application/recruitment cue such as application, registration, recruitment,
+    submission, or support deadline.
+  - Event, education, operation, activity, performance, exhibition, travel, and
+    program periods are skipped unless the text explicitly labels them as an
+    application/registration/recruitment period.
+  - Open-ended language such as always-on, rolling, until filled, or first-come
+    close no longer creates a fixed `deadline_date`.
+- Content-type routing:
+  - Rejected rows are no longer forced to `discard` before semantic routing.
+  - Clear Korean admin notices and news/event notices are separated before the
+    rejected-row fallback.
+  - Added stronger Korean signals for admin notices, news notices, recruitment
+    actions, and program context.
+- Tests added:
+  - Readable period facts become ISO `deadline_date` only with application
+    context.
+  - Event/education periods without application context do not create deadline
+    evidence.
+  - Rejected admin/news documents are routed as `admin`/`news` instead of blind
+    `discard`.
+- Validation:
+  - `pnpm --filter posterlink-crawler test`
+  - Passed with 227 tests.
+  - `pnpm eval:validate -- --set=eval/golden --require-labels`
+  - Passed with 120 files, 120 items, 720 truth fields.
+- Follow-up:
+  - Re-running `pnpm eval:extraction` against current operating DB evidence will
+    still show old stored evidence until evidence is regenerated/applied.
+  - Any operating DB evidence upsert/backfill remains an explicit approval step.
