@@ -410,3 +410,22 @@ Validation:
 
 - `pnpm --filter web lint`
 - `pnpm test -- apps/web/lib/posterSummaryFacts.test.ts`
+
+## Home New Poster Date Basis Fix
+
+Checked production crawler freshness and clarified why the public homepage can
+show `오늘 새 공고 0건` even after crawler activity.
+
+- Read-only production check showed the crawler ran successfully on 2026-08-25
+  KST and created new review candidates, but no newly published public posters
+  were present for the day.
+- File: `apps/web/app/api/home/summary/route.ts`
+- `todayNew` now uses an Asia/Seoul day boundary instead of the server's local
+  midnight.
+- `todayNew` now counts posters newly published today via `published_at`,
+  falling back to `created_at` only for published rows without `published_at`.
+
+Validation:
+
+- `pnpm --filter web lint`
+- `pnpm test -- apps/web/lib/trafficAnalytics.test.ts apps/web/lib/posterApplication.test.ts`

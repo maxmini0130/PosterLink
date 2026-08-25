@@ -29,12 +29,24 @@ async function safeRpcNumber(query: PromiseLike<{ data: unknown; error: unknown 
   return Number.isFinite(value) ? value : 0;
 }
 
+function getKoreaDayStartIso(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const valueByType = new Map(parts.map((part) => [part.type, part.value]));
+  return new Date(
+    `${valueByType.get("year")}-${valueByType.get("month")}-${valueByType.get("day")}T00:00:00+09:00`,
+  ).toISOString();
+}
+
 export async function GET() {
   const supabase = getAdminClient();
   const now = new Date();
   const nowIso = now.toISOString();
-  const todayStart = new Date(now);
-  todayStart.setHours(0, 0, 0, 0);
+  const todayStartIso = getKoreaDayStartIso(now);
   const sevenDaysLater = new Date(now);
   sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
 
@@ -44,7 +56,7 @@ export async function GET() {
         .from("posters")
         .select("id", { count: "exact", head: true })
         .eq("poster_status", "published")
-        .gte("created_at", todayStart.toISOString()),
+        .or(`published_at.gte.${todayStartIso},and(published_at.is.null,created_at.gte.${todayStartIso})`),
     ),
     safeRpcNumber(
       supabase.rpc("count_public_posters", {
