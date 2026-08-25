@@ -1,0 +1,16 @@
+{
+  "poster_id": "0951dffd-b8cc-4c8c-bde2-2f8f750e0358",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-09-11",
+    "deadline_type": "fixed",
+    "host_org": "서울디자인재단",
+    "official_url": "https://news.seoul.go.kr/economy/archives/574384"
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-06.json",
+  "context_title": "제2회 서울 브랜드 굿즈 공모 안내 (8.24.~9.11.)",
+  "context_source_url": "https://news.seoul.go.kr/economy/archives/574384"
+}

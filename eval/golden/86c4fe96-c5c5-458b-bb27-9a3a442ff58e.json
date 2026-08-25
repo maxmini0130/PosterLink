@@ -1,0 +1,17 @@
+{
+  "poster_id": "86c4fe96-c5c5-458b-bb27-9a3a442ff58e",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": null,
+    "deadline_type": "unknown",
+    "host_org": "강동문화재단",
+    "official_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73107"
+  },
+  "notes": "Program dates are present, but no explicit application deadline is stated.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-06.json",
+  "context_title": "강동구1인가구지원센터 <나의 견고한 1평> 참여자 모집",
+  "context_source_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73107"
+}

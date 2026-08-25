@@ -1,0 +1,17 @@
+{
+  "poster_id": "c0cf0e61-1823-460f-b5b7-f64e2962c697",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-09-26",
+    "deadline_type": "until_exhausted",
+    "host_org": "서울청년센터 관악 신림동쓰리룸",
+    "official_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73111"
+  },
+  "notes": "Multiple sessions close three days before start; latest derived deadline is 2026-09-26 and source states first-come close.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-06.json",
+  "context_title": "서울청년센터 관악 신림동쓰리룸<9월 청년성장><전입 청년 특화 프로그램> 참여자 모집",
+  "context_source_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73111"
+}

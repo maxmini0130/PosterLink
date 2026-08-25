@@ -1,0 +1,17 @@
+{
+  "poster_id": "6f67208a-6f9f-411a-81d9-91ab10f50413",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-08-26",
+    "deadline_type": "fixed",
+    "host_org": "서울청년센터 양천",
+    "official_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73192"
+  },
+  "notes": "deadline_date normalized from 모집기간 end.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-06.json",
+  "context_title": "서울청년센터 양천<양천 컨테이너 작업실 4회차 모집>",
+  "context_source_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73192"
+}

@@ -1,0 +1,17 @@
+{
+  "poster_id": "33ba0493-085f-4ac6-a380-14bc88470a92",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-08-27",
+    "deadline_type": "fixed",
+    "host_org": "서울특별시",
+    "official_url": "https://blog.naver.com/PostView.naver?blogId=makeyourseoul&logNo=224383881403&redirect=Dlog&widgetTypeCall=true&topReferer=https%3A%2F%2Fsearch.naver.com%2Fsearch.naver%3Fsm%3Dtab_hty.top%26where%3Dnexearch%26ssc%3Dtab.nx.all%26query%3D2026%2B%25EC%2584%259C%25EC%259A%25B8%25EC%25B2%25AD%25EB%2585%2584%25EC%25A3%25BC%25EA%25B0%2584%26oquery%3D%25EC%2584%259C%25EC%259A%25B8%25EC%25B2%25AD%25EB%2585"
+  },
+  "notes": "deadline_date normalized from Korean recruitment range end.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-06.json",
+  "context_title": "서울특별시 <2026년 서울청년주간 - 서울시X번개장터 플리마켓 셀러> 모집",
+  "context_source_url": "https://blog.naver.com/PostView.naver?blogId=makeyourseoul&logNo=224383881403&redirect=Dlog&topReferer=https%3A%2F%2Fsearch.naver.com%2Fsearch.naver%3Fsm%3Dtab_hty.top%26where%3Dnexearch%26ssc%3Dtab.nx.all%26query%3D2026%2B%25EC%2584%259C%25EC%259A%25B8%25EC%25B2%25AD%25EB%2585%2584%25EC%25A3%25BC%25EA%25B0%2584%26oquery%3D%25EC%2584%259C%25EC%259A%25B8%25EC%25B2%25AD%25EB%2585&widgetTypeCall=true"
+}

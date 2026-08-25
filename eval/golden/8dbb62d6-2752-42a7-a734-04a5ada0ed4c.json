@@ -1,0 +1,16 @@
+{
+  "poster_id": "8dbb62d6-2752-42a7-a734-04a5ada0ed4c",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-08-27",
+    "deadline_type": "fixed",
+    "host_org": "서울특별시",
+    "official_url": "https://news.seoul.go.kr/welfare/archives/582573"
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-06.json",
+  "context_title": "수동휠체어 동력보조장치 및 뇌병변 장애인 맞춤형 보조기기 장기 대여 사업 신청자 모집(~8/27)",
+  "context_source_url": "https://news.seoul.go.kr/welfare/archives/582573"
+}

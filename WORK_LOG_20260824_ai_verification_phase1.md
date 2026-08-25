@@ -1887,3 +1887,67 @@ DB writes were performed.
   - `pnpm eval:thresholds -- --input=data/eval/reports/extraction-batch01-05-current-20260825.json --out=data/eval/reports/extraction-thresholds-batch01-05-20260825.json --module-out=data/eval/reports/extraction-thresholds-batch01-05-20260825.js`
   - Threshold plan remains `production_ready: false` because labels are 100/120
     and one or more fields still lack a qualifying recommendation.
+
+## Phase 2 Golden Labels Batch 06
+
+Imported the sixth Phase 2 golden-label batch into `eval/golden`. No operating
+DB writes were performed.
+
+- Source batch:
+  `data/eval/review-batches-20260825/batch-06.json`
+- Imported labels:
+  - 20 posters.
+  - 120 truth fields.
+  - Fields labeled for each poster:
+    `is_real_poster`, `content_type`, `deadline_date`, `deadline_type`,
+    `host_org`, `official_url`.
+- Manual corrections captured in the labels:
+  - Event-date-as-deadline rows:
+    several rows with clear event/program dates but no application deadline were
+    labeled `deadline_date: null`, `deadline_type: unknown`, including
+    서울청년센터 성동, 계명대학교, 한세대학교, 강동구1인가구지원센터, and
+    고용노동청 일자리톡톡.
+  - 강남구청 대치2동 제로마켓:
+    captured source was an event notice without visible seller-application
+    details, so it was labeled `is_real_poster: false`, `content_type: news`.
+  - 민방위 보충교육:
+    administrative education notice labeled `is_real_poster: false`,
+    `content_type: admin`.
+  - 가락종합사회복지관:
+    initial deadline `2026-09-03` was preserved with `deadline_type: ongoing`
+    because the source says applications are possible afterward.
+  - 서울청년센터 관악 전입 청년 프로그램:
+    derived latest deadline `2026-09-26` from "3 days before each program" and
+    labeled as `until_exhausted` due first-come close language.
+  - 고용노동청 일자리톡톡:
+    `host_org` corrected from the speaker company `동원그룹` to
+    `서울고용노동청`.
+- Validation:
+  - `pnpm eval:validate -- --set=eval/golden --require-labels`
+  - Passed with 120 files, 120 items, 720 truth fields.
+- Progress:
+  - `pnpm eval:status`
+  - 120/120 labeled, 0 remaining.
+- Final evaluation snapshot:
+  - `pnpm eval:extraction -- --set=eval/golden --extractor=current --out=data/eval/reports/extraction-batch01-06-current-20260825.json`
+  - Labeled posters: 120.
+  - Evidence rows: 1373.
+  - Macro accuracy: 0.8138888888888888.
+  - Field accuracy:
+    - `is_real_poster`: 0.9666666666666667.
+    - `content_type`: 0.825.
+    - `deadline_date`: 0.6833333333333333.
+    - `deadline_type`: 0.7416666666666667.
+    - `host_org`: 0.825.
+    - `official_url`: 0.8416666666666667.
+  - `pnpm eval:thresholds -- --input=data/eval/reports/extraction-batch01-06-current-20260825.json --out=data/eval/reports/extraction-thresholds-batch01-06-20260825.json --module-out=data/eval/reports/extraction-thresholds-batch01-06-20260825.js`
+  - Threshold plan remains `production_ready: false`; the minimum 120 labels are
+    now satisfied, but at least one field still lacks a qualifying threshold
+    recommendation.
+- Next safe work:
+  - Improve extraction rules for event/program-date vs application-deadline
+    separation.
+  - Add stronger non-recruit/admin/news classification before deriving exposure
+    tiers.
+  - Re-run `pnpm eval:extraction` and `pnpm eval:thresholds` after rule changes
+    until a production-ready threshold plan is produced.

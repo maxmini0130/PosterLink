@@ -1,0 +1,17 @@
+{
+  "poster_id": "624f0168-99be-4e8c-9a96-b5cbefed3f8b",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": false,
+    "content_type": "news",
+    "deadline_date": null,
+    "deadline_type": null,
+    "host_org": "강남구청",
+    "official_url": "https://www.gangnam.go.kr/board/B_000001/1076594/view.do?mid=ID05_040101"
+  },
+  "notes": "Captured source is an event notice without visible seller application details; event date is not a deadline.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-06.json",
+  "context_title": "강남구청 <2026 대치2동 제로마켓 개최 및 주민 셀러 모집> 안내",
+  "context_source_url": "https://www.gangnam.go.kr/board/B_000001/1076594/view.do?mid=ID05_040101"
+}

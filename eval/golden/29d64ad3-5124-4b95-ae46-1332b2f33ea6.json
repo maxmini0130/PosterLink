@@ -1,0 +1,17 @@
+{
+  "poster_id": "29d64ad3-5124-4b95-ae46-1332b2f33ea6",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": null,
+    "deadline_type": "unknown",
+    "host_org": "서울고용노동청",
+    "official_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73112"
+  },
+  "notes": "Event date is present but no explicit application deadline; host corrected from speaker company to 서울고용노동청.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-06.json",
+  "context_title": "고용노동청 <취업준비콘서트 일자리톡톡_동원그룹> 참여자 모집",
+  "context_source_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73112"
+}

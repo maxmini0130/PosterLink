@@ -1,0 +1,16 @@
+{
+  "poster_id": "f49c6a72-db31-4484-a713-6b17c3314795",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-09-09",
+    "deadline_type": "fixed",
+    "host_org": "마포청년창업취업지원센터 나루",
+    "official_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73021"
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-06.json",
+  "context_title": "[마포청년창업취업지원센터 나루] 나루커리어패션위크 (NAROO Career Passion Week_힐링 클래스) 참가자 모집(~9/9)",
+  "context_source_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73021"
+}

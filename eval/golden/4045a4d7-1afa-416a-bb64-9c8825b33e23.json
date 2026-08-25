@@ -1,0 +1,17 @@
+{
+  "poster_id": "4045a4d7-1afa-416a-bb64-9c8825b33e23",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-08-28",
+    "deadline_type": "fixed",
+    "host_org": "한국정신장애인자립생활센터",
+    "official_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73116"
+  },
+  "notes": "deadline_date normalized from 수강신청 기간 end.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-06.json",
+  "context_title": "한국정신장애인자립생활센터 <2026년 광야학 2학기 수강신청> 안내",
+  "context_source_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73116"
+}

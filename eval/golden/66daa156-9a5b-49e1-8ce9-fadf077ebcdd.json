@@ -1,0 +1,17 @@
+{
+  "poster_id": "66daa156-9a5b-49e1-8ce9-fadf077ebcdd",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-08-27",
+    "deadline_type": "fixed",
+    "host_org": "강남문화재단",
+    "official_url": "https://www.gangnam.go.kr/office/gfac/board/gfac_perform15/54/view.do?mid=gfac_perform0106"
+  },
+  "notes": "deadline_date normalized from 모집기간 ~8/27 15:00.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-06.json",
+  "context_title": "강남문화재단 <배리어프리 공연-위라클 박위의 토크콘서트> 모집 안내",
+  "context_source_url": "https://www.gangnam.go.kr/office/gfac/board/gfac_perform15/54/view.do?mid=gfac_perform0106"
+}

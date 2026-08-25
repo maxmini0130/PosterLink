@@ -1,0 +1,17 @@
+{
+  "poster_id": "26b64806-0bba-4a6d-af21-6119b01416cb",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": false,
+    "content_type": "admin",
+    "deadline_date": null,
+    "deadline_type": null,
+    "host_org": "마포구 성산2동 주민센터",
+    "official_url": "https://culture.mapo.go.kr/site/seongsan2/board/townnews/2803?cp=1&sortOrder=BA_REGDATE&sortDirection=DESC&listType=list&bcId=townnews&baNotice=false&baCommSelec=false&baOpenDay=false&baUse=true"
+  },
+  "notes": "Civil defense supplementary education notice, not a recruitment poster.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-06.json",
+  "context_title": "2026년 마포구 민방위 보충교육 안내",
+  "context_source_url": "https://culture.mapo.go.kr/site/seongsan2/board/townnews/2803?bcId=townnews"
+}

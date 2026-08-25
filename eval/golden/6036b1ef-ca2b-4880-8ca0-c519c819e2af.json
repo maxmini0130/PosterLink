@@ -1,0 +1,17 @@
+{
+  "poster_id": "6036b1ef-ca2b-4880-8ca0-c519c819e2af",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": null,
+    "deadline_type": "unknown",
+    "host_org": "한세대학교",
+    "official_url": "https://5mytah.short.gy/talkconcert2608"
+  },
+  "notes": "Event date is present, but no explicit application deadline is stated.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-06.json",
+  "context_title": "한세대학교 X 면접왕이형",
+  "context_source_url": "https://5mytah.short.gy/talkconcert2608"
+}
