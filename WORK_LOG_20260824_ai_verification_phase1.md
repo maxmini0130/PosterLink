@@ -241,3 +241,45 @@ Post-apply tier dry-run:
 The A-tier count increased by 20 and the deadline alert gate increased by 22.
 One new row entered the published/review tier scope during the apply window,
 so the post-apply checked count is 557 instead of the dry-run's 556.
+
+## Final Auto Evidence Bundle Apply
+
+Applied after explicit user approval:
+
+- Approved phrase:
+  `final auto evidence bundle 18 rows operating DB apply approved.`
+- Original approval:
+  `final auto evidence bundle 18건 운영 DB 적용 승인합니다.`
+- Source dry-run:
+  `data/results/final-auto-evidence-bundle-18-dryrun.json`
+- Applied rows: 18
+- Affected posters: 3
+- Fields:
+  - `host_org`: 6
+  - `deadline_date`: 3
+  - `deadline_type`: 3
+  - `official_url`: 3
+  - `is_real_poster`: 3
+- Minimum confidence: 0.90
+
+Post-apply DB verification confirmed all 18 selected rows.
+
+Final auto-fill tier dry-run:
+
+- Checked rows: 559
+- A: 205
+- B: 3
+- C: 351
+- SEO gate: 468
+- calendar/deadlineAlert gate: 155
+- `critical_missing_deadline_type`: 244
+- `critical_missing_deadline_date`: 225
+- `critical_low_confidence_deadline_date`: 105
+- `critical_low_confidence_host_org`: 88
+- `critical_missing_official_url`: 2
+- `critical_low_confidence_official_url`: 2
+
+This closes the repetitive Phase 1 automatic evidence-fill pass. Remaining
+C-tier blockers are no longer good candidates for blind bulk evidence upserts;
+they should move to manual review, crawler/parser fixes, or targeted
+field-specific remediation.
