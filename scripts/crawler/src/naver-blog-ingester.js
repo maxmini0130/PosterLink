@@ -23,6 +23,7 @@ import { parseDeadlineText } from "./deadline-parser.js";
 import { normalizeSourceKey, loadDuplicateCandidates, refreshRepresentativeImage } from "./upload-to-supabase.js";
 import { findBestPosterDuplicate } from "./poster-duplicate-detector.js";
 import { computeImagePhash } from "./image-phash.js";
+import { buildTextModelUsageRow, extractAiUsageMetadata, logAiUsage } from "./ai-usage-logger.js";
 
 const SOURCE_PRIORITY = { 게시판: 1, 네이버블로그: 2, 페이스북: 3, 인스타그램: 3 };
 
@@ -129,6 +130,44 @@ async function classifyEntry(entry) {
     };
   }
   return routePosterRelevance({ title: entry.title, body: bodyText, ocrText: "" });
+}
+
+async function logNaverBlogAiUsageEvents(supabase, {
+  posterId = null,
+  candidateId = null,
+  sightingId = null,
+  sourceUrl = null,
+  blogId = null,
+  events = [],
+} = {}) {
+  for (const event of events) {
+    const usage = extractAiUsageMetadata(event);
+    if (!usage?.model || !usage.operation) continue;
+
+    const usageResult = await logAiUsage(supabase, buildTextModelUsageRow({
+      jobName: "naver-blog-ingester",
+      stageLabel: usage.stageLabel ?? "cheap_text",
+      posterId,
+      model: usage.model,
+      operation: usage.operation,
+      fieldKey: usage.fieldKey ?? null,
+      status: usage.status ?? "success",
+      inputTokens: usage.inputTokens ?? null,
+      outputTokens: usage.outputTokens ?? null,
+      imageCount: usage.imageCount ?? 0,
+      metadata: {
+        sourceUrl,
+        blogId,
+        ...(sightingId ? { sightingId } : {}),
+        ...(candidateId ? { candidateId } : {}),
+        ...(usage.metadata ?? {}),
+      },
+    }));
+
+    if (usageResult.status === "failed") {
+      console.warn(`  AI usage log failed (${usage.operation}): ${usageResult.error}`);
+    }
+  }
 }
 
 // Phase 3-4 필드 병합 정책: source_priority가 더 높은(=낮은 숫자) 값이 이미 있으면
@@ -260,6 +299,12 @@ export async function ingestNaverBlog(blogId, options = {}) {
 
     const relevanceRoute = await classifyEntry(entry);
     if (relevanceRoute.route === "폐기") {
+      await logNaverBlogAiUsageEvents(supabase, {
+        sightingId: sighting.id,
+        sourceUrl,
+        blogId,
+        events: [relevanceRoute],
+      });
       stats.discarded += 1;
       console.log(`  [폐기] ${entry.title} - ${relevanceRoute.reason}`);
       continue;
@@ -277,6 +322,13 @@ export async function ingestNaverBlog(blogId, options = {}) {
         .eq("id", sighting.id);
       if (linkError) throw new Error(`sighting_link:${linkError.message}`);
       await refreshRepresentativeImage(result.candidateId);
+      await logNaverBlogAiUsageEvents(supabase, {
+        candidateId: result.candidateId,
+        sightingId: sighting.id,
+        sourceUrl,
+        blogId,
+        events: [relevanceRoute, deadlineParse],
+      });
 
       if (result.created) {
         stats.created += 1;
@@ -291,6 +343,13 @@ export async function ingestNaverBlog(blogId, options = {}) {
         .update({ poster_id: result.posterId })
         .eq("id", sighting.id);
       if (linkError) throw new Error(`sighting_link:${linkError.message}`);
+      await logNaverBlogAiUsageEvents(supabase, {
+        posterId: result.posterId,
+        sightingId: sighting.id,
+        sourceUrl,
+        blogId,
+        events: [relevanceRoute, deadlineParse],
+      });
 
       stats.matchedPosterOnly += 1;
       console.log(`  [기존 posters에 연결] ${entry.title} -> poster ${result.posterId}`);

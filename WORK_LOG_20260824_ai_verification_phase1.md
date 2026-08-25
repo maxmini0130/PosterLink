@@ -780,6 +780,28 @@ Validation:
 - `git diff --check`
   - Passed, with existing Windows CRLF normalization warnings only.
 
+## Naver Blog Ingester Usage Logging
+
+Extended AI usage logging to the Naver blog RSS ingestion path. No operating DB
+writes were performed.
+
+- Updated `scripts/crawler/src/naver-blog-ingester.js`.
+  - Logs `poster_relevance_route` and `deadline_parse_fallback` usage after a
+    new sighting is processed.
+  - Candidate-linked rows keep `poster_id=null` and store `candidateId`,
+    `sightingId`, `sourceUrl`, and `blogId` in metadata.
+  - Poster-linked rows store the matched `poster_id`.
+  - Discarded rows can still log route usage against `sightingId` metadata, so
+    LLM cost is visible even when no candidate is created.
+  - Logging is best-effort and does not block ingestion.
+
+Validation:
+
+- `pnpm --filter posterlink-crawler test`
+  - Passed: 214 tests.
+- `git diff --check`
+  - Passed, with existing Windows CRLF normalization warnings only.
+
 ## Crawler VLM Usage Event Handoff
 
 Extended AI usage tracking across the crawl-result JSON boundary. No operating
