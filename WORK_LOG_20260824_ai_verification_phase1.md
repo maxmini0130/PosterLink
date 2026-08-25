@@ -1178,3 +1178,25 @@ writes were performed.
 - `discard` stays out of sitemap unless a future human-reviewed archive policy
   explicitly allows it.
 - Updated `docs/ai_content_type_routing.md`.
+
+## Phase 5 Content-Type Evidence Apply
+
+Applied Phase 5 `content_type` evidence to the operating DB after user approval.
+No poster publication status or exposure tier values were changed by this step.
+
+- Apply command:
+  `pnpm content-type:backfill -- --limit=5000 "--statuses=published,review,rejected" --output=data/results/content-type-evidence-apply-20260825-phase5.json --apply`
+  - Checked: 598.
+  - Evidence rows: 598.
+  - Recruit: 556.
+  - Discard: 39.
+  - News: 3.
+  - Applied: 598.
+  - Failed: 0.
+- Follow-up tier dry-run:
+  `pnpm tier:compute -- --limit=5000 "--statuses=published,review" --output=data/eval/reports/exposure-tier-after-content-type-apply-20260825.json`
+  - Checked: 559.
+  - Evidence rows: 5079.
+  - Tiers: A 205, B 3, C 351.
+  - `content_type_news`: 3 rows appear as tier C reasons.
+  - Applied: 0.
