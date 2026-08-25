@@ -122,3 +122,43 @@ Post-apply tier dry-run:
 - `critical_missing_deadline_date`: 221
 - `critical_low_confidence_deadline_date`: 115
 - `critical_low_confidence_host_org`: 88
+
+## New Review Gap Evidence Bundle Apply
+
+Applied after explicit user approval:
+
+- Approved phrase:
+  `new-review gap evidence bundle 32 rows operating DB apply approved.`
+- Original approval:
+  `new-review gap evidence bundle 32건 운영 DB 적용 승인합니다.`
+- Source dry-run:
+  `data/results/new-review-gap-evidence-bundle-dryrun.json`
+- Applied rows: 32
+- Fields:
+  - `is_real_poster`: 6
+  - `host_org`: 11
+  - `deadline_date`: 3
+  - `deadline_type`: 6
+  - `official_url`: 6
+- Minimum confidence: 0.90
+
+Post-apply DB verification confirmed all 32 selected rows.
+
+Post-apply tier dry-run:
+
+- Checked rows: 550
+- A: 179
+- B: 3
+- C: 368
+- SEO gate: 458
+- calendar/deadlineAlert gate: 128
+- `critical_missing_deadline_type`: 265
+- `critical_missing_deadline_date`: 225
+- `critical_missing_official_url`: 3
+- `critical_missing_host_org`: 2
+- `critical_missing_is_real_poster`: 2
+
+Note: two new `review` rows entered the tier scope between the bundle dry-run
+and post-apply tier check. They were outside the approved 32-row bundle and
+account for the remaining `critical_missing_is_real_poster` and
+`critical_missing_host_org` blockers.
