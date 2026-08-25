@@ -79,7 +79,7 @@ async function fetchReviewRows(supabase, limit, statuses) {
     const to = Math.min(offset + pageSize - 1, limit - 1);
     const { data, error } = await supabase
       .from("posters")
-      .select("id,title,source_org_name,summary_short,summary_long,thumbnail_url,source_key,created_at,field_verification")
+      .select("id,title,source_org_name,summary_short,summary_long,thumbnail_url,source_key,created_at,field_verification,exposure_tier")
       .in("poster_status", statuses)
       .not("source_key", "is", null)
       .order("created_at", { ascending: false })
@@ -118,6 +118,7 @@ async function main() {
     title: row.title,
     source_org_name: row.source_org_name,
     source_key: row.source_key,
+    exposure_tier: row.exposure_tier ?? null,
     created_at: row.created_at,
     issues: quality.issues.map((issue) => ({
       code: issue.code,

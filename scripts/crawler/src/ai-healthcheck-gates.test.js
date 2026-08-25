@@ -12,11 +12,11 @@ function passingSummary(overrides = {}) {
     field_verification_coverage_percent: 48.2,
     image_ai_coverage_percent: 20.4,
     review_queue_reject_candidates: 0,
-    image_ai_nonposter_count: 0,
+    image_ai_public_nonposter_count: 0,
     image_ai_low_confidence_count: 0,
     application_source_key_count: 0,
     field_correction_candidates: 0,
-    nonposter_reject_candidates: 0,
+    public_nonposter_reject_candidates: 0,
     ...overrides,
   };
 }

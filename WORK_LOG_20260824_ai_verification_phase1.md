@@ -1231,3 +1231,43 @@ performed.
   - Stages: rule 3101, cheap_text 2606, high_text 1765.
   - Estimated unit cost: 40512.
 - Updated `docs/ai_kpi_measurement.md`.
+
+## Launch Healthcheck Public Exposure Gate
+
+Adjusted the read-only AI healthcheck gate to match Phase 3/5 public exposure
+behavior. No operating DB writes were performed.
+
+- Raw non-poster counts remain visible in reports:
+  - `image_ai_nonposter_count`
+  - `nonposter_reject_candidates`
+- Enforced gate now uses public-feed counts:
+  - `image_ai_public_nonposter_count`
+  - `public_nonposter_reject_candidates`
+- Current healthcheck:
+  `pnpm --filter posterlink-crawler ai:healthcheck -- --output=data/results/ai-healthcheck-20260825-public-gated.json`
+  - `image_ai_nonposter_count`: 12.
+  - `image_ai_public_nonposter_count`: 0.
+  - `nonposter_reject_candidates`: 12.
+  - `public_nonposter_reject_candidates`: 0.
+  - `quality_gate_status`: pass.
+- Enforced healthcheck:
+  `pnpm --filter posterlink-crawler ai:healthcheck -- --enforce --output=data/results/ai-healthcheck-20260825-public-gated-enforce.json`
+  - Passed.
+- Added root command alias:
+  - `pnpm ai:healthcheck`
+
+## User Feedback Loop Dry-Run
+
+Checked the field-report escalation workflow. No operating DB writes were
+performed.
+
+- Detail pages already expose `FieldReportButton` for core fact fields.
+- Admin AI verification API and dashboard already list field reports and risky
+  repeated reports.
+- Dry-run command:
+  `pnpm field-reports:process -- --threshold=2 --output=data/results/field-report-escalation-dryrun-20260825.json`
+  - Checked reports: 0.
+  - Checked posters: 0.
+  - Escalations: 0.
+  - Move-to-review candidates: 0.
+  - Applied: 0.

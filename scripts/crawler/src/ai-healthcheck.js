@@ -41,11 +41,11 @@ Quality gate options:
   --min-field-coverage=45
   --min-image-coverage=20
   --max-review-reject-candidates=0
-  --max-image-nonposters=0
+  --max-public-image-nonposters=0
   --max-image-low-confidence=0
   --max-application-source-keys=0
   --max-field-correction-candidates=0
-  --max-nonposter-reject-candidates=0`);
+  --max-public-nonposter-reject-candidates=0`);
   process.exit(0);
 }
 
@@ -104,6 +104,10 @@ function percent(numerator, denominator) {
   return denominator > 0 ? Math.round((numerator / denominator) * 1000) / 10 : 0;
 }
 
+function isPublicExposureTier(value) {
+  return value === null || value === undefined || value === "A" || value === "B";
+}
+
 function numericArg(name, fallback) {
   if (!(name in args)) return fallback;
   const value = Number(args[name]);
@@ -125,7 +129,7 @@ async function measureImageAiCoverage() {
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabase
       .from("posters")
-      .select("id,title,poster_status,thumbnail_url,field_verification")
+      .select("id,title,poster_status,thumbnail_url,field_verification,exposure_tier")
       .in("poster_status", ["published", "review"])
       .not("thumbnail_url", "is", null)
       .range(offset, offset + pageSize - 1);
@@ -141,6 +145,7 @@ async function measureImageAiCoverage() {
   );
   const checkedRows = rows.filter((row) => getImageClassification(row));
   const nonposterRows = checkedRows.filter((row) => getImageClassification(row).isPoster === false);
+  const publicNonposterRows = nonposterRows.filter((row) => isPublicExposureTier(row.exposure_tier));
   const lowConfidenceRows = checkedRows.filter((row) => {
     const confidence = Number(getImageClassification(row).confidence ?? 0);
     return Number.isFinite(confidence) && confidence < 0.55;
@@ -151,6 +156,7 @@ async function measureImageAiCoverage() {
     checked_rows: checkedRows.length,
     coverage_percent: percent(checkedRows.length, rows.length),
     nonposter_image_count: nonposterRows.length,
+    public_nonposter_image_count: publicNonposterRows.length,
     low_confidence_count: lowConfidenceRows.length,
     nonposter_sample: nonposterRows.slice(0, 10).map((row) => ({
       id: row.id,
@@ -215,9 +221,9 @@ async function main() {
       "max-review-reject-candidates",
       DEFAULT_HEALTHCHECK_THRESHOLDS.max_review_queue_reject_candidates,
     ),
-    max_image_ai_nonposter_count: numericArg(
-      "max-image-nonposters",
-      DEFAULT_HEALTHCHECK_THRESHOLDS.max_image_ai_nonposter_count,
+    max_image_ai_public_nonposter_count: numericArg(
+      "max-public-image-nonposters",
+      DEFAULT_HEALTHCHECK_THRESHOLDS.max_image_ai_public_nonposter_count,
     ),
     max_image_ai_low_confidence_count: numericArg(
       "max-image-low-confidence",
@@ -231,9 +237,9 @@ async function main() {
       "max-field-correction-candidates",
       DEFAULT_HEALTHCHECK_THRESHOLDS.max_field_correction_candidates,
     ),
-    max_nonposter_reject_candidates: numericArg(
-      "max-nonposter-reject-candidates",
-      DEFAULT_HEALTHCHECK_THRESHOLDS.max_nonposter_reject_candidates,
+    max_public_nonposter_reject_candidates: numericArg(
+      "max-public-nonposter-reject-candidates",
+      DEFAULT_HEALTHCHECK_THRESHOLDS.max_public_nonposter_reject_candidates,
     ),
   };
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -277,10 +283,14 @@ async function main() {
     review_queue_reject_candidates: kpi.review_queue_reject_candidates,
     image_ai_coverage_percent: imageAi.coverage_percent,
     image_ai_nonposter_count: imageAi.nonposter_image_count,
+    image_ai_public_nonposter_count: imageAi.public_nonposter_image_count,
     image_ai_low_confidence_count: imageAi.low_confidence_count,
     application_source_key_count: sourceLinks.application_source_key_count,
     field_correction_candidates: corrections.correction_count,
     nonposter_reject_candidates: nonposters.reject_count,
+    public_nonposter_reject_candidates: (nonpostersReport.rows ?? [])
+      .filter((row) => isPublicExposureTier(row.exposure_tier))
+      .length,
     golden_set_labeled_rows: goldenSet?.labeled_rows ?? null,
     golden_set_macro_accuracy: goldenSet?.macro_accuracy_label ?? null,
   };

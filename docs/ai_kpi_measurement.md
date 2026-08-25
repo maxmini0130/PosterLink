@@ -80,8 +80,14 @@ pnpm --filter posterlink-crawler ai:healthcheck -- --enforce --output=data/resul
 
 The default coverage floors are 99% for embeddings, 45% for field
 verification, and 20% for image AI. Application-form source keys, review reject
-candidates, image non-poster or low-confidence candidates, field correction
-candidates, and published/review non-poster candidates must all remain at zero.
+candidates, public-feed image non-poster candidates, low-confidence image
+candidates, field correction candidates, and public-feed non-poster candidates
+must all remain at zero.
+
+The report still includes raw `image_ai_nonposter_count` and
+`nonposter_reject_candidates`. Those can include published tier C archive rows
+that are not exposed in the public feed. The enforced launch gate uses
+`image_ai_public_nonposter_count` and `public_nonposter_reject_candidates`.
 
 The command writes its full report before returning exit code 2 on a gate
 failure. Override coverage floors with `--min-embedding-coverage`,

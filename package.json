@@ -23,6 +23,7 @@
     "tier:auto-publish": "pnpm --filter posterlink-crawler tier:auto-publish",
     "ai:routing": "pnpm --filter posterlink-crawler ai:routing",
     "ai:usage": "pnpm --filter posterlink-crawler ai:usage",
+    "ai:healthcheck": "pnpm --filter posterlink-crawler ai:healthcheck",
     "field-reports:process": "pnpm --filter posterlink-crawler field-reports:process",
     "collect": "tsx scripts/collect-posters.ts",
     "collect:youth": "tsx scripts/collect-posters.ts youth",

@@ -3,11 +3,11 @@ export const DEFAULT_HEALTHCHECK_THRESHOLDS = Object.freeze({
   min_field_verification_coverage_percent: 45,
   min_image_ai_coverage_percent: 20,
   max_review_queue_reject_candidates: 0,
-  max_image_ai_nonposter_count: 0,
+  max_image_ai_public_nonposter_count: 0,
   max_image_ai_low_confidence_count: 0,
   max_application_source_key_count: 0,
   max_field_correction_candidates: 0,
-  max_nonposter_reject_candidates: 0,
+  max_public_nonposter_reject_candidates: 0,
 });
 
 const HEALTHCHECK_GATE_DEFINITIONS = [
@@ -32,8 +32,8 @@ const HEALTHCHECK_GATE_DEFINITIONS = [
     comparison: "max",
   },
   {
-    metric: "image_ai_nonposter_count",
-    threshold: "max_image_ai_nonposter_count",
+    metric: "image_ai_public_nonposter_count",
+    threshold: "max_image_ai_public_nonposter_count",
     comparison: "max",
   },
   {
@@ -52,8 +52,8 @@ const HEALTHCHECK_GATE_DEFINITIONS = [
     comparison: "max",
   },
   {
-    metric: "nonposter_reject_candidates",
-    threshold: "max_nonposter_reject_candidates",
+    metric: "public_nonposter_reject_candidates",
+    threshold: "max_public_nonposter_reject_candidates",
     comparison: "max",
   },
 ];
