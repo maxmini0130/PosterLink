@@ -89,3 +89,36 @@
     - `benefit`: 224
     - `deadline_type`: 221
     - `apply_url`: 178
+
+## High-confidence core P0 evidence apply
+
+Applied after explicit user approval:
+
+- Approved phrase:
+  `high-confidence core P0 evidence 16 new rows operating DB apply approved.`
+- Original approval:
+  `고신뢰 핵심 P0 evidence 신규 16건 운영 DB 적용 승인합니다.`
+- Source dry-run:
+  `data/results/field-evidence-high-core-p0-dryrun.json`
+- Applied rows: 16
+- Minimum confidence: 0.90
+- Fields:
+  - `host_org`: 8
+  - `deadline_type`: 1
+  - `official_url`: 4
+  - `deadline_date`: 3
+
+Post-apply DB verification confirmed all 16 selected rows.
+
+Post-apply tier dry-run:
+
+- Checked rows: 542
+- A: 167
+- B: 3
+- C: 372
+- SEO gate: 452
+- calendar/deadlineAlert gate: 115
+- `critical_missing_deadline_type`: 264
+- `critical_missing_deadline_date`: 221
+- `critical_low_confidence_deadline_date`: 115
+- `critical_low_confidence_host_org`: 88
