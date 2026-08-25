@@ -162,3 +162,42 @@ Note: two new `review` rows entered the tier scope between the bundle dry-run
 and post-apply tier check. They were outside the approved 32-row bundle and
 account for the remaining `critical_missing_is_real_poster` and
 `critical_missing_host_org` blockers.
+
+## Residual Gap Evidence Bundle Apply
+
+Applied after explicit user approval:
+
+- Approved phrase:
+  `residual gap evidence bundle 25 rows operating DB apply approved.`
+- Original approval:
+  `residual gap evidence bundle 25건 운영 DB 적용 승인합니다.`
+- Source dry-run:
+  `data/results/residual-gap-evidence-bundle-dryrun.json`
+- Applied rows: 25
+- Fields:
+  - `is_real_poster`: 5
+  - `host_org`: 10
+  - `official_url`: 4
+  - `deadline_date`: 2
+  - `deadline_type`: 4
+- Minimum confidence: 0.90
+
+Post-apply DB verification confirmed all 25 selected rows.
+
+Post-apply tier dry-run:
+
+- Checked rows: 554
+- A: 182
+- B: 3
+- C: 369
+- SEO gate: 462
+- calendar/deadlineAlert gate: 130
+- `critical_missing_deadline_type`: 265
+- `critical_missing_deadline_date`: 225
+- `critical_low_confidence_deadline_date`: 105
+- `critical_low_confidence_host_org`: 88
+- `critical_missing_official_url`: 3
+
+`critical_missing_is_real_poster` and `critical_missing_host_org` were removed
+from the top reasons after this bundle, but a new review row entered the tier
+scope during the run and accounts for one remaining multi-field gap.
