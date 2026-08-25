@@ -32,7 +32,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       : Promise.resolve({ data: [] }),
     supabase.from("categories").select("id,name,code").eq("is_active", true),
     supabase.from("regions").select("id,name,full_name,code,level,parent_id").eq("is_active", true),
-    supabase.from("institutions").select("slug,updated_at").eq("is_public", true).limit(500),
+    supabase
+      .from("institutions")
+      .select("slug,updated_at")
+      .eq("is_public", true)
+      .not("slug", "is", null)
+      .neq("slug", "")
+      .limit(500),
   ]);
 
   const staticRoutes: MetadataRoute.Sitemap = [

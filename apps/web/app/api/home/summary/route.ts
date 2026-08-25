@@ -22,6 +22,13 @@ async function safeCount(query: PromiseLike<{ count: number | null; error: unkno
   return count ?? 0;
 }
 
+async function safeRpcNumber(query: PromiseLike<{ data: unknown; error: unknown }>) {
+  const { data, error } = await query;
+  if (error) return 0;
+  const value = typeof data === "number" ? data : Number(data ?? 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
 export async function GET() {
   const supabase = getAdminClient();
   const now = new Date();
@@ -39,13 +46,13 @@ export async function GET() {
         .eq("poster_status", "published")
         .gte("created_at", todayStart.toISOString()),
     ),
-    safeCount(
-      supabase
-        .from("posters")
-        .select("id", { count: "exact", head: true })
-        .eq("poster_status", "published")
-        .or(`application_start_at.is.null,application_start_at.lte.${nowIso}`)
-        .or(`application_end_at.gte.${nowIso},and(application_end_at.is.null,deadline_type.in.(ongoing,until_exhausted))`),
+    safeRpcNumber(
+      supabase.rpc("count_public_posters", {
+        p_query: null,
+        p_category_id: null,
+        p_region_ids: null,
+        p_include_closed: false,
+      }),
     ),
     safeCount(
       supabase
@@ -60,7 +67,9 @@ export async function GET() {
       supabase
         .from("institutions")
         .select("id", { count: "exact", head: true })
-        .eq("is_public", true),
+        .eq("is_public", true)
+        .not("slug", "is", null)
+        .neq("slug", ""),
     ),
   ]);
 

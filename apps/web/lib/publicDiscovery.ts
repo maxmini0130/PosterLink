@@ -116,8 +116,10 @@ export async function fetchPublicInstitutions(search?: string | null): Promise<P
     .from("institutions")
     .select("id,slug,name,institution_type,region_name,homepage_url,verification_status,trust_score,last_collected_at")
     .eq("is_public", true)
+    .not("slug", "is", null)
+    .neq("slug", "")
     .order("name", { ascending: true })
-    .limit(300);
+    .limit(500);
 
   const cleanedSearch = sanitizeSearchTerm(search);
   if (cleanedSearch) query = query.or(`name.ilike.%${cleanedSearch}%,region_name.ilike.%${cleanedSearch}%`);

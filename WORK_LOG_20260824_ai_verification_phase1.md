@@ -366,3 +366,21 @@ Validation:
 - `pnpm --filter web lint`
 - `pnpm test -- apps/web/lib/discoveryRoutes.test.ts apps/web/lib/trafficAnalytics.test.ts`
 - `pnpm --filter web build`
+
+## Public Count Alignment Fix
+
+Aligned public homepage, discovery, institution list, and sitemap counting
+criteria.
+
+- File: `apps/web/app/api/home/summary/route.ts`
+- The homepage `activePosters` metric now uses the same
+  `count_public_posters` RPC as `/posters`, preventing the homepage from
+  showing a raw database count that differs from the public filtered list.
+- Homepage `collectionSources` now counts only public institutions with a
+  non-empty slug, matching institutions that can actually be opened publicly.
+- File: `apps/web/lib/publicDiscovery.ts`
+- Public institution discovery now excludes public institution rows without a
+  slug and uses the same 500-row cap as the sitemap.
+- File: `apps/web/app/sitemap.ts`
+- Institution sitemap URLs now use the same public-with-slug criteria, avoiding
+  empty/broken institution URLs and count drift.
