@@ -696,3 +696,33 @@ Validation:
   - Checked reports: 0.
   - Escalation candidates: 0.
   - Applied rows: 0.
+
+## AI Usage Logging Integration
+
+Connected initial AI call sites to `ai_usage_log`. No operating DB writes were
+performed in this step.
+
+- Added `scripts/crawler/src/ai-usage-logger.js`.
+  - Builds VLM usage rows for image classification.
+  - Inserts into `ai_usage_log` unless `POSTER_AI_USAGE_LOG=0`.
+  - Returns non-throwing status objects so usage logging failures do not block
+    the primary job.
+- Updated `scripts/crawler/src/backfill-image-classification.js`.
+  - When `--apply` performs image classification, it now logs one VLM usage row
+    per classified poster.
+  - Dry-run mode still performs no model calls and no DB writes.
+- Updated `supabase/functions/process-ocr/index.ts`.
+  - Writes a VLM `process-ocr` usage row after successful OpenAI OCR calls.
+  - Captures model, input/output tokens when returned by OpenAI, image count,
+    and estimated internal cost units.
+  - Usage logging is skipped when `POSTER_AI_USAGE_LOG=0`.
+  - Function deployment is still pending; code was not deployed in this step.
+
+Validation:
+
+- `pnpm --filter posterlink-crawler test`
+  - Passed: 210 tests.
+- `pnpm --filter posterlink-crawler image:backfill -- --limit=1 --needs-vlm-only --output=data/results/image-classification-ai-usage-dryrun-20260825.json`
+  - Dry-run only.
+  - Candidate count: 0.
+  - Applied rows: 0.

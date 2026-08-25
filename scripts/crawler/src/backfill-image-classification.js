@@ -5,6 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import { classifyPosterImage } from "./poster-image-classifier.js";
+import { buildImageClassificationUsageRow, logAiUsage } from "./ai-usage-logger.js";
 import {
   decidePosterDetection,
   extractPosterSignals,
@@ -250,6 +251,19 @@ async function main() {
         entry.visualType = classification.visualType;
         entry.reason = classification.reason;
         entry.model = classification.model;
+        const usageResult = await logAiUsage(supabase, buildImageClassificationUsageRow({
+          posterId: row.id,
+          model: classification.model,
+          status: "success",
+          metadata: {
+            isPoster: classification.isPoster,
+            confidence: classification.confidence,
+            visualType: classification.visualType,
+            needsVlmOnly,
+          },
+        }));
+        entry.ai_usage_log_status = usageResult.status;
+        if (usageResult.error) entry.ai_usage_log_error = usageResult.error;
       }
     } catch (error) {
       entry.status = "failed";

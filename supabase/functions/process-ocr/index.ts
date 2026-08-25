@@ -45,6 +45,7 @@ function normalizeFieldKey(value: unknown) {
     "host_org",
     "official_url",
     "is_real_poster",
+    "content_type",
     "apply_start",
     "category",
     "region",
@@ -60,6 +61,62 @@ function normalizeFieldKey(value: unknown) {
     "venue",
   ])
   return allowed.has(key) ? key : null
+}
+
+async function writeAiUsageLog({
+  posterId,
+  model,
+  inputTokens,
+  outputTokens,
+  imageCount,
+  status,
+  metadata,
+}: {
+  posterId: string | null
+  model: string
+  inputTokens?: number | null
+  outputTokens?: number | null
+  imageCount?: number
+  status: "success" | "failed"
+  metadata?: Record<string, unknown>
+}) {
+  if (Deno.env.get("POSTER_AI_USAGE_LOG") === "0") return
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+  if (!supabaseUrl || !serviceRoleKey) return
+
+  const tokenUnits = Math.max(1, Math.ceil(((inputTokens ?? 0) + (outputTokens ?? 0)) / 1000) || 1)
+  const safeImageCount = Math.max(0, Number(imageCount ?? 0) || 0)
+  const estimatedUnitCost = Math.round(25 * Math.max(tokenUnits, safeImageCount, 1) * 100) / 100
+
+  const response = await fetch(`${supabaseUrl}/rest/v1/ai_usage_log`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${serviceRoleKey}`,
+      "apikey": serviceRoleKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      job_name: "process-ocr",
+      stage: 3,
+      stage_label: "vlm",
+      model,
+      operation: "ocr_field_extraction",
+      poster_id: posterId,
+      field_key: null,
+      status,
+      input_tokens: inputTokens ?? null,
+      output_tokens: outputTokens ?? null,
+      image_count: safeImageCount,
+      estimated_unit_cost: estimatedUnitCost,
+      metadata: metadata ?? {},
+    }),
+  })
+
+  if (!response.ok) {
+    console.warn(`ai_usage_log write failed: ${response.status} ${await response.text()}`)
+  }
 }
 
 function normalizeEvidenceSrc(value: unknown) {
@@ -230,6 +287,7 @@ ${CATEGORY_GUIDE}
 - 날짜는 Asia/Seoul 기준입니다. 연도가 없으면 appEndAt은 null로 두고 낮은 confidence의 evidence만 반환하세요.
 - 청년/사업/교육이라는 단어만 보고 연령, 혜택, 신청방법을 추론하지 마세요.`
 
+    const model = "gpt-4o"
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -237,7 +295,7 @@ ${CATEGORY_GUIDE}
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o",
+        model,
         max_tokens: 1000,
         messages: [
           {
@@ -266,6 +324,18 @@ ${CATEGORY_GUIDE}
     }
 
     const aiResult = await response.json()
+    await writeAiUsageLog({
+      posterId: typeof posterId === "string" ? posterId : null,
+      model,
+      inputTokens: aiResult.usage?.prompt_tokens ?? null,
+      outputTokens: aiResult.usage?.completion_tokens ?? null,
+      imageCount: 1,
+      status: "success",
+      metadata: {
+        function: "process-ocr",
+        choiceCount: Array.isArray(aiResult.choices) ? aiResult.choices.length : null,
+      },
+    })
     const content = aiResult.choices?.[0]?.message?.content ?? ""
 
     let parsed: any = {}
