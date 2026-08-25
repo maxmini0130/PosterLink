@@ -558,3 +558,35 @@ Post-apply tier dry-run:
 - `critical_missing_deadline_type`: 261
 - `critical_low_confidence_is_real_poster`: 4
 - calendar/deadlineAlert gate: 115
+
+## Batch 12 production apply
+
+Applied after explicit user approval:
+
+- Approved phrase:
+  `needs-vlm 이미지 분류 batch12 20건 운영 DB 적용 승인합니다.`
+- Command:
+  `pnpm --filter posterlink-crawler image:backfill -- --limit=20 --concurrency=1 "--statuses=published,review" --needs-vlm-only --apply --output=data/results/needs-vlm-image-classification-batch12-apply.json`
+- Candidate count: 20
+- Applied count: 20
+- Failed count: 0
+- `isPoster=true`: 19
+- `isPoster=false`: 1
+- Confidence range: 0.92 to 0.98
+
+Non-poster classification:
+
+- `마포청소년문화의집, 국가보훈부 공모 3년 연속 선정 (2026.03.03.)`
+  - `news article / webpage screenshot`, confidence 0.92
+
+Post-apply poster-detection dry-run:
+
+- Checked rows: 538
+- Evidence rows: 486
+- `is_real_poster=true`: 476
+- `is_real_poster=false`: 10
+- Ambiguous: 52
+- `needs_vlm`: 52
+
+No batch12 `is_real_poster` evidence rows were applied in this step. That
+conversion requires a separate operating DB approval.
