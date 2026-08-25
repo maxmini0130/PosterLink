@@ -73,6 +73,17 @@ pnpm --filter posterlink-crawler eval:extraction -- --set=eval/golden --extracto
 
 The report is written to `data/eval/reports/` by default.
 
+Export threshold candidates from a scored evaluation report:
+
+```bash
+pnpm eval:thresholds -- --input=data/eval/reports/extraction-current.json --out=data/eval/reports/extraction-thresholds-candidate.json --module-out=data/eval/reports/extraction-thresholds-candidate.js
+```
+
+The threshold export is a local artifact step. It summarizes whether the report
+has enough labels and field-level recommendations, then emits copyable candidate
+constants. Treat the generated constants as a review draft until the 120-item
+golden set is complete.
+
 ## CI
 
 `.github/workflows/ai-extraction-eval.yml` runs the same harness:
@@ -94,6 +105,7 @@ The report includes:
 - `coverage@τ`
 - hallucination rate for labels explicitly marked as absent with `null`
 - recommended threshold per field
+- threshold-candidate export readiness and fallback defaults
 
 The status report includes:
 
@@ -107,6 +119,8 @@ Threshold selection follows the spec:
 
 - critical fields target `precision@τ >= 0.98`
 - major and minor fields target `precision@τ >= 0.90`
+- production threshold constants should be changed only after
+  `pnpm eval:thresholds` reports `production_ready: true`
 
 ## Labeling Rules
 

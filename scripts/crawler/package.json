@@ -28,6 +28,7 @@
     "eval:import-batch": "node src/import-extraction-golden-batch.js",
     "eval:validate": "node src/validate-extraction-golden.js",
     "eval:extraction": "node src/eval-extraction.js",
+    "eval:thresholds": "node src/export-extraction-thresholds.js",
     "eval:status": "node src/summarize-extraction-golden.js",
     "review:audit-notes": "node src/audit-human-review-notes.js",
     "review:apply-corrections": "node src/apply-human-review-corrections.js",

@@ -1643,3 +1643,23 @@ DB writes were performed.
 - Documentation updated:
   - `docs/ai_extraction_evaluation.md`
   - `eval/golden/README.md`
+
+## Phase 2 Threshold Candidate Export
+
+Added a local threshold-candidate export step for the Phase 2 evaluation
+workflow. No operating DB writes were performed.
+
+- Added CLI:
+  - `pnpm eval:thresholds`
+  - Package command:
+    `pnpm --filter posterlink-crawler eval:thresholds`
+- Behavior:
+  - Reads a `pnpm eval:extraction` report JSON.
+  - Exports field-level threshold recommendations, readiness, blocking reasons,
+    and fallback defaults to a local JSON report.
+  - Optionally writes a copyable candidate JS module via `--module-out`.
+  - Keeps production threshold code untouched until the 120-item golden set is
+    complete and the generated plan reports `production_ready: true`.
+- Documentation updated:
+  - `docs/ai_extraction_evaluation.md`
+  - `eval/golden/README.md`

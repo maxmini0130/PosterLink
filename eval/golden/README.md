@@ -36,6 +36,7 @@ pnpm eval:review-sheet -- --input=data/eval/review-batches-20260825/batch-01.jso
 pnpm eval:import-batch -- --input=data/eval/review-batches-20260825/batch-01.json --labeled-by=max
 pnpm eval:import-batch -- --input=data/eval/review-batches-20260825/batch-01.json --labeled-by=max --apply
 pnpm eval:extraction -- --set=eval/golden --extractor=current
+pnpm eval:thresholds -- --input=data/eval/reports/extraction-current.json --out=data/eval/reports/extraction-thresholds-candidate.json --module-out=data/eval/reports/extraction-thresholds-candidate.js
 ```
 
 Reports are written under `data/eval/reports/`, which is ignored by git.
