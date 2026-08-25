@@ -2247,7 +2247,7 @@ async function uploadToSupabase(filePath) {
         posterId: existingPoster.id,
         sourceKey,
         sourceUrl,
-        events: [readableInfo],
+        events: [readableInfo, embedding],
       });
       process.stdout.write("-");
       continue;
@@ -2292,7 +2292,7 @@ async function uploadToSupabase(filePath) {
       posterId,
       sourceKey,
       sourceUrl,
-      events: [readableInfo],
+      events: [readableInfo, embedding],
     });
 
     success++;

@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
+import { attachAiUsageMetadata } from "./ai-usage-logger.js";
 
 const CACHE_PATH = "data/poster_embeddings_cache.json";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY?.trim();
@@ -80,7 +81,15 @@ export async function embedPosterText({ title, summaryShort, summaryLong }) {
 
     cache[key] = embedding;
     await saveCache(cache);
-    return embedding;
+    return attachAiUsageMetadata(embedding, {
+      model: MODEL,
+      operation: "poster_embedding",
+      stageLabel: "cheap_text",
+      status: "success",
+      inputTokens: payload.usage?.input_tokens ?? payload.usage?.prompt_tokens ?? payload.usage?.total_tokens ?? null,
+      outputTokens: payload.usage?.output_tokens ?? payload.usage?.completion_tokens ?? null,
+      metadata: { inputCharLength: input.length },
+    });
   } catch (error) {
     console.warn(`  Embedding failed: ${error.message}`);
     return null;

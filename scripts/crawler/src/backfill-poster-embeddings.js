@@ -1,6 +1,7 @@
 import "./load-env.js";
 import { createClient } from "@supabase/supabase-js";
 import { embedPosterText, embeddingToPgVector } from "./poster-embedder.js";
+import { buildTextModelUsageRow, extractAiUsageMetadata, logAiUsage } from "./ai-usage-logger.js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
@@ -52,6 +53,24 @@ async function main() {
         .eq("id", poster.id);
 
       if (updateError) throw updateError;
+
+      const usage = extractAiUsageMetadata(embedding);
+      if (usage?.model && usage.operation) {
+        const usageResult = await logAiUsage(supabase, buildTextModelUsageRow({
+          jobName: "poster-embedding-backfill",
+          stageLabel: usage.stageLabel ?? "cheap_text",
+          posterId: poster.id,
+          model: usage.model,
+          operation: usage.operation,
+          status: usage.status ?? "success",
+          inputTokens: usage.inputTokens ?? null,
+          outputTokens: usage.outputTokens ?? null,
+          metadata: usage.metadata ?? {},
+        }));
+        if (usageResult.status === "failed") {
+          console.warn(`  AI usage log failed (${usage.operation}): ${usageResult.error}`);
+        }
+      }
     }
     embedded += 1;
   }

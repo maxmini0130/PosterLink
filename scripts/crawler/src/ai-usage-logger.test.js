@@ -80,6 +80,14 @@ test("AI usage metadata stays non-enumerable", () => {
   assert.deepEqual(extractAiUsageMetadata(result), { operation: "test" });
 });
 
+test("AI usage metadata stays off serialized embedding arrays", () => {
+  const embedding = attachAiUsageMetadata([0.1, 0.2], { operation: "poster_embedding" });
+
+  assert.deepEqual(Object.keys(embedding), ["0", "1"]);
+  assert.equal(JSON.stringify(embedding), "[0.1,0.2]");
+  assert.deepEqual(extractAiUsageMetadata(embedding), { operation: "poster_embedding" });
+});
+
 test("logAiUsage inserts rows when enabled", async () => {
   const inserted = [];
   const supabase = {

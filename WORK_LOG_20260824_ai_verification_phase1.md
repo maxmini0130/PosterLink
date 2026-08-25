@@ -779,3 +779,28 @@ Validation:
   - Passed: 213 tests.
 - `git diff --check`
   - Passed, with existing Windows CRLF normalization warnings only.
+
+## Embedding Usage Logging
+
+Extended AI usage logging to poster embedding calls. No operating DB writes were
+performed.
+
+- Updated `scripts/crawler/src/poster-embedder.js`.
+  - Fresh OpenAI embedding calls now attach non-enumerable `poster_embedding`
+    usage metadata to the returned vector array.
+  - Cached embedding vectors do not create duplicate usage metadata.
+  - Serialized embedding arrays remain unchanged.
+- Updated `scripts/crawler/src/upload-to-supabase.js`.
+  - Poster upload now records embedding usage after an existing poster update or
+    new poster insert succeeds.
+- Updated `scripts/crawler/src/backfill-poster-embeddings.js`.
+  - `--dry-run` remains read-only.
+  - Non-dry-run updates now log `poster-embedding-backfill` usage rows after the
+    embedding column update succeeds.
+
+Validation:
+
+- `pnpm --filter posterlink-crawler test`
+  - Passed: 214 tests.
+- `git diff --check`
+  - Passed, with existing Windows CRLF normalization warnings only.
