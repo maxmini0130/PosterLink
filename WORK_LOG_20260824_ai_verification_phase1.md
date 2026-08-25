@@ -621,3 +621,24 @@ Validation:
 
 - `pnpm --filter web lint`
 - `pnpm --filter web build`
+
+## Phase 6 And Feedback Loop DB Migration Apply
+
+Applied after explicit user approval:
+
+- Approval phrase:
+  `승인합시다.`
+- Applied with:
+  `pnpm dlx supabase db push --linked --yes`
+- Applied migrations:
+  - `20260825010000_add_ai_usage_log.sql`
+  - `20260825020000_add_field_reports.sql`
+
+Remote verification:
+
+- `ai_usage_log`: exists, count 0.
+- `ai_usage_daily_overview`: exists, count 0.
+- `field_reports`: exists, count 0.
+- `field_report_field_overview`: exists, count 0.
+- `pnpm dlx supabase migration list --linked` shows both migrations present
+  remotely.
