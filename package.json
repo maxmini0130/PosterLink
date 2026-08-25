@@ -16,6 +16,7 @@
     "eval:review-batches": "pnpm --filter posterlink-crawler eval:review-batches",
     "eval:validate": "pnpm --filter posterlink-crawler eval:validate",
     "eval:extraction": "pnpm --filter posterlink-crawler eval:extraction",
+    "eval:status": "pnpm --filter posterlink-crawler eval:status",
     "poster-detection:backfill": "pnpm --filter posterlink-crawler poster-detection:backfill",
     "content-type:backfill": "pnpm --filter posterlink-crawler content-type:backfill",
     "tier:compute": "pnpm --filter posterlink-crawler tier:compute",

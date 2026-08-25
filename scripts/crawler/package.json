@@ -26,6 +26,7 @@
     "eval:review-batches": "node src/prepare-extraction-review-batches.js",
     "eval:validate": "node src/validate-extraction-golden.js",
     "eval:extraction": "node src/eval-extraction.js",
+    "eval:status": "node src/summarize-extraction-golden.js",
     "review:audit-notes": "node src/audit-human-review-notes.js",
     "review:apply-corrections": "node src/apply-human-review-corrections.js",
     "review:reconcile-goldenset": "node src/reconcile-human-review-goldenset.js",

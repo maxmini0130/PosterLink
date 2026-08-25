@@ -1078,3 +1078,23 @@ writes were performed.
     secrets are available.
   - Uploads the evaluation report artifact for 30 days.
 - Updated `docs/ai_extraction_evaluation.md` with the CI behavior.
+
+## Phase 2 Label Progress Status Command
+
+Added a local progress report for the Phase 2 golden-label workflow. No
+operating DB reads or writes are required.
+
+- Added `scripts/crawler/src/summarize-extraction-golden.js`.
+  - Reads the generated seed, review batch files, and `eval/golden`.
+  - Reports target count, completed unique poster count, remaining count,
+    sample-bucket distribution, field-level label counts, and least-labeled
+    fields.
+- Added commands:
+  - `pnpm --filter posterlink-crawler eval:status`
+  - `pnpm eval:status`
+- Current report:
+  - Target: 120.
+  - Labeled unique posters under `eval/golden`: 0.
+  - Remaining: 120.
+  - Review batches: 6 files / 120 items.
+- Updated `docs/ai_extraction_evaluation.md` with the status command.

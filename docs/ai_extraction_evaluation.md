@@ -31,6 +31,12 @@ Validate reviewed labels:
 pnpm eval:validate -- --set=eval/golden --require-labels
 ```
 
+Check labeling progress:
+
+```bash
+pnpm eval:status
+```
+
 Run the scored evaluation after reviewed labels exist:
 
 ```bash
@@ -66,6 +72,14 @@ The report includes:
 - `coverage@τ`
 - hallucination rate for labels explicitly marked as absent with `null`
 - recommended threshold per field
+
+The status report includes:
+
+- current labeled poster count
+- remaining count against the generated 120-item seed
+- field-level label counts
+- least-labeled fields
+- review batch bucket distribution
 
 Threshold selection follows the spec:
 
