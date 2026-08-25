@@ -14,6 +14,7 @@
     "audit:phase1": "node scripts/audit-phase1.mjs",
     "eval:sample": "pnpm --filter posterlink-crawler eval:sample",
     "eval:review-batches": "pnpm --filter posterlink-crawler eval:review-batches",
+    "eval:validate": "pnpm --filter posterlink-crawler eval:validate",
     "eval:extraction": "pnpm --filter posterlink-crawler eval:extraction",
     "poster-detection:backfill": "pnpm --filter posterlink-crawler poster-detection:backfill",
     "tier:compute": "pnpm --filter posterlink-crawler tier:compute",

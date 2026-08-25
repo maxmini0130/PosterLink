@@ -490,3 +490,32 @@ Validation:
 - `pnpm --filter posterlink-crawler eval:review-batches -- --input=data/eval/extraction-golden-seed-20260825.json --output-dir=data/eval/review-batches-20260825 --batch-size=20`
 - `pnpm eval:review-batches -- --help`
 - `pnpm --filter posterlink-crawler test`
+
+## Phase 2 Golden Label Validator
+
+Added a pre-scoring validator for Phase 2 golden labels.
+
+- File: `scripts/crawler/src/validate-extraction-golden.js`
+- New package script:
+  `pnpm --filter posterlink-crawler eval:validate`
+- New root script:
+  `pnpm eval:validate`
+- The validator checks:
+  - missing or empty `truth`
+  - unknown field keys
+  - leftover review placeholders
+  - `YYYY-MM-DD` date format for date fields
+  - valid `http(s)` URLs for URL fields
+  - numeric values for numeric fields
+  - boolean values for `is_real_poster`
+  - supported `deadline_type` values
+- File: `docs/ai_extraction_evaluation.md`
+- Documented validation before running extraction scoring.
+
+Validation:
+
+- `pnpm eval:validate -- --set=eval/golden`
+- `pnpm eval:validate -- --set=eval/golden --require-labels`
+  - Expected failure while no golden JSON files exist yet.
+- `pnpm eval:validate -- --help`
+- `pnpm --filter posterlink-crawler test`

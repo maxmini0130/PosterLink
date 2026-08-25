@@ -19,6 +19,12 @@ Split the seed into reviewer-sized batches:
 pnpm eval:review-batches -- --input=data/eval/extraction-golden-seed.json --output-dir=data/eval/review-batches --batch-size=20
 ```
 
+Validate reviewed labels:
+
+```bash
+pnpm eval:validate -- --set=eval/golden --require-labels
+```
+
 Run the scored evaluation after reviewed labels exist:
 
 ```bash
@@ -59,6 +65,9 @@ The review batch files under `data/eval/review-batches/` are working files. For
 each poster, open `context.source_key`, compare the source against
 `review_fields`, and then put only reviewed values into the top-level `truth`
 object. Completed batch files can be copied under `eval/golden/` for scoring.
+Run `pnpm eval:validate -- --set=eval/golden --require-labels` before scoring
+to catch empty labels, unknown fields, placeholders, invalid URLs, and invalid
+date/number formats.
 
 See `eval/golden/README.md` for the JSON shape.
 
