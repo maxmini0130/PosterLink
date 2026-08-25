@@ -2312,3 +2312,47 @@ writes were performed for this change set.
 - Follow-up:
   - Applying this `official_url` evidence bundle to the operating DB requires
     explicit user approval.
+
+## Phase 2 Official URL Evidence Applied
+
+Applied the approved `official_url` evidence-only bundle to the operating DB.
+
+- User approval:
+  - `official_url evidence 596 rows operating DB apply approved`.
+- Apply method:
+  - Used the dry-run report
+    `data/results/field-evidence-official-url-fix-dryrun-20260825.json`.
+  - Selected only rows with `field_key === "official_url"`.
+  - Upserted those rows into `poster_field_evidence` with conflict key
+    `poster_id,field_key,extractor`.
+  - Did not apply `deadline_date`, `deadline_type`, `host_org`, or other
+    structured field rows from the full field-evidence dry-run.
+- Apply result:
+  - Selected rows: 596.
+  - Applied rows: 596.
+  - Failed rows: 0.
+- Post-apply evaluation:
+  - `pnpm eval:extraction -- --set=eval/golden --extractor=current --out=data/eval/reports/extraction-phase2-official-url-applied-20260825.json`
+  - Golden files: 120.
+  - Evidence rows in eval: 1,557.
+  - Macro accuracy: `0.8611111111111112`.
+  - `official_url` accuracy improved to `0.95`.
+  - Other field metrics remained unchanged from the current operating DB
+    evidence.
+- Threshold export:
+  - `pnpm eval:thresholds -- --input=data/eval/reports/extraction-phase2-official-url-applied-20260825.json --out=data/eval/reports/extraction-thresholds-phase2-official-url-applied-20260825.json --module-out=data/eval/reports/extraction-thresholds-phase2-official-url-applied-20260825.js`
+  - Production ready: false.
+  - Blocking reason: `one_or_more_fields_missing_recommendation`.
+- Remaining `official_url` issues:
+  - 6 golden-set official URL observations are still wrong.
+  - Three Mapo culture URLs differ only by extra listing query params and likely
+    need URL canonicalization in evaluation or evidence normalization.
+  - One QA/test poster still has an old `poster-link-v1` official URL evidence
+    row in the operating DB. The new generation guard prevents future rows, but
+    removing or suppressing the stale evidence requires a separate explicit
+    deletion/suppression approval.
+  - One Yongsan source URL points at the neighboring notice id and needs a
+    source-key correction.
+  - One manually reviewed `1in.seoul.go.kr` URL differs by equivalent query
+    ordering/extra params and needs canonical URL comparison or a manual
+    canonicalized evidence row.
