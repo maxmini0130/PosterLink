@@ -201,3 +201,43 @@ Post-apply tier dry-run:
 `critical_missing_is_real_poster` and `critical_missing_host_org` were removed
 from the top reasons after this bundle, but a new review row entered the tier
 scope during the run and accounts for one remaining multi-field gap.
+
+## Post-Residual Critical Evidence Bundle Apply
+
+Applied after explicit user approval:
+
+- Approved phrase:
+  `post-residual critical evidence bundle 37 rows operating DB apply approved.`
+- Original approval:
+  `post-residual critical evidence bundle 37건 운영 DB 적용 승인합니다.`
+- Source dry-run:
+  `data/results/post-residual-critical-evidence-bundle-dryrun.json`
+- Applied rows: 37
+- Affected posters: 23
+- Fields:
+  - `deadline_type`: 23
+  - `host_org`: 6
+  - `official_url`: 3
+  - `is_real_poster`: 3
+  - `deadline_date`: 2
+- Minimum confidence: 0.90
+
+Post-apply DB verification confirmed all 37 selected rows.
+
+Post-apply tier dry-run:
+
+- Checked rows: 557
+- A: 202
+- B: 3
+- C: 352
+- SEO gate: 465
+- calendar/deadlineAlert gate: 152
+- `critical_missing_deadline_type`: 245
+- `critical_missing_deadline_date`: 226
+- `critical_low_confidence_deadline_date`: 105
+- `critical_low_confidence_host_org`: 88
+- `critical_missing_official_url`: 3
+
+The A-tier count increased by 20 and the deadline alert gate increased by 22.
+One new row entered the published/review tier scope during the apply window,
+so the post-apply checked count is 557 instead of the dry-run's 556.
