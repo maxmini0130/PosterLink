@@ -823,3 +823,37 @@ Post-apply poster-detection dry-run:
 Note: after the batch15 apply, four additional review rows were included in the
 tier scope. They are outside the approved batch15 12-row evidence apply, so their
 `is_real_poster` evidence was not applied in this step.
+
+## Final-gap is_real_poster evidence apply
+
+Applied after explicit user approval:
+
+- Approved phrase:
+  `final-gap is_real_poster evidence 4 rows operating DB apply approved.`
+- Original approval:
+  `final-gap is_real_poster evidence 4건 운영 DB 적용 승인합니다.`
+- Applied rows: 4
+- Field: `is_real_poster`
+- Extractor: `poster-detection-signals-v1`
+- Value: `true` x 4
+- Confidence range: 0.90 to 0.95
+
+Applied poster ids:
+
+- `48b89a36-a5ce-4ba3-9313-36261a6e8838`
+- `0347d306-c3fe-492f-9f90-9d39079d38af`
+- `e4a0a436-df97-49af-8b97-179acfbf8a94`
+- `5120f542-bc57-4e78-b437-2c21df38f337`
+
+Post-apply DB verification confirmed 4 rows for the final-gap poster ids.
+
+Post-apply tier dry-run:
+
+- Checked rows: 542
+- A: 167
+- B: 3
+- C: 372
+- `critical_missing_is_real_poster`: 0
+- `critical_low_confidence_is_real_poster`: 4
+- `critical_missing_deadline_type`: 265
+- calendar/deadlineAlert gate: 115
