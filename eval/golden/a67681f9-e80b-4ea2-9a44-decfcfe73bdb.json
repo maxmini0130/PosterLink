@@ -1,0 +1,16 @@
+{
+  "poster_id": "a67681f9-e80b-4ea2-9a44-decfcfe73bdb",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-08-28",
+    "deadline_type": "fixed",
+    "host_org": "(재)한국청년기업가정신재단",
+    "official_url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn=179004"
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-01.json",
+  "context_title": "2026년 한국지역난방공사 창업·벤처기업 지원사업 참여기업 모집",
+  "context_source_url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?pbancSn=179004&schM=view"
+}

@@ -1,0 +1,16 @@
+{
+  "poster_id": "ae79a191-1a39-45d5-a5ba-b51795a8235d",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": null,
+    "deadline_type": "until_exhausted",
+    "host_org": "강서구립내발산작은도서관",
+    "official_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73277"
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-01.json",
+  "context_title": "강서구립내발산작은도서관<시! 읽고, 쓰고, 위로받다>",
+  "context_source_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73277"
+}

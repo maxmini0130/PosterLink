@@ -1,0 +1,16 @@
+{
+  "poster_id": "1b7e19e8-f777-4a6e-a1fd-d6fea3b49a36",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-09-01",
+    "deadline_type": "fixed",
+    "host_org": "주식회사뉴키즈인베스트먼트",
+    "official_url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn=178960"
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-01.json",
+  "context_title": "[2026 시흥시 청년 창업가 육성 프로그램] 준비된 성장, 투자의 모든 것",
+  "context_source_url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?pbancSn=178960&schM=view"
+}

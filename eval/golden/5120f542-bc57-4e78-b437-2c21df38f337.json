@@ -1,0 +1,16 @@
+{
+  "poster_id": "5120f542-bc57-4e78-b437-2c21df38f337",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-09-06",
+    "deadline_type": "fixed",
+    "host_org": "서울시 자치경찰위원회",
+    "official_url": "https://www.seoul.go.kr/news/news_notice.do?bbsNo=277&nttNo=464494"
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-01.json",
+  "context_title": "2026년 제5기 서울 대학생 순찰대 추가 모집 연장 공고",
+  "context_source_url": "https://www.seoul.go.kr/news/news_notice.do?bbsNo=277&nttNo=464494"
+}

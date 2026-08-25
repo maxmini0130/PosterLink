@@ -1,0 +1,16 @@
+{
+  "poster_id": "48b89a36-a5ce-4ba3-9313-36261a6e8838",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-09-04",
+    "deadline_type": "fixed",
+    "host_org": "서울특별시",
+    "official_url": "https://news.seoul.go.kr/economy/archives/574408"
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-01.json",
+  "context_title": "2026년 사회연대경제 청년 일경험 시범사업 참여기업 모집 공고(8.24.~9.4.)",
+  "context_source_url": "https://news.seoul.go.kr/economy/archives/574408"
+}

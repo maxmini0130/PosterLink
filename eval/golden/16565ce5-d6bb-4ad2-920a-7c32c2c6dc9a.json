@@ -1,0 +1,16 @@
+{
+  "poster_id": "16565ce5-d6bb-4ad2-920a-7c32c2c6dc9a",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-08-31",
+    "deadline_type": "fixed",
+    "host_org": "은평구진로직업체험지원센터",
+    "official_url": "https://www.1365.go.kr/vols/P9210/partcptn/timeCptn.do?type=show&progrmRegistNo=3502373"
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-01.json",
+  "context_title": "은평구진로직업체험지원센터 <제13회 은평대전 전공박람회>자원봉사자 모집",
+  "context_source_url": "https://www.1365.go.kr/vols/P9210/partcptn/timeCptn.do?progrmRegistNo=3502373&type=show"
+}

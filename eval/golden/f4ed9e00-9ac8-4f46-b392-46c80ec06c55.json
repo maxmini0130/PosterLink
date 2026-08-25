@@ -1,0 +1,17 @@
+{
+  "poster_id": "f4ed9e00-9ac8-4f46-b392-46c80ec06c55",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-09-10",
+    "deadline_type": "fixed",
+    "host_org": "노원구 청년일자리센터",
+    "official_url": "https://litt.ly/hi_myjob"
+  },
+  "notes": "multiple program deadlines 2026-09-07/09/10; labeled overall latest deadline 2026-09-10 as fixed",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-01.json",
+  "context_title": "노원구 청년일자리센터 <🚩2026 [커리어 위크] 힐링프로그램>",
+  "context_source_url": "https://litt.ly/hi_myjob"
+}

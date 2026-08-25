@@ -1,0 +1,16 @@
+{
+  "poster_id": "be46a746-c141-4ae6-ae55-fa3c0416be54",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": null,
+    "deadline_type": "until_exhausted",
+    "host_org": "강서구립영어도서관",
+    "official_url": "https://lib.gangseo.seoul.kr/NoticeInfoDetail/33701/TOL"
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-01.json",
+  "context_title": "강서구립영어도서관<2026 강서구 하늘품은 야외도서관 프로그램 사전접수 (1차) 황예솔 작가와의 만남>",
+  "context_source_url": "https://lib.gangseo.seoul.kr/NoticeInfoDetail/33701/TOL"
+}

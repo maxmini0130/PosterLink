@@ -1,0 +1,16 @@
+{
+  "poster_id": "74febfad-4da8-4b3f-8124-aad37d7cc430",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-09-01",
+    "deadline_type": "fixed",
+    "host_org": "벤처박스주식회사",
+    "official_url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn=178972"
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-01.json",
+  "context_title": "2026 경기 고양 MICE 연계 창업리그 참가자 모집 공고",
+  "context_source_url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?pbancSn=178972&schM=view"
+}

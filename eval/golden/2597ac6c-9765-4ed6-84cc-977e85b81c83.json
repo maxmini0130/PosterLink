@@ -1,0 +1,16 @@
+{
+  "poster_id": "2597ac6c-9765-4ed6-84cc-977e85b81c83",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-09-09",
+    "deadline_type": "fixed",
+    "host_org": "수원대학교",
+    "official_url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn=178992"
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-01.json",
+  "context_title": "2026년 WoW!메이커스 IR클리닉 참여기업 모집",
+  "context_source_url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?pbancSn=178992&schM=view"
+}

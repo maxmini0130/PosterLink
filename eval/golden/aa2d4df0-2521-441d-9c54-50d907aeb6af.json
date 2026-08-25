@@ -1,0 +1,16 @@
+{
+  "poster_id": "aa2d4df0-2521-441d-9c54-50d907aeb6af",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-08-27",
+    "deadline_type": "fixed",
+    "host_org": "광진구1인가구지원센터",
+    "official_url": "https://www.instagram.com/p/DcNLWCcif6x/?utm_source=ig_web_copy_link&igsi=MzRlODBiNWFlZA=="
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-01.json",
+  "context_title": "광진구1인가구지원센터 <광진학당 2학기 신규강좌 추가모집>(~8/27)",
+  "context_source_url": "https://www.instagram.com/p/DcNLWCcif6x/?igsi=MzRlODBiNWFlZA%3D%3D&utm_source=ig_web_copy_link"
+}

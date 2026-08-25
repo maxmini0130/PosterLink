@@ -1663,3 +1663,42 @@ workflow. No operating DB writes were performed.
 - Documentation updated:
   - `docs/ai_extraction_evaluation.md`
   - `eval/golden/README.md`
+
+## Phase 2 Golden Labels Batch 01
+
+Imported the first Phase 2 golden-label batch into `eval/golden`. No operating
+DB writes were performed.
+
+- Source batch:
+  `data/eval/review-batches-20260825/batch-01.json`
+- Imported labels:
+  - 20 posters.
+  - 120 truth fields.
+  - Fields labeled for each poster:
+    `is_real_poster`, `content_type`, `deadline_date`, `deadline_type`,
+    `host_org`, `official_url`.
+- Manual corrections captured in the labels:
+  - 성북구 청년도전지원사업 또래지원단:
+    `deadline_date` corrected from the predicted start date `2026-08-24` to
+    source 모집기간 end date `2026-08-28`.
+  - 노원구 청년일자리센터 커리어 위크 힐링프로그램:
+    multiple program deadlines were labeled as the overall latest deadline
+    `2026-09-10`, with `deadline_type: fixed`.
+  - 영암서울농장/남해서울농장 travel programs:
+    source only states application start `2026-08-31 10:00~`; travel end
+    `2026-09-13` was not labeled as an application deadline, so
+    `deadline_date: null`, `deadline_type: unknown`.
+- Validation:
+  - `pnpm eval:validate -- --set=eval/golden --require-labels`
+  - Passed with 20 files, 20 items, 120 truth fields.
+- Progress:
+  - `pnpm eval:status`
+  - 20/120 labeled, 100 remaining.
+- Evaluation snapshot:
+  - `pnpm eval:extraction -- --set=eval/golden --extractor=current --out=data/eval/reports/extraction-batch01-current-20260825.json`
+  - Labeled posters: 20.
+  - Evidence rows: 188.
+  - Macro accuracy: 0.9416666666666668.
+  - Current extraction errors were concentrated in deadline fields:
+    start-date-as-deadline, event/travel-period-as-deadline, and first
+    subprogram deadline instead of overall latest deadline.

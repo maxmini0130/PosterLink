@@ -1,0 +1,17 @@
+{
+  "poster_id": "b185627d-a2a8-4d42-b0eb-8c87a56d9a01",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-08-28",
+    "deadline_type": "fixed",
+    "host_org": "성북구 청년도전지원사업",
+    "official_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73266"
+  },
+  "notes": "deadline_date corrected from prediction 2026-08-24 to source 모집기간 end 2026-08-28",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-01.json",
+  "context_title": "성북구 청년도전지원사업 <또래지원단> 참여자 추가 모집",
+  "context_source_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73266"
+}

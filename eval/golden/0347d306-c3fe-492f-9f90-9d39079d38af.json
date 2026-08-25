@@ -1,0 +1,17 @@
+{
+  "poster_id": "0347d306-c3fe-492f-9f90-9d39079d38af",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": null,
+    "deadline_type": "unknown",
+    "host_org": "영암서울농장",
+    "official_url": "https://news.seoul.go.kr/gov/archives/580360"
+  },
+  "notes": "application period has start only; travel end date is not an application deadline",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-01.json",
+  "context_title": "[영암서울농장] 성심당도 사랑한 전국 최고! 영암 무화과 먹케이션 (260911)",
+  "context_source_url": "https://news.seoul.go.kr/gov/archives/580360"
+}
