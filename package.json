@@ -20,6 +20,7 @@
     "content-type:backfill": "pnpm --filter posterlink-crawler content-type:backfill",
     "tier:compute": "pnpm --filter posterlink-crawler tier:compute",
     "ai:routing": "pnpm --filter posterlink-crawler ai:routing",
+    "ai:usage": "pnpm --filter posterlink-crawler ai:usage",
     "field-reports:process": "pnpm --filter posterlink-crawler field-reports:process",
     "collect": "tsx scripts/collect-posters.ts",
     "collect:youth": "tsx scripts/collect-posters.ts youth",
