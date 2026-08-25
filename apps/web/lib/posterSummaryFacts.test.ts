@@ -34,6 +34,22 @@ test("ignores unlabeled summary text for user-facing facts", () => {
   assert.equal(facts.participationFee, null);
 });
 
+test("derives fallback facts from inline explicit labels", () => {
+  const facts = derivePosterSummaryFallbackFacts([
+    {
+      text:
+        "모집대상: 만 18세 이상 지역 주민 지원내용: 활동비 및 교육 제공 신청방법: 온라인 접수 비용: 무료",
+    },
+  ]);
+
+  assert.equal(facts.eligibilitySummary, "만 18세 이상 지역 주민");
+  assert.equal(facts.benefitsSummary, "활동비 및 교육 제공");
+  assert.equal(facts.applicationMethod, "온라인 접수");
+  assert.equal(facts.participationFee, "무료");
+  assert.equal(facts.targetAgeMin, 18);
+  assert.equal(facts.targetAgeMax, null);
+});
+
 test("extracts one-sided age conditions", () => {
   assert.deepEqual(extractTargetAgeRange("만 18세 이상"), {
     targetAgeMin: 18,

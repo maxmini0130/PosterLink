@@ -384,3 +384,29 @@ criteria.
 - File: `apps/web/app/sitemap.ts`
 - Institution sitemap URLs now use the same public-with-slug criteria, avoiding
   empty/broken institution URLs and count drift.
+
+Validation:
+
+- `pnpm --filter web lint`
+- `pnpm test -- apps/web/lib/discoveryRoutes.test.ts apps/web/lib/posterApplication.test.ts`
+- `pnpm --filter web build`
+
+## Poster Detail Summary Fallback Fix
+
+Improved the public poster detail fallback facts shown when structured fields
+are still missing.
+
+- File: `apps/web/lib/posterSummaryFacts.ts`
+- Detail cards can now derive 대상, 혜택, 신청방법, 비용 from unlabeled summary
+  text only when explicit inline labels such as `모집대상:`, `지원내용:`,
+  `신청방법:`, and `비용:` are present.
+- Generic unlabeled phrases such as "혜택이 있습니다" remain ignored to avoid
+  unsafe over-inference.
+- File: `apps/web/lib/posterSummaryFacts.test.ts`
+- Added regression coverage for inline explicit labels while preserving the
+  no-unlabeled-inference rule.
+
+Validation:
+
+- `pnpm --filter web lint`
+- `pnpm test -- apps/web/lib/posterSummaryFacts.test.ts`
