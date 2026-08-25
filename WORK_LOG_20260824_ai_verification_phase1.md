@@ -1098,3 +1098,32 @@ operating DB reads or writes are required.
   - Remaining: 120.
   - Review batches: 6 files / 120 items.
 - Updated `docs/ai_extraction_evaluation.md` with the status command.
+
+## Phase 4 Poster Detection Current Dry-Run
+
+Re-measured the current Phase 4 poster-detection signal coverage. No operating
+DB writes were performed.
+
+- Dry-run command:
+  `pnpm poster-detection:backfill -- --limit=5000 "--statuses=published,review" --output=data/results/poster-detection-current-dryrun-20260825.json --probe-missing-dimensions --probe-limit=100`
+  - Checked: 559 posters.
+  - Decisions: true 547, false 12, ambiguous 0.
+  - Routes: classifier_accept 547, reject 12.
+  - Needs VLM: 0.
+- Reviewed the 12 false candidates from the report.
+  - Several are clearly news/facility/administrative notices.
+  - Some are recruitment opportunities represented as administrative documents
+    rather than actual posters, so negative evidence should not be applied
+    blindly.
+- Updated `backfill-poster-detection-evidence.js` safety behavior.
+  - Default output/apply now emits only positive `is_real_poster=true`
+    evidence.
+  - Negative decisions stay in the report.
+  - `--include-negative` is required before writing `is_real_poster=false`
+    evidence.
+- Positive-only dry-run:
+  `pnpm poster-detection:backfill -- --limit=5000 "--statuses=published,review" --output=data/results/poster-detection-positive-only-dryrun-20260825.json --probe-missing-dimensions --probe-limit=100`
+  - Checked: 559 posters.
+  - Evidence rows generated: 547.
+  - Decisions still visible in report: true 547, false 12, ambiguous 0.
+- Updated `docs/ai_poster_detection.md`.

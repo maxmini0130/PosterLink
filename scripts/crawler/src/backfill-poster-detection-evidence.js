@@ -27,7 +27,7 @@ const args = Object.fromEntries(
 
 if (args.help || args.h) {
   console.log(`Usage:
-  node src/backfill-poster-detection-evidence.js [--limit=5000] [--statuses=published,review] [--output=data/results/poster-detection-evidence-dryrun.json] [--apply] [--probe-missing-dimensions] [--probe-limit=0]
+  node src/backfill-poster-detection-evidence.js [--limit=5000] [--statuses=published,review] [--output=data/results/poster-detection-evidence-dryrun.json] [--apply] [--probe-missing-dimensions] [--probe-limit=0] [--include-negative]
 
 Builds poster_field_evidence.is_real_poster rows from cheap geometry/text
 signals and existing imageClassification results. Dry-run is the default.
@@ -35,7 +35,10 @@ signals and existing imageClassification results. Dry-run is the default.
 or exposure_tier.
 
 --probe-missing-dimensions fetches image headers when poster_images has no
-width/height. --probe-limit caps network probes; 0 means no cap.`);
+width/height. --probe-limit caps network probes; 0 means no cap.
+
+Negative is_real_poster=false evidence is excluded by default. Add
+--include-negative only after manual review of the false candidates.`);
   process.exit(0);
 }
 
@@ -176,11 +179,13 @@ async function buildPlan(row, images, options) {
     }
   }
 
-  const evidence = buildPosterDetectionEvidence({
-    posterId: row.id,
-    signals,
-    decision,
-  });
+  const evidence = decision.isRealPoster === false && !options.includeNegative
+    ? null
+    : buildPosterDetectionEvidence({
+        posterId: row.id,
+        signals,
+        decision,
+      });
   return {
     id: row.id,
     title: row.title,
@@ -189,6 +194,9 @@ async function buildPlan(row, images, options) {
     selected_image: resolvedImage,
     signals,
     decision,
+    evidence_skipped_reason: decision.isRealPoster === false && !options.includeNegative
+      ? "negative_evidence_requires_include_negative"
+      : null,
     evidence,
   };
 }
@@ -252,6 +260,7 @@ async function main() {
     probeMissingDimensions: Boolean(args["probe-missing-dimensions"]),
     probeLimit: Math.max(0, Number(args["probe-limit"] || 0)),
     probeCount: { count: 0 },
+    includeNegative: Boolean(args["include-negative"]),
   };
 
   const posters = await fetchPosters(supabase, statuses, limit);
@@ -271,6 +280,7 @@ async function main() {
     statuses,
     checked_count: posters.length,
     evidence_row_count: evidenceRows.length,
+    include_negative: probeOptions.includeNegative,
     probed_image_count: probeOptions.probeCount.count,
     ...summary,
     applied_count: results
