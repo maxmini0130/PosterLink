@@ -34,7 +34,7 @@ test("infers end date from generated recruitment period summary", () => {
   const row = inferDeadlineDateEvidence({
     posterId: "poster-1",
     title: "서초청년센터 <바디밸런스> 모집",
-    sourceText: "대상: 청년 ♦ 모집 · 기간: 2026. 8. 14.(금) ~ 8. 25.(화) · 신청: 홈페이지",
+    sourceText: "대상: 청년 · 모집 기간: 2026. 8. 14.(금) ~ 8. 25.(화) · 신청: 네이버폼",
     createdAt: "2026-08-20T00:00:00Z",
   });
 
@@ -44,7 +44,7 @@ test("infers end date from generated recruitment period summary", () => {
 test("infers normalized deadline from Korean period summary with application cue", () => {
   const row = inferDeadlineDateEvidence({
     posterId: "poster-1",
-    title: "송파구청 <2026년 송파 청년축제 공연팀 모집>",
+    title: "송파구청 <2026 송파 청년축제 공연팀 모집>",
     sourceText: "대상: 송파구 청년 · 기간: 2026. 8. 18.(화) ~ 8. 25.(화) · 신청: 네이버폼 작성",
     fieldVerification: {
       dateQuality: {
@@ -78,7 +78,7 @@ test("does not infer Korean period summary when normalized deadline is a differe
 test("does not infer generic generated period summaries as deadlines", () => {
   const row = inferDeadlineDateEvidence({
     posterId: "poster-1",
-    title: "서울청년센터 광진 <느슨한가드닝 참여자 모집>(~8/30)",
+    title: "서울청년센터 광진 <예술 프로젝트 참여자 모집>(~8/30)",
     sourceText: "대상: 청년 · 기간: 2026.09.03.(목)~11.12.(목) · 내용: 정원활동 · 신청: 링크",
     fieldVerification: {
       dateQuality: { suggestedDeadline: "2026-09-03" },
@@ -103,10 +103,66 @@ test("does not infer event period as application deadline", () => {
 test("does not infer open-ended or exhausted deadlines as fixed dates", () => {
   const row = inferDeadlineDateEvidence({
     posterId: "poster-1",
-    title: "청년 워크숍 참여자 모집",
-    sourceText: "신청기간: 2026. 8. 1. ~ 모집 마감시 선착순 마감",
+    title: "청년 토크콘서트 참여자 모집",
+    sourceText: "신청기간: 2026. 8. 1. ~ 모집 마감시까지 선착순 마감",
     createdAt: "2026-08-20T00:00:00Z",
   });
 
   assert.equal(row, null);
+});
+
+test("prefers grounded normalized deadline over stale suggested deadline", () => {
+  const row = inferDeadlineDateEvidence({
+    posterId: "poster-1",
+    title: "(사)한국ICT패션뷰티산업협회 <2026년 미래내일일경험 패션뷰티유통직무 청년인턴 4기> 모집",
+    sourceText: "신청기간 /진행 일정 1. 청년모집 : 패션뷰티유통직무 ~ 26.09.04(금) / 경영사무직무 ~26.08.31(월) 5. 일경험 기간 2026.09.28(월) ~ 2026.12.04(금)",
+    fieldVerification: {
+      dateQuality: {
+        decision: "review",
+        suggestedDeadline: "2026-08-31",
+        normalizedDeadline: "2026-09-04",
+      },
+    },
+    createdAt: "2026-08-25T00:00:00Z",
+  });
+
+  assert.equal(row.value_text, "2026-09-04");
+  assert.equal(row.extractor, "deadline-date-grounded-v1");
+});
+
+test("uses title-level recruitment deadline when normalized date is grounded", () => {
+  const row = inferDeadlineDateEvidence({
+    posterId: "poster-1",
+    title: "소셜혁신연구소 사회적협동조합 <2026 미래내일 일경험 사업 소셜 WE 아트브릿지+ 3기> 모집",
+    sourceText: "[참여자 모집] 2026 미래내일 일경험 사업 소셜 WE 아트브릿지+ 3기 교육생 모집 (~9/20) 교육기간 2026.10.26 ~ 2027.01.13",
+    fieldVerification: {
+      dateQuality: {
+        decision: "review",
+        suggestedDeadline: "2026-09-29",
+        normalizedDeadline: "2026-09-20",
+      },
+    },
+    createdAt: "2026-08-25T00:00:00Z",
+  });
+
+  assert.equal(row.value_text, "2026-09-20");
+});
+
+test("accepts pass-quality stored date when grounded in recruitment title", () => {
+  const row = inferDeadlineDateEvidence({
+    posterId: "poster-1",
+    title: "강서구가족센터 <자립준비 청년대상 우리의 온(on)도(도예)> 참여자 모집",
+    sourceText: "기간: 2026-08-21 ~ 2026-09-02 신청방법: 온라인 접수",
+    fieldVerification: {
+      dateQuality: {
+        decision: "pass",
+        suggestedDeadline: "2026-09-02",
+        normalizedDeadline: "2026-09-02",
+      },
+    },
+    createdAt: "2026-08-25T00:00:00Z",
+  });
+
+  assert.equal(row.value_text, "2026-09-02");
+  assert.equal(row.confidence, 0.95);
 });

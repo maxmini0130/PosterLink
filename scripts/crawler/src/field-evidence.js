@@ -124,13 +124,15 @@ function normalizeReadableDeadlinePeriod({ value, evidenceText, sourceText }) {
   const source = compactText(sourceText ?? "", 700) ?? "";
   const combined = `${evidence} ${source}`;
   const normalized = combined.normalize("NFKC");
+  const normalizedEvidence = evidence.normalize("NFKC");
 
-  const hasApplicationCue = /(?:신청|접수|모집|응모|지원)\s*(?:기간|기한|마감|일정)?/u.test(normalized);
+  const hasExplicitApplicationPeriod = /(?:신청|접수|모집|응모|지원)\s*(?:기간|기한|마감|일정)/u.test(normalizedEvidence);
+  const hasApplicationCue = hasExplicitApplicationPeriod;
   const hasNonApplicationCue = /(?:진행|교육|행사|운영|활동|프로그램|강좌|공연|전시|여행)\s*(?:기간|일정|일시)/u.test(normalized);
   const openEnded = /(?:상시|수시|연중)\s*(?:모집|접수|신청)|(?:마감|모집)\s*시(?:까지)?|선착순\s*마감/u.test(normalized);
 
   if (!hasApplicationCue || openEnded) return null;
-  if (hasNonApplicationCue && !/(?:신청기간|접수기간|모집기간|응모기간|지원기간)/u.test(normalized)) {
+  if (hasNonApplicationCue && !/(?:신청기간|접수기간|모집기간|응모기간|지원기간)/u.test(normalizedEvidence)) {
     return null;
   }
 

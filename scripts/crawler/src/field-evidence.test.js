@@ -29,7 +29,7 @@ test("adjustConfidence accepts equivalent Korean date evidence", () => {
       fieldKey: "deadline_date",
       modelConfidence: 0.85,
       valueText: "2026-08-31",
-      evidenceText: "신청기간 2026년 8월 1일~8월 31일",
+      evidenceText: "신청기간 2026년 8월 1일부터 8월 31일까지",
       extractor: "regex-date-v1",
     }),
     1,
@@ -42,7 +42,7 @@ test("adjustConfidence does not penalize deterministic deadline type enums", () 
       fieldKey: "deadline_type",
       modelConfidence: 0.9,
       valueText: "fixed",
-      evidenceText: "신청기간 2026년 8월 1일~8월 31일",
+      evidenceText: "신청기간 2026년 8월 1일부터 8월 31일까지",
       extractor: "deadline-type-v1",
     }),
     0.9,
@@ -67,7 +67,7 @@ test("adjustConfidence penalizes conflicts and trusts human entries", () => {
     adjustConfidence({
       modelConfidence: 0.8,
       valueText: "서울",
-      evidenceText: "서울 지역 대상",
+      evidenceText: "서울 지원 대상",
       conflictsWith: ["ocr"],
     }),
     0.4,
@@ -88,8 +88,8 @@ test("normalizeEvidenceRow canonicalizes known structured fields", () => {
     normalizeEvidenceRow({
       posterId: "poster-1",
       fieldKey: "benefits_summary",
-      valueText: "참여수당 50만원",
-      evidenceText: "이수 시 참여수당 50만원 지급",
+      valueText: "참여자당 50만원",
+      evidenceText: "이수 시 참여자당 50만원 지급",
       evidenceSrc: "body",
       extractor: "readable-notice-v1",
       confidence: 0.8,
@@ -97,10 +97,10 @@ test("normalizeEvidenceRow canonicalizes known structured fields", () => {
     {
       poster_id: "poster-1",
       field_key: "benefit",
-      value_text: "참여수당 50만원",
+      value_text: "참여자당 50만원",
       value_json: null,
       confidence: 0.8,
-      evidence_text: "이수 시 참여수당 50만원 지급",
+      evidence_text: "이수 시 참여자당 50만원 지급",
       evidence_src: "body",
       extractor: "readable-notice-v1",
     },
@@ -129,7 +129,7 @@ test("normalizeEvidenceRow does not split surrogate pairs when truncating", () =
     fieldKey: "deadline_date",
     valueText: "2026-05-18",
     valueJson: { date: "2026-05-18" },
-    evidenceText: `${prefix}😀 trailing`,
+    evidenceText: `${prefix}🙂 trailing`,
     evidenceSrc: "body",
     extractor: "deadline-date-grounded-v1",
     confidence: 0.9,
@@ -159,10 +159,10 @@ test("readable period facts become ISO deadline date only with application conte
   const rows = evidenceRowsFromReadableFacts({
     posterId: "poster-1",
     facts: {
-      period: "2026. 8. 18.(화) ~ 8. 27.(목) 자정까지",
-      application: "신청폼 접수",
+      period: "신청기간: 2026. 8. 18.(화) ~ 8. 27.(목) 자정까지",
+      application: "이메일 신청",
     },
-    sourceText: "모집 일정: 2026. 8. 18.(화) ~ 8. 27.(목) 자정까지 신청폼으로 접수합니다.",
+    sourceText: "신청기간: 2026. 8. 18.(화) ~ 8. 27.(목) 자정까지 이메일로 접수합니다.",
   });
 
   const deadline = rows.find((row) => row.field_key === "deadline_date");
@@ -177,7 +177,7 @@ test("readable period facts skip event or education periods without application 
       period: "2026.09.03.(목)~11.12.(목)",
       application: "구글폼 신청",
     },
-    sourceText: "진행기간: 2026.09.03.(목)~11.12.(목) 매주 목요일. 신청방법: 구글폼 신청",
+    sourceText: "진행기간: 2026.09.03.(목)~11.12.(목) 매주 목요일 신청방법: 구글폼 신청",
   });
 
   assert.equal(rows.some((row) => row.field_key === "deadline_date"), false);
@@ -186,7 +186,7 @@ test("readable period facts skip event or education periods without application 
 
 test("findEvidenceSentence returns the matching source sentence", () => {
   assert.equal(
-    findEvidenceSentence("첫 문장입니다. 이수 시 참여수당 50만원을 지급합니다.", "참여수당 50만원"),
-    "이수 시 참여수당 50만원을 지급합니다.",
+    findEvidenceSentence("첫 문장입니다. 이수 시 참여자당 50만원을 지급합니다.", "참여자당 50만원"),
+    "이수 시 참여자당 50만원을 지급합니다.",
   );
 });

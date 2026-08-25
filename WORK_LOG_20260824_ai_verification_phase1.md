@@ -1990,3 +1990,43 @@ evaluation. No operating DB writes were performed.
   - Re-running `pnpm eval:extraction` against current operating DB evidence will
     still show old stored evidence until evidence is regenerated/applied.
   - Any operating DB evidence upsert/backfill remains an explicit approval step.
+
+## Phase 2 Evaluation Rule Fixes 02
+
+Tightened deadline-date extraction after dry-run review. No operating DB writes
+were performed.
+
+- Deadline-date grounding:
+  - Restored the deadline-date evidence parser to handle normal Korean source
+    labels and 2-digit year dates such as `26.09.04`.
+  - `dateQuality.normalizedDeadline`/`extractedDeadline` is now preferred over a
+    stale suggested/stored deadline when the normalized date is present in the
+    source text.
+  - Title-level recruitment deadlines such as `(~9/20)` are accepted when they
+    ground the normalized date, while later interview/education/program dates do
+    not override the recruitment deadline.
+  - Evidence rows append a compact `(normalized: YYYY-MM-DD)` hint when using a
+    normalized deadline, so confidence scoring and human review can see the
+    canonical date while preserving the original evidence text.
+- Regression checks added:
+  - Future-Work fashion/beauty internship deadline resolves to `2026-09-04`.
+  - Social WE Artbridge deadline resolves to `2026-09-20`.
+  - Gangseo Family Center "우리의 온(on)도" deadline resolves to `2026-09-02`.
+- Validation:
+  - `pnpm --filter posterlink-crawler test`
+  - Passed with 230 tests.
+  - `pnpm eval:validate -- --set=eval/golden --require-labels`
+  - Passed with 120 files, 120 items, 720 truth fields.
+- Dry-run report:
+  - `node src/backfill-field-evidence.js --limit=5000 '--statuses=published,review' --output=data/results/field-evidence-backfill-phase2-rulefix-20260825.json`
+  - Mode: dry-run.
+  - Checked posters: 559.
+  - Evidence rows: 3,961.
+  - `deadline_date` rows: 440.
+  - Non-ISO `deadline_date` values: 0.
+  - Applied rows: 0.
+- Follow-up:
+  - Operating DB upsert of regenerated `poster_field_evidence` still requires
+    explicit user approval.
+  - After applying evidence, re-run extraction/threshold reports to see the
+    actual Phase 2 metric movement.

@@ -1,14 +1,14 @@
 import { normalizeEvidenceRow } from "./field-evidence.js";
 
-const APP_PERIOD_RE = /(?:신청|접수|모집|응모|지원)\s*(?:기간|기한|마감|일정)|(?:신청|접수|모집)\s*[·:：]\s*기간|(?:신청|접수|모집)\s*·\s*기간/u;
-const NON_APPLICATION_PERIOD_RE = /(?:교육|행사|진행|운영|활동|사용|사업|프로그램)\s*(?:기간|일정)/u;
-const OPEN_ENDED_RE = /(?:상시|수시|연중)\s*(?:모집|접수|신청|운영)|(?:마감|모집)\s*시(?:까지)?|소진\s*시|선착순\s*마감/u;
-const DATE_RE = /(?:(20\d{2})\s*[.\-/년]\s*)?(\d{1,2})\s*[.\-/월]\s*(\d{1,2})\s*(?:일)?/gu;
-const RANGE_CONNECTOR_RE = /(?:~|～|-|부터|까지)/u;
+const APP_PERIOD_RE = /(?:신청|접수|모집|응모|지원|참여)\s*(?:기간|기한|마감|일정)|(?:신청|접수|모집)\s*[·:>\-\s]*기간/u;
+const NON_APPLICATION_PERIOD_RE = /(?:교육|행사|진행|운영|활동|사용|사업|프로그램|일경험|사전직무교육)\s*(?:기간|일정|일시)/u;
+const OPEN_ENDED_RE = /(?:상시|수시|연중)\s*(?:모집|접수|신청|운영)|(?:마감|모집)\s*시(?:까지)?|선착순\s*(?:마감|접수|모집)/u;
+const DATE_RE = /(?:(20\d{2}|\d{2})\s*(?:년|[.\-/])\s*)?(\d{1,2})\s*(?:월|[.\-/])\s*(\d{1,2})\s*(?:일)?/gu;
+const RANGE_CONNECTOR_RE = /(?:~|-|부터|까지)/u;
 
-const KOREAN_APPLICATION_CUE_RE = /(?:신청|접수|모집|지원|참여)\s*(?:방법|기간|기한|마감|일정|링크|폼|서류|서식|가능|하세요|바랍니다)?/u;
-const KOREAN_PERIOD_LABEL_RE = /(?:기간|일정)\s*[:：]/u;
-const EXPLICIT_DATE_RE = /(?:(20\d{2})\s*[.\-/년]\s*)?(\d{1,2})\s*[.\-/월]\s*(\d{1,2})\s*(?:일)?/gu;
+const KOREAN_APPLICATION_CUE_RE = /(?:신청|접수|모집|응모|지원|참여)\s*(?:방법|기간|기한|마감|일정|링크|및|서류|서식|가능|하세요|바랍니다)?/u;
+const KOREAN_PERIOD_LABEL_RE = /(?:기간|일정)\s*[:>]/u;
+const EXPLICIT_DATE_RE = /(?:(20\d{2}|\d{2})\s*(?:년|[.\-/])\s*)?(\d{1,2})\s*(?:월|[.\-/])\s*(\d{1,2})\s*(?:일)?/gu;
 
 function compact(value, limit = 12_000) {
   return String(value ?? "")
@@ -19,7 +19,7 @@ function compact(value, limit = 12_000) {
 }
 
 function makeIsoDate(year, month, day) {
-  const y = Number(year);
+  const y = String(year).length === 2 ? 2000 + Number(year) : Number(year);
   const m = Number(month);
   const d = Number(day);
   if (!y || !m || !d || m < 1 || m > 12 || d < 1 || d > 31) return null;
@@ -41,6 +41,19 @@ function isoDateText(value) {
   if (direct) return makeIsoDate(direct[1], direct[2], direct[3]);
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+}
+
+function dateMentionRe(isoDate) {
+  const match = String(isoDate ?? "").match(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/);
+  if (!match) return null;
+  const [, year, month, day] = match;
+  const shortYear = year.slice(2);
+  const m = Number(month);
+  const d = Number(day);
+  return new RegExp(
+    `(?:${year}|${shortYear})\\s*(?:년|[.\\-/])\\s*0?${m}\\s*(?:월|[.\\-/])\\s*0?${d}\\s*(?:일)?|0?${m}\\s*(?:월|[.\\-/])\\s*0?${d}\\s*(?:일)?`,
+    "u",
+  );
 }
 
 function extractDates(segment, referenceYear = null) {
@@ -90,12 +103,12 @@ function splitSegments(text) {
   if (!source) return [];
 
   const sentenceLike = source
-    .split(/(?:[\n\r]+|(?<=[.!?。]|[다요음임])\s+)/u)
+    .split(/(?:[\n\r]+|[•·]|(?<=[.!?。])\s+)/u)
     .map((segment) => compact(segment, 700))
     .filter(Boolean);
 
   const windows = [];
-  for (const match of source.matchAll(/신청기간|접수기간|모집기간|신청|접수|모집|응모|지원|기간/gu)) {
+  for (const match of source.matchAll(/신청기간|접수기간|모집기간|응모기간|지원기간|신청|접수|모집|응모|지원/gu)) {
     const start = Math.max(0, (match.index ?? 0) - 120);
     const end = Math.min(source.length, (match.index ?? 0) + 320);
     windows.push(compact(source.slice(start, end), 700));
@@ -111,13 +124,24 @@ function isApplicationSegment(segment, title) {
   return false;
 }
 
+function canUseGroundedDeadlineSegment(segment, title, { allowTitleRecruit = false } = {}) {
+  if (!segment || OPEN_ENDED_RE.test(segment)) return false;
+  if (isApplicationSegment(segment, title)) return true;
+  if (!allowTitleRecruit) return false;
+  if (/(?:\(|~)\s*\d{1,2}\s*(?:[.\/-]|월)\s*\d{1,2}\s*\)?/u.test(segment)) return true;
+  if (NON_APPLICATION_PERIOD_RE.test(segment)) return false;
+  return /(?:모집|신청|접수|참여자|교육생|수강생)/u.test(String(title ?? ""));
+}
+
 function findEvidenceForDate(sourceText, isoDate) {
   const target = isoDateText(isoDate);
   if (!target) return null;
-  const [year, month, day] = target.split("-").map(Number);
+  const [year] = target.split("-").map(Number);
+  const dateRe = dateMentionRe(target);
   for (const segment of splitSegments(sourceText)) {
     const dates = extractDates(segment, year);
     if (dates.some((date) => date.iso === target)) return segment;
+    if (dateRe?.test(segment)) return segment;
   }
   return null;
 }
@@ -183,22 +207,38 @@ export function inferDeadlineDateEvidence({
     fieldVerification?.dateQuality?.extractedDeadline,
   );
   const storedDeadline = isoDateText(applicationEndAt);
+  const dateQualityDecision = String(fieldVerification?.dateQuality?.decision ?? "");
+
+  if (normalizedDeadline) {
+    const evidenceText = findEvidenceForDate(sourceText, normalizedDeadline);
+    if (canUseGroundedDeadlineSegment(evidenceText, title, { allowTitleRecruit: true })) {
+      return normalizeEvidenceRow({
+        posterId,
+        fieldKey: "deadline_date",
+        valueText: normalizedDeadline,
+        valueJson: { date: normalizedDeadline },
+        confidence: dateQualityDecision === "pass" ? 0.95 : 0.9,
+        evidenceText: `${evidenceText} (normalized: ${normalizedDeadline})`,
+        evidenceSrc: "body",
+        extractor: "deadline-date-grounded-v1",
+      });
+    }
+  }
 
   if (suggestedDeadline) {
     const evidenceText = findEvidenceForDate(sourceText, suggestedDeadline);
-    if (!evidenceText || OPEN_ENDED_RE.test(evidenceText) || !isApplicationSegment(evidenceText, title)) {
-      return null;
+    if (canUseGroundedDeadlineSegment(evidenceText, title, { allowTitleRecruit: dateQualityDecision === "pass" })) {
+      return normalizeEvidenceRow({
+        posterId,
+        fieldKey: "deadline_date",
+        valueText: suggestedDeadline,
+        valueJson: { date: suggestedDeadline },
+        confidence: 0.9,
+        evidenceText: `${evidenceText} (normalized: ${suggestedDeadline})`,
+        evidenceSrc: "body",
+        extractor: "deadline-date-grounded-v1",
+      });
     }
-    return normalizeEvidenceRow({
-      posterId,
-      fieldKey: "deadline_date",
-      valueText: suggestedDeadline,
-      valueJson: { date: suggestedDeadline },
-      confidence: 0.9,
-      evidenceText,
-      evidenceSrc: "body",
-      extractor: "deadline-date-grounded-v1",
-    });
   }
 
   const inferred = inferDateFromApplicationSegments({ title, sourceText, referenceYear });
