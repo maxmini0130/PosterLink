@@ -748,3 +748,38 @@ Post-apply tier dry-run:
 - `critical_missing_deadline_type`: 261
 - `critical_low_confidence_is_real_poster`: 4
 - calendar/deadlineAlert gate: 115
+
+## Batch 15 production apply
+
+Applied after explicit user approval:
+
+- Approved phrase:
+  `needs-vlm image classification batch15 12 rows operating DB apply approved.`
+- Original approval:
+  `needs-vlm 이미지 분류 batch15 12건 운영 DB 적용 승인합니다.`
+- Command:
+  `pnpm --filter posterlink-crawler image:backfill -- --limit=20 --concurrency=1 "--statuses=published,review" --needs-vlm-only --apply --output=data/results/needs-vlm-image-classification-batch15-apply.json`
+- Candidate count: 12
+- Applied count: 12
+- Failed count: 0
+- Non-poster count: 0
+- `isPoster=true`: 12
+- Confidence range: 0.92 to 0.98
+
+Post-apply poster-detection dry-run:
+
+- Checked rows: 542
+- Evidence rows: 542
+- `is_real_poster=true`: 530
+- `is_real_poster=false`: 12
+- Ambiguous: 0
+- `needs_vlm`: 0
+
+Batch15 evidence candidate check:
+
+- Batch ids: 12
+- Evidence rows: 12
+- `is_real_poster=true`: 12
+
+No batch15 `is_real_poster` evidence rows were applied in this step. That
+conversion requires a separate operating DB approval.
