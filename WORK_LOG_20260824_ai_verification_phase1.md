@@ -1623,3 +1623,23 @@ operating DB writes were performed.
 - Documentation updated:
   - `docs/ai_extraction_evaluation.md`
   - `eval/golden/README.md`
+
+## Phase 2 Review Sheet Tool
+
+Added a local Markdown review-sheet generator for Phase 2 labeling. No operating
+DB writes were performed.
+
+- Added CLI:
+  - `pnpm eval:review-sheet`
+  - Package command:
+    `pnpm --filter posterlink-crawler eval:review-sheet`
+- Behavior:
+  - Reads a `data/eval/review-batches-*/batch-*.json` file.
+  - Writes a local Markdown checklist with source links, critical predictions,
+    evidence snippets, optional predicted fields, source excerpts, and a JSON
+    edit block per item.
+  - The Markdown file is only a working artifact; final labels still go into the
+    batch JSON top-level `truth` object before `pnpm eval:import-batch`.
+- Documentation updated:
+  - `docs/ai_extraction_evaluation.md`
+  - `eval/golden/README.md`

@@ -25,6 +25,17 @@ Split the seed into reviewer-sized batches:
 pnpm eval:review-batches -- --input=data/eval/extraction-golden-seed.json --output-dir=data/eval/review-batches --batch-size=20
 ```
 
+Create a Markdown review sheet for a batch:
+
+```bash
+pnpm eval:review-sheet -- --input=data/eval/review-batches/batch-01.json --output=data/eval/review-batches/batch-01-review.md
+```
+
+The sheet is a local working artifact that shows source links, current critical
+predictions, evidence snippets, and a small JSON edit block per item. Put final
+labels back into the batch JSON top-level `truth` object; do not edit the sheet
+as the source of truth.
+
 Import completed review-batch labels into git-managed golden files:
 
 ```bash
@@ -107,8 +118,10 @@ confirmed absent, use `null`. If a field was not reviewed, omit it.
 The review batch files under `data/eval/review-batches/` are working files. For
 each poster, open `context.source_key`, compare the source against
 `review_fields`, and then put only reviewed values into the top-level `truth`
-object. Completed batch files should be imported with `pnpm eval:import-batch`
-so only reviewed `truth` values are copied under `eval/golden/` for scoring. Run
+object. Use `pnpm eval:review-sheet` when you want a readable side-by-side
+checklist for the batch. Completed batch files should be imported with
+`pnpm eval:import-batch` so only reviewed `truth` values are copied under
+`eval/golden/` for scoring. Run
 `pnpm eval:validate -- --set=eval/golden --require-labels` before scoring to
 catch empty labels, unknown fields, placeholders, invalid URLs, and invalid
 date/number formats.

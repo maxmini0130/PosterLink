@@ -32,6 +32,7 @@ confirmed absent, set it to `null`. If it was not reviewed, omit it.
 ## Run
 
 ```bash
+pnpm eval:review-sheet -- --input=data/eval/review-batches-20260825/batch-01.json --output=data/eval/review-batches-20260825/batch-01-review.md
 pnpm eval:import-batch -- --input=data/eval/review-batches-20260825/batch-01.json --labeled-by=max
 pnpm eval:import-batch -- --input=data/eval/review-batches-20260825/batch-01.json --labeled-by=max --apply
 pnpm eval:extraction -- --set=eval/golden --extractor=current
