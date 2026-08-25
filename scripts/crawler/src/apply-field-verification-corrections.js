@@ -53,7 +53,16 @@ function normalizeText(value, maxLength = 200) {
 
 function dateKey(value) {
   const text = String(value ?? "").trim();
-  return text ? text.slice(0, 10) : null;
+  if (!text) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return text.slice(0, 10);
+
+  // application_end_at can be stored as KST midnight in a timestamptz column,
+  // which Supabase returns as the previous UTC date. Compare deadline evidence
+  // by the Seoul calendar day that operators and users see.
+  return new Date(parsed.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 function getOrganizationCandidate(verification) {

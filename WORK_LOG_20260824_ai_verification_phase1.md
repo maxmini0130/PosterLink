@@ -1344,3 +1344,45 @@ writes were performed.
   - Delete the QA test row when no longer needed.
   - For real opportunities, confirm deadline/source URL in the original page
     before approval.
+
+## Manual Review Corrections
+
+Applied 3 operator-confirmed corrections to the operating DB after user
+approval. The rows remain in `review`; the changes only corrected the grounded
+fields and recomputed their exposure tier.
+
+- Approval text:
+  `수동 교정 3건 운영 DB 적용 승인합니다.`
+- Corrected rows:
+  - `(사)한국ICT패션뷰티산업협회 <2026년 미래내일일경험 패션뷰티유통직무 청년인턴 4기> 모집`
+    - Host org: `(사)한국ICT패션뷰티산업협회`
+    - Deadline: 2026-09-04 KST
+  - `소셜혁신연구소 사회적협동조합 <2026 미래내일 일경험 사업(ESG지원형) 소셜 WE 아트브릿지+ 문화예술 기획자 양성과정 3기>`
+    - Host org: `소셜혁신연구소 사회적협동조합`
+    - Deadline: 2026-09-20 KST
+  - `강서구가족센터 <자립준비 청년대상 우리의 온(on)도(도예)> 참여자 모집`
+    - Host org: `강서구가족센터`
+    - Deadline: 2026-09-02 KST
+- Evidence/audit writes:
+  - Upserted 12 `poster_field_evidence` rows with
+    `operator-manual-review-v1`.
+  - Inserted 3 `admin_actions` audit rows with
+    `manual_review_correction`.
+  - Recomputed these 3 rows to exposure tier A.
+- Fixed the field-correction dry-run date comparison to use the Seoul calendar
+  day for timestamptz values. This prevents KST midnight values from being
+  reported as the previous UTC day.
+- Verification:
+  - `pnpm --filter posterlink-crawler test`
+    - 217 passed.
+  - `pnpm ai:healthcheck -- --enforce --output=data/results/ai-healthcheck-after-manual-corrections-final-20260825.json`
+    - `field_correction_candidates`: 0.
+    - `quality_gate_status`: pass.
+  - `pnpm tier:auto-publish -- --output=data/eval/reports/auto-publish-plan-after-manual-corrections-final-20260825.json`
+    - Checked review posters: 8.
+    - Eligible tier A: 3.
+    - Blocked tier C: 5.
+    - Applied: 0.
+- Recommended next action:
+  - Apply auto-publish for the 3 corrected tier A review rows after separate
+    operating DB approval.

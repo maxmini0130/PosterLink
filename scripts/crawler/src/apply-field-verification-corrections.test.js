@@ -22,6 +22,23 @@ test("deadline corrections remain actionable", () => {
   assert.equal(correction.suppressed.length, 0);
 });
 
+test("deadline comparison uses the Seoul calendar day", () => {
+  const correction = getCorrection(
+    {
+      application_end_at: "2026-09-01T15:00:00+00:00",
+      source_org_name: "강서구",
+      field_verification: {
+        confidence: 0.95,
+        correctedDeadline: "2026-09-02",
+        deadlineMatches: false,
+      },
+    },
+    0.85,
+  );
+
+  assert.equal(correction, null);
+});
+
 test("organizer suggestions are not applied to source_org_name", () => {
   const correction = getCorrection(
     {
