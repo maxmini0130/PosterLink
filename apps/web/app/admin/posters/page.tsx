@@ -408,6 +408,11 @@ function isValidHttpUrl(value: any) {
 function getPrimarySourceUrl(poster: any) {
   const primarySourceUrl = normalizeOrgDisplayValue(poster?.primarySourceUrl);
   if (isValidHttpUrl(primarySourceUrl)) return primarySourceUrl;
+  const verifiedNoticeUrl = normalizeOrgDisplayValue(
+    poster?.field_verification?.humanStructuredVerification?.officialNoticeUrl
+      ?? poster?.field_verification?.humanStructuredVerificationDraft?.officialNoticeUrl,
+  );
+  if (isValidHttpUrl(verifiedNoticeUrl)) return verifiedNoticeUrl;
   const sourceKey = normalizeOrgDisplayValue(poster?.source_key);
   if (isValidHttpUrl(sourceKey)) return sourceKey;
   return "";
@@ -442,6 +447,15 @@ async function fetchPosterSourceUrlMap(posterIds: string[]) {
     }
   }
   return Object.fromEntries(Object.entries(map).map(([posterId, source]) => [posterId, source.url]));
+}
+
+async function withFreshApprovalSourceUrl(poster: any) {
+  if (!poster?.id || getPrimarySourceUrl(poster)) return poster;
+  const sourceUrlMap = await fetchPosterSourceUrlMap([poster.id]);
+  return {
+    ...poster,
+    primarySourceUrl: sourceUrlMap[poster.id] ?? poster.primarySourceUrl ?? null,
+  };
 }
 
 function createApprovalCheck(key: string, label: string, status: ApprovalCheckStatus, detail: string): ApprovalCheck {
@@ -842,9 +856,16 @@ export default function AdminPostersPage() {
       return;
     }
 
-    const posterForApproval = previewPoster?.id === id
+    const basePosterForApproval = previewPoster?.id === id
       ? previewPoster
       : posters.find((poster) => poster.id === id);
+    const posterForApproval = basePosterForApproval
+      ? await withFreshApprovalSourceUrl(basePosterForApproval)
+      : null;
+    if (!posterForApproval) {
+      toast.error("승인할 공고 정보를 불러오지 못했습니다. 목록을 새로고침한 뒤 다시 시도해 주세요.");
+      return;
+    }
     const approvalChecks = posterForApproval ? getApprovalChecklist(posterForApproval) : [];
     const blockingChecks = approvalChecks.filter((check) => check.status === "block");
     const warningChecks = approvalChecks.filter((check) => check.status === "warning");
@@ -993,7 +1014,11 @@ export default function AdminPostersPage() {
 
   const handleBulkApprove = async () => {
     if (selectedCount === 0) return;
-    const selectedPosters = posters.filter((poster) => selectedIds.includes(poster.id));
+    const selectedPosters = await Promise.all(
+      posters
+        .filter((poster) => selectedIds.includes(poster.id))
+        .map((poster) => withFreshApprovalSourceUrl(poster)),
+    );
     const approvalResults = selectedPosters.map((poster) => ({
       poster,
       checks: getApprovalChecklist(poster),

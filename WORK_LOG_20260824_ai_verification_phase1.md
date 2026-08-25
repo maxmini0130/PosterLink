@@ -283,3 +283,24 @@ This closes the repetitive Phase 1 automatic evidence-fill pass. Remaining
 C-tier blockers are no longer good candidates for blind bulk evidence upserts;
 they should move to manual review, crawler/parser fixes, or targeted
 field-specific remediation.
+
+## Admin Approval Source URL Fix
+
+Fixed the P0 admin approval blocker where operator-edited posters could be
+blocked by the pre-approval checklist even when a valid official notice URL was
+stored.
+
+- File: `apps/web/app/admin/posters/page.tsx`
+- `getPrimarySourceUrl` now also accepts official notice URLs stored in
+  `field_verification.humanStructuredVerification` and draft verification
+  metadata.
+- Single approval and bulk approval now refresh the poster's source URL from
+  `poster_links` immediately before computing approval checklist results.
+- Added an explicit error toast if an approval action cannot resolve the target
+  poster object.
+
+Validation:
+
+- `pnpm --filter web lint`
+- `pnpm test -- apps/web/lib/posterStructuredEditor.test.ts apps/web/lib/adminPosterFilters.test.ts`
+- `pnpm --filter web build`
