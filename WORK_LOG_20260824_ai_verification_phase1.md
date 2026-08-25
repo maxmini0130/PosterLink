@@ -1271,3 +1271,43 @@ performed.
   - Escalations: 0.
   - Move-to-review candidates: 0.
   - Applied: 0.
+
+## Phase 3 Tier A Auto-Publish Apply
+
+Applied Phase 3 tier A auto-publish candidates to the operating DB after user
+approval. This changed eligible review posters to published and wrote
+`admin_actions` audit rows.
+
+- Approval text:
+  `tier A 자동 공개 후보 14건 운영 DB 적용 승인합니다`
+- Apply command:
+  `EXPOSURE_AUTO_PUBLISH=true pnpm tier:auto-publish -- --output=data/eval/reports/auto-publish-plan-apply-20260825.json --apply`
+  - Checked review posters: 22.
+  - Eligible tier A: 14.
+  - Blocked tier C: 8.
+  - Applied: 14.
+  - Failed: 0.
+  - Audit failed: 0.
+- Follow-up dry-run:
+  `pnpm tier:auto-publish -- --output=data/eval/reports/auto-publish-plan-after-apply-20260825.json`
+  - Checked review posters: 8.
+  - Eligible tier A: 0.
+  - Blocked tier C: 8.
+- Tier compute dry-run:
+  `pnpm tier:compute -- --limit=5000 "--statuses=published,review" --output=data/eval/reports/exposure-tier-after-auto-publish-20260825.json`
+  - Checked: 559.
+  - Tiers: A 205, B 3, C 351.
+  - Applied: 0.
+- Enforced healthcheck:
+  `pnpm ai:healthcheck -- --enforce --output=data/results/ai-healthcheck-after-auto-publish-20260825.json`
+  - Review queue count: 8.
+  - Public image non-poster count: 0.
+  - Public non-poster reject candidates: 0.
+  - Quality gate: pass.
+- Direct operating DB count check:
+  - Published: 551.
+  - Review: 8.
+  - Published A/B/C: 205 / 3 / 343.
+  - Review A/C: 0 / 8.
+  - Public active count: 110.
+  - Public all count: 208.
