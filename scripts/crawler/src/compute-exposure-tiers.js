@@ -6,7 +6,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 
-import { bestFieldsFromEvidence, computeTier } from "./exposure-tier.js";
+import { classifyPosterContentType } from "./content-type-routing.js";
+import { bestFieldsFromEvidence, computeTier, fieldValue } from "./exposure-tier.js";
 
 const DEFAULT_OUTPUT = "data/eval/reports/exposure-tier-dryrun.json";
 const DEFAULT_LIMIT = 5000;
@@ -52,15 +53,17 @@ function hasDuplicateIssues(row) {
     .some((issue) => issue?.duplicatePosterId || String(issue?.code ?? "").includes("duplicate"));
 }
 
-function inferContentType(row) {
-  const route = String(
-    row.field_verification?.classification?.route ??
-    row.field_verification?.classification?.contentType ??
-    "",
-  ).toLowerCase();
-  if (["recruit", "news", "admin", "discard"].includes(route)) return route;
-  if (row.poster_status === "rejected") return "discard";
-  return "recruit";
+function inferContentType(row, fields) {
+  const evidenceValue = String(fieldValue(fields?.content_type) ?? "").toLowerCase();
+  const evidenceConfidence = Number(fields?.content_type?.confidence);
+  if (
+    ["recruit", "news", "admin", "discard"].includes(evidenceValue) &&
+    Number.isFinite(evidenceConfidence) &&
+    evidenceConfidence >= 0.9
+  ) {
+    return evidenceValue;
+  }
+  return classifyPosterContentType(row).contentType ?? "recruit";
 }
 
 async function fetchPosters(supabase, statuses, limit) {
@@ -69,7 +72,7 @@ async function fetchPosters(supabase, statuses, limit) {
   for (let offset = 0; rows.length < limit; offset += pageSize) {
     const { data, error } = await supabase
       .from("posters")
-      .select("id,title,poster_status,thumbnail_url,field_verification,created_at")
+      .select("id,title,poster_status,thumbnail_url,summary_short,summary_long,source_org_name,source_key,field_verification,created_at")
       .in("poster_status", statuses)
       .order("created_at", { ascending: false })
       .range(offset, offset + pageSize - 1);
@@ -165,10 +168,12 @@ async function main() {
 
   const plans = posters.map((poster) => {
     const evidence = evidenceByPoster.get(poster.id) ?? [];
+    const fields = bestFieldsFromEvidence(evidence);
+    const contentType = inferContentType(poster, fields);
     const result = computeTier({
-      fields: bestFieldsFromEvidence(evidence),
+      fields,
       isDuplicate: hasDuplicateIssues(poster),
-      contentType: inferContentType(poster),
+      contentType,
       hasPosterImage: Boolean(poster.thumbnail_url),
     });
     return {
@@ -176,6 +181,7 @@ async function main() {
       title: poster.title,
       poster_status: poster.poster_status,
       field_count: evidence.length,
+      content_type: contentType,
       tier: result.tier,
       reason: result.reason,
       gates: result.gates,

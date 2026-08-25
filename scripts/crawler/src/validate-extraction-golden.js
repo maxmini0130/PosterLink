@@ -86,6 +86,9 @@ function validateTruthValue(fieldKey, value) {
   if (fieldKey === "deadline_type" && !["fixed", "ongoing", "until_exhausted", "scheduled", "unknown"].includes(String(value))) {
     return "deadline_type truth value is not supported";
   }
+  if (fieldKey === "content_type" && !["recruit", "news", "admin", "discard"].includes(String(value))) {
+    return "content_type truth value is not supported";
+  }
   return null;
 }
 

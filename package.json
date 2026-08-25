@@ -17,6 +17,7 @@
     "eval:validate": "pnpm --filter posterlink-crawler eval:validate",
     "eval:extraction": "pnpm --filter posterlink-crawler eval:extraction",
     "poster-detection:backfill": "pnpm --filter posterlink-crawler poster-detection:backfill",
+    "content-type:backfill": "pnpm --filter posterlink-crawler content-type:backfill",
     "tier:compute": "pnpm --filter posterlink-crawler tier:compute",
     "collect": "tsx scripts/collect-posters.ts",
     "collect:youth": "tsx scripts/collect-posters.ts youth",

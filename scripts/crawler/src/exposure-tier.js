@@ -4,6 +4,7 @@ export const DEFAULT_EXTRACTION_THRESHOLDS = Object.freeze({
   host_org: 0.9,
   official_url: 0.9,
   is_real_poster: 0.9,
+  content_type: 0.9,
   apply_start: 0.8,
   category: 0.8,
   region: 0.8,
@@ -46,7 +47,7 @@ export const MINOR_FIELDS = Object.freeze([
   "venue",
 ]);
 
-function fieldValue(field) {
+export function fieldValue(field) {
   if (!field) return null;
   const valueJson = field.value_json;
   if (valueJson && typeof valueJson === "object" && !Array.isArray(valueJson)) {

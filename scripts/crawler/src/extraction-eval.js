@@ -4,6 +4,7 @@ export const FIELD_IMPORTANCE = Object.freeze({
   host_org: "critical",
   official_url: "critical",
   is_real_poster: "critical",
+  content_type: "critical",
   apply_start: "major",
   category: "major",
   region: "major",
@@ -73,6 +74,10 @@ export function valuesMatch(fieldKey, predicted, truth) {
 
   if (["official_url", "apply_url"].includes(fieldKey)) {
     return String(predicted ?? "").trim().replace(/\/$/, "") === String(truth ?? "").trim().replace(/\/$/, "");
+  }
+
+  if (["content_type", "deadline_type"].includes(fieldKey)) {
+    return String(predicted ?? "").trim() === String(truth ?? "").trim();
   }
 
   if (typeof truth === "boolean") {

@@ -30,6 +30,7 @@ fields, then move completed JSON files under eval/golden/.`);
 
 const FIELD_ORDER = Object.freeze([
   "is_real_poster",
+  "content_type",
   "deadline_date",
   "deadline_type",
   "host_org",

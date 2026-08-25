@@ -16,6 +16,7 @@ export const FIELD_KEYS = [
   "host_org",
   "official_url",
   "is_real_poster",
+  "content_type",
   "apply_start",
   "category",
   "region",

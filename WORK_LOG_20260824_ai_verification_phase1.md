@@ -519,3 +519,44 @@ Validation:
   - Expected failure while no golden JSON files exist yet.
 - `pnpm eval:validate -- --help`
 - `pnpm --filter posterlink-crawler test`
+
+## Phase 5 Content Type Routing Tool
+
+Started the Phase 5 feed-routing foundation without writing to the operating
+database.
+
+- Added `content_type` to the field evidence vocabulary and extraction
+  evaluation field list.
+- Added `scripts/crawler/src/content-type-routing.js`.
+  - Routes rows to `recruit`, `news`, `admin`, or `discard`.
+  - Treats rejected rows and known duplicate/corrupt issues as `discard`.
+  - Treats facility staffing, hiring, bid, contract, and administrative notice
+    rows as `admin`.
+  - Keeps program/opportunity rows with application/recruitment signals as
+    `recruit`.
+- Added `scripts/crawler/src/backfill-content-type-evidence.js`.
+  - Defaults to dry-run.
+  - `--apply` only upserts `poster_field_evidence.content_type` rows after
+    explicit approval.
+- Connected `content_type` evidence to exposure tier computation so
+  non-`recruit` rows remain C tier.
+- Added `docs/ai_content_type_routing.md`.
+
+Validation:
+
+- `pnpm --filter posterlink-crawler test`
+  - Passed: 198 tests.
+- `pnpm content-type:backfill -- --limit=120 --output=data/results/content-type-evidence-phase5-dryrun.json`
+  - Dry-run only.
+  - Checked posters: 120.
+  - Evidence rows planned: 120.
+  - Applied rows: 0.
+  - Content types: `recruit` 119, `discard` 1.
+- `pnpm tier:compute -- --limit=600 --output=data/eval/reports/exposure-tier-with-content-type-current-20260825.json`
+  - Dry-run only.
+  - Checked posters: 559.
+  - Evidence rows: 4,520.
+  - A: 205, B: 3, C: 351.
+  - New content routing blocker observed: `content_type_news` 3.
+- `pnpm eval:validate -- --set=eval/golden`
+  - Passed with the current empty local golden set.
