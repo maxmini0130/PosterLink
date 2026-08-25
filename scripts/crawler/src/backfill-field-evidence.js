@@ -164,7 +164,20 @@ function buildEvidenceRowsForPoster(row, links = []) {
     }));
   }
 
-  if (row.deadline_type && row.deadline_type !== "unknown") {
+  const deadlineDateEvidence = rows
+    .filter((evidenceRow) => evidenceRow.field_key === "deadline_date")
+    .sort((left, right) => Number(right.confidence) - Number(left.confidence))[0];
+  const inferredDeadlineTypeEvidence = inferDeadlineTypeEvidence({
+    posterId: row.id,
+    sourceText,
+    periodText: readableFacts.period,
+    applicationEndAt: row.application_end_at,
+    existingDeadlineType: null,
+    deadlineDateEvidence,
+  });
+  addRow(rows, inferredDeadlineTypeEvidence);
+
+  if (!inferredDeadlineTypeEvidence && row.deadline_type && row.deadline_type !== "unknown") {
     addRow(rows, normalizeEvidenceRow({
       posterId: row.id,
       fieldKey: "deadline_type",
@@ -174,18 +187,6 @@ function buildEvidenceRowsForPoster(row, links = []) {
       evidenceText: readableFacts.period ?? findEvidenceSentence(sourceText, row.deadline_type) ?? row.deadline_type,
       evidenceSrc: "rule",
       extractor: "deadline-type-v1",
-    }));
-  } else {
-    const deadlineDateEvidence = rows
-      .filter((evidenceRow) => evidenceRow.field_key === "deadline_date")
-      .sort((left, right) => Number(right.confidence) - Number(left.confidence))[0];
-    addRow(rows, inferDeadlineTypeEvidence({
-      posterId: row.id,
-      sourceText,
-      periodText: readableFacts.period,
-      applicationEndAt: row.application_end_at,
-      existingDeadlineType: row.deadline_type,
-      deadlineDateEvidence,
     }));
   }
 

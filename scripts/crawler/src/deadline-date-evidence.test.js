@@ -166,3 +166,78 @@ test("accepts pass-quality stored date when grounded in recruitment title", () =
   assert.equal(row.value_text, "2026-09-02");
   assert.equal(row.confidence, 0.95);
 });
+
+test("prefers 접수기간 over earlier 행사일 in the same service-reservation segment", () => {
+  const row = inferDeadlineDateEvidence({
+    posterId: "poster-1",
+    title: "\uAC15\uBD81\uAD6C\uCCAD <\uBA85\uC0AC\uD2B9\uAC15> \uCC38\uC5EC\uC790 \uBAA8\uC9D1",
+    sourceText:
+      "\uB300\uC0C1 \uAC15\uBD81\uAD6C\uBBFC \uD589\uC0AC\uC77C2026.09.30~2026.09.30 \uC7A5\uC18C \uAC15\uBD81\uBB38\uD654\uC608\uC220\uD68C\uAD00 \uC811\uC218\uAE30\uAC042026.08.10~2026.09.18 \uBAA8\uC9D1\uC778\uC6D0520\uBA85 \uC2E0\uCCAD\uBC29\uBC95 \uC628\uB77C\uC778 \uC811\uC218 / \uC120\uCC29\uC21C",
+    createdAt: "2026-08-25T00:00:00Z",
+  });
+
+  assert.equal(row.value_text, "2026-09-18");
+  assert.match(row.evidence_text, /\uC811\uC218\uAE30\uAC04/);
+  assert.doesNotMatch(row.evidence_text, /\uD589\uC0AC\uC77C/);
+});
+
+test("prefers 모집기간 over earlier 강좌기간 in the same library segment", () => {
+  const row = inferDeadlineDateEvidence({
+    posterId: "poster-1",
+    title: "[\uAC00\uC0B0\uD37C\uBE14\uB9AD] \uC791\uAC00\uC640\uC758 \uB9CC\uB0A8",
+    sourceText:
+      "\uAC15\uC88C\uAE30\uAC04: 2026-08-26 19:00 ~ 2026-08-26 20:30 \uAC15\uC88C\uC2DC\uAC04: \uC218\uC694\uC77C 19:00 ~ 20:30 \uBAA8\uC9D1\uAE30\uAC04: 2026-08-04 10:00 ~ 2026-08-25 10:00 \uC218\uAC15\uB8CC: \uBB34\uB8CC",
+    createdAt: "2026-08-25T00:00:00Z",
+  });
+
+  assert.equal(row.value_text, "2026-08-25");
+  assert.match(row.evidence_text, /\uBAA8\uC9D1\uAE30\uAC04/);
+});
+
+test("does not use 서울농장 여행기간 when 신청기간 only has a start date", () => {
+  const row = inferDeadlineDateEvidence({
+    posterId: "poster-1",
+    title: "\uC11C\uC6B8\uB18D\uC7A5 \uB18D\uCD0C\uCCB4\uD5D8 \uCC38\uC5EC\uC790 \uBAA8\uC9D1",
+    sourceText:
+      "\uC9C0\uC5ED \uBC0F \uC7A5\uC18C: \uCDA9\uB0A8 \uBD80\uC5EC\uAD70 \uBD80\uC5EC\uC11C\uC6B8\uB18D\uC7A5 \uC2E0\uCCAD\uAE30\uAC04: 2026. 8. 24.(\uC6D4) 10:00~ \uC2E0\uCCAD\uBC29\uBC95: \uC11C\uC6B8\uC2DC \uACF5\uACF5\uC11C\uBE44\uC2A4\uC608\uC57D\uC2DC\uC2A4\uD15C\uC5D0\uC11C \uC2E0\uCCAD \uC5EC\uD589\uAE30\uAC04: 2026. 9. 5.(\uAE08)~9. 6.(\uD1A0)",
+    createdAt: "2026-08-25T00:00:00Z",
+  });
+
+  assert.equal(row, null);
+});
+
+test("ignores normalized start date when application window has a later end date", () => {
+  const row = inferDeadlineDateEvidence({
+    posterId: "poster-1",
+    title: "\uCC38\uC5EC\uC790 \uBAA8\uC9D1",
+    sourceText:
+      "\uC811\uC218\uAE30\uAC04: 2026-08-19 ~ 2026-08-28 23:00 \uC8FC\uAD00\uAE30\uAD00\uBA85: (\uC7AC)\uD55C\uAD6D\uCCAD\uB144\uAE30\uC5C5\uAC00\uC815\uC2E0\uC7AC\uB2E8",
+    fieldVerification: {
+      dateQuality: {
+        decision: "review",
+        normalizedDeadline: "2026-08-19",
+      },
+    },
+    createdAt: "2026-08-25T00:00:00Z",
+  });
+
+  assert.equal(row.value_text, "2026-08-28");
+});
+
+test("ignores normalized start date when application window is open-ended", () => {
+  const row = inferDeadlineDateEvidence({
+    posterId: "poster-1",
+    title: "\uC11C\uC6B8\uB18D\uC7A5 \uB18D\uCD0C\uCCB4\uD5D8 \uCC38\uC5EC\uC790 \uBAA8\uC9D1",
+    sourceText:
+      "\uC2E0\uCCAD\uAE30\uAC04: 2026. 8. 24.(\uC6D4) 10:00~ \uC2E0\uCCAD\uBC29\uBC95: \uC11C\uC6B8\uC2DC \uACF5\uACF5\uC11C\uBE44\uC2A4\uC608\uC57D\uC2DC\uC2A4\uD15C\uC5D0\uC11C \uC2E0\uCCAD \uC5EC\uD589\uAE30\uAC04: 2026. 9. 5.(\uAE08)~9. 6.(\uD1A0)",
+    fieldVerification: {
+      dateQuality: {
+        decision: "review",
+        normalizedDeadline: "2026-08-24",
+      },
+    },
+    createdAt: "2026-08-25T00:00:00Z",
+  });
+
+  assert.equal(row, null);
+});

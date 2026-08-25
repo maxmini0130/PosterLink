@@ -2202,3 +2202,73 @@ Applied the approved router-fix evidence bundles for `content_type` and
     records and QA/internal-test suppression.
   - `is_real_poster` needs one more targeted pass for seven golden false
     positives that still receive generic classifier-accept evidence.
+
+## Phase 2 Deadline Window Fix Dry Run
+
+Implemented a local deadline extraction safety pass. No operating DB writes were
+performed for this change set.
+
+- Deadline date extraction:
+  - Added application-label windows for real Korean `신청기간`, `접수기간`,
+    `모집기간`, and `참여기간` labels.
+  - When an application window is present, date extraction now chooses dates
+    from that window instead of scanning the whole mixed service-reservation
+    segment.
+  - This prevents earlier `행사일`, `강좌기간`, and `여행기간` ranges from being
+    promoted as `deadline_date`.
+  - Normalized/suggested dates are accepted from an application window only
+    when the date is grounded as a range end or explicit deadline date. Start-
+    only open application periods such as `신청기간: 2026.8.24 10:00~` no longer
+    create fixed deadline evidence.
+- Deadline type extraction:
+  - Explicit `ongoing` / `until_exhausted` rule evidence now uses confidence
+    `0.95` so it can outrank stale structured `deadline_type=fixed` evidence
+    when the source text clearly says always-open or exhaustion/first-come
+    closing.
+  - Field evidence backfill now attempts rule-based deadline type evidence
+    before falling back to legacy structured `deadline_type` rows.
+- Regression coverage:
+  - Public-service reservation rows with `행사일 ... 접수기간 ...` now use the
+    `접수기간` end date.
+  - Library rows with `강좌기간 ... 모집기간 ...` now use the `모집기간` end date.
+  - Seoul Farm/public-service rows with start-only `신청기간` no longer use the
+    later `여행기간` as the application deadline.
+  - Normalized start dates are ignored when an application window has a later
+    end date.
+- Validation:
+  - `pnpm exec node --test src/deadline-date-evidence.test.js`
+  - `pnpm exec node --test src/deadline-type-evidence.test.js src/deadline-date-evidence.test.js src/field-evidence.test.js`
+  - `pnpm --filter posterlink-crawler test`
+  - Passed with 240 tests.
+- Dry-run report:
+  - `node src/backfill-field-evidence.js --limit=5000 '--statuses=published,review,rejected' --output=data/results/field-evidence-deadline-windowfix-dryrun-20260825.json`
+  - Mode: dry-run.
+  - Checked posters: 598.
+  - Candidate posters: 598.
+  - Evidence rows: 4,095.
+  - Applied rows: 0.
+  - Failed rows: 0.
+  - Field counts:
+    - `deadline_date`: 434.
+    - `deadline_type`: 326.
+    - `host_org`: 1,076.
+    - `official_url`: 597.
+    - Other structured fields: 1,664.
+- Dry-run overlay evaluation:
+  - Report: `data/eval/reports/extraction-phase2-deadline-windowfix-dryrun-overlay-20260825.json`.
+  - Macro accuracy if the dry-run rows were overlaid on current DB evidence:
+    `0.8708333333333335`.
+  - `deadline_date`: `0.7583333333333333`.
+  - `deadline_type`: `0.7166666666666667`.
+  - `host_org`: `0.9083333333333333`.
+  - `official_url`: `0.95`.
+- Decision:
+  - Do not apply this whole field-evidence bundle to the operating DB yet.
+    It improves source-window safety and non-deadline fields, but the full
+    bundle still lowers `deadline_type` versus the currently applied operating
+    evidence because existing human/operator and legacy fixed rows need a
+    separate reconciliation policy.
+  - Next safe step is a targeted evidence bundle, not a full field backfill:
+    either source-link/host-org improvements, or a manually reviewed
+    `deadline_type` correction bundle for the remaining ambiguous fixed vs
+    until-exhausted cases.
