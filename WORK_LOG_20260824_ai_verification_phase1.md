@@ -1702,3 +1702,48 @@ DB writes were performed.
   - Current extraction errors were concentrated in deadline fields:
     start-date-as-deadline, event/travel-period-as-deadline, and first
     subprogram deadline instead of overall latest deadline.
+
+## Phase 2 Golden Labels Batch 02
+
+Imported the second Phase 2 golden-label batch into `eval/golden`. No operating
+DB writes were performed.
+
+- Source batch:
+  `data/eval/review-batches-20260825/batch-02.json`
+- Imported labels:
+  - 20 posters.
+  - 120 truth fields.
+  - Fields labeled for each poster:
+    `is_real_poster`, `content_type`, `deadline_date`, `deadline_type`,
+    `host_org`, `official_url`.
+- Manual corrections captured in the labels:
+  - 송파구청 2026 송파 청년정책연구단:
+    `deadline_date` corrected from program period end `2026-10-07` to 모집기간
+    end `2026-08-31`.
+  - 양재종합사회복지관, 강북구청 reservation programs, 은평구청 아카데미:
+    explicit first-come/early-close language labeled as
+    `deadline_type: until_exhausted` while preserving the known period end date.
+  - 강북구청 제30기 생활속 다산사상:
+    `deadline_date` normalized from predicted range
+    `2026.07.29~2026.09.04` to `2026-09-04`; early-close/first-come context
+    labeled as `deadline_type: until_exhausted`.
+- External source check:
+  - `https://www.allforyoung.com/posts/86522` confirmed the 송파 청년정책연구단
+    접수기간 as `2026년 08월 19일 ~ 2026년 08월 31일`.
+  - `https://yeyak.seoul.go.kr/web/reservation/selectReservView.do?reSvc=N&rsv_svc_id=S260821104001822818`
+    confirmed the 서울청년센터 성북 legal program application period as
+    `2026.08.21 11:40 ~ 2026.08.26 23:59`.
+- Validation:
+  - `pnpm eval:validate -- --set=eval/golden --require-labels`
+  - Passed with 40 files, 40 items, 240 truth fields.
+- Progress:
+  - `pnpm eval:status`
+  - 40/120 labeled, 80 remaining.
+- Evaluation snapshot:
+  - `pnpm eval:extraction -- --set=eval/golden --extractor=current --out=data/eval/reports/extraction-batch01-02-current-20260825.json`
+  - Labeled posters: 40.
+  - Evidence rows: 495.
+  - Macro accuracy: 0.9458333333333333.
+  - `pnpm eval:thresholds -- --input=data/eval/reports/extraction-batch01-02-current-20260825.json --out=data/eval/reports/extraction-thresholds-batch01-02-20260825.json --module-out=data/eval/reports/extraction-thresholds-batch01-02-20260825.js`
+  - Threshold plan remains `production_ready: false` because labels are 40/120
+    and deadline fields still lack a qualifying recommendation.

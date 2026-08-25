@@ -1,0 +1,17 @@
+{
+  "poster_id": "02084c9b-7818-48b4-8df6-4c014cf99cdf",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-09-18",
+    "deadline_type": "until_exhausted",
+    "host_org": "강북구청",
+    "official_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73163"
+  },
+  "notes": "source says application starts 2026-08-10 and closes when seats are exhausted; reservation page also has period ending 2026-09-18",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-02.json",
+  "context_title": "강북구청<제11회 강북구 명사특강(문형배 교수)>",
+  "context_source_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73163"
+}

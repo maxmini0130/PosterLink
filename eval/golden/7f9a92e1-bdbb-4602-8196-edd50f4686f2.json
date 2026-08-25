@@ -1,0 +1,16 @@
+{
+  "poster_id": "7f9a92e1-bdbb-4602-8196-edd50f4686f2",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-08-28",
+    "deadline_type": "fixed",
+    "host_org": "실로암시각장애인복지관",
+    "official_url": "https://www.silwel.or.kr/v2/modules/board/board_view.php?tbl=board_comm_notice&id=10612&m=&c=&page=1&page_num=15&select_srch=&term1="
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-02.json",
+  "context_title": "실로암시각장애인복지관 <실로암 인문학콘서트 문유석 작가와 함께하는 - 나로 살 결심-지금 나 답게 산다는 것>",
+  "context_source_url": "https://www.silwel.or.kr/v2/modules/board/board_view.php?id=10612&page_num=15&tbl=board_comm_notice"
+}

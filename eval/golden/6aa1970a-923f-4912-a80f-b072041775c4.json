@@ -1,0 +1,16 @@
+{
+  "poster_id": "6aa1970a-923f-4912-a80f-b072041775c4",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-09-02",
+    "deadline_type": "fixed",
+    "host_org": "관악중소벤처진흥원",
+    "official_url": "https://www.gsva.or.kr/main/post/view.do?post_sn=12&search=UlVTRXgvS090NzV1MEZNcG96TTRxZz09"
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-02.json",
+  "context_title": "관악중소벤처진흥원 <관악S밸리 성장 지원 세미나 3회> 안내",
+  "context_source_url": "https://www.gsva.or.kr/main/post/view.do?post_sn=12&search=UlVTRXgvS090NzV1MEZNcG96TTRxZz09"
+}

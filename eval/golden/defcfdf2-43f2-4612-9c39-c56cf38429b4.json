@@ -1,0 +1,16 @@
+{
+  "poster_id": "defcfdf2-43f2-4612-9c39-c56cf38429b4",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-09-03",
+    "deadline_type": "fixed",
+    "host_org": "도봉아이나라도서관",
+    "official_url": "https://www.unilib.dobong.kr/edusat/view.do?edu_idx=6128&prepage=%2Fedusat%2Flist.do%3Fsh_ct_idx%3D3"
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-02.json",
+  "context_title": "도봉아이나라도서관 <독서의 달 '정은정 작가와의 만남(떡볶이와 치킨의 유쾌한 이야기)'> 참여자 모집",
+  "context_source_url": "https://www.unilib.dobong.kr/edusat/view.do?edu_idx=6128&prepage=%2Fedusat%2Flist.do%3Fsh_ct_idx%3D3"
+}

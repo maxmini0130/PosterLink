@@ -1,0 +1,16 @@
+{
+  "poster_id": "d9a5e0b9-a22e-4e13-8e8a-5c4a63b7dae0",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-08-25",
+    "deadline_type": "fixed",
+    "host_org": "경기도경제과학진흥원",
+    "official_url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn=178940"
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-02.json",
+  "context_title": "경기창업혁신공간 서부권 「스담스담」(오픈 네트워킹) 2회차",
+  "context_source_url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?pbancSn=178940&schM=view"
+}

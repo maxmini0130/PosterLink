@@ -1,0 +1,16 @@
+{
+  "poster_id": "25764d5b-953e-490e-ae48-8df7f8e3bed4",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-08-31",
+    "deadline_type": "fixed",
+    "host_org": "강남구청",
+    "official_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73144"
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-02.json",
+  "context_title": "강남구청 <민선9기 강남 대전환!! 주민제안 공모전> 안내",
+  "context_source_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73144"
+}

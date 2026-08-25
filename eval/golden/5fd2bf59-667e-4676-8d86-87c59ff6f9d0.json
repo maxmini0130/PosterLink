@@ -1,0 +1,17 @@
+{
+  "poster_id": "5fd2bf59-667e-4676-8d86-87c59ff6f9d0",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-08-31",
+    "deadline_type": "fixed",
+    "host_org": "송파구청",
+    "official_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73098"
+  },
+  "notes": "deadline_date corrected from program period end 2026-10-07 to 모집기간 end 2026-08-31",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-02.json",
+  "context_title": "송파구청 <2026 송파 청년정책연구단> 참여자 모집",
+  "context_source_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73098"
+}

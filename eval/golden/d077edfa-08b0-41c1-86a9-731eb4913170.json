@@ -1,0 +1,16 @@
+{
+  "poster_id": "d077edfa-08b0-41c1-86a9-731eb4913170",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-08-28",
+    "deadline_type": "fixed",
+    "host_org": "염리종합사회복지관",
+    "official_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73211"
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-02.json",
+  "context_title": "염리종합사회복지관 <마음의 틈을 메우는 마을돌봄 플랫폼>",
+  "context_source_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73211"
+}
