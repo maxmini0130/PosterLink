@@ -7,6 +7,7 @@ import dayjs from "dayjs";
 import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
+import { attachAiUsageMetadata } from "./ai-usage-logger.js";
 
 const CACHE_PATH = "data/deadline_parse_llm_fallback.json";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY?.trim();
@@ -206,13 +207,20 @@ async function parseDeadlineTextWithLlm(text, postedAt) {
       ?? payload.output?.flatMap((item) => item.content ?? []).map((part) => part.text ?? "").join("\n")
       ?? "";
     const parsed = parseJson(outputText);
-    const result = {
+    const result = attachAiUsageMetadata({
       applyStart: parsed.apply_start ?? null,
       applyEnd: parsed.apply_end ?? null,
       deadlineType: parsed.deadline_type ?? null,
       note: "LLM 폴백으로 파싱됨",
       matched: true,
-    };
+    }, {
+      model: MODEL,
+      operation: "deadline_parse_fallback",
+      stageLabel: "high_text",
+      status: "success",
+      inputTokens: payload.usage?.input_tokens ?? payload.usage?.prompt_tokens ?? null,
+      outputTokens: payload.usage?.output_tokens ?? payload.usage?.completion_tokens ?? null,
+    });
     cache[key] = result;
     await saveCache(cache);
     return result;

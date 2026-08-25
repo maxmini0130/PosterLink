@@ -748,3 +748,34 @@ Validation:
 
 - `pnpm --filter posterlink-crawler test`
   - Passed: 211 tests.
+
+## Crawler Upload Text Usage Logging
+
+Extended AI usage logging to the crawler upload text-model paths. No operating
+DB writes were performed.
+
+- Updated `scripts/crawler/src/notice-facts-extractor.js`.
+  - Fresh OpenAI calls now attach non-enumerable usage metadata for
+    `notice_facts_extraction`.
+  - Cached results do not create duplicate usage metadata.
+- Updated `scripts/crawler/src/poster-relevance-router.js`.
+  - Fresh OpenAI calls now attach usage metadata for `poster_relevance_route`.
+- Updated `scripts/crawler/src/deadline-parser.js`.
+  - LLM fallback deadline parsing now attaches `high_text` usage metadata for
+    `deadline_parse_fallback`.
+- Updated `scripts/crawler/src/upload-to-supabase.js`.
+  - After a poster save succeeds, usage rows are linked to `posters.id`.
+  - After a text notice candidate save succeeds, usage rows keep
+    `poster_id=null` and store `candidateId/sourceKey/sourceUrl` in metadata
+    because `ai_usage_log.poster_id` references only `posters.id`.
+  - Logging remains best-effort and does not block crawler uploads.
+- Updated `scripts/crawler/src/ai-usage-logger.js`.
+  - Added generic text-model usage row builder and non-enumerable usage metadata
+    helpers.
+
+Validation:
+
+- `pnpm --filter posterlink-crawler test`
+  - Passed: 213 tests.
+- `git diff --check`
+  - Passed, with existing Windows CRLF normalization warnings only.

@@ -9,6 +9,7 @@
 import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
+import { attachAiUsageMetadata } from "./ai-usage-logger.js";
 
 const CACHE_PATH = "data/poster_relevance_routes.json";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY?.trim();
@@ -202,7 +203,14 @@ export async function routePosterRelevance(context = {}) {
     const outputText = payload.output_text
       ?? payload.output?.flatMap((item) => item.content ?? []).map((part) => part.text ?? "").join("\n")
       ?? "";
-    const result = normalizeResult(parseJson(outputText));
+    const result = attachAiUsageMetadata(normalizeResult(parseJson(outputText)), {
+      model: MODEL,
+      operation: "poster_relevance_route",
+      stageLabel: "cheap_text",
+      status: "success",
+      inputTokens: payload.usage?.input_tokens ?? payload.usage?.prompt_tokens ?? null,
+      outputTokens: payload.usage?.output_tokens ?? payload.usage?.completion_tokens ?? null,
+    });
     cache[key] = result;
     await saveCache(cache);
     return result;

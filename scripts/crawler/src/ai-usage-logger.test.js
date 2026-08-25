@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  attachAiUsageMetadata,
   buildImageClassificationUsageRow,
+  buildTextModelUsageRow,
   buildTextVerificationUsageRow,
+  extractAiUsageMetadata,
   logAiUsage,
 } from "./ai-usage-logger.js";
 
@@ -49,6 +52,32 @@ test("buildTextVerificationUsageRow creates high-text usage rows", () => {
   assert.equal(row.operation, "field_verification");
   assert.equal(row.poster_id, "poster-1");
   assert.equal(row.estimated_unit_cost, 20);
+});
+
+test("buildTextModelUsageRow supports crawler text operations", () => {
+  const row = buildTextModelUsageRow({
+    posterId: "poster-1",
+    model: "gpt-5-mini",
+    operation: "notice_facts_extraction",
+    stageLabel: "cheap_text",
+    inputTokens: 300,
+    outputTokens: 80,
+    metadata: { sourceKey: "source-1" },
+  });
+
+  assert.equal(row.job_name, "crawler-upload");
+  assert.equal(row.stage_label, "cheap_text");
+  assert.equal(row.operation, "notice_facts_extraction");
+  assert.equal(row.estimated_unit_cost, 1);
+  assert.deepEqual(row.metadata, { sourceKey: "source-1" });
+});
+
+test("AI usage metadata stays non-enumerable", () => {
+  const result = attachAiUsageMetadata({ ok: true }, { operation: "test" });
+
+  assert.deepEqual(Object.keys(result), ["ok"]);
+  assert.equal(JSON.stringify(result), "{\"ok\":true}");
+  assert.deepEqual(extractAiUsageMetadata(result), { operation: "test" });
 });
 
 test("logAiUsage inserts rows when enabled", async () => {

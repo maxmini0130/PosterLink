@@ -16,6 +16,7 @@ import {
   sanitizeNoticeFacts,
   sanitizeNoticeFactValue,
 } from "./notice-fact-normalizer.js";
+import { attachAiUsageMetadata } from "./ai-usage-logger.js";
 
 const CACHE_PATH = process.env.NOTICE_FACTS_CACHE_PATH?.trim() || "data/notice_facts_llm.json";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY?.trim();
@@ -209,14 +210,21 @@ export async function extractNoticeFactsWithLlm(source = {}, existingFacts = {})
       }
     }
 
-    const result = {
+    const result = attachAiUsageMetadata({
       facts: completeFactShape(sanitizeNoticeFacts(facts)),
       allFactsGroundedInText: Boolean(parsed.allFactsGroundedInText) && rejectedUngrounded.length === 0,
       filledByLlm,
       rejectedUngrounded,
       reason: normalizeText(parsed.reason, 300) ?? "",
       model: MODEL,
-    };
+    }, {
+      model: MODEL,
+      operation: "notice_facts_extraction",
+      stageLabel: "cheap_text",
+      status: "success",
+      inputTokens: payload.usage?.input_tokens ?? payload.usage?.prompt_tokens ?? null,
+      outputTokens: payload.usage?.output_tokens ?? payload.usage?.completion_tokens ?? null,
+    });
     cache[key] = result;
     await saveCache(cache);
     return result;

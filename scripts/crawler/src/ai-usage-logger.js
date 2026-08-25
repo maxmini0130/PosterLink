@@ -16,6 +16,48 @@ export async function logAiUsage(supabase, row) {
   return { status: "logged" };
 }
 
+export function attachAiUsageMetadata(result, usage) {
+  if (!result || typeof result !== "object" || !usage) return result;
+
+  Object.defineProperty(result, "__aiUsage", {
+    value: usage,
+    enumerable: false,
+    configurable: true,
+  });
+  return result;
+}
+
+export function extractAiUsageMetadata(result) {
+  return result && typeof result === "object" ? result.__aiUsage ?? null : null;
+}
+
+export function buildTextModelUsageRow({
+  jobName = "crawler-upload",
+  stageLabel = "cheap_text",
+  posterId,
+  model,
+  operation,
+  fieldKey = null,
+  status = "success",
+  inputTokens = null,
+  outputTokens = null,
+  metadata = {},
+} = {}) {
+  return buildAiUsageLogRow({
+    jobName,
+    stageLabel,
+    model,
+    operation,
+    posterId,
+    fieldKey,
+    status,
+    inputTokens,
+    outputTokens,
+    imageCount: 0,
+    metadata,
+  });
+}
+
 export function buildImageClassificationUsageRow({ posterId, model, status = "success", metadata = {} } = {}) {
   return buildAiUsageLogRow({
     jobName: "image-classification-backfill",
@@ -42,7 +84,7 @@ export function buildTextVerificationUsageRow({
   outputTokens = null,
   metadata = {},
 } = {}) {
-  return buildAiUsageLogRow({
+  return buildTextModelUsageRow({
     jobName: "field-verification-backfill",
     stageLabel: "high_text",
     model,

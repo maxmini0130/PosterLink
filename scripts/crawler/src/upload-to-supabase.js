@@ -51,6 +51,12 @@ import {
   sanitizeNoticeFactValue,
 } from "./notice-fact-normalizer.js";
 import {
+  attachAiUsageMetadata,
+  buildTextModelUsageRow,
+  extractAiUsageMetadata,
+  logAiUsage,
+} from "./ai-usage-logger.js";
+import {
   inferPosterLinkType,
   isLikelyApplicationLink,
   resolveCanonicalSource,
@@ -97,6 +103,40 @@ function createConfiguredSupabase() {
 }
 
 const supabase = createConfiguredSupabase();
+
+async function logCrawlerAiUsageEvents({
+  posterId = null,
+  candidateId = null,
+  sourceKey = null,
+  sourceUrl = null,
+  events = [],
+} = {}) {
+  for (const event of events) {
+    const usage = extractAiUsageMetadata(event);
+    if (!usage?.model || !usage.operation) continue;
+
+    const result = await logAiUsage(supabase, buildTextModelUsageRow({
+      jobName: "crawler-upload",
+      stageLabel: usage.stageLabel ?? "cheap_text",
+      posterId,
+      model: usage.model,
+      operation: usage.operation,
+      status: usage.status ?? "success",
+      inputTokens: usage.inputTokens ?? null,
+      outputTokens: usage.outputTokens ?? null,
+      metadata: {
+        sourceKey,
+        sourceUrl,
+        ...(candidateId ? { candidateId } : {}),
+        ...(usage.metadata ?? {}),
+      },
+    }));
+
+    if (result.status === "failed") {
+      console.warn(`\n  AI usage log failed (${usage.operation}): ${result.error}`);
+    }
+  }
+}
 
 const POSTER_IMAGE_BUCKET = process.env.POSTER_IMAGE_BUCKET?.trim() || "poster-originals";
 const POSTER_DUPLICATE_LOOKUP_LIMIT = Number(process.env.POSTER_DUPLICATE_LOOKUP_LIMIT ?? "5000");
@@ -908,6 +948,7 @@ async function enrichReadableNoticeInfoWithLlm(readableInfo, post) {
     { title: readableInfo.title, content },
     readableInfo.facts ?? {},
   );
+  const aiUsage = extractAiUsageMetadata(llmResult);
   const factsLlmMeta = {
     filledByLlm: llmResult.filledByLlm,
     rejectedUngrounded: llmResult.rejectedUngrounded ?? [],
@@ -921,11 +962,11 @@ async function enrichReadableNoticeInfoWithLlm(readableInfo, post) {
 
   if (!hasLlmAuditMeta) return readableInfo;
 
-  return {
+  return attachAiUsageMetadata({
     ...readableInfo,
     facts: llmResult.facts,
     factsLlmMeta,
-  };
+  }, aiUsage);
 }
 
 function buildAttachmentAnalysisSummary(analysis = null) {
@@ -1329,6 +1370,12 @@ async function upsertNoticeCandidate(post, {
       .eq("id", existing.id);
 
     if (updateError) throw new Error(`notice_candidate_update:${updateError.message}`);
+    await logCrawlerAiUsageEvents({
+      candidateId: existing.id,
+      sourceKey,
+      sourceUrl,
+      events: [readableInfo, relevanceRoute, deadlineParse],
+    });
     return { created: false, id: existing.id };
   }
 
@@ -1341,6 +1388,13 @@ async function upsertNoticeCandidate(post, {
   if (error || !data?.id) {
     throw new Error(`notice_candidate_insert:${error?.message ?? "insert returned no row"}`);
   }
+
+  await logCrawlerAiUsageEvents({
+    candidateId: data.id,
+    sourceKey,
+    sourceUrl,
+    events: [readableInfo, relevanceRoute, deadlineParse],
+  });
 
   return { created: true, id: data.id };
 }
@@ -2189,6 +2243,12 @@ async function uploadToSupabase(filePath) {
       await assignPosterRegions(existingPoster.id, post, regionMap, classification);
       await assignPosterAudiences(existingPoster.id, classification, audienceMap);
       await upsertBoardNoticeSighting(post, sourceUrl, { posterId: existingPoster.id, precomputedImagePhash: currentImagePhash?.phash ?? null });
+      await logCrawlerAiUsageEvents({
+        posterId: existingPoster.id,
+        sourceKey,
+        sourceUrl,
+        events: [readableInfo],
+      });
       process.stdout.write("-");
       continue;
     }
@@ -2228,6 +2288,12 @@ async function uploadToSupabase(filePath) {
     await assignPosterAudiences(posterId, classification, audienceMap);
     addDuplicateCandidate(duplicateCandidates, posterId, posterRecord, post, sourceUrl, storedImages, linkEntries, currentImagePhash?.phash ?? null);
     await upsertBoardNoticeSighting(post, sourceUrl, { posterId, precomputedImagePhash: currentImagePhash?.phash ?? null });
+    await logCrawlerAiUsageEvents({
+      posterId,
+      sourceKey,
+      sourceUrl,
+      events: [readableInfo],
+    });
 
     success++;
     collectionStats.recordCreated(post);
