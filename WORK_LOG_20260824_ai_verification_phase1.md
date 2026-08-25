@@ -2078,3 +2078,61 @@ Applied the approved Phase 2 rulefix evidence bundle to the operating DB.
     before the generic `discard`/`recruit` fallback.
   - `is_real_poster`: four known non-posters still have high-confidence positive
     signal evidence and need negative routing or evidence suppression.
+
+## Phase 2 Router Fixes 03 Dry Run
+
+Implemented local routing fixes for `content_type` and `is_real_poster`. No
+operating DB writes were performed for this change set.
+
+- Content type routing:
+  - Replaced fragile mojibake-prone Korean regex routing with ASCII
+    `\uXXXX`-escaped Korean keyword patterns.
+  - Added stable routing for civil-defense/admin notices, public-restroom
+    manager notices, no-relative-death notices, QA test notices, community news,
+    walking-group/news posts, citizen-vote notices, and known contaminated event
+    notices.
+  - Narrowed the event-notice rule after dry-run review so it only catches the
+    observed next-link contamination pattern, not ordinary participant
+    recruitment pages.
+- Poster detection routing:
+  - Added non-poster notice suppression before classifier-accept routing.
+  - Civil-defense/admin/QA/public-recruitment admin notices now emit
+    `is_real_poster=false` in dry-run instead of high-confidence positive
+    poster evidence.
+  - Added the same narrow contaminated-event notice suppression for the
+    Gangnam Zero Market case.
+- Regression checks added:
+  - Civil defense notice => `content_type=admin`,
+    `is_real_poster=false`.
+  - QA test notice => `content_type=discard`,
+    `is_real_poster=false`.
+  - Gangnam Zero Market contaminated event notice =>
+    `content_type=news`, `is_real_poster=false`.
+  - Walking-group/news posts still route to `news`.
+- Validation:
+  - `pnpm --filter posterlink-crawler test`
+  - Passed with 235 tests.
+- Dry-run reports:
+  - `node src/backfill-content-type-evidence.js --limit=5000 '--statuses=published,review,rejected' --output=data/results/content-type-evidence-phase2-routerfix-dryrun-20260825.json`
+    - Mode: dry-run.
+    - Checked rows: 598.
+    - Evidence rows: 598.
+    - Content types: recruit 541, discard 21, admin 7, news 29.
+    - Applied rows: 0.
+  - `node src/backfill-poster-detection-evidence.js --limit=5000 '--statuses=published,review,rejected' --include-negative --output=data/results/poster-detection-evidence-phase2-routerfix-dryrun-20260825.json`
+    - Mode: dry-run.
+    - Checked rows: 598.
+    - Evidence rows: 573.
+    - Decisions: true 544, false 29, ambiguous 25.
+    - Applied rows: 0.
+- Spot checks:
+  - `2026년 마포구 민방위 보충교육 안내`: admin / false.
+  - `2026년 민방위 교육 안내`: admin / false.
+  - `[QA 테스트] 검수 플로우 확인 공고`: discard / false.
+  - `강남구청 <2026 대치2동 제로마켓 개최 및 주민 셀러 모집> 안내`:
+    news / false.
+  - `제4회 용강동 마을축제 ... 축제추진위원 공개모집 공고`:
+    admin / false.
+- Follow-up:
+  - Applying these generated `content_type` and `is_real_poster` evidence rows
+    to the operating DB requires explicit user approval.

@@ -1,5 +1,18 @@
-const DATE_TOKEN_RE = /(?:20\d{2}[.\-/년\s]+)?\d{1,2}[.\-/월\s]+\d{1,2}|(?:신청|접수|모집)\s*(?:기간|마감|일정)|D-\d+/i;
-const CONTACT_TOKEN_RE = /(?:0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4})|[\w.+-]+@[\w.-]+\.\w+|QR|문의|연락처/i;
+const DATE_TOKEN_RE = /(?:20\d{2}\s*(?:년|[.\-/])\s*)?\d{1,2}\s*(?:월|[.\-/])\s*\d{1,2}\s*(?:일)?|(?:\uC2E0\uCCAD|\uC811\uC218|\uBAA8\uC9D1)\s*(?:\uAE30\uAC04|\uB9C8\uAC10|\uC77C\uC815)|D-\d+/i;
+const CONTACT_TOKEN_RE = /(?:0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4})|[\w.+-]+@[\w.-]+\.\w+|QR|\uBB38\uC758|\uC5F0\uB77D\uCC98/i;
+const NON_POSTER_NOTICE_RE = new RegExp([
+  "QA\\s*(?:\\uD14C\\uC2A4\\uD2B8)?",
+  "\\uBBFC\\uBC29\\uC704",
+  "\\uAD50\\uC721\\s*\\uBC0F\\s*\\uD1B5\\uC9C0\\uC11C\\s*\\uC218\\uB839\\s*\\uC548\\uB0B4",
+  "\\uBB34\\uC5F0\\uACE0\\s*\\uC0AC\\uB9DD\\uC790",
+  "\\uCC44\\uC6A9\\s*\\uACF5\\uACE0",
+  "\\uC9C1\\uC6D0\\s*\\uCC44\\uC6A9",
+  "\\uD1B5\\uC7A5\\s*\\uBAA8\\uC9D1\\s*\\uACF5\\uACE0",
+  "\\uACF5\\uC911\\uD654\\uC7A5\\uC2E4\\s*\\uAD00\\uB9AC\\uC778",
+  "\\uACF5\\uAC1C\\uBAA8\\uC9D1\\s*\\uACF5\\uACE0",
+].join("|"), "i");
+const CONTAMINATED_EVENT_NOTICE_RE = /(?:\uC81C\uB85C\uB9C8\uCF13|(?:\uAC1C\uCD5C\s*\uC548\uB0B4[\s\S]{0,500}\uB2E4\uC74C\uAE00)|(?:\uB2E4\uC74C\uAE00[\s\S]{0,500}\uAC1C\uCD5C\s*\uC548\uB0B4))/i;
+const APPLICATION_PERIOD_RE = /(?:\uC2E0\uCCAD|\uC811\uC218|\uBAA8\uC9D1)\s*(?:\uAE30\uAC04|\uBC29\uBC95|\uB9C8\uAC10)/i;
 
 function normalizeText(value) {
   return String(value ?? "")
@@ -50,6 +63,9 @@ export function extractPosterSignals({
   const classificationConfidence = Number(imageClassification?.confidence);
   const hasClassifierPoster = imageClassification?.isPoster === true && classificationConfidence >= 0.65;
   const hasClassifierReject = imageClassification?.isPoster === false && classificationConfidence >= 0.8;
+  const noticeText = [title, sourceText].filter(Boolean).join(" ");
+  const hasNonPosterNotice = NON_POSTER_NOTICE_RE.test(noticeText) ||
+    (CONTAMINATED_EVENT_NOTICE_RE.test(noticeText) && !APPLICATION_PERIOD_RE.test(noticeText));
 
   return {
     aspectRatio,
@@ -62,6 +78,7 @@ export function extractPosterSignals({
     hasContactToken: CONTACT_TOKEN_RE.test(combinedText),
     hasClassifierPoster,
     hasClassifierReject,
+    hasNonPosterNotice,
     classifierConfidence: Number.isFinite(classificationConfidence) ? classificationConfidence : null,
     classifierVisualType: imageClassification?.visualType ?? null,
   };
@@ -77,6 +94,16 @@ export function decidePosterDetection(signals) {
       route: "reject",
       needsVlm: false,
       reasons: ["classifier_reject"],
+    };
+  }
+
+  if (signals.hasNonPosterNotice) {
+    return {
+      isRealPoster: false,
+      confidence: 0.95,
+      route: "reject",
+      needsVlm: false,
+      reasons: ["non_poster_notice"],
     };
   }
 

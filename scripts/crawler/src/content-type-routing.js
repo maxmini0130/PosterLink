@@ -20,15 +20,66 @@ const NEWS_ISSUE_CODES = new Set([
   "public-safety-guide",
 ]);
 
-const ADMIN_TITLE_RE = /(?:채용\s*(?:공고|재공고|기간|안내)|직원\s*채용|계약직\s*(?:직원|사회복지사|매니저)?\s*채용|강사\s*모집|(?:관리인|관리원|청소원|환경미화원)\s*모집\s*공고|통장\s*모집\s*공고|입찰\s*공고|수의계약|행정예고|고시\s*공고|공고\s*제\s*\d{4}-\d+)/i;
-const NEWS_TITLE_RE = /(?:소식|보도자료|결과\s*(?:발표|공지|안내)|선정\s*결과|당첨자|합격자|후기|현장\s*스케치|활동\s*보고|행사\s*취소|변경\s*안내)/i;
-const RECRUIT_ACTION_RE = /(?:모집|신청|접수|참여자|참가자|수강생|교육생|지원\s*대상|대상자\s*모집|공모|선착순|접수\s*중|apply|register|registration)/i;
-const PROGRAM_RE = /(?:프로그램|교육|행사|강좌|특강|멘토링|컨설팅|창업|지원사업|바우처|공모전|네트워킹|워크숍|캠프|상담|클리닉)/i;
+const ADMIN_RE = new RegExp([
+  "\\uBBFC\\uBC29\\uC704", // civil defense
+  "\\uACF5\\uC911\\uD654\\uC7A5\\uC2E4\\s*\\uAD00\\uB9AC\\uC778",
+  "\\uBB34\\uC5F0\\uACE0\\s*\\uC0AC\\uB9DD\\uC790",
+  "\\uACF5\\uC2DC\\uC1A1\\uB2EC",
+  "\\uCC44\\uC6A9\\s*\\uACF5\\uACE0",
+  "\\uC9C1\\uC6D0\\s*\\uCC44\\uC6A9",
+  "\\uD1B5\\uC7A5\\s*\\uBAA8\\uC9D1\\s*\\uACF5\\uACE0",
+  "\\uC785\\uCC30\\s*\\uACF5\\uACE0",
+  "\\uACE0\\uC2DC\\s*\\uACF5\\uACE0",
+  "\\uAD50\\uC721\\s*\\uBC0F\\s*\\uD1B5\\uC9C0\\uC11C\\s*\\uC218\\uB839\\s*\\uC548\\uB0B4",
+  "\\uCD95\\uC81C\\uCD94\\uC9C4\\uC704\\uC6D0\\s*\\uACF5\\uAC1C\\uBAA8\\uC9D1\\s*\\uACF5\\uACE0",
+  "\\uACF5\\uAC1C\\uBAA8\\uC9D1\\s*\\uACF5\\uACE0",
+].join("|"), "i");
 
-const KOREAN_ADMIN_TITLE_RE = /(?:민방위|무연고\s*사망자|공시송달|재결서|공중화장실\s*관리인|수상후보자\s*추천\s*공고|예방수칙|교육문화사업\s*온라인접수\s*안내|통장\s*모집\s*공고|채용\s*공고|직원\s*채용|입찰\s*공고|행정\s*예고|고시\s*공고)/i;
-const KOREAN_NEWS_TITLE_RE = /(?:소식|보도자료|할인\s*혜택|팝업|시민투표|걷기모임|공동체상영회|조합원교육|건강돌봄학교|결과\s*(?:발표|공지|안내)|행사\s*(?:개최\s*)?안내|페스티벌|축제|캠페인|이벤트)/i;
-const KOREAN_RECRUIT_ACTION_RE = /(?:참여자|수강생|신청자|교육생|셀러|팀|후보자)?\s*(?:모집|신청|접수|공모)|참가자\s*모집|참여\s*신청|온라인\s*신청|수강신청/u;
-const KOREAN_PROGRAM_RE = /(?:프로그램|교육|강좌|특강|워크숍|멘토링|컨설팅|창업|취업|공모|대회|클래스|캠프|상담|체험|토크콘서트|플리마켓)/u;
+const NEWS_RE = new RegExp([
+  "\\uC18C\\uC2DD",
+  "\\uBCF4\\uB3C4\\uC790\\uB8CC",
+  "\\uACB0\\uACFC\\s*(?:\\uBC1C\\uD45C|\\uACF5\\uC9C0|\\uC548\\uB0B4)",
+  "\\uC2DC\\uBBFC\\uD22C\\uD45C",
+  "\\uAC77\\uAE30\\uBAA8\\uC784",
+  "\\uAC74\\uAC15\\uB3CC\\uBD04\\uD559\\uAD50",
+  "\\uACBD\\uBE44\\uB178\\uB3D9\\uC790\\s*\\uAD50\\uC721\\s*\\uBC0F\\s*\\uD55C\\uB9C8\\uB2F9",
+  "\\uD589\\uC0AC\\s*(?:\\uAC1C\\uCD5C\\s*)?\\uC548\\uB0B4",
+  "\\uC774\\uBCA4\\uD2B8",
+].join("|"), "i");
+
+const RECRUIT_RE = new RegExp([
+  "\\uBAA8\\uC9D1",
+  "\\uC2E0\\uCCAD",
+  "\\uC811\\uC218",
+  "\\uCC38\\uC5EC\\uC790",
+  "\\uCC38\\uAC00\\uC790",
+  "\\uC218\\uAC15\\uC0DD",
+  "\\uAD50\\uC721\\uC0DD",
+  "\\uACF5\\uBAA8",
+  "apply",
+  "register",
+  "registration",
+].join("|"), "i");
+
+const PROGRAM_RE = new RegExp([
+  "\\uD504\\uB85C\\uADF8\\uB7A8",
+  "\\uAD50\\uC721",
+  "\\uAC15\\uC88C",
+  "\\uD2B9\\uAC15",
+  "\\uC6CC\\uD06C\\uC20D",
+  "\\uBA58\\uD1A0\\uB9C1",
+  "\\uCEE8\\uC124\\uD305",
+  "\\uCCB4\\uD5D8",
+  "\\uCC3D\\uC5C5",
+  "\\uCDE8\\uC5C5",
+  "\\uB300\\uD68C",
+  "\\uD1A0\\uD06C\\uCF58\\uC11C\\uD2B8",
+  "\\uD50C\\uB9AC\\uB9C8\\uCF13",
+].join("|"), "i");
+
+const QA_TEST_RE = /QA\s*(?:\uD14C\uC2A4\uD2B8)?/i;
+const CONTAMINATED_EVENT_NOTICE_RE = /(?:\uC81C\uB85C\uB9C8\uCF13|(?:\uAC1C\uCD5C\s*\uC548\uB0B4[\s\S]{0,500}\uB2E4\uC74C\uAE00)|(?:\uB2E4\uC74C\uAE00[\s\S]{0,500}\uAC1C\uCD5C\s*\uC548\uB0B4))/i;
+const APPLICATION_PERIOD_RE = /(?:\uC2E0\uCCAD|\uC811\uC218|\uBAA8\uC9D1)\s*(?:\uAE30\uAC04|\uBC29\uBC95|\uB9C8\uAC10)/i;
 
 function compact(value, limit = 300) {
   return Array.from(String(value ?? "").replace(/\s+/g, " ").trim()).slice(0, limit).join("");
@@ -94,10 +145,28 @@ export function classifyPosterContentType(row = {}) {
 
   const title = compact(row.title);
   const text = textBundle(row);
-  const hasRecruitAction = RECRUIT_ACTION_RE.test(text) || KOREAN_RECRUIT_ACTION_RE.test(text);
-  const hasProgramSignal = PROGRAM_RE.test(text) || KOREAN_PROGRAM_RE.test(text);
-  const hasAdminTitle = ADMIN_TITLE_RE.test(title) || KOREAN_ADMIN_TITLE_RE.test(title);
-  const hasNewsTitle = NEWS_TITLE_RE.test(title) || KOREAN_NEWS_TITLE_RE.test(title);
+  const hasRecruitAction = RECRUIT_RE.test(text);
+  const hasProgramSignal = PROGRAM_RE.test(text);
+  const hasAdminTitle = ADMIN_RE.test(title);
+  const hasNewsTitle = NEWS_RE.test(title);
+
+  if (QA_TEST_RE.test(text)) {
+    return {
+      contentType: "discard",
+      confidence: 0.95,
+      reason: "qa_test_notice",
+      evidenceText: title,
+    };
+  }
+
+  if (CONTAMINATED_EVENT_NOTICE_RE.test(text) && !APPLICATION_PERIOD_RE.test(text)) {
+    return {
+      contentType: "news",
+      confidence: 0.85,
+      reason: "event_notice_without_application_period",
+      evidenceText: compact(text),
+    };
+  }
 
   if (hasAdminTitle && !(hasRecruitAction && hasProgramSignal)) {
     return {
@@ -144,7 +213,7 @@ export function classifyPosterContentType(row = {}) {
     };
   }
 
-  if (NEWS_TITLE_RE.test(text) || KOREAN_NEWS_TITLE_RE.test(text)) {
+  if (NEWS_RE.test(text)) {
     return {
       contentType: "news",
       confidence: 0.65,

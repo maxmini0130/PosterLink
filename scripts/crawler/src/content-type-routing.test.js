@@ -26,23 +26,51 @@ test("classifyPosterContentType routes public restroom manager notices to admin"
   assert.equal(result.reason, "admin_title_rule");
 });
 
-test("classifyPosterContentType routes retrospective result notices to news", () => {
+test("classifyPosterContentType routes civil defense notices to admin", () => {
   const result = classifyPosterContentType({
-    title: "청년 행사 결과 발표 및 활동 보고",
-    summary_short: "지난 프로그램 운영 결과를 안내합니다.",
+    title: "2026년 마포구 민방위 보충교육 안내",
+    summary_short: "민방위 교육 및 통지서 수령 안내입니다.",
   });
 
-  assert.equal(result.contentType, "news");
+  assert.equal(result.contentType, "admin");
 });
 
-test("classifyPosterContentType routes rejected posters to discard", () => {
+test("classifyPosterContentType routes retrospective and community notices to news", () => {
+  assert.equal(
+    classifyPosterContentType({
+      title: "청년 행사 결과 발표 및 활동 보고",
+      summary_short: "지원 프로그램 운영 결과를 안내합니다.",
+    }).contentType,
+    "news",
+  );
+
+  assert.equal(
+    classifyPosterContentType({
+      title: "5월 걷기모임 소식",
+      summary_short: "마포구노동자종합지원센터 활동 소식입니다.",
+    }).contentType,
+    "news",
+  );
+});
+
+test("classifyPosterContentType routes QA notices to discard", () => {
   const result = classifyPosterContentType({
-    poster_status: "rejected",
-    title: "QA 테스트 검수 플로우 확인 공고",
+    title: "[QA 테스트] 검수 플로우 확인 공고",
+    summary_short: "PosterLink QA팀 임시 공고입니다. 확인 후 삭제됩니다.",
   });
 
   assert.equal(result.contentType, "discard");
-  assert.equal(result.reason, "poster_rejected");
+  assert.equal(result.reason, "qa_test_notice");
+});
+
+test("classifyPosterContentType routes event notices polluted by next links to news", () => {
+  const result = classifyPosterContentType({
+    title: "강남구청 <2026 대치2동 제로마켓 개최 및 주민 셀러 모집> 안내",
+    summary_short: "2026 대치2동 제로마켓 개최 안내 행사개요 행 사 명 일 시 장소 프로그램 플리마켓 다음글 시민특강 참여자 모집",
+  });
+
+  assert.equal(result.contentType, "news");
+  assert.equal(result.reason, "event_notice_without_application_period");
 });
 
 test("classifyPosterContentType separates rejected admin and news documents", () => {
@@ -104,7 +132,7 @@ test("buildContentTypeEvidence does not split emoji surrogate pairs", () => {
   const row = buildContentTypeEvidence({
     id: "poster-emoji",
     title: "주거 수리 교육 참여자 모집",
-    summary_short: `${"모집 ".repeat(130)}🔌`,
+    summary_short: `${"모집 ".repeat(130)}🙂`,
     summary_long: "교육 프로그램 신청 접수",
   });
 

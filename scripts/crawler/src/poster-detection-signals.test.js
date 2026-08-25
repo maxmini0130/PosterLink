@@ -10,18 +10,18 @@ import {
 
 test("titleSimilarity measures overlap against OCR/source text", () => {
   assert.equal(
-    titleSimilarity("청년 커리어 패스 참여자 모집", "청년 커리어 패스 참여자 모집 신청기간 8월 31일까지"),
+    titleSimilarity("청년 커리어 캠프 참여자 모집", "청년 커리어 캠프 참여자 모집 신청기간 8월 31일까지"),
     1,
   );
-  assert.equal(titleSimilarity("청년 커리어 패스", "주차 통제 안내"), 0);
+  assert.equal(titleSimilarity("청년 커리어 캠프", "주차 통제 안내"), 0);
 });
 
 test("extractPosterSignals computes geometry, text, and token signals", () => {
   const signals = extractPosterSignals({
     width: 800,
     height: 1200,
-    title: "청년 커리어 패스",
-    ocrText: "청년 커리어 패스 참여자 모집 신청기간 2026.8.1~8.31 문의 02-123-4567",
+    title: "청년 커리어 캠프",
+    ocrText: "청년 커리어 캠프 참여자 모집 신청기간 2026.8.1~8.31 문의 02-123-4567",
   });
 
   assert.equal(signals.aspectRatio, 1.5);
@@ -76,6 +76,49 @@ test("low text density rejects only when OCR text exists", () => {
     }).route,
     "reject",
   );
+});
+
+test("non-poster administrative notices override classifier poster accepts", () => {
+  const signals = extractPosterSignals({
+    width: 800,
+    height: 1200,
+    title: "2026년 마포구 민방위 보충교육 안내",
+    ocrText: "2026년 마포구 민방위 보충교육 안내",
+    imageClassification: { isPoster: true, confidence: 0.95 },
+  });
+
+  const decision = decidePosterDetection(signals);
+  assert.equal(decision.isRealPoster, false);
+  assert.equal(decision.route, "reject");
+  assert.deepEqual(decision.reasons, ["non_poster_notice"]);
+});
+
+test("QA notices override classifier poster accepts", () => {
+  const signals = extractPosterSignals({
+    width: 800,
+    height: 1200,
+    title: "[QA 테스트] 검수 플로우 확인 공고",
+    ocrText: "[QA 테스트] 검수 플로우 확인 공고",
+    imageClassification: { isPoster: true, confidence: 0.95 },
+  });
+
+  const decision = decidePosterDetection(signals);
+  assert.equal(decision.isRealPoster, false);
+  assert.deepEqual(decision.reasons, ["non_poster_notice"]);
+});
+
+test("event notices without application periods override classifier poster accepts", () => {
+  const signals = extractPosterSignals({
+    width: 800,
+    height: 1200,
+    title: "강남구청 <2026 대치2동 제로마켓 개최 및 주민 셀러 모집> 안내",
+    sourceText: "2026 대치2동 제로마켓 개최 안내 행사개요 행 사 명 일 시 장소 프로그램 플리마켓 다음글 시민특강 참여자 모집",
+    imageClassification: { isPoster: true, confidence: 0.95 },
+  });
+
+  const decision = decidePosterDetection(signals);
+  assert.equal(decision.isRealPoster, false);
+  assert.deepEqual(decision.reasons, ["non_poster_notice"]);
 });
 
 test("decidePosterDetection accepts strong rule signals or high-confidence classifier results", () => {
