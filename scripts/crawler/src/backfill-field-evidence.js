@@ -87,6 +87,14 @@ function compactBodyText(row) {
     .slice(0, 12_000);
 }
 
+function isInternalQaPoster(row) {
+  const text = [row.title, row.summary_short, row.summary_long]
+    .filter(Boolean)
+    .join(" ")
+    .normalize("NFKC");
+  return /\[QA\s*테스트\]|검수\s*플로우\s*확인|PosterLink\s*QA팀/u.test(text);
+}
+
 function isoDateText(value) {
   if (!value) return null;
   const date = new Date(value);
@@ -191,7 +199,7 @@ function buildEvidenceRowsForPoster(row, links = []) {
   }
 
   const officialNotice = links.find((link) => link.link_type === "official_notice");
-  if (officialNotice?.url || row.source_key) {
+  if (!isInternalQaPoster(row) && (officialNotice?.url || row.source_key)) {
     const url = officialNotice?.url ?? row.source_key;
     addRow(rows, normalizeEvidenceRow({
       posterId: row.id,

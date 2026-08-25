@@ -2272,3 +2272,43 @@ performed for this change set.
     either source-link/host-org improvements, or a manually reviewed
     `deadline_type` correction bundle for the remaining ambiguous fixed vs
     until-exhausted cases.
+
+## Phase 2 Official URL Evidence Dry Run
+
+Implemented a narrow safety guard for official URL evidence. No operating DB
+writes were performed for this change set.
+
+- Change:
+  - Internal QA/test posters no longer generate `official_url` evidence from
+    `source_key` or `poster_links`.
+  - This prevents test-only review records such as `[QA 테스트] 검수 플로우 확인
+    공고` from producing a public-looking official URL evidence row.
+- Host org review:
+  - A broader `host_org` regeneration was tested and rejected for now. It can
+    lower golden-set accuracy because title prefixes and old structured/GPT
+    organization rows are not always the true host organization.
+  - Host organization repair should be handled by a smaller manually reviewed
+    correction bundle or a dedicated reconciliation rule that can suppress stale
+    portal-name evidence.
+- Validation:
+  - `pnpm exec node --test src/host-org-evidence.test.js`
+  - Passed with 5 tests.
+- Dry-run report:
+  - `node src/backfill-field-evidence.js --limit=5000 '--statuses=published,review,rejected' --output=data/results/field-evidence-official-url-fix-dryrun-20260825.json`
+  - Mode: dry-run.
+  - Checked posters: 598.
+  - Candidate posters: 598.
+  - Evidence rows: 4,094.
+  - `official_url` rows: 596.
+  - Applied rows: 0.
+  - Failed rows: 0.
+- Official URL only overlay evaluation:
+  - Report: `data/eval/reports/extraction-phase2-official-url-fix-dryrun-overlay-20260825.json`.
+  - Overlay rows: 119 golden-set `official_url` rows.
+  - Macro accuracy if only these `official_url` rows were overlaid:
+    `0.8611111111111112`.
+  - `official_url` accuracy improves from `0.8416666666666667` to `0.95`.
+  - Other field metrics remain unchanged from the current operating DB evidence.
+- Follow-up:
+  - Applying this `official_url` evidence bundle to the operating DB requires
+    explicit user approval.
