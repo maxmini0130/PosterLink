@@ -45,6 +45,13 @@ function toNumber(value) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function ratio(part, total) {
+  const numerator = toNumber(part);
+  const denominator = toNumber(total);
+  if (denominator <= 0) return 0;
+  return Number((numerator / denominator).toFixed(4));
+}
+
 function addMetrics(target, row) {
   target.call_count += toNumber(row.call_count ?? 1);
   target.input_tokens += toNumber(row.input_tokens);
@@ -100,6 +107,39 @@ function countLinkedRows(rows) {
   return result;
 }
 
+function findCount(rows, key, value) {
+  return rows
+    .filter((row) => row[key] === value)
+    .reduce((sum, row) => sum + toNumber(row.call_count), 0);
+}
+
+function findCost(rows, key, value) {
+  return rows
+    .filter((row) => row[key] === value)
+    .reduce((sum, row) => sum + toNumber(row.estimated_unit_cost), 0);
+}
+
+function buildTieringHealth({ dailyRows, totals, linkageSample }) {
+  const ruleCalls = findCount(dailyRows, "stage_label", "rule");
+  const cheapTextCalls = findCount(dailyRows, "stage_label", "cheap_text");
+  const highTextCalls = findCount(dailyRows, "stage_label", "high_text");
+  const vlmCalls = findCount(dailyRows, "stage_label", "vlm");
+  const failedCalls = findCount(dailyRows, "status", "failed");
+  const skippedCalls = findCount(dailyRows, "status", "skipped");
+  const highCost = findCost(dailyRows, "stage_label", "high_text") + findCost(dailyRows, "stage_label", "vlm");
+  return {
+    rule_call_share: ratio(ruleCalls, totals.call_count),
+    cheap_text_call_share: ratio(cheapTextCalls, totals.call_count),
+    high_text_call_share: ratio(highTextCalls, totals.call_count),
+    vlm_call_share: ratio(vlmCalls, totals.call_count),
+    high_cost_call_share: ratio(highTextCalls + vlmCalls, totals.call_count),
+    high_cost_unit_share: ratio(highCost, totals.estimated_unit_cost),
+    failure_rate: ratio(failedCalls, totals.call_count),
+    skipped_rate: ratio(skippedCalls, totals.call_count),
+    unlinked_recent_row_share: ratio(linkageSample.unlinked_rows, linkageSample.total_rows_sampled),
+  };
+}
+
 export function summarizeAiUsage({ dailyRows = [], recentRows = [], days = DEFAULT_DAYS } = {}) {
   const totals = {
     days,
@@ -112,6 +152,7 @@ export function summarizeAiUsage({ dailyRows = [], recentRows = [], days = DEFAU
     estimated_unit_cost: 0,
   };
   for (const row of dailyRows) addMetrics(totals, row);
+  const linkageSample = countLinkedRows(recentRows);
 
   return {
     generated_at: new Date().toISOString(),
@@ -120,7 +161,8 @@ export function summarizeAiUsage({ dailyRows = [], recentRows = [], days = DEFAU
     by_operation: groupRows(dailyRows, (row) => row.operation, "operation"),
     by_model: groupRows(dailyRows, (row) => row.model, "model"),
     by_status: groupRows(dailyRows, (row) => row.status, "status"),
-    linkage_sample: countLinkedRows(recentRows),
+    tiering_health: buildTieringHealth({ dailyRows, totals, linkageSample }),
+    linkage_sample: linkageSample,
   };
 }
 
@@ -169,6 +211,7 @@ async function main() {
     days,
     call_count: report.totals.call_count,
     estimated_unit_cost: report.totals.estimated_unit_cost,
+    tiering_health: report.tiering_health,
     linkage_sample: report.linkage_sample,
   }, null, 2));
 }

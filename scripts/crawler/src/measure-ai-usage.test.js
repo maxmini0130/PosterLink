@@ -45,6 +45,12 @@ test("summarizeAiUsage groups usage rows by stage, operation, model, and status"
   assert.equal(report.totals.estimated_unit_cost, 27);
   assert.equal(report.by_stage[0].stage_label, "vlm");
   assert.equal(report.by_operation[0].operation, "poster_ocr");
+  assert.equal(report.tiering_health.cheap_text_call_share, 0.6667);
+  assert.equal(report.tiering_health.vlm_call_share, 0.3333);
+  assert.equal(report.tiering_health.high_cost_call_share, 0.3333);
+  assert.equal(report.tiering_health.high_cost_unit_share, 0.9259);
+  assert.equal(report.tiering_health.failure_rate, 0);
+  assert.equal(report.tiering_health.unlinked_recent_row_share, 0.3333);
   assert.deepEqual(report.linkage_sample, {
     total_rows_sampled: 3,
     poster_linked_rows: 1,

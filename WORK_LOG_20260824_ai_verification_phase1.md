@@ -1200,3 +1200,34 @@ No poster publication status or exposure tier values were changed by this step.
   - Tiers: A 205, B 3, C 351.
   - `content_type_news`: 3 rows appear as tier C reasons.
   - Applied: 0.
+
+## Phase 6 Model Tiering Usage Report
+
+Improved the Phase 6 read-only usage report. No operating DB writes were
+performed.
+
+- Added `tiering_health` to `scripts/crawler/src/measure-ai-usage.js`.
+  - `rule_call_share`
+  - `cheap_text_call_share`
+  - `high_text_call_share`
+  - `vlm_call_share`
+  - `high_cost_call_share`
+  - `high_cost_unit_share`
+  - `failure_rate`
+  - `skipped_rate`
+  - `unlinked_recent_row_share`
+- Current 14-day usage report:
+  `pnpm ai:usage -- --days=14 --output=data/eval/reports/ai-usage-report-20260825-phase6.json`
+  - `call_count`: 0.
+  - `estimated_unit_cost`: 0.
+  - Interpretation: the ledger exists, but recent AI writers have not inserted
+    measurable rows.
+- Current routing dry-run:
+  `pnpm ai:routing -- --limit=5000 "--statuses=published,review" --output=data/eval/reports/ai-model-routing-dryrun-20260825-phase6.json`
+  - Checked: 559.
+  - Evidence rows: 5079.
+  - Planned actions: 7472.
+  - Planned model calls: 4371.
+  - Stages: rule 3101, cheap_text 2606, high_text 1765.
+  - Estimated unit cost: 40512.
+- Updated `docs/ai_kpi_measurement.md`.
