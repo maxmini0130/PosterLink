@@ -161,6 +161,7 @@ export default function EditPosterPage() {
   const [newImageBlob, setNewImageBlob] = useState<Blob | null>(null);
   const [showCropper, setShowCropper] = useState(false);
   const [rejectionReason, setRejectionReason] = useState<string | null>(null);
+  const [initialPosterStatus, setInitialPosterStatus] = useState<string | null>(null);
   const [fieldVerification, setFieldVerification] = useState<unknown>(null);
   const [originalTimestamps, setOriginalTimestamps] = useState<PosterStructuredTimestamps>({});
   const [isAdminReviewer, setIsAdminReviewer] = useState(false);
@@ -228,6 +229,7 @@ export default function EditPosterPage() {
           thumbnailUrl: text(poster.thumbnail_url),
           sourceKey: text(poster.source_key),
         };
+        setInitialPosterStatus(poster.poster_status ?? null);
         setRejectionReason(poster.poster_status === "rejected" ? poster.rejection_reason ?? null : null);
         setFieldVerification(poster.field_verification);
         setIsAdminReviewer(profile?.role === "admin" || profile?.role === "super_admin");
@@ -375,6 +377,9 @@ export default function EditPosterPage() {
         .update({
           ...structuredUpdate.update,
           ...(newImageBlob ? { thumbnail_url: thumbnailUrl } : {}),
+          ...(!isAdminReviewer && initialPosterStatus === "rejected"
+            ? { poster_status: "review", rejection_reason: null }
+            : {}),
         })
         .eq("id", id);
       if (posterUpdateError) throw posterUpdateError;
@@ -400,7 +405,9 @@ export default function EditPosterPage() {
       }
 
       toast.success(
-        shouldDemoteOperatorEdit
+        !isAdminReviewer && initialPosterStatus === "rejected"
+          ? "수정 내용을 저장하고 재검수를 요청했습니다."
+          : shouldDemoteOperatorEdit
           ? "수정 내용을 저장하고 사람 검증 상태를 재검토로 변경했습니다."
           : "포스터 정보와 검수 이력을 저장했습니다.",
       );

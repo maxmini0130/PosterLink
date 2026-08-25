@@ -325,3 +325,21 @@ Validation:
 - `pnpm --filter web lint`
 - `pnpm test -- apps/web/lib/posterImage.test.ts apps/web/lib/adminPosterFilters.test.ts`
 - `pnpm --filter web build`
+
+## Operator Re-Review Flow Fix
+
+Fixed the rejected-poster correction flow so an operator edit can actually
+request review again.
+
+- File: `apps/web/app/operator/posters/[id]/edit/page.tsx`
+- The edit page now remembers the poster's initial status.
+- When a non-admin operator saves a poster that was initially `rejected`, the
+  update also sets `poster_status` back to `review` and clears
+  `rejection_reason`.
+- The success toast now explicitly says that the correction was saved and
+  re-review was requested.
+
+Validation:
+
+- `pnpm --filter web lint`
+- `pnpm --filter web build`
