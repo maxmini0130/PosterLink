@@ -1,0 +1,16 @@
+{
+  "poster_id": "a0db4ad7-8124-4ee8-93de-fe71cf087bbd",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-09-11",
+    "deadline_type": "fixed",
+    "host_org": "서울경제진흥원",
+    "official_url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn=178915"
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-03.json",
+  "context_title": "2026년 서울창업허브M+ 글로벌 오픈 이노베이션",
+  "context_source_url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?pbancSn=178915&schM=view"
+}

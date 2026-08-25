@@ -1,0 +1,17 @@
+{
+  "poster_id": "e8e21c42-888f-466b-b356-db2c4e4ccb7c",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "news",
+    "deadline_date": "2026-09-12",
+    "deadline_type": "fixed",
+    "host_org": "서초청년센터",
+    "official_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73106"
+  },
+  "notes": "Festival/event announcement, not a recruitment/application posting; host inferred from source hashtags.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-03.json",
+  "context_title": "2026년 제3회 서초 청년 FESTA x 한불수교 140주년 페스티벌 Bonjour, Fête!",
+  "context_source_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73106"
+}

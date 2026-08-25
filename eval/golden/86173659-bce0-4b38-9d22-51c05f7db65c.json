@@ -1,0 +1,16 @@
+{
+  "poster_id": "86173659-bce0-4b38-9d22-51c05f7db65c",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-08-30",
+    "deadline_type": "fixed",
+    "host_org": "영등포청년건축학교",
+    "official_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73041"
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-03.json",
+  "context_title": "영등포청년건축학교 <실내인테리어 현장실무 기술교육>",
+  "context_source_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73041"
+}

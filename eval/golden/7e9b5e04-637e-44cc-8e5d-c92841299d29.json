@@ -1,0 +1,16 @@
+{
+  "poster_id": "7e9b5e04-637e-44cc-8e5d-c92841299d29",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-08-26",
+    "deadline_type": "fixed",
+    "host_org": "마포청년창업취업지원센터 나루",
+    "official_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73189"
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-03.json",
+  "context_title": "[허브릿지×마포청년창업취업지원센터 나루] 경험을 디자인하는 기획자 양성 과정 참가자 모집 (~8/26)",
+  "context_source_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73189"
+}

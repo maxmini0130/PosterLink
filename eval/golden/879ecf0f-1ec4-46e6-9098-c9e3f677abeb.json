@@ -1,0 +1,17 @@
+{
+  "poster_id": "879ecf0f-1ec4-46e6-9098-c9e3f677abeb",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-09-06",
+    "deadline_type": "fixed",
+    "host_org": "용산구청",
+    "official_url": "https://www.yongsan.go.kr/portal/bbs/B0000042/view.do?nttId=767249&menuNo=200229&pageUnit=10&pageIndex=1"
+  },
+  "notes": "deadline_date corrected from source post date 2026-08-19 to 접수일정 end 2026-09-06.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-03.json",
+  "context_title": "용산구청 <[나의 완벽한 청년생활] '단백질 프로틴바 만들기' 프로그램 참여자 모집>",
+  "context_source_url": "https://www.yongsan.go.kr/portal/bbs/B0000042/view.do?menuNo=200229&nttId=767249&pageUnit=10"
+}

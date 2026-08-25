@@ -1,0 +1,17 @@
+{
+  "poster_id": "6d0bd770-51c4-4c83-9e38-955d95996f7e",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-08-23",
+    "deadline_type": "fixed",
+    "host_org": "서울청년센터 마포",
+    "official_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73124"
+  },
+  "notes": "deadline_date corrected from program end 2026-09-09 to 모집기간 end 2026-08-23.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-03.json",
+  "context_title": "공인노무사 포스타 모집",
+  "context_source_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73124"
+}

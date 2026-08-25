@@ -1,0 +1,16 @@
+{
+  "poster_id": "3b0de170-d7b5-4542-8e4e-da939a0f8301",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-09-01",
+    "deadline_type": "fixed",
+    "host_org": "대구창조경제혁신센터",
+    "official_url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn=178934"
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-03.json",
+  "context_title": "2026 대구·경북 스타트업 페스티벌 연계 제10회 대구 스타트업 오픈이노베이션 밋업데이(Meet-up) 참여 스타트업 모집",
+  "context_source_url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?pbancSn=178934&schM=view"
+}

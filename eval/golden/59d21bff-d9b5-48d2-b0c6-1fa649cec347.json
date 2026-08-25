@@ -1,0 +1,17 @@
+{
+  "poster_id": "59d21bff-d9b5-48d2-b0c6-1fa649cec347",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": null,
+    "deadline_type": "unknown",
+    "host_org": "영월서울농장",
+    "official_url": "https://news.seoul.go.kr/gov/archives/580314"
+  },
+  "notes": "Application period has start only; travel end date 2026-09-06 is not an application deadline.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-03.json",
+  "context_title": "[영월서울농장] 파란 가을하늘 보면서 콩알콩알 땅콩 캐기 (260905)",
+  "context_source_url": "https://news.seoul.go.kr/gov/archives/580314"
+}

@@ -1,0 +1,16 @@
+{
+  "poster_id": "243666bd-3479-43ef-abf3-3ecad018e31b",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-09-01",
+    "deadline_type": "fixed",
+    "host_org": "양천구 보건소",
+    "official_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73104"
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-03.json",
+  "context_title": "양천보건소<바른 습관을 만드는 댕댕이 클래스 2026 양천구 반려동물 문화교실 신청안내>",
+  "context_source_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73104"
+}

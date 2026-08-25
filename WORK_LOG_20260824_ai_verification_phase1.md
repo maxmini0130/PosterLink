@@ -1747,3 +1747,52 @@ DB writes were performed.
   - `pnpm eval:thresholds -- --input=data/eval/reports/extraction-batch01-02-current-20260825.json --out=data/eval/reports/extraction-thresholds-batch01-02-20260825.json --module-out=data/eval/reports/extraction-thresholds-batch01-02-20260825.js`
   - Threshold plan remains `production_ready: false` because labels are 40/120
     and deadline fields still lack a qualifying recommendation.
+
+## Phase 2 Golden Labels Batch 03
+
+Imported the third Phase 2 golden-label batch into `eval/golden`. No operating
+DB writes were performed.
+
+- Source batch:
+  `data/eval/review-batches-20260825/batch-03.json`
+- Imported labels:
+  - 20 posters.
+  - 120 truth fields.
+  - Fields labeled for each poster:
+    `is_real_poster`, `content_type`, `deadline_date`, `deadline_type`,
+    `host_org`, `official_url`.
+- Manual corrections captured in the labels:
+  - MFAC event-listing row:
+    performance dates were not treated as application deadlines, so
+    `deadline_date: null`, `deadline_type: unknown`.
+  - Seoul youth portal rows:
+    generic portal host values were corrected where the actual host was visible
+    in the title/source context, including `서울청년센터 영등포`, `모멘텀`, and
+    `서초청년센터`.
+  - Yongsan protein-bar program:
+    `deadline_date` corrected from source post date `2026-08-19` to the
+    application-period end date `2026-09-06`.
+  - Gangnam one-day job lecture:
+    `deadline_date` corrected from program date `2026-08-26` to recruitment
+    period end `2026-08-24`.
+  - Seoul Farm travel programs:
+    travel end dates were not labeled as application deadlines because the
+    source context only stated an application start time, so the deadline fields
+    were set to `null`/`unknown`.
+  - Seoul Youth Center Mapo labor-attorney program:
+    `deadline_date` corrected from program end `2026-09-09` to recruitment
+    period end `2026-08-23`.
+- Validation:
+  - `pnpm eval:validate -- --set=eval/golden --require-labels`
+  - Passed with 60 files, 60 items, 360 truth fields.
+- Progress:
+  - `pnpm eval:status`
+  - 60/120 labeled, 60 remaining.
+- Evaluation snapshot:
+  - `pnpm eval:extraction -- --set=eval/golden --extractor=current --out=data/eval/reports/extraction-batch01-03-current-20260825.json`
+  - Labeled posters: 60.
+  - Evidence rows: 793.
+  - Macro accuracy: 0.9222222222222222.
+  - `pnpm eval:thresholds -- --input=data/eval/reports/extraction-batch01-03-current-20260825.json --out=data/eval/reports/extraction-thresholds-batch01-03-20260825.json --module-out=data/eval/reports/extraction-thresholds-batch01-03-20260825.js`
+  - Threshold plan remains `production_ready: false` because labels are 60/120
+    and one or more fields still lack a qualifying recommendation.
