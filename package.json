@@ -19,6 +19,7 @@
     "poster-detection:backfill": "pnpm --filter posterlink-crawler poster-detection:backfill",
     "content-type:backfill": "pnpm --filter posterlink-crawler content-type:backfill",
     "tier:compute": "pnpm --filter posterlink-crawler tier:compute",
+    "ai:routing": "pnpm --filter posterlink-crawler ai:routing",
     "collect": "tsx scripts/collect-posters.ts",
     "collect:youth": "tsx scripts/collect-posters.ts youth",
     "collect:central": "tsx scripts/collect-posters.ts central",

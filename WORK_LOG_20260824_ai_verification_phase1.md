@@ -560,3 +560,40 @@ Validation:
   - New content routing blocker observed: `content_type_news` 3.
 - `pnpm eval:validate -- --set=eval/golden`
   - Passed with the current empty local golden set.
+
+## Phase 6 Model Routing Foundation
+
+Started the Phase 6 cost-control foundation without applying any operating DB
+migration and without writing AI usage rows.
+
+- Added `scripts/crawler/src/ai-model-routing.js`.
+  - Defines model stages: `rule`, `cheap_text`, `high_text`, `vlm`.
+  - Routes deterministic fields to rules first.
+  - Routes `category`, `region`, `content_type`, and descriptive fields to the
+    cheap text tier by default.
+  - Escalates low-confidence critical fields to the high text tier.
+  - Sends only ambiguous `is_real_poster` cases to VLM.
+  - Builds `ai_usage_log`-compatible rows and internal cost-unit estimates.
+- Added `scripts/crawler/src/measure-ai-model-routing.js`.
+  - Read-only dry-run against current `poster_field_evidence`.
+  - Reports planned model call pressure by stage and field.
+- Added migration `supabase/migrations/20260825010000_add_ai_usage_log.sql`.
+  - Prepares `public.ai_usage_log` and `public.ai_usage_daily_overview`.
+  - Migration has not been applied to the operating DB.
+- Added `docs/ai_model_routing.md`.
+
+Validation:
+
+- `pnpm --filter posterlink-crawler test`
+  - Passed: 204 tests.
+- `pnpm ai:routing -- --limit=600 --output=data/eval/reports/ai-model-routing-current-20260825.json`
+  - Read-only dry-run.
+  - Checked posters: 559.
+  - Evidence rows: 4,520.
+  - Planned actions: 7,472.
+  - Planned model calls: 4,371.
+  - Stage distribution:
+    - `rule`: 3,101
+    - `cheap_text`: 2,606
+    - `high_text`: 1,765
+  - Estimated internal cost units: 40,512.

@@ -37,6 +37,7 @@
     "poster-detection:backfill": "node src/backfill-poster-detection-evidence.js",
     "content-type:backfill": "node src/backfill-content-type-evidence.js",
     "tier:compute": "node src/compute-exposure-tiers.js",
+    "ai:routing": "node src/measure-ai-model-routing.js",
     "verify:apply-corrections": "node src/apply-field-verification-corrections.js",
     "structure:backfill": "node src/backfill-structured-poster-fields.js",
     "image:backfill": "node src/backfill-image-classification.js",
