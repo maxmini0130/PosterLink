@@ -74,6 +74,28 @@ test("infers fixed type from high-confidence application deadline evidence", () 
   assert.equal(row.extractor, "deadline-type-from-date-evidence-v1");
 });
 
+test("infers fixed type from grounded Korean period summary deadline evidence", () => {
+  const row = inferDeadlineTypeEvidence({
+    posterId: "poster-1",
+    existingDeadlineType: "unknown",
+    deadlineDateEvidence: {
+      value_text: "2026-08-25",
+      value_json: { date: "2026-08-25" },
+      confidence: 0.9,
+      evidence_text: "대상: 송파구 청년 · 기간: 2026. 8. 18.(화) ~ 8. 25.(화) · 신청: 네이버폼 작성",
+      extractor: "deadline-date-grounded-v1",
+    },
+  });
+
+  assert.equal(row.field_key, "deadline_type");
+  assert.equal(row.value_text, "fixed");
+  assert.deepEqual(row.value_json, {
+    type: "fixed",
+    deadline_date: "2026-08-25",
+  });
+  assert.equal(row.extractor, "deadline-type-from-date-evidence-v1");
+});
+
 test("does not infer fixed type from a travel period after an open application period", () => {
   const row = inferDeadlineTypeEvidence({
     posterId: "poster-1",

@@ -41,6 +41,40 @@ test("infers end date from generated recruitment period summary", () => {
   assert.equal(row.value_text, "2026-08-25");
 });
 
+test("infers normalized deadline from Korean period summary with application cue", () => {
+  const row = inferDeadlineDateEvidence({
+    posterId: "poster-1",
+    title: "송파구청 <2026년 송파 청년축제 공연팀 모집>",
+    sourceText: "대상: 송파구 청년 · 기간: 2026. 8. 18.(화) ~ 8. 25.(화) · 신청: 네이버폼 작성",
+    fieldVerification: {
+      dateQuality: {
+        normalizedDeadline: "2026-08-25",
+      },
+    },
+    createdAt: "2026-08-20T00:00:00Z",
+  });
+
+  assert.equal(row.field_key, "deadline_date");
+  assert.equal(row.value_text, "2026-08-25");
+  assert.equal(row.confidence, 0.9);
+});
+
+test("does not infer Korean period summary when normalized deadline is a different date", () => {
+  const row = inferDeadlineDateEvidence({
+    posterId: "poster-1",
+    title: "광진구1인가구지원센터 <교육 및 여가문화 프로그램>(~8/12)",
+    sourceText: "기간: 2026.8.24.(월) ~ 2026.9.14.(월) · 신청: 광진1인가구플랫폼",
+    fieldVerification: {
+      dateQuality: {
+        normalizedDeadline: "2026-08-12",
+      },
+    },
+    createdAt: "2026-08-20T00:00:00Z",
+  });
+
+  assert.equal(row, null);
+});
+
 test("does not infer generic generated period summaries as deadlines", () => {
   const row = inferDeadlineDateEvidence({
     posterId: "poster-1",

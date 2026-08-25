@@ -11,6 +11,9 @@ const APPLICATION_LABEL_RE = /(?:신청|접수|모집|응모|지원)\s*(?:[·ㆍ
 const NEXT_SECTION_LABEL_RE = /(?:신청방법|접수방법|여행\s*기간|진행\s*기간|운영\s*기간|활동\s*기간|프로그램\s*일정|진행\s*일정|진행\s*일시|운영\s*일시|행사\s*일시|일시|장소|대상|문의|내용|선정|선발|발표|참가\s*인원|참가\s*비용)\s*[:：]?/gu;
 const FIXED_RANGE_RE = /(?:~|-|부터|까지|마감|기한|종료)/u;
 
+const KOREAN_APPLICATION_CUE_RE = /(?:신청|접수|모집|지원|참여)\s*(?:방법|기간|기한|마감|일정|링크|폼|서류|서식|가능|하세요|바랍니다)?/u;
+const KOREAN_PERIOD_LABEL_RE = /(?:기간|일정)\s*[:：]/u;
+
 function compact(value, limit = 12_000) {
   return String(value ?? "")
     .normalize("NFKC")
@@ -104,6 +107,15 @@ function fixedTypeFromDeadlineDateEvidence(deadlineDateEvidence) {
     if (OPEN_ENDED_RE.test(window)) continue;
     if (!containsDeadlineDate(window, dateRe)) continue;
     return { date: deadlineDate, evidenceText: window };
+  }
+
+  if (
+    String(deadlineDateEvidence.extractor ?? "") === "deadline-date-grounded-v1" &&
+    KOREAN_PERIOD_LABEL_RE.test(evidenceText) &&
+    KOREAN_APPLICATION_CUE_RE.test(evidenceText) &&
+    containsDeadlineDate(evidenceText, dateRe)
+  ) {
+    return { date: deadlineDate, evidenceText };
   }
 
   return null;

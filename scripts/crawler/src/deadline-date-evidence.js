@@ -6,6 +6,10 @@ const OPEN_ENDED_RE = /(?:상시|수시|연중)\s*(?:모집|접수|신청|운영
 const DATE_RE = /(?:(20\d{2})\s*[.\-/년]\s*)?(\d{1,2})\s*[.\-/월]\s*(\d{1,2})\s*(?:일)?/gu;
 const RANGE_CONNECTOR_RE = /(?:~|～|-|부터|까지)/u;
 
+const KOREAN_APPLICATION_CUE_RE = /(?:신청|접수|모집|지원|참여)\s*(?:방법|기간|기한|마감|일정|링크|폼|서류|서식|가능|하세요|바랍니다)?/u;
+const KOREAN_PERIOD_LABEL_RE = /(?:기간|일정)\s*[:：]/u;
+const EXPLICIT_DATE_RE = /(?:(20\d{2})\s*[.\-/년]\s*)?(\d{1,2})\s*[.\-/월]\s*(\d{1,2})\s*(?:일)?/gu;
+
 function compact(value, limit = 12_000) {
   return String(value ?? "")
     .normalize("NFKC")
@@ -54,6 +58,27 @@ function extractDates(segment, referenceYear = null) {
       iso,
       index: match.index,
       endIndex: DATE_RE.lastIndex,
+      raw: match[0],
+    });
+  }
+  return dates;
+}
+
+function extractExplicitDates(segment, referenceYear = null) {
+  const dates = [];
+  let lastYear = referenceYear;
+  EXPLICIT_DATE_RE.lastIndex = 0;
+  let match;
+  while ((match = EXPLICIT_DATE_RE.exec(segment)) !== null) {
+    const year = match[1] ? Number(match[1]) : lastYear;
+    if (!year) continue;
+    const iso = makeIsoDate(year, match[2], match[3]);
+    if (!iso) continue;
+    if (match[1]) lastYear = Number(match[1]);
+    dates.push({
+      iso,
+      index: match.index,
+      endIndex: EXPLICIT_DATE_RE.lastIndex,
       raw: match[0],
     });
   }
@@ -120,6 +145,29 @@ function inferDateFromApplicationSegments({ title, sourceText, referenceYear }) 
   return null;
 }
 
+function inferDateFromGroundedPeriodSummary({ sourceText, targetDate, referenceYear }) {
+  const target = isoDateText(targetDate);
+  if (!target) return null;
+
+  for (const segment of splitSegments(sourceText)) {
+    if (!KOREAN_PERIOD_LABEL_RE.test(segment)) continue;
+    if (!KOREAN_APPLICATION_CUE_RE.test(segment)) continue;
+    if (OPEN_ENDED_RE.test(segment)) continue;
+
+    const dates = extractExplicitDates(segment, referenceYear);
+    if (dates.length < 2) continue;
+
+    for (let index = 0; index + 1 < dates.length; index += 1) {
+      const between = segment.slice(dates[index].endIndex, dates[index + 1].index);
+      if (between.length > 40 || !/[~-]/u.test(between)) continue;
+      if (dates[index + 1].iso !== target) continue;
+      return { date: target, evidenceText: segment, confidence: 0.9 };
+    }
+  }
+
+  return null;
+}
+
 export function inferDeadlineDateEvidence({
   posterId,
   title,
@@ -130,6 +178,10 @@ export function inferDeadlineDateEvidence({
 } = {}) {
   const referenceYear = Number(String(createdAt ?? "").match(/\b(20\d{2})\b/)?.[1]) || null;
   const suggestedDeadline = isoDateText(fieldVerification?.dateQuality?.suggestedDeadline);
+  const normalizedDeadline = isoDateText(
+    fieldVerification?.dateQuality?.normalizedDeadline ??
+    fieldVerification?.dateQuality?.extractedDeadline,
+  );
   const storedDeadline = isoDateText(applicationEndAt);
 
   if (suggestedDeadline) {
@@ -158,6 +210,24 @@ export function inferDeadlineDateEvidence({
       valueJson: { date: inferred.date },
       confidence: inferred.confidence,
       evidenceText: inferred.evidenceText,
+      evidenceSrc: "body",
+      extractor: "deadline-date-grounded-v1",
+    });
+  }
+
+  const groundedPeriod = inferDateFromGroundedPeriodSummary({
+    sourceText,
+    targetDate: normalizedDeadline,
+    referenceYear,
+  });
+  if (groundedPeriod) {
+    return normalizeEvidenceRow({
+      posterId,
+      fieldKey: "deadline_date",
+      valueText: groundedPeriod.date,
+      valueJson: { date: groundedPeriod.date },
+      confidence: groundedPeriod.confidence,
+      evidenceText: groundedPeriod.evidenceText,
       evidenceSrc: "body",
       extractor: "deadline-date-grounded-v1",
     });

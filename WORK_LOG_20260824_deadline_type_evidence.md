@@ -22,3 +22,25 @@
 - Existing non-`unknown` deadline types are not changed.
 - Ambiguous event dates without application/recruitment context do not create evidence.
 - DB writes still require a separate `--apply` run after operator approval.
+
+## Grounded Deadline Date Follow-up
+
+Added a narrow fallback to infer `deadline_type=fixed` from high-confidence
+`deadline-date-grounded-v1` evidence when the evidence text itself contains a
+Korean period label and application cue.
+
+This is intentionally limited to grounded date evidence and does not promote
+standalone event/travel periods.
+
+Verification:
+
+- `node --test scripts/crawler/src/deadline-date-evidence.test.js scripts/crawler/src/deadline-type-evidence.test.js`
+  - Passed: 18 tests.
+- `pnpm --filter posterlink-crawler test`
+  - Passed: 192 tests.
+- Dry-run:
+  `data/results/grounded-period-deadline-evidence-safe-13-dryrun.json`
+  - Candidate rows: 13
+  - `deadline_date`: 12
+  - `deadline_type`: 1
+  - Not applied to the operating DB.
