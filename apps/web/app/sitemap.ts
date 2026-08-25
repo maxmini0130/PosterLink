@@ -8,6 +8,7 @@ import { PUBLIC_POSTER_EXPOSURE_FILTER } from "../lib/publicPosterVisibility";
 export const dynamic = "force-dynamic";
 
 const appOrigin = getAppOrigin();
+const SITEMAP_POSTER_SELECT = "id, updated_at, application_start_at, application_end_at, deadline_type";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const supabase = createServerClient(
@@ -16,14 +17,35 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { cookies: { get: () => undefined } }
   );
 
-  const { data: posters } = await supabase
-    .from("posters")
-    .select("id, updated_at, application_start_at, application_end_at, deadline_type")
-    .eq("poster_status", "published")
-    .or(PUBLIC_POSTER_EXPOSURE_FILTER)
-    .order("updated_at", { ascending: false })
-    .limit(1000);
-  const posterIds = (posters ?? []).map((poster) => poster.id);
+  const [{ data: feedPosters }, { data: archiveEvidence }] = await Promise.all([
+    supabase
+      .from("posters")
+      .select(SITEMAP_POSTER_SELECT)
+      .eq("poster_status", "published")
+      .or(PUBLIC_POSTER_EXPOSURE_FILTER)
+      .order("updated_at", { ascending: false })
+      .limit(1000),
+    supabase
+      .from("poster_field_evidence")
+      .select("poster_id")
+      .eq("field_key", "content_type")
+      .in("value_text", ["news", "admin"])
+      .gte("confidence", 0.8)
+      .order("extracted_at", { ascending: false })
+      .limit(1000),
+  ]);
+  const archivePosterIds = [...new Set((archiveEvidence ?? []).map((row: any) => row.poster_id).filter(Boolean))];
+  const { data: archivePosters } = archivePosterIds.length
+    ? await supabase
+        .from("posters")
+        .select(SITEMAP_POSTER_SELECT)
+        .eq("poster_status", "published")
+        .in("id", archivePosterIds)
+        .order("updated_at", { ascending: false })
+        .limit(1000)
+    : { data: [] };
+  const posters = uniquePostersById([...(feedPosters ?? []), ...(archivePosters ?? [])]);
+  const posterIds = posters.map((poster) => poster.id);
 
   const [categoryLinksRes, regionLinksRes, categoriesRes, regionsRes, institutionsRes] = await Promise.all([
     posterIds.length
@@ -51,7 +73,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${appOrigin}/terms`, lastModified: new Date(), changeFrequency: "yearly", priority: 0.3 },
   ];
 
-  const posterRoutes: MetadataRoute.Sitemap = (posters ?? []).map((poster) => {
+  const posterRoutes: MetadataRoute.Sitemap = posters.map((poster) => {
     const active = isPosterAcceptingApplications({
       applicationStartAt: poster.application_start_at,
       applicationEndAt: poster.application_end_at,
@@ -131,6 +153,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...combinationRoutes,
     ...institutionRoutes,
   ];
+}
+
+function uniquePostersById<T extends { id: string }>(posters: T[]) {
+  const byId = new Map<string, T>();
+  for (const poster of posters) {
+    if (!byId.has(poster.id)) byId.set(poster.id, poster);
+  }
+  return [...byId.values()];
 }
 
 function groupLinkIds(rows: any[], valueKey: string, allowedPosterIds: Set<string>) {

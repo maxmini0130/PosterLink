@@ -1156,3 +1156,25 @@ performed.
   `pnpm tier:auto-publish -- --apply --output=data/eval/reports/auto-publish-apply-refusal-20260825.json`
   - Refused as expected because `EXPOSURE_AUTO_PUBLISH=true` was not set.
 - Updated `docs/ai_exposure_tiers.md`.
+
+## Phase 5 Content-Type Routing Sitemap Preservation
+
+Reviewed Phase 5 routing against the current public surfaces. No operating DB
+writes were performed.
+
+- Current content-type dry-run:
+  `pnpm content-type:backfill -- --limit=5000 "--statuses=published,review,rejected" --output=data/results/content-type-evidence-dryrun-20260825-phase5.json`
+  - Checked: 598.
+  - Recruit: 556.
+  - Discard: 39.
+  - News: 3.
+  - Applied: 0.
+- Main feed, home counts, semantic search, and recommendations continue to use
+  public exposure tier A/B gates.
+- Updated `apps/web/app/sitemap.ts` so sitemap poster URLs are the union of:
+  - public feed posters, and
+  - published archive posters with `content_type` evidence of `news` or `admin`
+    at confidence `>= 0.8`.
+- `discard` stays out of sitemap unless a future human-reviewed archive policy
+  explicitly allows it.
+- Updated `docs/ai_content_type_routing.md`.

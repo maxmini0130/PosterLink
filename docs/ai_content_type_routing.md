@@ -54,3 +54,11 @@ The rule layer is a gate, not a deletion mechanism. Ambiguous content defaults
 to reviewable `recruit` with lower confidence until Phase 2 labels can tune the
 thresholds.
 
+## Public Routing Behavior
+
+- Main discovery, home counts, semantic search, recommendation, region pages,
+  and category pages continue to use public exposure tiers A/B.
+- Sitemap includes public feed posters plus published archive posters that have
+  `content_type` evidence of `news` or `admin` with confidence `>= 0.8`.
+- `discard` remains out of the sitemap unless a future human-reviewed archive
+  policy explicitly allows it.
