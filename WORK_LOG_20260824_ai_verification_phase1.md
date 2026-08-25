@@ -597,3 +597,27 @@ Validation:
     - `cheap_text`: 2,606
     - `high_text`: 1,765
   - Estimated internal cost units: 40,512.
+
+## User Feedback Loop Foundation
+
+Started the field-level user feedback loop without applying any operating DB
+migration.
+
+- Added migration `supabase/migrations/20260825020000_add_field_reports.sql`.
+  - Prepares `public.field_reports`.
+  - Allows authenticated users to report a specific field once per poster.
+  - Adds admin RLS and `field_report_field_overview` for field-level ranking.
+  - Migration has not been applied to the operating DB.
+- Added `POST /api/field-reports`.
+  - Requires a logged-in user.
+  - Accepts `posterId`, `fieldKey`, and optional `note`.
+  - Allows reports only for published posters.
+  - Uses server-side validation before inserting/upserting a report.
+- Added `FieldReportButton` on public poster detail core facts.
+  - Users can report inaccurate application target, period, region, age, cost,
+    benefit, application method, or required document fields.
+
+Validation:
+
+- `pnpm --filter web lint`
+- `pnpm --filter web build`

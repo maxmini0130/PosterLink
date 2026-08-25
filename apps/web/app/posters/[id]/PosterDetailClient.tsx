@@ -19,6 +19,7 @@ import { resolvePosterImageGallery } from "../../../lib/posterImage";
 import { derivePosterSummaryFallbackFacts } from "../../../lib/posterSummaryFacts";
 import { Footer } from "../../components/Footer";
 import { CalendarPlus, ChevronLeft, ChevronRight, Eye, Heart, Share2, X } from "lucide-react";
+import { FieldReportButton } from "./FieldReportButton";
 
 export type PosterDetailPoster = {
   id: string;
@@ -600,28 +601,33 @@ export function PosterDetailClient({
             : "bg-emerald-50 text-emerald-700 border-emerald-100";
   const coreFacts = [
     {
+      fieldKey: "target_desc",
       label: "신청 대상",
       value: poster.eligibility_summary || summaryFallbackFacts.eligibilitySummary || "공식 공고 확인 필요"
     },
-    { label: "신청 기간", value: applicationPeriodLabel },
-    { label: "대상 지역", value: poster.regionName || "지역 확인 필요" },
+    { fieldKey: "deadline_date", label: "신청 기간", value: applicationPeriodLabel },
+    { fieldKey: "region", label: "대상 지역", value: poster.regionName || "지역 확인 필요" },
     {
+      fieldKey: "age_min",
       label: "연령",
       value: formatTargetAge(
         poster.target_age_min ?? summaryFallbackFacts.targetAgeMin,
         poster.target_age_max ?? summaryFallbackFacts.targetAgeMax
       )
     },
-    { label: "비용", value: poster.participation_fee || summaryFallbackFacts.participationFee || "기관 문의 필요" },
+    { fieldKey: "cost", label: "비용", value: poster.participation_fee || summaryFallbackFacts.participationFee || "기관 문의 필요" },
     {
+      fieldKey: "benefit",
       label: "혜택",
       value: poster.benefits_summary || summaryFallbackFacts.benefitsSummary || "정보 확인 중"
     },
     {
+      fieldKey: "apply_method",
       label: "신청 방법",
       value: poster.application_method || summaryFallbackFacts.applicationMethod || "공식 공고 확인 필요"
     },
     {
+      fieldKey: "required_documents",
       label: "준비 서류",
       value: poster.required_documents || "공식 공고 확인 필요"
     }
@@ -727,7 +733,10 @@ export function PosterDetailClient({
                 className="grid grid-cols-[5rem_minmax(0,1fr)] gap-3 border-t border-gray-100 py-3 first:border-t-0 sm:first:border-t"
               >
                 <dt className="text-xs font-bold text-gray-400">{fact.label}</dt>
-                <dd className="min-w-0 break-words text-sm font-bold leading-relaxed text-gray-900">{fact.value}</dd>
+                <dd className="flex min-w-0 items-start justify-between gap-2 break-words text-sm font-bold leading-relaxed text-gray-900">
+                  <span className="min-w-0 flex-1 break-words">{fact.value}</span>
+                  <FieldReportButton posterId={poster.id} fieldKey={fact.fieldKey} label={fact.label} />
+                </dd>
               </div>
             ))}
           </dl>
