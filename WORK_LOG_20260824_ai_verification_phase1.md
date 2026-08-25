@@ -1127,3 +1127,32 @@ DB writes were performed.
   - Evidence rows generated: 547.
   - Decisions still visible in report: true 547, false 12, ambiguous 0.
 - Updated `docs/ai_poster_detection.md`.
+
+## Phase 3 Auto-Publish Planner
+
+Added a double-locked Phase 3 auto-publish planner. No operating DB writes were
+performed.
+
+- Added `scripts/crawler/src/plan-auto-publish-exposure-tiers.js`.
+  - Dry-run is the default.
+  - Eligible source rows are `poster_status = 'review'` only.
+  - Launch-window default allows tier A only.
+  - Rows without `tier_computed_at` are blocked.
+  - Apply mode is refused unless both `--apply` and
+    `EXPOSURE_AUTO_PUBLISH=true` are present.
+  - Apply mode, when explicitly approved and enabled later, changes eligible
+    rows to `published` and writes an `admin_actions` audit record.
+- Added commands:
+  - `pnpm --filter posterlink-crawler tier:auto-publish`
+  - `pnpm tier:auto-publish`
+- Dry-run command:
+  `pnpm tier:auto-publish -- --output=data/eval/reports/auto-publish-plan-dryrun-20260825.json`
+  - Checked review posters: 22.
+  - Eligible tier A candidates: 14.
+  - Blocked candidates: 8.
+  - Blocked reason: `tier_not_allowed` for 8 tier C rows.
+  - Applied: 0.
+- Safety refusal check:
+  `pnpm tier:auto-publish -- --apply --output=data/eval/reports/auto-publish-apply-refusal-20260825.json`
+  - Refused as expected because `EXPOSURE_AUTO_PUBLISH=true` was not set.
+- Updated `docs/ai_exposure_tiers.md`.

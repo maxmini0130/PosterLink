@@ -27,14 +27,42 @@ pnpm tier:compute -- --limit=5000 "--statuses=published,review" --output=data/ev
 
 It does not auto-publish, hide, reject, or otherwise change `poster_status`.
 
+## Auto-Publish Planner
+
+Phase 3 auto-publish is implemented as a separately gated planner. It reads
+review posters with existing exposure tiers and writes a candidate report by
+default.
+
+Dry-run:
+
+```bash
+pnpm tier:auto-publish -- --output=data/eval/reports/auto-publish-plan-dryrun.json
+```
+
+Launch-window default:
+
+- only `poster_status = 'review'` rows are considered
+- only tier A is eligible unless `--tiers=A,B` is explicitly supplied
+- rows without `tier_computed_at` are blocked
+- no write occurs without `--apply`
+
+Applying is intentionally double-locked and must be explicitly approved before
+use:
+
+```bash
+EXPOSURE_AUTO_PUBLISH=true pnpm tier:auto-publish -- --output=data/eval/reports/auto-publish-plan-apply.json --apply
+```
+
+When applied, the script changes eligible rows to `poster_status = 'published'`
+and writes an `admin_actions` audit row with
+`action_reason = 'auto_publish_exposure_tier'`.
+
 ## Current Safety Position
 
 The default thresholds are conservative provisional values until Phase 2 has 120
 reviewed labels. `is_real_poster` is treated as a required critical field, so
-current rows remain C until Phase 4 creates reliable poster-detection evidence
-or a human label writes that field.
+non-poster or weakly grounded rows remain blocked from tier A.
 
-This is intentional. Phase 3 can report gates and blockers now, but should not
-turn on automatic publishing before Phase 2 thresholds and Phase 4 poster
-detection are ready.
-
+This is intentional. Phase 3 can report gates and auto-publish candidates now,
+but status-changing apply mode must remain an explicit operating decision during
+the launch safety window.

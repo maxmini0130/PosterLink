@@ -20,6 +20,7 @@
     "poster-detection:backfill": "pnpm --filter posterlink-crawler poster-detection:backfill",
     "content-type:backfill": "pnpm --filter posterlink-crawler content-type:backfill",
     "tier:compute": "pnpm --filter posterlink-crawler tier:compute",
+    "tier:auto-publish": "pnpm --filter posterlink-crawler tier:auto-publish",
     "ai:routing": "pnpm --filter posterlink-crawler ai:routing",
     "ai:usage": "pnpm --filter posterlink-crawler ai:usage",
     "field-reports:process": "pnpm --filter posterlink-crawler field-reports:process",

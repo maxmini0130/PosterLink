@@ -38,6 +38,7 @@
     "poster-detection:backfill": "node src/backfill-poster-detection-evidence.js",
     "content-type:backfill": "node src/backfill-content-type-evidence.js",
     "tier:compute": "node src/compute-exposure-tiers.js",
+    "tier:auto-publish": "node src/plan-auto-publish-exposure-tiers.js",
     "ai:routing": "node src/measure-ai-model-routing.js",
     "ai:usage": "node src/measure-ai-usage.js",
     "field-reports:process": "node src/process-field-reports.js",
