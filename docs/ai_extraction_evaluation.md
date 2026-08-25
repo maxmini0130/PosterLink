@@ -25,6 +25,17 @@ Split the seed into reviewer-sized batches:
 pnpm eval:review-batches -- --input=data/eval/extraction-golden-seed.json --output-dir=data/eval/review-batches --batch-size=20
 ```
 
+Import completed review-batch labels into git-managed golden files:
+
+```bash
+pnpm eval:import-batch -- --input=data/eval/review-batches/batch-01.json --labeled-by=max
+pnpm eval:import-batch -- --input=data/eval/review-batches/batch-01.json --labeled-by=max --apply
+```
+
+The import command is dry-run by default. It writes one JSON file per reviewed
+poster under `eval/golden/` only when `--apply` is passed. Rows with empty
+`truth` objects are skipped unless `--require-complete` is used.
+
 Validate reviewed labels:
 
 ```bash
@@ -96,9 +107,10 @@ confirmed absent, use `null`. If a field was not reviewed, omit it.
 The review batch files under `data/eval/review-batches/` are working files. For
 each poster, open `context.source_key`, compare the source against
 `review_fields`, and then put only reviewed values into the top-level `truth`
-object. Completed batch files can be copied under `eval/golden/` for scoring.
-Run `pnpm eval:validate -- --set=eval/golden --require-labels` before scoring
-to catch empty labels, unknown fields, placeholders, invalid URLs, and invalid
+object. Completed batch files should be imported with `pnpm eval:import-batch`
+so only reviewed `truth` values are copied under `eval/golden/` for scoring. Run
+`pnpm eval:validate -- --set=eval/golden --require-labels` before scoring to
+catch empty labels, unknown fields, placeholders, invalid URLs, and invalid
 date/number formats.
 
 See `eval/golden/README.md` for the JSON shape.

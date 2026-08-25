@@ -24,6 +24,7 @@
     "baseline:score": "node src/score-baseline-goldenset.js",
     "eval:sample": "node src/create-extraction-golden-seed.js",
     "eval:review-batches": "node src/prepare-extraction-review-batches.js",
+    "eval:import-batch": "node src/import-extraction-golden-batch.js",
     "eval:validate": "node src/validate-extraction-golden.js",
     "eval:extraction": "node src/eval-extraction.js",
     "eval:status": "node src/summarize-extraction-golden.js",

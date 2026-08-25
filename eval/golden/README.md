@@ -32,8 +32,9 @@ confirmed absent, set it to `null`. If it was not reviewed, omit it.
 ## Run
 
 ```bash
+pnpm eval:import-batch -- --input=data/eval/review-batches-20260825/batch-01.json --labeled-by=max
+pnpm eval:import-batch -- --input=data/eval/review-batches-20260825/batch-01.json --labeled-by=max --apply
 pnpm eval:extraction -- --set=eval/golden --extractor=current
 ```
 
 Reports are written under `data/eval/reports/`, which is ignored by git.
-

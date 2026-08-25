@@ -1597,3 +1597,29 @@ and auto-publish passes.
   - Decide whether to leave or delete the QA test row.
   - Start Phase 2 human golden-set labeling, or continue non-DB launch
     readiness tasks.
+
+## Phase 2 Golden Label Import Tool
+
+Added the Phase 2 batch-import step for the human golden-set workflow. No
+operating DB writes were performed.
+
+- Current Phase 2 status:
+  - Seed exists: `data/eval/extraction-golden-seed-20260825-stratified.json`.
+  - Review batches exist: `data/eval/review-batches-20260825/`.
+  - Target items: 120.
+  - Labeled items: 0.
+  - Remaining items: 120.
+- Added CLI:
+  - `pnpm eval:import-batch`
+  - Package command:
+    `pnpm --filter posterlink-crawler eval:import-batch`
+- Behavior:
+  - Dry-run by default.
+  - Reads a completed review batch JSON.
+  - Imports only items with non-empty top-level `truth`.
+  - Writes one `eval/golden/<poster_id>.json` file per reviewed poster only
+    with `--apply`.
+  - Skips empty/unreviewed rows unless `--require-complete` is passed.
+- Documentation updated:
+  - `docs/ai_extraction_evaluation.md`
+  - `eval/golden/README.md`
