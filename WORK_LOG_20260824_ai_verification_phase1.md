@@ -667,3 +667,32 @@ Validation:
 
 - `pnpm --filter web lint`
 - `pnpm --filter web build`
+
+## Field Report Escalation Batch
+
+Added the automated escalation batch for the user feedback loop. No operating
+DB writes were performed.
+
+- Added `scripts/crawler/src/field-report-escalation.js`.
+  - Groups reports by `poster_id + field_key`.
+  - Creates an escalation plan when the same field reaches the threshold.
+  - Marks published posters as needing to move back to `review`.
+- Added `scripts/crawler/src/process-field-reports.js`.
+  - Defaults to dry-run.
+  - `--apply` sets matching non-human `poster_field_evidence.confidence` to 0.
+  - `--apply` moves published posters back to `review`.
+  - `--apply` marks matched reports as `reviewing`.
+  - `--apply` writes an `admin_actions` audit row.
+- Added root/package command:
+  `pnpm field-reports:process`
+- Documented the command in `docs/ai_model_routing.md`.
+
+Validation:
+
+- `pnpm --filter posterlink-crawler test`
+  - Passed: 207 tests.
+- `pnpm field-reports:process -- --threshold=2 --output=data/results/field-report-escalation-current-20260825.json`
+  - Dry-run only.
+  - Checked reports: 0.
+  - Escalation candidates: 0.
+  - Applied rows: 0.

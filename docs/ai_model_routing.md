@@ -46,3 +46,25 @@ push`.
 `estimated_unit_cost` is an internal unit, not a hard-coded provider price.
 Writers can configure real pricing or relative weights without changing the
 database shape.
+
+## Field Feedback Escalation
+
+Process repeated field reports in dry-run mode:
+
+```bash
+pnpm field-reports:process -- --threshold=2 --output=data/results/field-report-escalation-dryrun.json
+```
+
+Apply after explicit approval:
+
+```bash
+pnpm field-reports:process -- --threshold=2 --output=data/results/field-report-escalation-apply.json --apply
+```
+
+`--apply` only touches groups where the same `poster_id + field_key` has at
+least the threshold number of `received` or `reviewing` reports. It:
+
+- sets matching non-human `poster_field_evidence.confidence` to `0`
+- moves published posters back to `review`
+- marks the matched reports as `reviewing`
+- writes an `admin_actions` audit row
