@@ -79,3 +79,15 @@ test("buildContentTypeEvidence emits poster_field_evidence compatible rows", () 
   assert.equal(row.evidence_src, "rule");
   assert.equal(row.extractor, "content-type-routing-v1");
 });
+
+test("buildContentTypeEvidence does not split emoji surrogate pairs", () => {
+  const row = buildContentTypeEvidence({
+    id: "poster-emoji",
+    title: "주거 수리 교육 참여자 모집",
+    summary_short: `${"모집 ".repeat(130)}🔌`,
+    summary_long: "교육 프로그램 신청 접수",
+  });
+
+  assert.doesNotThrow(() => JSON.stringify(row));
+  assert.doesNotThrow(() => encodeURIComponent(row.evidence_text));
+});

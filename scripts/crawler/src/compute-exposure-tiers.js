@@ -120,10 +120,9 @@ function summarize(plans) {
 async function applyPlans(supabase, plans) {
   const results = [];
   const computedAt = new Date().toISOString();
-  for (let index = 0; index < plans.length; index += 200) {
-    const chunk = plans.slice(index, index + 200);
-    const payload = chunk.map((plan) => ({
-      id: plan.poster_id,
+  for (let index = 0; index < plans.length; index += 1) {
+    const plan = plans[index];
+    const patch = {
       exposure_tier: plan.tier,
       tier_computed_at: computedAt,
       tier_reason: {
@@ -132,17 +131,19 @@ async function applyPlans(supabase, plans) {
         field_count: plan.field_count,
         generated_by: "compute-exposure-tiers-v1",
       },
-    }));
+    };
     const { error } = await supabase
       .from("posters")
-      .upsert(payload, { onConflict: "id" });
+      .update(patch)
+      .eq("id", plan.poster_id);
     results.push({
       index,
-      count: chunk.length,
+      count: 1,
+      poster_id: plan.poster_id,
       status: error ? "failed" : "applied",
       error: error?.message ?? null,
     });
-    if (error) console.error(`[exposure-tier] upsert failed: ${error.message}`);
+    if (error) console.error(`[exposure-tier] update failed ${plan.poster_id}: ${error.message}`);
   }
   return results;
 }

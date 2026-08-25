@@ -835,6 +835,30 @@ Validation:
 - `git diff --check`
   - Passed, with existing Windows CRLF normalization warnings only.
 
+## Process OCR Function Deploy
+
+Deployed the updated `process-ocr` Edge Function after user approval.
+
+- Deployment command:
+  `pnpm dlx supabase functions deploy process-ocr --project-ref zxndgzsfrgwahwsdbjdj`
+- Before deploy:
+  - `process-ocr` ACTIVE v12
+  - `verify_jwt=true`
+- After deploy:
+  - `process-ocr` ACTIVE v13
+  - `verify_jwt=true`
+- The deployed code writes `process_ocr` usage rows into `ai_usage_log` after
+  successful OpenAI OCR calls.
+
+Validation:
+
+- `pnpm dlx supabase functions list --project-ref zxndgzsfrgwahwsdbjdj`
+  - Confirmed `process-ocr` ACTIVE v13.
+- `pnpm ai:usage -- --days=14 --output=data/eval/reports/ai-usage-after-process-ocr-deploy-20260825.json`
+  - Read-only.
+  - Current operating log rows in the 14-day report: 0.
+  - This is expected until the function is called after deployment.
+
 ## Crawler VLM Usage Event Handoff
 
 Extended AI usage tracking across the crawl-result JSON boundary. No operating
@@ -888,5 +912,70 @@ Validation:
 
 - `pnpm --filter posterlink-crawler test`
   - Passed: 214 tests.
+- `git diff --check`
+  - Passed, with existing Windows CRLF normalization warnings only.
+
+## Content Type Evidence And Exposure Tier Operating Apply
+
+Applied the approved Phase 5 `content_type` evidence bundle and then refreshed
+Phase 1 exposure tiers in the operating DB.
+
+Content type evidence:
+
+- Dry-run command:
+  `pnpm content-type:backfill -- --limit=5000 "--statuses=published,review,rejected" --output=data/results/content-type-evidence-approved-dryrun-20260825.json`
+  - Checked: 598 posters.
+  - Planned evidence: 598 rows.
+  - Routes: recruit 556, discard 39, news 3.
+- Initial approved apply command:
+  `pnpm content-type:backfill -- --limit=5000 "--statuses=published,review,rejected" --output=data/results/content-type-evidence-approved-apply-20260825.json --apply`
+  - Applied: 98 rows.
+  - Failed chunk: 1.
+  - Failure: invalid JSON caused by evidence text truncating inside an emoji
+    surrogate pair.
+- Stabilization:
+  - Updated `backfill-content-type-evidence.js` to use smaller chunks and retry
+    failed chunks row-by-row so future failures name the exact poster.
+  - Updated `content-type-routing.js` to truncate by Unicode code point instead
+    of UTF-16 code unit.
+  - Added a regression test for emoji evidence text.
+- Retry command:
+  `pnpm content-type:backfill -- --limit=5000 "--statuses=published,review,rejected" --output=data/results/content-type-evidence-approved-apply-retry-20260825.json --apply`
+  - Applied: 594 rows.
+  - Failed: 4 rows with the same invalid JSON issue.
+- Final approved apply command:
+  `pnpm content-type:backfill -- --limit=5000 "--statuses=published,review,rejected" --output=data/results/content-type-evidence-approved-apply-final-20260825.json --apply`
+  - Applied: 598 rows.
+  - Failed: 0.
+  - The earlier partial apply was completed by the final idempotent upsert.
+
+Exposure tiers:
+
+- Dry-run command:
+  `pnpm tier:compute -- --limit=5000 "--statuses=published,review" --output=data/eval/reports/exposure-tier-after-content-type-dryrun-20260825.json`
+  - Checked: 559 posters.
+  - Evidence rows read: 5079.
+  - Planned tiers: A 205, B 3, C 351.
+  - Gates: SEO 468, calendar 155, deadline alert 155, recommendation 0.
+- First apply attempt:
+  `pnpm tier:compute -- --limit=5000 "--statuses=published,review" --output=data/eval/reports/exposure-tier-after-content-type-apply-20260825.json --apply`
+  - Applied: 0 rows.
+  - Failed: 3 chunks.
+  - Failure: partial `posters` upsert hit the existing `title NOT NULL`
+    constraint.
+- Stabilization:
+  - Updated `compute-exposure-tiers.js` to update only the tier columns per
+    poster id instead of upserting partial poster records.
+- Final approved apply command:
+  `pnpm tier:compute -- --limit=5000 "--statuses=published,review" --output=data/eval/reports/exposure-tier-after-content-type-apply-final-20260825.json --apply`
+  - Applied: 559 rows.
+  - Failed: 0.
+  - Final tiers: A 205, B 3, C 351.
+  - Final gates: SEO 468, calendar 155, deadline alert 155, recommendation 0.
+
+Validation:
+
+- `pnpm --filter posterlink-crawler test`
+  - Passed: 216 tests.
 - `git diff --check`
   - Passed, with existing Windows CRLF normalization warnings only.

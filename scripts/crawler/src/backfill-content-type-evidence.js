@@ -61,18 +61,39 @@ async function fetchPosters(supabase, statuses, limit) {
 
 async function applyEvidenceRows(supabase, rows) {
   const results = [];
-  for (let index = 0; index < rows.length; index += 500) {
-    const chunk = rows.slice(index, index + 500);
+  const chunkSize = 100;
+  for (let index = 0; index < rows.length; index += chunkSize) {
+    const chunk = rows.slice(index, index + chunkSize);
     const { error } = await supabase
       .from("poster_field_evidence")
       .upsert(chunk, { onConflict: "poster_id,field_key,extractor" });
-    results.push({
-      index,
-      count: chunk.length,
-      status: error ? "failed" : "applied",
-      error: error?.message ?? null,
-    });
-    if (error) console.error(`[content-type] upsert failed: ${error.message}`);
+    if (!error) {
+      results.push({
+        index,
+        count: chunk.length,
+        status: "applied",
+        error: null,
+      });
+      continue;
+    }
+
+    console.error(`[content-type] chunk upsert failed at ${index}: ${error.message}`);
+    for (let rowIndex = 0; rowIndex < chunk.length; rowIndex += 1) {
+      const row = chunk[rowIndex];
+      const retry = await supabase
+        .from("poster_field_evidence")
+        .upsert(row, { onConflict: "poster_id,field_key,extractor" });
+      results.push({
+        index: index + rowIndex,
+        count: 1,
+        poster_id: row.poster_id,
+        status: retry.error ? "failed" : "applied",
+        error: retry.error?.message ?? null,
+      });
+      if (retry.error) {
+        console.error(`[content-type] row upsert failed ${row.poster_id}: ${retry.error.message}`);
+      }
+    }
   }
   return results;
 }

@@ -26,7 +26,7 @@ const RECRUIT_ACTION_RE = /(?:모집|신청|접수|참여자|참가자|수강생
 const PROGRAM_RE = /(?:프로그램|교육|행사|강좌|특강|멘토링|컨설팅|창업|지원사업|바우처|공모전|네트워킹|워크숍|캠프|상담|클리닉)/i;
 
 function compact(value, limit = 300) {
-  return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, limit);
+  return Array.from(String(value ?? "").replace(/\s+/g, " ").trim()).slice(0, limit).join("");
 }
 
 function issueCodesFrom(row = {}) {
