@@ -1475,6 +1475,39 @@ exposure tiers.
     - Deadline evidence remains unclear; keep in manual review.
   - `[QA 테스트] 검수 플로우 확인 공고`
     - QA row remains unpublished in review.
+
+## Eunpyeong Until-Exhausted Deadline Type
+
+Applied an operator-approved non-date deadline type correction for the remaining
+Eunpyeong review row. No artificial deadline date was created.
+
+- Approval text:
+  `은평 커리어 레벨업 deadline_type until_exhausted evidence 운영 DB 적용 승인합니다.`
+- Applied row:
+  - `은평여성인력개발센터 경력단절예방사업 <커리어 레벨업> 참여자 모집`
+    - Set `deadline_type` to `until_exhausted`.
+    - Kept `application_end_at` null.
+    - Evidence text: `참여대상: 30~50대 재직자(입사5년이상 또는 이직을 준비하는 재직자)/선착순 10명`
+- Evidence/audit writes:
+  - Upserted 1 `poster_field_evidence` row with
+    `operator-manual-review-v1`.
+  - Inserted 1 `admin_actions` audit row with
+    `manual_review_until_exhausted_deadline_type`.
+  - Recomputed the row to exposure tier A.
+- Verification:
+  - `pnpm ai:healthcheck -- --enforce --output=data/results/ai-healthcheck-after-eunpyeong-until-exhausted-20260825.json`
+    - `field_correction_candidates`: 0.
+    - `quality_gate_status`: pass.
+  - `pnpm tier:auto-publish -- --output=data/eval/reports/auto-publish-plan-after-eunpyeong-until-exhausted-20260825.json`
+    - Checked review posters: 2.
+    - Eligible tier A: 1.
+    - Blocked tier C: 1.
+    - Applied: 0.
+- Remaining review rows:
+  - `은평여성인력개발센터 경력단절예방사업 <커리어 레벨업> 참여자 모집`
+    - Tier A, ready for separate auto-publish approval.
+  - `[QA 테스트] 검수 플로우 확인 공고`
+    - Tier C QA row remains unpublished in review.
 - Recommended next action:
   - Apply auto-publish for the 3 newly corrected tier A review rows after
     separate operating DB approval.
