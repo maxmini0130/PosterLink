@@ -642,3 +642,28 @@ Remote verification:
 - `field_report_field_overview`: exists, count 0.
 - `pnpm dlx supabase migration list --linked` shows both migrations present
   remotely.
+
+## Admin AI Verification Console
+
+Added an admin-facing console for the Phase 6 and feedback-loop tables.
+
+- Added `GET /api/admin/ai-verification`.
+  - Requires admin or super admin.
+  - Reads `ai_usage_daily_overview`, `field_report_field_overview`, and recent
+    `field_reports`.
+  - Enriches field reports with poster title/status and reporter nickname.
+- Added `PATCH /api/admin/ai-verification`.
+  - Allows admins to move field reports to `reviewing`, `actioned`, or
+    `dismissed`.
+  - Records the action in `admin_actions`.
+- Added `/admin/ai-verification`.
+  - Shows model call/token/image/cost-unit summary.
+  - Shows stage-level usage distribution.
+  - Shows field report ranking and pending field reports.
+  - Flags same poster + same field reports when the count is at least 2.
+- Added the page to the admin sidebar.
+
+Validation:
+
+- `pnpm --filter web lint`
+- `pnpm --filter web build`
