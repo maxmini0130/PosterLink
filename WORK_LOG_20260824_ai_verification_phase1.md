@@ -1478,3 +1478,40 @@ exposure tiers.
 - Recommended next action:
   - Apply auto-publish for the 3 newly corrected tier A review rows after
     separate operating DB approval.
+
+## Remaining Review Tier A Publish Apply
+
+Applied the 3 newly corrected tier A review posters to the operating DB after
+separate user approval. This changed only eligible tier A review rows to
+`published` and wrote the auto-publish audit rows.
+
+- Approval text:
+  `남은 review tier A 3건 자동 공개 운영 DB 적용 승인합니다.`
+- Apply command:
+  `EXPOSURE_AUTO_PUBLISH=true pnpm tier:auto-publish -- --output=data/eval/reports/auto-publish-plan-remaining-review-a-apply-20260825.json --apply`
+  - Checked review posters: 5.
+  - Eligible tier A: 3.
+  - Blocked tier C: 2.
+  - Applied: 3.
+  - Failed: 0.
+  - Audit failed: 0.
+- Follow-up dry-run:
+  `pnpm tier:auto-publish -- --output=data/eval/reports/auto-publish-plan-after-remaining-review-a-publish-20260825.json`
+  - Checked review posters: 2.
+  - Eligible tier A: 0.
+  - Blocked tier C: 2.
+- Enforced healthcheck:
+  `pnpm ai:healthcheck -- --enforce --output=data/results/ai-healthcheck-after-remaining-review-a-publish-20260825.json`
+  - Review queue count: 2.
+  - Field correction candidates: 0.
+  - Public image non-poster count: 0.
+  - Public non-poster reject candidates: 0.
+  - Quality gate: pass.
+- Direct operating DB count check:
+  - Published A/B/C: 211 / 3 / 343.
+  - Review A/B/C: 0 / 0 / 2.
+- Remaining review C rows:
+  - `은평여성인력개발센터 경력단절예방사업 <커리어 레벨업> 참여자 모집`
+    - Deadline evidence remains unclear; keep in manual review.
+  - `[QA 테스트] 검수 플로우 확인 공고`
+    - QA row remains unpublished in review.
