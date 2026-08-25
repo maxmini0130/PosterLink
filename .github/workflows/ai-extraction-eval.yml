@@ -1,0 +1,60 @@
+name: AI Extraction Evaluation
+
+on:
+  schedule:
+    - cron: "0 18 * * 0" # Monday 03:00 KST
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "eval/golden/**"
+      - "scripts/crawler/src/eval-extraction.js"
+      - "scripts/crawler/src/extraction-eval.js"
+      - "scripts/crawler/src/validate-extraction-golden.js"
+      - ".github/workflows/ai-extraction-eval.yml"
+
+jobs:
+  validate-and-score:
+    name: Validate labels and score current evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+    defaults:
+      run:
+        working-directory: scripts/crawler
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: scripts/crawler/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate golden labels
+        run: npm run eval:validate -- --set=eval/golden
+
+      - name: Score extraction evidence
+        if: ${{ env.SUPABASE_URL != '' && env.SUPABASE_KEY != '' }}
+        run: |
+          npm run eval:extraction -- \
+            --set=eval/golden \
+            --extractor=current \
+            --out=data/results/extraction-eval-${GITHUB_RUN_ID}.json
+
+      - name: Skip scoring without DB secrets
+        if: ${{ env.SUPABASE_URL == '' || env.SUPABASE_KEY == '' }}
+        run: echo "Skipping extraction scoring because SUPABASE_URL/SUPABASE_KEY secrets are unavailable."
+
+      - name: Upload evaluation report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ai-extraction-eval-${{ github.run_id }}
+          path: scripts/crawler/data/results/
+          retention-days: 30

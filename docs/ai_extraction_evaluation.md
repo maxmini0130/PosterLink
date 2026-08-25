@@ -45,6 +45,18 @@ pnpm --filter posterlink-crawler eval:extraction -- --set=eval/golden --extracto
 
 The report is written to `data/eval/reports/` by default.
 
+## CI
+
+`.github/workflows/ai-extraction-eval.yml` runs the same harness:
+
+- weekly on Monday 03:00 KST
+- manually via `workflow_dispatch`
+- on pull requests that change `eval/golden` labels or the evaluator
+
+The workflow always validates label shape. It scores current operating evidence
+when `SUPABASE_URL` and `SUPABASE_KEY` secrets are available, then uploads the
+JSON report as a 30-day artifact.
+
 ## Metrics
 
 The report includes:

@@ -1063,3 +1063,18 @@ Remaining human step:
 
 - Review the six generated batch JSON files, fill checked `truth` values, and
   place completed labels under `eval/golden/` before threshold calibration.
+
+## Phase 2 Weekly Evaluation Workflow
+
+Added CI support for the Phase 2 extraction evaluation harness. No operating DB
+writes were performed.
+
+- Added `.github/workflows/ai-extraction-eval.yml`.
+  - Runs weekly on Monday 03:00 KST.
+  - Supports manual `workflow_dispatch`.
+  - Runs on PRs that change golden labels or the evaluator.
+  - Always validates `eval/golden` JSON shape.
+  - Scores current `poster_field_evidence` against labels only when Supabase
+    secrets are available.
+  - Uploads the evaluation report artifact for 30 days.
+- Updated `docs/ai_extraction_evaluation.md` with the CI behavior.
