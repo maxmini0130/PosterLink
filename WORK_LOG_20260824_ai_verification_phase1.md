@@ -1508,6 +1508,41 @@ Eunpyeong review row. No artificial deadline date was created.
     - Tier A, ready for separate auto-publish approval.
   - `[QA 테스트] 검수 플로우 확인 공고`
     - Tier C QA row remains unpublished in review.
+
+## Eunpyeong Tier A Publish Apply
+
+Applied the Eunpyeong tier A review poster to the operating DB after separate
+user approval. This changed the single eligible tier A review row to
+`published` and wrote the auto-publish audit row.
+
+- Approval text:
+  `은평 커리어 레벨업 tier A 자동 공개 운영 DB 적용 승인합니다.`
+- Apply command:
+  `EXPOSURE_AUTO_PUBLISH=true pnpm tier:auto-publish -- --output=data/eval/reports/auto-publish-plan-eunpyeong-apply-20260825.json --apply`
+  - Checked review posters: 2.
+  - Eligible tier A: 1.
+  - Blocked tier C: 1.
+  - Applied: 1.
+  - Failed: 0.
+  - Audit failed: 0.
+- Follow-up dry-run:
+  `pnpm tier:auto-publish -- --output=data/eval/reports/auto-publish-plan-after-eunpyeong-publish-20260825.json`
+  - Checked review posters: 1.
+  - Eligible tier A: 0.
+  - Blocked tier C: 1.
+- Enforced healthcheck:
+  `pnpm ai:healthcheck -- --enforce --output=data/results/ai-healthcheck-after-eunpyeong-publish-20260825.json`
+  - Review queue count: 1.
+  - Field correction candidates: 0.
+  - Public image non-poster count: 0.
+  - Public non-poster reject candidates: 0.
+  - Quality gate: pass.
+- Direct operating DB count check:
+  - Published A/B/C: 212 / 3 / 343.
+  - Review A/B/C: 0 / 0 / 1.
+- Remaining review row:
+  - `[QA 테스트] 검수 플로우 확인 공고`
+    - Tier C QA row remains unpublished in review.
 - Recommended next action:
   - Apply auto-publish for the 3 newly corrected tier A review rows after
     separate operating DB approval.
