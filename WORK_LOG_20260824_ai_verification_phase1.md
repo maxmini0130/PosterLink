@@ -1026,3 +1026,40 @@ Validation:
   - Passed.
 - `git diff --check`
   - Passed, with existing Windows CRLF normalization warnings only.
+
+## Phase 2 Stratified Golden Set Package
+
+Prepared the next Phase 2 human-review package. No operating DB writes were
+performed.
+
+- Improved `create-extraction-golden-seed.js`.
+  - Default strategy is now `stratified`.
+  - `--strategy=newest` keeps the old latest-first behavior.
+  - `--pool-size` controls how many recent operating rows are considered before
+    selecting the final review sample.
+  - Source excerpts are truncated by Unicode code point to avoid splitting emoji
+    surrogate pairs.
+- Generated a 120-poster stratified seed:
+  `pnpm eval:sample -- --limit=120 --pool-size=1000 --output=data/eval/extraction-golden-seed-20260825-stratified.json`
+  - Pool size: 598.
+  - Evidence rows read: 5118.
+  - Sample buckets:
+    - normal recruit: 60.
+    - low-confidence/visual uncertainty: 36.
+    - non-recruit or rejected: 16.
+    - duplicate suspected: 8.
+    - text or missing visual: 0 available in the current pool.
+- Split the seed into reviewer batches:
+  `pnpm eval:review-batches -- --input=data/eval/extraction-golden-seed-20260825-stratified.json --output-dir=data/eval/review-batches-20260825 --batch-size=20`
+  - Batch count: 6.
+  - Batch size: 20.
+- Checked current golden-label commands:
+  - `pnpm eval:validate -- --set=eval/golden`
+    - Passed with 0 files / 0 labels.
+  - `pnpm eval:extraction -- --set=eval/golden --extractor=current --out=data/eval/reports/extraction-current-empty-or-labeled-20260825.json`
+    - Passed and emitted the expected empty-label report.
+
+Remaining human step:
+
+- Review the six generated batch JSON files, fill checked `truth` values, and
+  place completed labels under `eval/golden/` before threshold calibration.

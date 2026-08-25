@@ -10,8 +10,14 @@ JSON files in `eval/golden`.
 Create a reviewer seed:
 
 ```bash
-pnpm eval:sample -- --limit=120 --output=data/eval/extraction-golden-seed.json
+pnpm eval:sample -- --limit=120 --pool-size=1000 --output=data/eval/extraction-golden-seed.json
 ```
+
+The default sampler uses `--strategy=stratified`. It samples from a larger
+recent operating pool and tries to include normal recruit rows, low-confidence
+or C-tier rows, non-recruit/rejected rows, and duplicate-suspected rows. Use
+`--strategy=newest` only when a plain latest-first sample is intentionally
+needed.
 
 Split the seed into reviewer-sized batches:
 
@@ -73,6 +79,18 @@ See `eval/golden/README.md` for the JSON shape.
 
 ## Current Status
 
-The harness, reviewer seed generator, and review batch generator are implemented
-and executable. The 120 human-reviewed labels still need to be added before
-thresholds can be treated as production constants for Phase 3.
+The harness, stratified reviewer seed generator, and review batch generator are
+implemented and executable.
+
+Latest generated reviewer package:
+
+- Seed:
+  `data/eval/extraction-golden-seed-20260825-stratified.json`
+- Review batches:
+  `data/eval/review-batches-20260825/`
+- Batch count: 6 batches of 20 posters.
+- Sample buckets: normal recruit 60, low-confidence/visual uncertainty 36,
+  non-recruit or rejected 16, duplicate suspected 8.
+
+The 120 human-reviewed labels still need to be added under `eval/golden/`
+before thresholds can be treated as production constants for Phase 3.
