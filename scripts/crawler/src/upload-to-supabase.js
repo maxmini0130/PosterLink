@@ -104,6 +104,13 @@ function createConfiguredSupabase() {
 
 const supabase = createConfiguredSupabase();
 
+function normalizeAiUsageEvent(event) {
+  const usage = extractAiUsageMetadata(event);
+  if (usage) return usage;
+  if (event && typeof event === "object" && event.model && event.operation) return event;
+  return null;
+}
+
 async function logCrawlerAiUsageEvents({
   posterId = null,
   candidateId = null,
@@ -112,7 +119,7 @@ async function logCrawlerAiUsageEvents({
   events = [],
 } = {}) {
   for (const event of events) {
-    const usage = extractAiUsageMetadata(event);
+    const usage = normalizeAiUsageEvent(event);
     if (!usage?.model || !usage.operation) continue;
 
     const result = await logAiUsage(supabase, buildTextModelUsageRow({
@@ -121,9 +128,11 @@ async function logCrawlerAiUsageEvents({
       posterId,
       model: usage.model,
       operation: usage.operation,
+      fieldKey: usage.fieldKey ?? null,
       status: usage.status ?? "success",
       inputTokens: usage.inputTokens ?? null,
       outputTokens: usage.outputTokens ?? null,
+      imageCount: usage.imageCount ?? 0,
       metadata: {
         sourceKey,
         sourceUrl,
@@ -1374,7 +1383,7 @@ async function upsertNoticeCandidate(post, {
       candidateId: existing.id,
       sourceKey,
       sourceUrl,
-      events: [readableInfo, relevanceRoute, deadlineParse],
+      events: [readableInfo, relevanceRoute, deadlineParse, ...(post.aiUsageEvents ?? [])],
     });
     return { created: false, id: existing.id };
   }
@@ -1393,7 +1402,7 @@ async function upsertNoticeCandidate(post, {
     candidateId: data.id,
     sourceKey,
     sourceUrl,
-    events: [readableInfo, relevanceRoute, deadlineParse],
+    events: [readableInfo, relevanceRoute, deadlineParse, ...(post.aiUsageEvents ?? [])],
   });
 
   return { created: true, id: data.id };
@@ -2247,7 +2256,7 @@ async function uploadToSupabase(filePath) {
         posterId: existingPoster.id,
         sourceKey,
         sourceUrl,
-        events: [readableInfo, embedding],
+        events: [readableInfo, embedding, ...(post.aiUsageEvents ?? [])],
       });
       process.stdout.write("-");
       continue;
@@ -2292,7 +2301,7 @@ async function uploadToSupabase(filePath) {
       posterId,
       sourceKey,
       sourceUrl,
-      events: [readableInfo, embedding],
+      events: [readableInfo, embedding, ...(post.aiUsageEvents ?? [])],
     });
 
     success++;

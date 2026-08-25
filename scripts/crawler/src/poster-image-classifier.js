@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import fs from "fs/promises";
 import os from "node:os";
 import path from "path";
+import { attachAiUsageMetadata } from "./ai-usage-logger.js";
 import { resolveImageContentType } from "./image-content-type.js";
 
 const CACHE_PATH = "data/poster_image_classifications.json";
@@ -273,7 +274,16 @@ export async function classifyPosterImage(imageUrl, context = {}) {
 
     const payload = await response.json();
     const outputText = payload.output_text ?? payload.output?.flatMap((item) => item.content ?? []).map((part) => part.text ?? "").join("\n") ?? "";
-    const result = normalizeResult(parseJson(outputText));
+    const result = attachAiUsageMetadata(normalizeResult(parseJson(outputText)), {
+      model: MODEL,
+      operation: "is_real_poster",
+      fieldKey: "is_real_poster",
+      stageLabel: "vlm",
+      status: "success",
+      inputTokens: payload.usage?.input_tokens ?? payload.usage?.prompt_tokens ?? null,
+      outputTokens: payload.usage?.output_tokens ?? payload.usage?.completion_tokens ?? null,
+      imageCount: 1,
+    });
     cache[key] = result;
     await saveCache(cache);
     return result;

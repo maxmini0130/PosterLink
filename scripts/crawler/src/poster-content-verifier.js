@@ -2,6 +2,7 @@ import axios from "axios";
 import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
+import { attachAiUsageMetadata } from "./ai-usage-logger.js";
 import { resolveImageContentType } from "./image-content-type.js";
 
 const CACHE_PATH = "data/poster_content_verifications.json";
@@ -231,7 +232,15 @@ export async function verifyPosterMatchesNotice(imageUrl, context = {}) {
     const outputText = payload.output_text
       ?? payload.output?.flatMap((item) => item.content ?? []).map((part) => part.text ?? "").join("\n")
       ?? "";
-    const result = normalizeResult(parseJson(outputText));
+    const result = attachAiUsageMetadata(normalizeResult(parseJson(outputText)), {
+      model: MODEL,
+      operation: "poster_content_verification",
+      stageLabel: "vlm",
+      status: "success",
+      inputTokens: payload.usage?.input_tokens ?? payload.usage?.prompt_tokens ?? null,
+      outputTokens: payload.usage?.output_tokens ?? payload.usage?.completion_tokens ?? null,
+      imageCount: 1,
+    });
     cache[key] = result;
     await saveCache(cache);
     return result;

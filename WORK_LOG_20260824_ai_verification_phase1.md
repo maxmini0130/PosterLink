@@ -780,6 +780,37 @@ Validation:
 - `git diff --check`
   - Passed, with existing Windows CRLF normalization warnings only.
 
+## Crawler VLM Usage Event Handoff
+
+Extended AI usage tracking across the crawl-result JSON boundary. No operating
+DB writes were performed.
+
+- Updated VLM callers:
+  - `scripts/crawler/src/poster-image-classifier.js`
+  - `scripts/crawler/src/poster-content-verifier.js`
+  - `scripts/crawler/src/poster-ocr.js`
+- Fresh OpenAI calls now attach non-enumerable usage metadata for:
+  - `is_real_poster`
+  - `poster_content_verification`
+  - `poster_ocr`
+- Updated `scripts/crawler/src/crawler.js`.
+  - Converts non-enumerable call metadata into serializable `aiUsageEvents`
+    before writing crawl result JSON.
+  - Includes selected and non-selected candidate image checks, plus OCR for the
+    selected poster image.
+- Updated `scripts/crawler/src/upload-to-supabase.js`.
+  - Upload now writes `aiUsageEvents` into `ai_usage_log` only after the poster
+    or text notice candidate save succeeds.
+  - Poster rows link via `poster_id`; text notice candidates stay linked through
+    metadata because `ai_usage_log.poster_id` references only `posters.id`.
+
+Validation:
+
+- `pnpm --filter posterlink-crawler test`
+  - Passed: 214 tests.
+- `git diff --check`
+  - Passed, with existing Windows CRLF normalization warnings only.
+
 ## Embedding Usage Logging
 
 Extended AI usage logging to poster embedding calls. No operating DB writes were

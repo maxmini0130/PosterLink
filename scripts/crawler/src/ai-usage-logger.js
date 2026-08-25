@@ -41,6 +41,7 @@ export function buildTextModelUsageRow({
   status = "success",
   inputTokens = null,
   outputTokens = null,
+  imageCount = 0,
   metadata = {},
 } = {}) {
   return buildAiUsageLogRow({
@@ -53,7 +54,7 @@ export function buildTextModelUsageRow({
     status,
     inputTokens,
     outputTokens,
-    imageCount: 0,
+    imageCount,
     metadata,
   });
 }

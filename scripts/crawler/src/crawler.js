@@ -16,6 +16,7 @@ import { selectBestPosterImage } from "./poster-image-rules.js";
 import { analyzePostAttachments } from "./attachment-text-extractor.js";
 import { mergeAttachmentImageCandidates } from "./attachment-image-candidates.js";
 import { evaluateRelevanceHeuristic } from "./relevance-heuristic.js";
+import { extractAiUsageMetadata } from "./ai-usage-logger.js";
 
 // ── Logger ──────────────────────────────────────
 export const logger = createLogger({
@@ -108,6 +109,56 @@ export async function saveSeen(seenSet) {
 
 function hasPosterImage(post) {
   return Array.isArray(post.images) && post.images.length > 0;
+}
+
+function serializeAiUsageEvent(result, metadata = {}) {
+  const usage = extractAiUsageMetadata(result);
+  if (!usage?.model || !usage.operation) return null;
+
+  return {
+    model: usage.model,
+    operation: usage.operation,
+    fieldKey: usage.fieldKey ?? null,
+    stageLabel: usage.stageLabel ?? "cheap_text",
+    status: usage.status ?? "success",
+    inputTokens: usage.inputTokens ?? null,
+    outputTokens: usage.outputTokens ?? null,
+    imageCount: usage.imageCount ?? 0,
+    metadata: {
+      ...metadata,
+      ...(usage.metadata ?? {}),
+    },
+  };
+}
+
+function collectAiUsageEvents({ candidateChecks = [], ocrResult = null, selectedImageUrl = null } = {}) {
+  const events = [];
+  for (const [index, check] of candidateChecks.entries()) {
+    const baseMetadata = {
+      imageUrl: check.imageUrl,
+      candidateIndex: index,
+      selected: Boolean(selectedImageUrl && check.imageUrl === selectedImageUrl),
+    };
+    const classificationEvent = serializeAiUsageEvent(check.model, {
+      ...baseMetadata,
+      source: "poster_image_classification",
+    });
+    const contentEvent = serializeAiUsageEvent(check.content, {
+      ...baseMetadata,
+      source: "poster_content_verification",
+    });
+    if (classificationEvent) events.push(classificationEvent);
+    if (contentEvent) events.push(contentEvent);
+  }
+
+  const ocrEvent = serializeAiUsageEvent(ocrResult, {
+    imageUrl: selectedImageUrl,
+    source: "poster_ocr",
+    selected: true,
+  });
+  if (ocrEvent) events.push(ocrEvent);
+
+  return events;
 }
 
 function pickImagesByPriority(detailImages, listImages) {
@@ -209,6 +260,7 @@ function buildTextNoticePost(fullPost, reason, candidateChecks = []) {
   return {
     ...fullPost,
     images: [],
+    aiUsageEvents: collectAiUsageEvents({ candidateChecks }),
     contentMode: "text_notice",
     noticeOnly: true,
     posterImageCheck: {
@@ -730,6 +782,11 @@ export async function crawlSite(site, adapter, options = {}) {
               posterContentVerification: verifiedImage.contentVerification,
               posterImageCheck,
               posterOcr: ocrResult,
+              aiUsageEvents: collectAiUsageEvents({
+                candidateChecks: verifiedImage.candidateChecks,
+                ocrResult,
+                selectedImageUrl: verifiedImage.selectedImageUrl,
+              }),
             };
 
             allPosts.push(verifiedPost);
