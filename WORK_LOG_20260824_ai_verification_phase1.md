@@ -429,3 +429,35 @@ Validation:
 
 - `pnpm --filter web lint`
 - `pnpm test -- apps/web/lib/trafficAnalytics.test.ts apps/web/lib/posterApplication.test.ts`
+
+## Phase 2 Readiness Snapshot
+
+Created the next-step read-only artifacts for moving from Phase 1 evidence fill
+into Phase 2 golden-set evaluation.
+
+- Tier dry-run:
+  `data/eval/reports/exposure-tier-current-20260825.json`
+- Golden seed:
+  `data/eval/extraction-golden-seed-20260825.json`
+- Current tier dry-run summary:
+  - Checked posters: 559
+  - Evidence rows: 4,520
+  - A: 205
+  - B: 3
+  - C: 351
+  - SEO gate: 468
+  - Calendar/deadline alert gate: 155
+  - Recommendation gate: 0
+- Top remaining blockers:
+  - `critical_missing_deadline_type`: 244
+  - `critical_missing_deadline_date`: 225
+  - `critical_low_confidence_deadline_date`: 105
+  - `critical_low_confidence_host_org`: 88
+  - `duplicate_suspected`: 11
+- Golden seed contains 120 sampled posters and 1,437 current evidence rows for
+  human review.
+
+Validation:
+
+- `pnpm --filter posterlink-crawler tier:compute -- --output=data/eval/reports/exposure-tier-current-20260825.json`
+- `pnpm --filter posterlink-crawler eval:sample -- --limit=120 --output=data/eval/extraction-golden-seed-20260825.json`
