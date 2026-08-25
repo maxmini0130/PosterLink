@@ -9,9 +9,10 @@ import {
   type DiscoveryTaxonomy,
 } from "./discoveryRoutes";
 import { isPosterAcceptingApplications } from "./posterApplication";
+import { PUBLIC_POSTER_EXPOSURE_FILTER } from "./publicPosterVisibility";
 
 const PUBLIC_POSTER_SELECT =
-  "id,title,source_org_name,organizer_name,organizer_id,source_institution_id,application_institution_id,application_start_at,application_end_at,deadline_type,verification_status,verified_at,thumbnail_url,source_key,summary_short,created_at,updated_at";
+  "id,title,source_org_name,organizer_name,organizer_id,source_institution_id,application_institution_id,application_start_at,application_end_at,deadline_type,verification_status,verified_at,thumbnail_url,source_key,summary_short,created_at,updated_at,exposure_tier";
 
 export type PublicDiscoveryFilters = {
   query?: string | null;
@@ -130,6 +131,7 @@ export async function fetchPublicInstitutions(search?: string | null): Promise<P
       .from("posters")
       .select("organizer_id,source_institution_id,application_start_at,application_end_at,deadline_type")
       .eq("poster_status", "published")
+      .or(PUBLIC_POSTER_EXPOSURE_FILTER)
       .limit(2000),
   ]);
 
@@ -170,6 +172,7 @@ export async function fetchPublicInstitution(slug: string) {
     .from("posters")
     .select(PUBLIC_POSTER_SELECT)
     .eq("poster_status", "published")
+    .or(PUBLIC_POSTER_EXPOSURE_FILTER)
     .or(`organizer_id.eq.${data.id},source_institution_id.eq.${data.id}`)
     .order("created_at", { ascending: false })
     .limit(60);

@@ -979,3 +979,50 @@ Validation:
   - Passed: 216 tests.
 - `git diff --check`
   - Passed, with existing Windows CRLF normalization warnings only.
+
+## Public Discovery Exposure Gate
+
+Connected the approved Phase 1/3/5 output to public discovery surfaces after
+user approval. This does not delete rows or change publication status; it only
+keeps rows explicitly computed as `exposure_tier = 'C'` out of public feeds.
+Rows with `exposure_tier IS NULL` remain visible so local or not-yet-backfilled
+environments do not go blank.
+
+- Added shared web helper:
+  - `apps/web/lib/publicPosterVisibility.ts`
+- Updated public web surfaces to exclude tier C:
+  - home feed and urgent feed
+  - home summary counts
+  - public institution poster counts and institution detail poster lists
+  - sitemap poster URLs
+  - semantic-search response safety filter
+- Added migration:
+  - `supabase/migrations/20260825030000_gate_public_discovery_by_exposure_tier.sql`
+  - Updates `search_public_posters`, `count_public_posters`,
+    `match_posters_by_embedding`, and `get_recommended_posters_v2`.
+- Operating DB migration apply:
+  - Dry-run showed exactly one pending migration:
+    `20260825030000_gate_public_discovery_by_exposure_tier.sql`
+  - Applied with:
+    `pnpm dlx supabase db push --project-ref zxndgzsfrgwahwsdbjdj`
+  - Follow-up dry-run reported the remote DB is up to date.
+- Operating DB verification:
+  - Published posters: 537.
+  - Published tier A: 191.
+  - Published tier B: 3.
+  - Published tier C: 343.
+  - Published tier null: 0.
+  - `count_public_posters(..., p_include_closed=false)`: 105.
+  - Equivalent direct visible-active query: 105.
+  - `count_public_posters(..., p_include_closed=true)`: 194.
+
+Validation:
+
+- `pnpm --filter web lint`
+  - Passed.
+- `pnpm --filter posterlink-crawler test`
+  - Passed: 216 tests.
+- `pnpm --filter web build`
+  - Passed.
+- `git diff --check`
+  - Passed, with existing Windows CRLF normalization warnings only.

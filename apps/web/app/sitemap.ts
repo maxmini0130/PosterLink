@@ -3,6 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import { getAppOrigin } from "../lib/siteUrl";
 import { taxonomySlug, type DiscoveryTaxonomy } from "../lib/discoveryRoutes";
 import { isPosterAcceptingApplications } from "../lib/posterApplication";
+import { PUBLIC_POSTER_EXPOSURE_FILTER } from "../lib/publicPosterVisibility";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     .from("posters")
     .select("id, updated_at, application_start_at, application_end_at, deadline_type")
     .eq("poster_status", "published")
+    .or(PUBLIC_POSTER_EXPOSURE_FILTER)
     .order("updated_at", { ascending: false })
     .limit(1000);
   const posterIds = (posters ?? []).map((poster) => poster.id);

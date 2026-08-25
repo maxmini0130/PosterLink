@@ -26,6 +26,7 @@ import { PosterCard } from "./components/PosterCard";
 import { fetchCategoryRegionNames, fetchPosterImages } from "./lib/posterHelpers";
 import { fetchPosterMetricCounts } from "./lib/posterMetrics";
 import { getPosterApplicationState, isPosterAcceptingApplications } from "../lib/posterApplication";
+import { PUBLIC_POSTER_EXPOSURE_FILTER } from "../lib/publicPosterVisibility";
 
 const categories = ["전체", "청년", "소상공인", "창업", "교육", "문화·행사", "복지", "채용", "주거"] as const;
 const feedTabs = [
@@ -142,7 +143,8 @@ export default function Home() {
           let publicQuery = supabase
             .from("posters")
             .select("id, title, source_org_name, application_start_at, application_end_at, deadline_type, created_at, poster_status, thumbnail_url, source_key, summary_short")
-            .eq("poster_status", "published");
+            .eq("poster_status", "published")
+            .or(PUBLIC_POSTER_EXPOSURE_FILTER);
 
           if (hideClosedPosters) {
             publicQuery = publicQuery
@@ -173,6 +175,7 @@ export default function Home() {
             .from("posters")
             .select("id, title, source_org_name, application_start_at, application_end_at, deadline_type, created_at, poster_status, thumbnail_url, source_key, summary_short")
             .eq("poster_status", "published")
+            .or(PUBLIC_POSTER_EXPOSURE_FILTER)
             .gte("application_end_at", nowIso)
             .lte("application_end_at", sevenDaysLater.toISOString())
             .order("application_end_at", { ascending: true })

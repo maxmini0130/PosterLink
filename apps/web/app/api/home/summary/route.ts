@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { PUBLIC_POSTER_EXPOSURE_FILTER } from "../../../../lib/publicPosterVisibility";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,7 @@ export async function GET() {
         .from("posters")
         .select("id", { count: "exact", head: true })
         .eq("poster_status", "published")
+        .or(PUBLIC_POSTER_EXPOSURE_FILTER)
         .or(`published_at.gte.${todayStartIso},and(published_at.is.null,created_at.gte.${todayStartIso})`),
     ),
     safeRpcNumber(
@@ -71,6 +73,7 @@ export async function GET() {
         .from("posters")
         .select("id", { count: "exact", head: true })
         .eq("poster_status", "published")
+        .or(PUBLIC_POSTER_EXPOSURE_FILTER)
         .or(`application_start_at.is.null,application_start_at.lte.${nowIso}`)
         .gte("application_end_at", nowIso)
         .lte("application_end_at", sevenDaysLater.toISOString()),
