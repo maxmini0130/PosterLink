@@ -1,0 +1,17 @@
+{
+  "poster_id": "9262ae47-14a1-4837-8261-724a86c140b9",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": false,
+    "content_type": "admin",
+    "deadline_date": null,
+    "deadline_type": null,
+    "host_org": "마포구",
+    "official_url": "https://culture.mapo.go.kr/site/seongsan1/board/townnews/2454?bcId=townnews"
+  },
+  "notes": "Administrative public notice, not a PosterLink poster-quality opportunity.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-04.json",
+  "context_title": "공중화장실 관리인 모집 공고",
+  "context_source_url": "https://culture.mapo.go.kr/site/seongsan1/board/townnews/2454?bcId=townnews"
+}

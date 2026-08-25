@@ -1,0 +1,17 @@
+{
+  "poster_id": "f763cc80-a662-405b-a7bd-e21e851386b4",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-09-20",
+    "deadline_type": "fixed",
+    "host_org": "소셜혁신연구소 사회적협동조합",
+    "official_url": "https://vo.la/lyzliZM"
+  },
+  "notes": "deadline_date filled from title/source 모집 기간 ~26.09.20.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-04.json",
+  "context_title": "소셜혁신연구소 사회적협동조합 <2026 미래내일 일경험 사업(ESG지원형) 소셜 WE 아트브릿지+ 문화예술 기획자 양성과정 3기>",
+  "context_source_url": "https://vo.la/lyzliZM"
+}

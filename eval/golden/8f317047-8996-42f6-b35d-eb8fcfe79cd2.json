@@ -1,0 +1,17 @@
+{
+  "poster_id": "8f317047-8996-42f6-b35d-eb8fcfe79cd2",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-09-02",
+    "deadline_type": "fixed",
+    "host_org": "강서구가족센터",
+    "official_url": "https://1in.seoul.go.kr/front/partcptn/partcptnView.do?CSRF_TOKEN=332cb07e-4f71-49e5-ae98-9889930929ee&LISTOP=miv_pageNo%253D1%253B_SERIALISVALID%253DT%253Bmiv_pageSize%253D15%253B&miv_pageNo=1&miv_pageSize=10&mode=W&p_agrde=AG01%2CAG02&p_atdrc=1150000000&p_face=Y%25&p_se=SC02%2CSC03%2CSC04%2CSC05%2CSC06%2CSC01&p_sexdstn=F%2CM&partcptn_id=d7cc0314bbce40dca2171f7d4bd20988"
+  },
+  "notes": "Host corrected from displayed district label to operating center confirmed by manual review.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-04.json",
+  "context_title": "강서구가족센터 <자립준비 청년대상 우리의 온(on)도(도예)> 참여자 모집",
+  "context_source_url": "https://1in.seoul.go.kr/front/partcptn/partcptnView.do?CSRF_TOKEN=332cb07e-4f71-49e5-ae98-9889930929ee&LISTOP=miv_pageNo%253D1%253B_SERIALISVALID%253DT%253Bmiv_pageSize%253D15%253B&miv_pageNo=1&miv_pageSize=10&mode=W&p_agrde=AG01%2CAG02&p_atdrc=1150000000&p_face=Y%25&p_se=SC02%2CSC03%2CSC04%2CSC05%2CSC06%2CSC01&p_sexdstn=F%2CM&partcptn_id=d7cc0314bbce40dca2171f7d4bd20988"
+}

@@ -1,0 +1,17 @@
+{
+  "poster_id": "4b20326f-a926-4cde-ac21-23229a00c0c2",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": false,
+    "content_type": "admin",
+    "deadline_date": null,
+    "deadline_type": null,
+    "host_org": "마포구 용강동 주민센터",
+    "official_url": "https://culture.mapo.go.kr/site/yonggang/board/townnews/4882?bcId=townnews"
+  },
+  "notes": "Administrative committee recruitment notice rejected from public poster exposure.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-04.json",
+  "context_title": "제4회 용강동 마을축제 '토정아 놀자!' 축제추진위원 공개모집 공고",
+  "context_source_url": "https://culture.mapo.go.kr/site/yonggang/board/townnews/4882?bcId=townnews"
+}

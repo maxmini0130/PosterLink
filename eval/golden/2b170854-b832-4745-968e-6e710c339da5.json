@@ -1,0 +1,16 @@
+{
+  "poster_id": "2b170854-b832-4745-968e-6e710c339da5",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": false,
+    "content_type": "discard",
+    "deadline_date": null,
+    "deadline_type": null,
+    "host_org": null,
+    "official_url": null
+  },
+  "notes": "Temporary QA test row; not a real public poster/opportunity.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-04.json",
+  "context_title": "[QA 테스트] 검수 플로우 확인 공고"
+}

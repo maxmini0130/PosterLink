@@ -1,0 +1,17 @@
+{
+  "poster_id": "d2c0cc55-aa03-43f8-85bd-80a6ef8b921d",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": false,
+    "content_type": "admin",
+    "deadline_date": null,
+    "deadline_type": null,
+    "host_org": "중랑구청",
+    "official_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=72652"
+  },
+  "notes": "Award candidate recommendation public notice; keep out of poster exposure.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-04.json",
+  "context_title": "중랑구청<제31회 중랑구민대상 수상후보자 추천 공고>(~8/18)",
+  "context_source_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=72652"
+}

@@ -1796,3 +1796,48 @@ DB writes were performed.
   - `pnpm eval:thresholds -- --input=data/eval/reports/extraction-batch01-03-current-20260825.json --out=data/eval/reports/extraction-thresholds-batch01-03-20260825.json --module-out=data/eval/reports/extraction-thresholds-batch01-03-20260825.js`
   - Threshold plan remains `production_ready: false` because labels are 60/120
     and one or more fields still lack a qualifying recommendation.
+
+## Phase 2 Golden Labels Batch 04
+
+Imported the fourth Phase 2 golden-label batch into `eval/golden`. No operating
+DB writes were performed.
+
+- Source batch:
+  `data/eval/review-batches-20260825/batch-04.json`
+- Imported labels:
+  - 20 posters.
+  - 120 truth fields.
+  - Fields labeled for each poster:
+    `is_real_poster`, `content_type`, `deadline_date`, `deadline_type`,
+    `host_org`, `official_url`.
+- Manual corrections captured in the labels:
+  - Review/tier C rows with first-come or close-when-full language were labeled
+    as `deadline_type: until_exhausted` instead of plain fixed deadlines.
+  - 강서구가족센터 row:
+    `host_org` corrected from the district label to `강서구가족센터`, and the
+    source URL was preserved as `official_url`.
+  - 소셜혁신연구소 and 한국ICT패션뷰티산업협회 rows:
+    missing `deadline_date` values were filled from source/title recruitment
+    deadlines `2026-09-20` and `2026-09-04`.
+  - Published/tier C rows:
+    several program-period values were corrected to recruitment deadlines,
+    including 서울청년센터 광진 `2026-08-30`, 한국디지털컨버전스협회
+    `2026-09-14`, and 덕성여대 `2026-09-06`.
+  - Rejected/public notice rows:
+    administrative notices were labeled `is_real_poster: false` with
+    `content_type: admin`; the temporary QA row was labeled
+    `content_type: discard`.
+- Validation:
+  - `pnpm eval:validate -- --set=eval/golden --require-labels`
+  - Passed with 80 files, 80 items, 480 truth fields.
+- Progress:
+  - `pnpm eval:status`
+  - 80/120 labeled, 40 remaining.
+- Evaluation snapshot:
+  - `pnpm eval:extraction -- --set=eval/golden --extractor=current --out=data/eval/reports/extraction-batch01-04-current-20260825.json`
+  - Labeled posters: 80.
+  - Evidence rows: 976.
+  - Macro accuracy: 0.8708333333333332.
+  - `pnpm eval:thresholds -- --input=data/eval/reports/extraction-batch01-04-current-20260825.json --out=data/eval/reports/extraction-thresholds-batch01-04-20260825.json --module-out=data/eval/reports/extraction-thresholds-batch01-04-20260825.js`
+  - Threshold plan remains `production_ready: false` because labels are 80/120
+    and one or more fields still lack a qualifying recommendation.

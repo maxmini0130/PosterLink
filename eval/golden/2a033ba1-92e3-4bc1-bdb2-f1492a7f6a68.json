@@ -1,0 +1,17 @@
+{
+  "poster_id": "2a033ba1-92e3-4bc1-bdb2-f1492a7f6a68",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": false,
+    "content_type": "admin",
+    "deadline_date": null,
+    "deadline_type": null,
+    "host_org": "마포구",
+    "official_url": "https://culture.mapo.go.kr/site/ahyeon/board/townnews/3646?cp=1&sortOrder=BA_REGDATE&sortDirection=DESC&listType=list&bcId=townnews&baNotice=false&baCommSelec=false&baOpenDay=false&baUse=true"
+  },
+  "notes": "Civil defense education notice, not a recruitment poster.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-04.json",
+  "context_title": "2026년 민방위 교육 안내",
+  "context_source_url": "https://culture.mapo.go.kr/site/ahyeon/board/townnews/3646?bcId=townnews"
+}

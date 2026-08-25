@@ -1,0 +1,17 @@
+{
+  "poster_id": "fb9e8b62-f42f-44a2-b8aa-8e3b2ede1d31",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": false,
+    "content_type": "admin",
+    "deadline_date": null,
+    "deadline_type": null,
+    "host_org": "마포구",
+    "official_url": "https://culture.mapo.go.kr/site/daeheung/board/townnews/2544?bcId=townnews"
+  },
+  "notes": "Public notice/service notice, not a recruitment poster.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-04.json",
+  "context_title": "재결서 정본 공시송달 공고(신촌지역(마포) 4-10지구)",
+  "context_source_url": "https://culture.mapo.go.kr/site/daeheung/board/townnews/2544?bcId=townnews"
+}

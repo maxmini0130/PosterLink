@@ -1,0 +1,17 @@
+{
+  "poster_id": "073cc5a0-112a-4802-bc7e-979b344c7801",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-09-04",
+    "deadline_type": "fixed",
+    "host_org": "(사)한국ICT패션뷰티산업협회",
+    "official_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73289"
+  },
+  "notes": "Title/program track is fashion-beauty-distribution; source gives that track deadline as 2026-09-04.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-04.json",
+  "context_title": "(사)한국ICT패션뷰티산업협회 <2026년 미래내일일경험 패션뷰티유통직무 청년인턴 4기> 모집",
+  "context_source_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73289"
+}

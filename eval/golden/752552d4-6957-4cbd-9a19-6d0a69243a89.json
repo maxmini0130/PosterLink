@@ -1,0 +1,17 @@
+{
+  "poster_id": "752552d4-6957-4cbd-9a19-6d0a69243a89",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-09-01",
+    "deadline_type": "fixed",
+    "host_org": "서울노동권익센터·서울청년센터 은평",
+    "official_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73255"
+  },
+  "notes": "deadline_date normalized from Korean range to end date; co-host preserved from title.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-04.json",
+  "context_title": "서울노동권익센터*서울청년센터은평 <퇴사 전 꼭 알아야 할 실전 노동법 교육> 수강생 모집",
+  "context_source_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73255"
+}

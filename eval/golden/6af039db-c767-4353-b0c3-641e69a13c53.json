@@ -1,0 +1,17 @@
+{
+  "poster_id": "6af039db-c767-4353-b0c3-641e69a13c53",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": null,
+    "deadline_type": "until_exhausted",
+    "host_org": "한국여성공학기술인협회",
+    "official_url": "https://www.tukorea.ac.kr/bbs/tukorea/376/152331/artclView.do?layout=unknown"
+  },
+  "notes": "Each class closes 10 days before the class and may close first-come; no single absolute deadline.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-04.json",
+  "context_title": "한국공학대학교 <2026 여성공학인 직무교육 STEP-UP, AI로 여는 성장의 단계> 참여자 모집",
+  "context_source_url": "https://www.tukorea.ac.kr/bbs/tukorea/376/152331/artclView.do?layout=unknown"
+}

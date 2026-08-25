@@ -1,0 +1,17 @@
+{
+  "poster_id": "1b866954-f9d6-46d3-8e0b-8a325cac7ab9",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-09-08",
+    "deadline_type": "until_exhausted",
+    "host_org": "강동구 청년해냄센터",
+    "official_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73257"
+  },
+  "notes": "Application ends 2026-09-08 14:00 but source states first-come/early close by submission order.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-04.json",
+  "context_title": "강동구 청년해냄센터 <전문분야 창업 멘토링(9월)> 참여자 모집",
+  "context_source_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73257"
+}
