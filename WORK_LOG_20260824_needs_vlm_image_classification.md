@@ -615,3 +615,47 @@ Post-apply tier dry-run:
 - `critical_missing_deadline_type`: 261
 - `critical_low_confidence_is_real_poster`: 4
 - calendar/deadlineAlert gate: 115
+
+## Batch 13 production apply
+
+Applied after explicit user approval:
+
+- Approved phrase:
+  `needs-vlm image classification batch13 20 rows operating DB apply approved.`
+- Original approval:
+  `needs-vlm 이미지 분류 batch13 20건 운영 DB 적용 승인합니다.`
+- Command:
+  `pnpm --filter posterlink-crawler image:backfill -- --limit=20 --concurrency=1 "--statuses=published,review" --needs-vlm-only --apply --output=data/results/needs-vlm-image-classification-batch13-apply.json`
+- Candidate count: 20
+- Applied count: 20
+- Failed count: 0
+- Non-poster count: 2
+- `isPoster=true`: 18
+- `isPoster=false`: 2
+- Confidence range: 0.92 to 0.98
+
+Non-poster classifications:
+
+- `[Notice] Mapo Yusuji public parking lot monthly pass application notice`
+  - `official notice / administrative announcement`, confidence 0.95
+- `[Notice] Mapo loop train bus fare change notice`
+  - `public transportation schedule/operational notice`, confidence 0.92
+
+Post-apply poster-detection dry-run:
+
+- Checked rows: 538
+- Evidence rows: 506
+- `is_real_poster=true`: 494
+- `is_real_poster=false`: 12
+- Ambiguous: 32
+- `needs_vlm`: 32
+
+Batch13 evidence candidate check:
+
+- Batch ids: 20
+- Evidence rows: 20
+- `is_real_poster=true`: 18
+- `is_real_poster=false`: 2
+
+No batch13 `is_real_poster` evidence rows were applied in this step. That
+conversion requires a separate operating DB approval.
