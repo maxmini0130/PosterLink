@@ -1433,3 +1433,48 @@ after separate user approval. This changed only eligible tier A review rows to
       2026-09-06.
   - `[QA 테스트] 검수 플로우 확인 공고`
     - QA row remains unpublished in review.
+
+## Remaining Review C Corrections
+
+Applied 3 additional operator-confirmed corrections to the operating DB after
+user approval. These rows remain in `review`; the changes corrected grounded
+deadline evidence, cleared one false duplicate suspicion, and recomputed their
+exposure tiers.
+
+- Approval text:
+  `남은 review C 3건 교정/evidence 및 중복의심 해제 운영 DB 적용 승인합니다.`
+- Applied rows:
+  - `강동구 청년해냄센터 <전문분야 창업 멘토링(9월)> 참여자 모집`
+    - Deadline corrected to 2026-09-08 KST.
+    - Added operator deadline_date/deadline_type evidence.
+  - `서울청년센터 강서 <강서로컬픽> 6기 참여자 모집`
+    - Stored deadline kept as 2026-09-06 KST.
+    - Added operator deadline_date/deadline_type evidence.
+  - `서울청년센터서초 <청년 리커넥트 프로젝트 - 커리어 포커스 워크숍 4기> 참여자 모집`
+    - Deadline corrected to 2026-09-09 KST.
+    - Added operator deadline_date/deadline_type evidence.
+    - Cleared duplicate suspicion after manual comparison with a pending
+      notice candidate for a different program in the same project family.
+- Evidence/audit writes:
+  - Upserted 6 `poster_field_evidence` rows with
+    `operator-manual-review-v1`.
+  - Inserted 3 `admin_actions` audit rows with
+    `manual_review_correction_remaining_review_c`.
+  - Recomputed these 3 rows to exposure tier A.
+- Verification:
+  - `pnpm ai:healthcheck -- --enforce --output=data/results/ai-healthcheck-after-remaining-review-c-corrections-20260825.json`
+    - `field_correction_candidates`: 0.
+    - `quality_gate_status`: pass.
+  - `pnpm tier:auto-publish -- --output=data/eval/reports/auto-publish-plan-after-remaining-review-c-corrections-20260825.json`
+    - Checked review posters: 5.
+    - Eligible tier A: 3.
+    - Blocked tier C: 2.
+    - Applied: 0.
+- Remaining review C rows:
+  - `은평여성인력개발센터 경력단절예방사업 <커리어 레벨업> 참여자 모집`
+    - Deadline evidence remains unclear; keep in manual review.
+  - `[QA 테스트] 검수 플로우 확인 공고`
+    - QA row remains unpublished in review.
+- Recommended next action:
+  - Apply auto-publish for the 3 newly corrected tier A review rows after
+    separate operating DB approval.
