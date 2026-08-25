@@ -2030,3 +2030,51 @@ were performed.
     explicit user approval.
   - After applying evidence, re-run extraction/threshold reports to see the
     actual Phase 2 metric movement.
+
+## Phase 2 Rulefix Evidence Applied
+
+Applied the approved Phase 2 rulefix evidence bundle to the operating DB.
+
+- User approval:
+  - `Phase 2 rulefix evidence 3,961건 운영 DB 적용 승인합니다.`
+- Apply command:
+  - `node src/backfill-field-evidence.js --limit=5000 '--statuses=published,review' --output=data/results/field-evidence-backfill-phase2-rulefix-apply-20260825.json --apply`
+- Apply result:
+  - Mode: apply.
+  - Checked posters: 559.
+  - Candidate posters: 559.
+  - Evidence rows: 3,961.
+  - Applied rows: 3,961.
+  - Failed chunks: 0.
+  - Field counts:
+    - `deadline_date`: 440.
+    - `deadline_type`: 307.
+    - `host_org`: 1,028.
+    - `official_url`: 558.
+    - `apply_url`: 184.
+    - `target_desc`: 358.
+    - `apply_method`: 286.
+    - `venue`: 310.
+    - `contact`: 262.
+    - `benefit`: 228.
+- Post-apply evaluation:
+  - `pnpm eval:extraction -- --set=eval/golden --extractor=current --out=data/eval/reports/extraction-phase2-rulefix-applied-20260825.json`
+  - Golden files: 120.
+  - Labeled posters: 120.
+  - Evidence rows in eval: 1,531.
+  - Macro accuracy: `0.8263888888888888`.
+  - Previous macro accuracy before these rulefixes: `0.8138888888888888`.
+  - `deadline_date` accuracy improved to `0.7583333333333333`.
+- Threshold export:
+  - `pnpm eval:thresholds -- --input=data/eval/reports/extraction-phase2-rulefix-applied-20260825.json --out=data/eval/reports/extraction-thresholds-phase2-rulefix-applied-20260825.json --module-out=data/eval/reports/extraction-thresholds-phase2-rulefix-applied-20260825.js`
+  - Production ready: false.
+  - Blocking reason: `one_or_more_fields_missing_recommendation`.
+- Remaining blockers surfaced by eval:
+  - `deadline_date`: still has event/program dates leaking into deadline
+    evidence, especially Seoul Farm/program-event pages.
+  - `deadline_type`: fixed date evidence is still inferred too readily from
+    event/program date rows and existing manual fixed rows.
+  - `content_type`: rejected/news/admin documents still need stronger routing
+    before the generic `discard`/`recruit` fallback.
+  - `is_real_poster`: four known non-posters still have high-confidence positive
+    signal evidence and need negative routing or evidence suppression.
