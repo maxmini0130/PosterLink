@@ -2136,3 +2136,69 @@ operating DB writes were performed for this change set.
 - Follow-up:
   - Applying these generated `content_type` and `is_real_poster` evidence rows
     to the operating DB requires explicit user approval.
+
+## Phase 2 Router Fixes 03 Evidence Applied
+
+Applied the approved router-fix evidence bundles for `content_type` and
+`is_real_poster` to the operating DB.
+
+- User approvals:
+  - `content_type routerfix evidence 598 rows operating DB apply approved`.
+  - `poster detection routerfix evidence 573 rows operating DB apply approved`.
+- Content type apply command:
+  - `node src/backfill-content-type-evidence.js --limit=5000 '--statuses=published,review,rejected' --output=data/results/content-type-evidence-phase2-routerfix-apply-20260825.json --apply`
+- Content type apply result:
+  - Mode: apply.
+  - Checked rows: 598.
+  - Evidence rows: 598.
+  - Applied rows: 598.
+  - Failed rows: 0.
+  - Content types: recruit 541, discard 21, admin 7, news 29.
+- Poster detection apply command:
+  - `node src/backfill-poster-detection-evidence.js --limit=5000 '--statuses=published,review,rejected' --include-negative --output=data/results/poster-detection-evidence-phase2-routerfix-apply-20260825.json --apply`
+- Poster detection apply result:
+  - Mode: apply.
+  - Checked rows: 598.
+  - Evidence rows: 573.
+  - Applied rows: 573.
+  - Failed rows: 0.
+  - Decisions: true 544, false 29, ambiguous 25.
+  - Routes: classifier_accept 544, reject 29, needs_vlm 25.
+- Post-apply evaluation:
+  - `pnpm eval:extraction -- --set=eval/golden --extractor=current --out=data/eval/reports/extraction-phase2-routerfix-applied-20260825.json`
+  - Golden files: 120.
+  - Labeled posters: 120.
+  - Evidence rows in eval: 1,541.
+  - Macro accuracy: `0.8430555555555556`.
+  - Previous macro accuracy before router fixes: `0.8263888888888888`.
+  - `content_type` accuracy improved from `0.825` to `0.95`.
+  - `is_real_poster` accuracy is `0.9416666666666667`; this is lower than the
+    previous `0.9666666666666667`, but the newly added negative routing prevents
+    known non-poster notices from being promoted by generic classifier evidence.
+- Threshold export:
+  - `pnpm eval:thresholds -- --input=data/eval/reports/extraction-phase2-routerfix-applied-20260825.json --out=data/eval/reports/extraction-thresholds-phase2-routerfix-applied-20260825.json --module-out=data/eval/reports/extraction-thresholds-phase2-routerfix-applied-20260825.js`
+  - Production ready: false.
+  - Blocking reason: `one_or_more_fields_missing_recommendation`.
+- Current field metrics:
+  - `is_real_poster`: accuracy `0.9416666666666667`, predicted 114/120,
+    correct 113.
+  - `content_type`: accuracy `0.95`, predicted 120/120, correct 114,
+    recommended threshold `0.85` with precision 1 and coverage 0.1167.
+  - `deadline_date`: accuracy `0.7583333333333333`, predicted 99/120,
+    correct 91.
+  - `deadline_type`: accuracy `0.7416666666666667`, predicted 100/120,
+    correct 89.
+  - `host_org`: accuracy `0.825`, predicted 104/120, correct 99.
+  - `official_url`: accuracy `0.8416666666666667`, predicted 104/120,
+    correct 101.
+- Remaining blockers:
+  - `deadline_date` and `deadline_type` are now the largest blockers. Event
+    dates and program period text still leak into application-deadline evidence,
+    especially Seoul Farm/public-service reservation style pages.
+  - `host_org` still needs source-grounded fallback evidence for missing
+    Mapo/center records and protection against portal names such as
+    `youth.seoul`.
+  - `official_url` still needs source-link evidence for missing Mapo labor/news
+    records and QA/internal-test suppression.
+  - `is_real_poster` needs one more targeted pass for seven golden false
+    positives that still receive generic classifier-accept evidence.
