@@ -304,3 +304,24 @@ Validation:
 - `pnpm --filter web lint`
 - `pnpm test -- apps/web/lib/posterStructuredEditor.test.ts apps/web/lib/adminPosterFilters.test.ts`
 - `pnpm --filter web build`
+
+## Operator Registration UX Fix
+
+Fixed two operator-facing P1 issues in the poster registration flow.
+
+- File: `apps/web/app/operator/posters/new/page.tsx`
+- Missing-image submission now scrolls and focuses the inline error near the
+  submit area, so operators do not miss the failure reason when the toast is
+  out of view.
+- Registration submit button contrast was reinforced with an explicit border,
+  white text, and clearer disabled colors.
+- File: `apps/web/lib/posterHelpers.ts`
+- Category ranking explicitly deprioritizes the real Korean `기타` category so
+  operator/admin lists prefer a specific category when multiple category links
+  exist.
+
+Validation:
+
+- `pnpm --filter web lint`
+- `pnpm test -- apps/web/lib/posterImage.test.ts apps/web/lib/adminPosterFilters.test.ts`
+- `pnpm --filter web build`

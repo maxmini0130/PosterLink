@@ -180,6 +180,7 @@ export default function NewPosterPage() {
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const imagePreviewsRef = useRef<string[]>([]);
   const [imageSubmitError, setImageSubmitError] = useState("");
+  const imageSubmitErrorRef = useRef<HTMLDivElement | null>(null);
   const [showCropper, setShowCropper] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   
@@ -434,6 +435,10 @@ export default function NewPosterPage() {
     if (croppedImageBlobs.length === 0) {
       const message = "포스터 이미지를 포함하여 등록해주세요. 상단에서 이미지를 업로드하거나 자동 제작을 먼저 실행하세요.";
       setImageSubmitError(message);
+      requestAnimationFrame(() => {
+        imageSubmitErrorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        imageSubmitErrorRef.current?.focus();
+      });
       toast.error(message, { duration: 6000 });
       return;
     }
@@ -718,11 +723,16 @@ export default function NewPosterPage() {
         </div>
 
         {imageSubmitError && (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-bold text-rose-700">
+          <div
+            ref={imageSubmitErrorRef}
+            tabIndex={-1}
+            role="alert"
+            className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-bold text-rose-700 outline-none ring-0 focus-visible:ring-2 focus-visible:ring-rose-300"
+          >
             {imageSubmitError}
           </div>
         )}
-        <Button disabled={loading} className="w-full h-16 rounded-[2rem] bg-gray-950 text-lg font-black text-white shadow-2xl transition-all hover:bg-black disabled:bg-gray-200 disabled:text-gray-500">
+        <Button disabled={loading} className="w-full h-16 rounded-[2rem] border border-gray-950 bg-gray-950 text-lg font-black text-white shadow-2xl transition-all hover:bg-black disabled:border-gray-300 disabled:bg-gray-200 disabled:text-gray-600">
           {loading ? <Loader2 className="animate-spin" /> : "보정된 포스터 등록하기"}
         </Button>
       </form>

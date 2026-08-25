@@ -81,7 +81,8 @@ function pickPrimaryId(ids: string[], ranks: Record<string, number>) {
 function rankCategory(category: any) {
   const name = String(category?.name ?? "");
   const code = String(category?.code ?? "");
-  return name === "기타" || /OTHER/i.test(code) ? 0 : 10;
+  if (name === "기타") return 0;
+  return name === "湲고?" || /OTHER/i.test(code) ? 0 : 10;
 }
 
 function rankRegion(region: any) {
