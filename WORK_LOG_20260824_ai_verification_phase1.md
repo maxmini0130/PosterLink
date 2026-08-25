@@ -343,3 +343,26 @@ Validation:
 
 - `pnpm --filter web lint`
 - `pnpm --filter web build`
+
+## Search Logging Reliability Fix
+
+Fixed the popular-keyword logging gap where live search result updates could
+occur without a `/api/search-logs` call.
+
+- File: `apps/web/app/posters/PosterListClient.tsx`
+- Search logs are now recorded after result fetches for normalized search terms
+  of at least two characters, with a one-minute same-term client cooldown.
+- Initial query URLs also use the same logging guard and avoid one-character
+  noise.
+- File: `apps/web/app/api/search-logs/route.ts`
+- The API now reads the bearer session token when available, stores the user id
+  for non-internal users, and skips admin/super_admin/operator searches.
+- File: `apps/web/app/admin/page.tsx`
+- The dashboard popular-keyword copy now states that internal accounts are
+  excluded.
+
+Validation:
+
+- `pnpm --filter web lint`
+- `pnpm test -- apps/web/lib/discoveryRoutes.test.ts apps/web/lib/trafficAnalytics.test.ts`
+- `pnpm --filter web build`

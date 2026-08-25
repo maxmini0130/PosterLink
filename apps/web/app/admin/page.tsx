@@ -129,7 +129,7 @@ export default function AdminDashboardPage() {
             </div>
             <div>
               <h2 className="text-sm font-black text-gray-900">인기 검색어</h2>
-              <p className="text-xs font-bold text-gray-400">최근 검색 로그 기준</p>
+              <p className="text-xs font-bold text-gray-400">최근 검색 로그 기준 · 내부 계정 제외</p>
             </div>
           </div>
           {popularKeywords.length > 0 ? (
@@ -141,7 +141,7 @@ export default function AdminDashboardPage() {
               ))}
             </div>
           ) : (
-            <p className="text-sm font-bold text-gray-300">아직 검색 로그가 없습니다.</p>
+            <p className="text-sm font-bold text-gray-300">아직 외부 이용자 검색 로그가 없습니다.</p>
           )}
         </section>
 

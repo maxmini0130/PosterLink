@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect, useRef } from "react";
+import { Suspense, useState, useEffect, useRef, type MutableRefObject } from "react";
 import { supabase } from "../lib/supabase";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
@@ -68,6 +68,7 @@ function PosterListPageContent({
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const pendingSearchLogRef = useRef<string | null>(null);
+  const lastLoggedSearchRef = useRef<{ key: string; loggedAt: number } | null>(null);
   const skipInitialFetchRef = useRef(true);
   const skipInitialUrlSyncRef = useRef(true);
   const initialSearchLoggedRef = useRef(false);
@@ -245,7 +246,7 @@ function PosterListPageContent({
       setSemanticSearchActive(semanticSearchUsed);
       setDisplayCount(PAGE_SIZE);
 
-      if (normalizedQuery && pendingSearchLogRef.current === normalizedQuery) {
+      if (normalizedQuery.length >= 2 && shouldRecordSearchLog(normalizedQuery, lastLoggedSearchRef)) {
         pendingSearchLogRef.current = null;
         void recordSearchLog(normalizedQuery, sortedData.length);
       }
@@ -270,9 +271,11 @@ function PosterListPageContent({
 
   useEffect(() => {
     const normalizedInitialQuery = initialQuery.trim();
-    if (initialSearchLoggedRef.current || !normalizedInitialQuery) return;
+    if (initialSearchLoggedRef.current || normalizedInitialQuery.length < 2) return;
     initialSearchLoggedRef.current = true;
-    void recordSearchLog(normalizedInitialQuery, resultTotalCount);
+    if (shouldRecordSearchLog(normalizedInitialQuery, lastLoggedSearchRef)) {
+      void recordSearchLog(normalizedInitialQuery, resultTotalCount);
+    }
   }, [initialQuery, resultTotalCount]);
 
   useEffect(() => {
@@ -585,10 +588,26 @@ function PosterListPageContent({
   );
 }
 
+function shouldRecordSearchLog(
+  query: string,
+  ref: MutableRefObject<{ key: string; loggedAt: number } | null>,
+) {
+  const key = query.trim().replace(/\s+/g, " ").toLowerCase();
+  const now = Date.now();
+  const previous = ref.current;
+  if (previous?.key === key && now - previous.loggedAt < 60_000) return false;
+  ref.current = { key, loggedAt: now };
+  return true;
+}
+
 async function recordSearchLog(query: string, resultCount: number) {
+  const { data: { session } } = await supabase.auth.getSession();
   await fetch("/api/search-logs", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+    },
     body: JSON.stringify({ query, result_count: resultCount }),
   }).catch(() => null);
 }

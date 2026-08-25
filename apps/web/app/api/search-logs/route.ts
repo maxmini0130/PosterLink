@@ -9,6 +9,27 @@ function createSupabaseAdmin() {
   );
 }
 
+async function getRequestUserIdAndRole(supabaseAdmin: ReturnType<typeof createSupabaseAdmin>, request: Request) {
+  const authorization = request.headers.get("authorization") ?? "";
+  const token = authorization.match(/^Bearer\s+(.+)$/i)?.[1] ?? "";
+  if (!token) return { userId: null, role: null };
+
+  const { data: userData } = await supabaseAdmin.auth.getUser(token);
+  const userId = userData.user?.id ?? null;
+  if (!userId) return { userId: null, role: null };
+
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .maybeSingle();
+
+  return {
+    userId,
+    role: typeof profile?.role === "string" ? profile.role : null,
+  };
+}
+
 export async function POST(request: Request) {
   let payload: {
     query?: string;
@@ -31,8 +52,13 @@ export async function POST(request: Request) {
     : 0;
 
   const supabaseAdmin = createSupabaseAdmin();
+  const actor = await getRequestUserIdAndRole(supabaseAdmin, request);
+  if (["admin", "super_admin", "operator"].includes(actor.role ?? "")) {
+    return NextResponse.json({ success: true, skipped: "internal_actor" });
+  }
+
   const { error } = await supabaseAdmin.from("search_logs").insert({
-    user_id: null,
+    user_id: actor.userId,
     query,
     result_count: resultCount,
   });
