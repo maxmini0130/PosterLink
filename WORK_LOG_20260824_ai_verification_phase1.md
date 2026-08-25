@@ -1386,3 +1386,50 @@ fields and recomputed their exposure tier.
 - Recommended next action:
   - Apply auto-publish for the 3 corrected tier A review rows after separate
     operating DB approval.
+
+## Manual Correction Tier A Publish Apply
+
+Applied the 3 manually corrected tier A review posters to the operating DB
+after separate user approval. This changed only eligible tier A review rows to
+`published` and wrote the auto-publish audit rows.
+
+- Approval text:
+  `수동 교정 후 tier A 자동 공개 후보 3건 운영 DB 적용 승인합니다.`
+- Apply command:
+  `EXPOSURE_AUTO_PUBLISH=true pnpm tier:auto-publish -- --output=data/eval/reports/auto-publish-plan-manual-corrections-apply-20260825.json --apply`
+  - Checked review posters: 8.
+  - Eligible tier A: 3.
+  - Blocked tier C: 5.
+  - Applied: 3.
+  - Failed: 0.
+  - Audit failed: 0.
+- Follow-up dry-run:
+  `pnpm tier:auto-publish -- --output=data/eval/reports/auto-publish-plan-after-manual-correction-publish-20260825.json`
+  - Checked review posters: 5.
+  - Eligible tier A: 0.
+  - Blocked tier C: 5.
+- Enforced healthcheck:
+  `pnpm ai:healthcheck -- --enforce --output=data/results/ai-healthcheck-after-manual-correction-publish-20260825.json`
+  - Review queue count: 5.
+  - Field correction candidates: 0.
+  - Public image non-poster count: 0.
+  - Public non-poster reject candidates: 0.
+  - Quality gate: pass.
+- Direct operating DB count check:
+  - Published: 554.
+  - Published A/B/C: 208 / 3 / 343.
+  - Review: 5.
+  - Review A/B/C: 0 / 0 / 5.
+- Remaining review queue:
+  - `서울청년센터서초 <청년 리커넥트 프로젝트 - 커리어 포커스 워크숍 4기> 참여자 모집`
+    - Blocked by duplicate suspicion against a pending notice candidate for a
+      different program in the same project family.
+  - `강동구 청년해냄센터 <전문분야 창업 멘토링(9월)> 참여자 모집`
+    - Needs deadline correction/evidence; body indicates 2026-09-08.
+  - `은평여성인력개발센터 경력단절예방사업 <커리어 레벨업> 참여자 모집`
+    - Needs manual deadline confirmation.
+  - `서울청년센터 강서 <강서로컬픽> 6기 참여자 모집`
+    - Needs deadline_date evidence backfill; stored deadline appears to match
+      2026-09-06.
+  - `[QA 테스트] 검수 플로우 확인 공고`
+    - QA row remains unpublished in review.
