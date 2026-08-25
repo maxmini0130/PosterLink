@@ -1311,3 +1311,36 @@ approval. This changed eligible review posters to published and wrote
   - Review A/C: 0 / 8.
   - Public active count: 110.
   - Public all count: 208.
+
+## Remaining Review C Triage
+
+Triaged the remaining review queue after tier A auto-publish. No operating DB
+writes were performed.
+
+- Current review rows: 8.
+  - Review A: 0.
+  - Review C: 8.
+- The remaining rows are not safe automatic publish candidates.
+  - 1 row is duplicate-suspected.
+  - 1 row is the `[QA 테스트] 검수 플로우 확인 공고`.
+  - Several rows have deadline/date mismatch or missing grounded deadline
+    evidence.
+  - One row lacks a high-confidence official URL.
+- Evidence backfill dry-run:
+  `pnpm --filter posterlink-crawler evidence:backfill -- --limit=20 "--statuses=review" --output=data/results/review-c-evidence-backfill-dryrun-20260825.json`
+  - Checked: 8.
+  - Evidence rows generated: 85.
+  - Applied: 0.
+- Local tier simulation after adding those dry-run evidence rows showed all 8
+  would still remain tier C. Applying the evidence bundle alone is therefore
+  not enough to auto-publish them.
+- Field correction dry-run:
+  `pnpm --filter posterlink-crawler verify:apply-corrections -- --limit=1000 "--statuses=review" --output=data/results/review-c-field-corrections-dryrun-20260825.json`
+  - Scanned: 8.
+  - Correction candidates: 0.
+  - Suppressed organization suggestions: 1.
+- Recommended next action:
+  - Manually review these 8 rows in the admin queue.
+  - Delete the QA test row when no longer needed.
+  - For real opportunities, confirm deadline/source URL in the original page
+    before approval.
