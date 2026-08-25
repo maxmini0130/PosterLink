@@ -1,0 +1,16 @@
+{
+  "poster_id": "cee9981d-4a27-44d8-b105-d69d0da1b352",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-09-03",
+    "deadline_type": "fixed",
+    "host_org": "도봉구 청년창업센터",
+    "official_url": "https://dobongstartup.com/bbs/board.php?bo_table=donotic&wr_id=155"
+  },
+  "source_review_batch": "data/eval/review-batches-20260825/batch-05.json",
+  "context_title": "도봉구 청년창업센터 <2026 도봉 청년창업 아이디어 경진대회> 참여자 모집",
+  "context_source_url": "https://dobongstartup.com/bbs/board.php?bo_table=donotic&wr_id=155"
+}

@@ -1,0 +1,17 @@
+{
+  "poster_id": "561d3ba4-7d46-46f4-a518-da4798a42289",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": false,
+    "content_type": "news",
+    "deadline_date": null,
+    "deadline_type": null,
+    "host_org": "마포구노동자종합지원센터",
+    "official_url": "https://mapolabor.org/community/news/post?seq=374"
+  },
+  "notes": "Organization school news post, not a public recruitment poster.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-05.json",
+  "context_title": "2026 일하는 사람들의 건강돌봄학교(일건강학교) 소식",
+  "context_source_url": "https://mapolabor.org/community/news/post?seq=374"
+}

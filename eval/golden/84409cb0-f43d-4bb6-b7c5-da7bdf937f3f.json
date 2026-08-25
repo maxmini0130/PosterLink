@@ -1,0 +1,17 @@
+{
+  "poster_id": "84409cb0-f43d-4bb6-b7c5-da7bdf937f3f",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": false,
+    "content_type": "news",
+    "deadline_date": null,
+    "deadline_type": null,
+    "host_org": "서울특별시",
+    "official_url": "https://news.seoul.go.kr/economy/archives/573913"
+  },
+  "notes": "서울 주얼리 브랜드 팝업 소개 기사; recruitment deadline not applicable.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-05.json",
+  "context_title": "서울 주얼리 브랜드 14개사, 더현대 서울에 모인다 - 「갓서울(GOAT SEOUL), 서울 주얼리 공방」",
+  "context_source_url": "https://news.seoul.go.kr/economy/archives/573913"
+}

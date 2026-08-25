@@ -1,0 +1,17 @@
+{
+  "poster_id": "689b87ff-ad15-42eb-b286-63400fcc6fb5",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": false,
+    "content_type": "news",
+    "deadline_date": null,
+    "deadline_type": null,
+    "host_org": "서울특별시",
+    "official_url": "https://news.seoul.go.kr/economy/archives/573918"
+  },
+  "notes": "Discount campaign article, not a recruitment/application poster.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-05.json",
+  "context_title": "서울배달+ 땡겨요 8월 한달 간 한강 배달존 특별한 할인 혜택!",
+  "context_source_url": "https://news.seoul.go.kr/economy/archives/573918"
+}

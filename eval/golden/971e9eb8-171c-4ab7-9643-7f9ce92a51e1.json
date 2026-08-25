@@ -1,0 +1,17 @@
+{
+  "poster_id": "971e9eb8-171c-4ab7-9643-7f9ce92a51e1",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": null,
+    "deadline_type": "until_exhausted",
+    "host_org": "서울청년센터 관악",
+    "official_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=72789"
+  },
+  "notes": "Source only gives application form and early-close language; event date 2026-09-12 is not an application deadline.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-05.json",
+  "context_title": "서울청년센터 관악 신림동쓰리룸 2026 청년연합체육대회 <2026 Youth Championship in 광명> 참여자 모집",
+  "context_source_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=72789"
+}

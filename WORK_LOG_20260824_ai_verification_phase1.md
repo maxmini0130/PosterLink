@@ -1841,3 +1841,49 @@ DB writes were performed.
   - `pnpm eval:thresholds -- --input=data/eval/reports/extraction-batch01-04-current-20260825.json --out=data/eval/reports/extraction-thresholds-batch01-04-20260825.json --module-out=data/eval/reports/extraction-thresholds-batch01-04-20260825.js`
   - Threshold plan remains `production_ready: false` because labels are 80/120
     and one or more fields still lack a qualifying recommendation.
+
+## Phase 2 Golden Labels Batch 05
+
+Imported the fifth Phase 2 golden-label batch into `eval/golden`. No operating
+DB writes were performed.
+
+- Source batch:
+  `data/eval/review-batches-20260825/batch-05.json`
+- Imported labels:
+  - 20 posters.
+  - 120 truth fields.
+  - Fields labeled for each poster:
+    `is_real_poster`, `content_type`, `deadline_date`, `deadline_type`,
+    `host_org`, `official_url`.
+- Manual corrections captured in the labels:
+  - Rejected Seoul/news rows:
+    article, campaign, public-health guidance, public voting, and organizational
+    news posts were labeled `is_real_poster: false` with `content_type` split
+    into `news` or `admin` instead of blindly preserving `discard`.
+  - 용산구청 one-pan cooking row:
+    `deadline_date` corrected from post date `2026-08-10` to 접수일정 end
+    `2026-08-17`; `official_url` corrected to the source row.
+  - 용산구청 house-repair row:
+    `deadline_date` corrected from post date `2026-08-13` to 접수일정 end
+    `2026-08-30`.
+  - 동작청년센터 row:
+    `deadline_date` normalized from the recruitment range to end date
+    `2026-08-24`.
+  - 서울청년센터 관악 sports-day row:
+    event date `2026-09-12` was not treated as application deadline; because
+    the source only states early-close language, `deadline_date: null`,
+    `deadline_type: until_exhausted`.
+- Validation:
+  - `pnpm eval:validate -- --set=eval/golden --require-labels`
+  - Passed with 100 files, 100 items, 600 truth fields.
+- Progress:
+  - `pnpm eval:status`
+  - 100/120 labeled, 20 remaining.
+- Evaluation snapshot:
+  - `pnpm eval:extraction -- --set=eval/golden --extractor=current --out=data/eval/reports/extraction-batch01-05-current-20260825.json`
+  - Labeled posters: 100.
+  - Evidence rows: 1097.
+  - Macro accuracy: 0.8249999999999998.
+  - `pnpm eval:thresholds -- --input=data/eval/reports/extraction-batch01-05-current-20260825.json --out=data/eval/reports/extraction-thresholds-batch01-05-20260825.json --module-out=data/eval/reports/extraction-thresholds-batch01-05-20260825.js`
+  - Threshold plan remains `production_ready: false` because labels are 100/120
+    and one or more fields still lack a qualifying recommendation.

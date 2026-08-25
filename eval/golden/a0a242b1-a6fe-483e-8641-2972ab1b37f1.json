@@ -1,0 +1,17 @@
+{
+  "poster_id": "a0a242b1-a6fe-483e-8641-2972ab1b37f1",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": false,
+    "content_type": "admin",
+    "deadline_date": null,
+    "deadline_type": null,
+    "host_org": "서울특별시",
+    "official_url": "https://news.seoul.go.kr/welfare/archives/582238"
+  },
+  "notes": "Public health prevention guidance, not a recruitment poster.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-05.json",
+  "context_title": "수인성·식품매개감염병 6대 예방수칙",
+  "context_source_url": "https://news.seoul.go.kr/welfare/archives/582238"
+}

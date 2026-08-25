@@ -1,0 +1,17 @@
+{
+  "poster_id": "e5ff2e3e-f261-4567-af2e-443a46e224df",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": false,
+    "content_type": "admin",
+    "deadline_date": null,
+    "deadline_type": null,
+    "host_org": "시립동대문청소년센터",
+    "official_url": "http://www.dhyouth.or.kr/bbs/board.php?bo_table=notice&wr_id=8974"
+  },
+  "notes": "General online registration guide, not a single recruitable poster.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-05.json",
+  "context_title": "교육문화사업 온라인접수 안내",
+  "context_source_url": "http://www.dhyouth.or.kr/bbs/board.php?bo_table=notice&wr_id=8974"
+}

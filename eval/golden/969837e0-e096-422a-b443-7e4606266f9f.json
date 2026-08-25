@@ -1,0 +1,17 @@
+{
+  "poster_id": "969837e0-e096-422a-b443-7e4606266f9f",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-08-30",
+    "deadline_type": "fixed",
+    "host_org": "용산구청",
+    "official_url": "https://www.yongsan.go.kr/portal/bbs/B0000042/view.do?nttId=767139&menuNo=200229&pageUnit=10&pageIndex=1"
+  },
+  "notes": "deadline_date corrected from post date to 접수일정 end.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-05.json",
+  "context_title": "용산구청 <[나의 완벽한 청년생활] '집안수리의 달인' 프로그램 참여자 모집>",
+  "context_source_url": "https://www.yongsan.go.kr/portal/bbs/B0000042/view.do?menuNo=200229&nttId=767139&pageUnit=10"
+}

@@ -1,0 +1,17 @@
+{
+  "poster_id": "27349f10-4e89-4a45-bced-84a5ed41500c",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": false,
+    "content_type": "news",
+    "deadline_date": null,
+    "deadline_type": null,
+    "host_org": "서울특별시",
+    "official_url": "https://news.seoul.go.kr/gov/archives/579879"
+  },
+  "notes": "Public voting notice; participation period exists but not a PosterLink recruitment poster.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-05.json",
+  "context_title": "2027년 시민참여예산 온라인 시민투표",
+  "context_source_url": "https://news.seoul.go.kr/gov/archives/579879"
+}

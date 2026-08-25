@@ -1,0 +1,17 @@
+{
+  "poster_id": "ce7056b2-7e67-4466-8e6c-ba714dfd52ca",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": false,
+    "content_type": "news",
+    "deadline_date": null,
+    "deadline_type": null,
+    "host_org": "전국환경시설노동조합 마포지부",
+    "official_url": "https://mapolabor.org/community/news/post?seq=367"
+  },
+  "notes": "Organization news post, not a public recruitment poster.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-05.json",
+  "context_title": "전국환경시설노동조합 마포지부 조합원교육 \"심장이 먼저 뛰는 노동이야기\"",
+  "context_source_url": "https://mapolabor.org/community/news/post?seq=367"
+}

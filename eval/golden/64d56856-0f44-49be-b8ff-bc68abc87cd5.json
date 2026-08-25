@@ -1,0 +1,17 @@
+{
+  "poster_id": "64d56856-0f44-49be-b8ff-bc68abc87cd5",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": true,
+    "content_type": "recruit",
+    "deadline_date": "2026-08-24",
+    "deadline_type": "fixed",
+    "host_org": "동작청년센터",
+    "official_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73148"
+  },
+  "notes": "deadline_date normalized from recruitment range end.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-05.json",
+  "context_title": "동작청년센터 <2026 동작구 청년 사회회복 및 취업역량 강화 프로그램> 안내",
+  "context_source_url": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=73148"
+}

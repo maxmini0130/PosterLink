@@ -1,0 +1,17 @@
+{
+  "poster_id": "7af44f71-46a5-452e-853c-2aafa43e9366",
+  "labeled_by": "codex_assisted",
+  "labeled_at": "2026-08-25",
+  "truth": {
+    "is_real_poster": false,
+    "content_type": "admin",
+    "deadline_date": null,
+    "deadline_type": null,
+    "host_org": "서울특별시 강서구청",
+    "official_url": "https://www.seoul.go.kr/news/news_notice.do?bbsNo=277&nttNo=463292"
+  },
+  "notes": "Administrative public notice.",
+  "source_review_batch": "data/eval/review-batches-20260825/batch-05.json",
+  "context_title": "무연고 사망자 공고",
+  "context_source_url": "https://www.seoul.go.kr/news/news_notice.do?bbsNo=277&nttNo=463292"
+}
