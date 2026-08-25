@@ -65,3 +65,36 @@ Prepared but did not apply:
   - C: 372 -> 363
   - calendar/deadlineAlert gate: 115 -> 126
   - `critical_low_confidence_deadline_date`: 115 -> 105
+
+## Grounded Period Safe 13 Evidence Apply
+
+Applied after explicit user approval:
+
+- Approved phrase:
+  `grounded-period deadline evidence safe 13 rows operating DB apply approved.`
+- Original approval:
+  `grounded-period deadline evidence safe 13건 운영 DB 적용 승인합니다.`
+- Source dry-run:
+  `data/results/grounded-period-deadline-evidence-safe-13-dryrun.json`
+- Applied rows: 13
+  - `deadline_date`: 12
+  - `deadline_type`: 1
+- Minimum confidence: 0.90
+
+Post-apply DB verification confirmed all 13 selected rows.
+
+Post-apply tier dry-run:
+
+- Checked rows: 546
+- A: 176
+- B: 3
+- C: 367
+- calendar/deadlineAlert gate: 126
+- `critical_missing_deadline_type`: 267
+- `critical_missing_deadline_date`: 224
+- `critical_low_confidence_deadline_date`: 105
+
+Note: between the dry-run and post-apply tier check, four new `review` rows
+entered the tier scope. They are outside this approved 13-row deadline evidence
+apply and reintroduced missing `is_real_poster`, `host_org`, and `official_url`
+blockers for those new rows.

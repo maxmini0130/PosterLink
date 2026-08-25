@@ -44,3 +44,25 @@ Verification:
   - `deadline_date`: 12
   - `deadline_type`: 1
   - Not applied to the operating DB.
+
+## Grounded Period Safe 13 Evidence Apply
+
+Applied after explicit user approval:
+
+- Approved phrase:
+  `grounded-period deadline evidence safe 13 rows operating DB apply approved.`
+- Original approval:
+  `grounded-period deadline evidence safe 13건 운영 DB 적용 승인합니다.`
+- Applied deadline type rows: 1
+- Extractor: `deadline-type-from-date-evidence-v1`
+- Value: `fixed`
+- Confidence: 0.90
+
+Post-apply tier dry-run:
+
+- Checked rows: 546
+- `critical_missing_deadline_type`: 267
+- calendar/deadlineAlert gate: 126
+
+The post-apply scope included four additional review rows that were not present
+in the earlier safe-13 dry-run baseline.
