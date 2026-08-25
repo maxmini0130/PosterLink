@@ -802,6 +802,34 @@ Validation:
 - `git diff --check`
   - Passed, with existing Windows CRLF normalization warnings only.
 
+## AI Usage Read-Only Report Command
+
+Added a read-only Phase 6 usage report command. No operating DB writes were
+performed.
+
+- Added `scripts/crawler/src/measure-ai-usage.js`.
+  - Reads `ai_usage_daily_overview` and recent `ai_usage_log` rows.
+  - Summarizes calls, tokens, image count, and internal cost units.
+  - Groups usage by stage, operation, model, and status.
+  - Reports whether recent rows are linked to `posters.id`, candidate/sighting
+    metadata, or no object.
+- Added root package command:
+  `pnpm --filter posterlink-crawler ai:usage -- --days=14 --output=data/eval/reports/ai-usage-report.json`
+- Added `scripts/crawler/src/measure-ai-usage.test.js`.
+- Updated `docs/ai_model_routing.md` with the command and current usage writers.
+
+Validation:
+
+- `pnpm --filter posterlink-crawler test`
+  - Passed: 215 tests.
+- `pnpm --filter posterlink-crawler ai:usage -- --days=14 --output=data/eval/reports/ai-usage-current-20260825.json`
+  - Read-only.
+  - Current operating log rows in the 14-day report: 0.
+  - This is expected until the newly connected jobs run, or until `process-ocr`
+    is deployed.
+- `git diff --check`
+  - Passed, with existing Windows CRLF normalization warnings only.
+
 ## Crawler VLM Usage Event Handoff
 
 Extended AI usage tracking across the crawl-result JSON boundary. No operating
