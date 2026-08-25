@@ -461,3 +461,32 @@ Validation:
 
 - `pnpm --filter posterlink-crawler tier:compute -- --output=data/eval/reports/exposure-tier-current-20260825.json`
 - `pnpm --filter posterlink-crawler eval:sample -- --limit=120 --output=data/eval/extraction-golden-seed-20260825.json`
+
+## Phase 2 Review Batch Tool
+
+Added a reviewer batching utility so the 120-poster Phase 2 seed can be reviewed
+in manageable chunks.
+
+- File: `scripts/crawler/src/prepare-extraction-review-batches.js`
+- New package script:
+  `pnpm --filter posterlink-crawler eval:review-batches`
+- New root script:
+  `pnpm eval:review-batches`
+- The tool reads an extraction golden seed and writes:
+  - `batch-XX.json` files with 20 posters each by default
+  - `index.csv` for tracking source URLs and review progress
+  - `summary.json` with batch counts
+- File: `docs/ai_extraction_evaluation.md`
+- Documented the seed -> review batches -> `eval/golden` -> evaluation flow.
+
+Generated local review working files:
+
+- `data/eval/review-batches-20260825/batch-01.json` through `batch-06.json`
+- `data/eval/review-batches-20260825/index.csv`
+- `data/eval/review-batches-20260825/summary.json`
+
+Validation:
+
+- `pnpm --filter posterlink-crawler eval:review-batches -- --input=data/eval/extraction-golden-seed-20260825.json --output-dir=data/eval/review-batches-20260825 --batch-size=20`
+- `pnpm eval:review-batches -- --help`
+- `pnpm --filter posterlink-crawler test`

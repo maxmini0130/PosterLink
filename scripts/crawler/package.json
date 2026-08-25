@@ -23,6 +23,7 @@
     "baseline:sample": "node src/create-baseline-goldenset.js",
     "baseline:score": "node src/score-baseline-goldenset.js",
     "eval:sample": "node src/create-extraction-golden-seed.js",
+    "eval:review-batches": "node src/prepare-extraction-review-batches.js",
     "eval:extraction": "node src/eval-extraction.js",
     "review:audit-notes": "node src/audit-human-review-notes.js",
     "review:apply-corrections": "node src/apply-human-review-corrections.js",
