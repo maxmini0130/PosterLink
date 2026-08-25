@@ -857,3 +857,43 @@ Post-apply tier dry-run:
 - `critical_low_confidence_is_real_poster`: 4
 - `critical_missing_deadline_type`: 265
 - calendar/deadlineAlert gate: 115
+
+## Low-confidence is_real_poster human evidence apply
+
+Applied after explicit user approval:
+
+- Approved phrase:
+  `low-confidence is_real_poster manual review evidence 4 rows operating DB apply approved.`
+- Original approval:
+  `low-confidence is_real_poster 수동 검수 evidence 4건 운영 DB 적용 승인합니다.`
+- Applied rows: 4
+- Field: `is_real_poster`
+- Extractor: `human`
+- Evidence source: `operator`
+- Value: `true` x 1, `false` x 3
+- Confidence: 1.00
+
+Manual decisions:
+
+- `d4f6e475-b58f-4c8d-8d34-752cafeefa67`: `false`
+  - photo of printed card-news/display materials, not a representative poster image
+- `ed336e11-9151-4425-85e0-f4b191d92d3d`: `false`
+  - facility interior photo with guide signage/activity materials, not a standalone poster
+- `dd85392e-26cb-45af-8fd6-29c8bedf73fe`: `false`
+  - decorative thumbnail/social graphic without announcement details
+- `ffbd538b-9911-4a96-a10c-9518cabf9b14`: `true`
+  - festival key visual/poster graphic
+
+Post-apply DB verification confirmed 4 `human` evidence rows.
+
+Post-apply tier dry-run:
+
+- Checked rows: 542
+- A: 167
+- B: 3
+- C: 372
+- `critical_missing_is_real_poster`: 0
+- `critical_low_confidence_is_real_poster`: 0
+- `critical_missing_deadline_type`: 265
+- `critical_low_confidence_host_org`: 88
+- calendar/deadlineAlert gate: 115
