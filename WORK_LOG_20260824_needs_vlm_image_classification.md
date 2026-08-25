@@ -783,3 +783,43 @@ Batch15 evidence candidate check:
 
 No batch15 `is_real_poster` evidence rows were applied in this step. That
 conversion requires a separate operating DB approval.
+
+## Batch 15 is_real_poster evidence apply
+
+Applied after explicit user approval:
+
+- Approved phrase:
+  `VLM batch15 12 rows result to is_real_poster evidence operating DB apply approved.`
+- Original approval:
+  `VLM batch15 12건 결과를 is_real_poster evidence로 운영 DB 적용 승인합니다.`
+- Applied rows: 12
+- Field: `is_real_poster`
+- Extractor: `poster-detection-signals-v1`
+- Value: `true` x 12
+- Confidence range: 0.92 to 0.98
+
+Post-apply DB verification confirmed 12 rows for the batch15 poster ids.
+
+Post-apply tier dry-run:
+
+- Checked rows: 542
+- A: 167
+- B: 3
+- C: 372
+- `critical_missing_is_real_poster`: 4
+- `critical_missing_deadline_type`: 265
+- `critical_low_confidence_is_real_poster`: 4
+- calendar/deadlineAlert gate: 115
+
+Post-apply poster-detection dry-run:
+
+- Checked rows: 542
+- Evidence rows: 542
+- `is_real_poster=true`: 530
+- `is_real_poster=false`: 12
+- Ambiguous: 0
+- `needs_vlm`: 0
+
+Note: after the batch15 apply, four additional review rows were included in the
+tier scope. They are outside the approved batch15 12-row evidence apply, so their
+`is_real_poster` evidence was not applied in this step.
