@@ -726,3 +726,25 @@ Validation:
   - Dry-run only.
   - Candidate count: 0.
   - Applied rows: 0.
+
+## Text Verification Usage Logging
+
+Extended AI usage logging to the text field verification backfill path. No
+operating DB writes were performed.
+
+- Updated `scripts/crawler/src/poster-field-verifier.js`.
+  - Fresh OpenAI `/v1/responses` calls now attach non-enumerable usage metadata
+    to the returned verification object.
+  - The metadata is intentionally non-enumerable so it is not persisted inside
+    `posters.field_verification`.
+- Updated `scripts/crawler/src/backfill-field-verification.js`.
+  - When `--apply` performs a fresh field verification call, the batch records a
+    `high_text` usage row in `ai_usage_log`.
+  - Cached verifier results do not create duplicate usage rows.
+- Updated `scripts/crawler/src/ai-usage-logger.js`.
+  - Added high-text field verification usage row builder.
+
+Validation:
+
+- `pnpm --filter posterlink-crawler test`
+  - Passed: 211 tests.

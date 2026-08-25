@@ -111,6 +111,15 @@ function normalizeResult(result) {
   };
 }
 
+function attachAiUsage(result, usage) {
+  Object.defineProperty(result, "__aiUsage", {
+    value: usage,
+    enumerable: false,
+    configurable: true,
+  });
+  return result;
+}
+
 function buildFieldContext(context = {}) {
   return [
     `Title: ${context.title ?? ""}`,
@@ -240,7 +249,13 @@ export async function verifyPosterFields(context = {}) {
     const outputText = payload.output_text
       ?? payload.output?.flatMap((item) => item.content ?? []).map((part) => part.text ?? "").join("\n")
       ?? "";
-    const result = normalizeResult(parseJson(outputText));
+    const result = attachAiUsage(normalizeResult(parseJson(outputText)), {
+      model: MODEL,
+      inputTokens: payload.usage?.input_tokens ?? payload.usage?.prompt_tokens ?? null,
+      outputTokens: payload.usage?.output_tokens ?? payload.usage?.completion_tokens ?? null,
+      operation: "field_verification",
+      status: "success",
+    });
     cache[key] = result;
     await saveCache(cache);
     return result;

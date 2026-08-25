@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   buildImageClassificationUsageRow,
+  buildTextVerificationUsageRow,
   logAiUsage,
 } from "./ai-usage-logger.js";
 
@@ -32,6 +33,22 @@ test("logAiUsage skips when disabled", async () => {
     if (previous === undefined) delete process.env.POSTER_AI_USAGE_LOG;
     else process.env.POSTER_AI_USAGE_LOG = previous;
   }
+});
+
+test("buildTextVerificationUsageRow creates high-text usage rows", () => {
+  const row = buildTextVerificationUsageRow({
+    posterId: "poster-1",
+    model: "gpt-5",
+    inputTokens: 1200,
+    outputTokens: 300,
+    metadata: { decision: "checked" },
+  });
+
+  assert.equal(row.job_name, "field-verification-backfill");
+  assert.equal(row.stage_label, "high_text");
+  assert.equal(row.operation, "field_verification");
+  assert.equal(row.poster_id, "poster-1");
+  assert.equal(row.estimated_unit_cost, 20);
 });
 
 test("logAiUsage inserts rows when enabled", async () => {

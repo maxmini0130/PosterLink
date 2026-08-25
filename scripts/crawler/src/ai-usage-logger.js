@@ -31,3 +31,28 @@ export function buildImageClassificationUsageRow({ posterId, model, status = "su
     metadata,
   });
 }
+
+export function buildTextVerificationUsageRow({
+  posterId,
+  model,
+  operation = "field_verification",
+  fieldKey = null,
+  status = "success",
+  inputTokens = null,
+  outputTokens = null,
+  metadata = {},
+} = {}) {
+  return buildAiUsageLogRow({
+    jobName: "field-verification-backfill",
+    stageLabel: "high_text",
+    model,
+    operation,
+    posterId,
+    fieldKey,
+    status,
+    inputTokens,
+    outputTokens,
+    imageCount: 0,
+    metadata,
+  });
+}

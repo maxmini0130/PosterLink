@@ -4,6 +4,7 @@ import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
+import { buildTextVerificationUsageRow, logAiUsage } from "./ai-usage-logger.js";
 import { verifyPosterFields } from "./poster-field-verifier.js";
 
 const DEFAULT_OUTPUT = "data/results/field-verification-backfill.json";
@@ -156,6 +157,22 @@ async function main() {
         entry.decision = verification.decision;
         entry.confidence = verification.confidence;
         entry.reason = verification.reason;
+        if (verification.__aiUsage) {
+          const usageResult = await logAiUsage(supabase, buildTextVerificationUsageRow({
+            posterId: row.id,
+            model: verification.__aiUsage.model,
+            operation: verification.__aiUsage.operation,
+            status: verification.__aiUsage.status,
+            inputTokens: verification.__aiUsage.inputTokens,
+            outputTokens: verification.__aiUsage.outputTokens,
+            metadata: {
+              decision: verification.decision,
+              confidence: verification.confidence,
+            },
+          }));
+          entry.ai_usage_log_status = usageResult.status;
+          if (usageResult.error) entry.ai_usage_log_error = usageResult.error;
+        }
       }
     } catch (error) {
       entry.status = "failed";
