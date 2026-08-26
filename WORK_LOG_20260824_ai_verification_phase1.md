@@ -2423,3 +2423,39 @@ DB.
   - `pnpm eval:thresholds -- --input=data/eval/reports/extraction-phase2-official-url-final-applied-20260826.json --out=data/eval/reports/extraction-thresholds-phase2-official-url-final-applied-20260826.json --module-out=data/eval/reports/extraction-thresholds-phase2-official-url-final-applied-20260826.js`
   - Production ready: false.
   - Blocking reason: `one_or_more_fields_missing_recommendation`.
+
+## Phase 2 Deadline Evaluation Semantics
+
+Improved the local Phase 2 extraction evaluator and prepared a deadline
+correction dry-run. No operating DB writes were performed.
+
+- Evaluator fixes:
+  - `deadline_date` range text now compares against the end date of the range.
+    This prevents values such as `2026-08-18 ~ 2026-08-27` from being scored
+    against the start date.
+  - `poster_field_evidence` rows with `confidence <= 0` are treated as
+    suppressed and ignored by the evaluator.
+  - A missing `deadline_type` prediction now matches a human label of
+    `unknown`, because the reviewed source did not confirm a deadline type.
+- Correction planner:
+  - Added `scripts/crawler/src/plan-golden-evidence-corrections.js`.
+  - Added package script `pnpm eval:plan-corrections`.
+  - Dry-run only by default; `--apply` requires explicit operating DB approval.
+  - For non-null/non-unknown truths, the plan upserts
+    `golden-correction-v1` operator evidence.
+  - For null or unknown truths, the plan suppresses conflicting evidence only
+    and does not create user-facing positive evidence.
+- Evaluation:
+  - `pnpm eval:extraction -- --set=eval/golden --extractor=current --out=data/eval/reports/extraction-phase2-deadline-eval-semantics-20260826.json`
+  - Macro accuracy: `0.873611111111111`.
+  - `deadline_date` accuracy: `0.7833333333333333`.
+  - `deadline_type` accuracy: `0.7416666666666667`.
+- Deadline correction dry-run:
+  - `pnpm eval:plan-corrections -- --input=data/eval/reports/extraction-phase2-deadline-eval-semantics-20260826.json --fields=deadline_date,deadline_type --output=data/results/golden-deadline-corrections-dryrun-20260826.json`
+  - Mismatches planned: 57.
+  - Correction upserts: 25.
+  - Evidence suppressions: 84.
+  - Suppression-only plans: 32.
+- Validation:
+  - `pnpm exec node --test src/extraction-eval.test.js`
+  - `pnpm --filter posterlink-crawler test`

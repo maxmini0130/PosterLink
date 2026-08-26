@@ -15,6 +15,20 @@ test("valuesMatch compares dates, numbers, URLs, and grounded text", () => {
   assert.equal(valuesMatch("benefit", "교육비 무료", "참여수당 50만원"), false);
 });
 
+test("valuesMatch compares deadline ranges by their end date", () => {
+  assert.equal(valuesMatch("deadline_date", "2026-08-18 ~ 2026-08-27", "2026-08-27"), true);
+  assert.equal(
+    valuesMatch("deadline_date", "2026. 8. 19.(wed) ~ 8. 23.(sun)", "2026-08-23"),
+    true,
+  );
+});
+
+test("valuesMatch treats missing deadline type as unknown when labeled unknown", () => {
+  assert.equal(valuesMatch("deadline_type", null, "unknown"), true);
+  assert.equal(valuesMatch("deadline_type", "", "unknown"), true);
+  assert.equal(valuesMatch("deadline_type", "fixed", "unknown"), false);
+});
+
 test("valuesMatch ignores non-identifying URL query params", () => {
   assert.equal(
     valuesMatch(
@@ -52,6 +66,14 @@ test("bestEvidenceByField keeps the highest confidence evidence per field", () =
   ]);
 
   assert.equal(best.get("deadline_date").value_text, "2026-08-31");
+});
+
+test("bestEvidenceByField ignores suppressed zero-confidence evidence", () => {
+  const best = bestEvidenceByField([
+    { field_key: "deadline_date", confidence: 0, value_text: "2026-08-30" },
+  ]);
+
+  assert.equal(best.has("deadline_date"), false);
 });
 
 test("evaluateGoldenSet reports field accuracy, precision, coverage, and thresholds", () => {

@@ -34,10 +34,34 @@ function normalizeForMatch(value) {
 
 function normalizeDate(value) {
   const text = String(value ?? "").trim();
-  const match = text.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
-  if (!match) return null;
-  const [, year, month, day] = match;
-  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  const dates = [];
+  const dateRe = /(?:(20\d{2}|\d{2})\D{0,5})?(\d{1,2})\D{1,5}(\d{1,2})(?=\D|$)/g;
+  let lastYear = null;
+  let match;
+
+  while ((match = dateRe.exec(text)) !== null) {
+    const year = match[1] ? Number(match[1]) : lastYear;
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if (!year || month < 1 || month > 12 || day < 1 || day > 31) continue;
+
+    const fullYear = year < 100 ? 2000 + year : year;
+    const date = new Date(Date.UTC(fullYear, month - 1, day));
+    if (
+      date.getUTCFullYear() !== fullYear ||
+      date.getUTCMonth() !== month - 1 ||
+      date.getUTCDate() !== day
+    ) {
+      continue;
+    }
+
+    if (match[1]) lastYear = fullYear;
+    dates.push(
+      `${String(fullYear).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+    );
+  }
+
+  return dates.at(-1) ?? null;
 }
 
 function normalizeNumber(value) {
@@ -131,6 +155,10 @@ export function valuesMatch(fieldKey, predicted, truth) {
     return normalizeNumber(predicted) === normalizeNumber(truth);
   }
 
+  if (fieldKey === "deadline_type" && String(truth ?? "").trim() === "unknown") {
+    return predicted === null || predicted === undefined || predicted === "" || String(predicted).trim() === "unknown";
+  }
+
   if (["official_url", "apply_url"].includes(fieldKey)) {
     return canonicalUrlForMatch(predicted) === canonicalUrlForMatch(truth);
   }
@@ -154,6 +182,7 @@ export function bestEvidenceByField(rows = []) {
   for (const row of rows) {
     const fieldKey = row?.field_key;
     if (!fieldKey) continue;
+    if (Number(row.confidence ?? 0) <= 0) continue;
     const existing = byField.get(fieldKey);
     if (!existing || Number(row.confidence ?? 0) > Number(existing.confidence ?? 0)) {
       byField.set(fieldKey, row);
