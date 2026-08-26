@@ -46,6 +46,65 @@ function normalizeNumber(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+const NON_IDENTIFYING_URL_PARAMS = new Set([
+  "CSRF_TOKEN",
+  "LISTOP",
+  "baCommSelec",
+  "baNotice",
+  "baOpenDay",
+  "baUse",
+  "cp",
+  "curPage",
+  "listType",
+  "miv_pageNo",
+  "miv_pageSize",
+  "p_atdrc_nm",
+  "p_ty",
+  "pageIndex",
+  "sortDirection",
+  "sortOrder",
+  "total_cnt",
+]);
+
+function safeUrl(value) {
+  const text = String(value ?? "").trim().replace(/%(?![0-9a-fA-F]{2})/g, "%25");
+  try {
+    return new URL(text);
+  } catch {
+    return null;
+  }
+}
+
+function canonicalUrlForMatch(value) {
+  const url = safeUrl(value);
+  if (!url) return String(value ?? "").trim().replace(/\/$/, "");
+
+  url.hash = "";
+  url.hostname = url.hostname.toLowerCase();
+  if (
+    (url.protocol === "https:" && url.port === "443") ||
+    (url.protocol === "http:" && url.port === "80")
+  ) {
+    url.port = "";
+  }
+
+  const params = [];
+  for (const [key, paramValue] of url.searchParams.entries()) {
+    if (NON_IDENTIFYING_URL_PARAMS.has(key)) continue;
+    params.push([key, paramValue]);
+  }
+  params.sort(([leftKey, leftValue], [rightKey, rightValue]) =>
+    leftKey === rightKey ? leftValue.localeCompare(rightValue) : leftKey.localeCompare(rightKey),
+  );
+
+  url.search = "";
+  for (const [key, paramValue] of params) {
+    url.searchParams.append(key, paramValue);
+  }
+
+  return url.href.replace(/\/$/, "");
+}
+
 function predictionValue(row) {
   const json = row?.value_json;
   if (json && typeof json === "object" && !Array.isArray(json)) {
@@ -73,7 +132,7 @@ export function valuesMatch(fieldKey, predicted, truth) {
   }
 
   if (["official_url", "apply_url"].includes(fieldKey)) {
-    return String(predicted ?? "").trim().replace(/\/$/, "") === String(truth ?? "").trim().replace(/\/$/, "");
+    return canonicalUrlForMatch(predicted) === canonicalUrlForMatch(truth);
   }
 
   if (["content_type", "deadline_type"].includes(fieldKey)) {

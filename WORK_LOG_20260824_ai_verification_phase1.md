@@ -2356,3 +2356,40 @@ Applied the approved `official_url` evidence-only bundle to the operating DB.
   - One manually reviewed `1in.seoul.go.kr` URL differs by equivalent query
     ordering/extra params and needs canonical URL comparison or a manual
     canonicalized evidence row.
+
+## Phase 2 URL Canonical Evaluation
+
+Improved URL comparison in the golden-set evaluator. No operating DB writes were
+performed for this change set.
+
+- Change:
+  - `official_url` / `apply_url` comparisons now canonicalize URLs before
+    matching.
+  - Non-identifying list, sort, paging, CSRF, and transient filter params are
+    ignored during evaluation.
+  - Identifier params such as `nttId`, `seq`, `bcId`, `partcptn_id`, and
+    `sprtInfoId` are preserved, so genuinely different source records still
+    fail.
+  - Invalid stray percent characters are handled leniently for comparison.
+- Validation:
+  - `pnpm exec node --test src/extraction-eval.test.js`
+  - Added regression cases for:
+    - Mapo culture URLs with extra list/sort query params.
+    - `1in.seoul.go.kr` URLs with equivalent query params in different order and
+      extra transient params.
+    - Yongsan URLs with different `nttId`, which must remain unequal.
+- Evaluation:
+  - `pnpm eval:extraction -- --set=eval/golden --extractor=current --out=data/eval/reports/extraction-phase2-url-canonical-eval-20260826.json`
+  - Macro accuracy: `0.8666666666666667`.
+  - `official_url` accuracy: `0.9833333333333333`.
+  - `official_url` recommended threshold: `0`, precision
+    `0.9833333333333333`, coverage `1`, predictions 120.
+- Threshold export:
+  - `pnpm eval:thresholds -- --input=data/eval/reports/extraction-phase2-url-canonical-eval-20260826.json --out=data/eval/reports/extraction-thresholds-phase2-url-canonical-eval-20260826.json --module-out=data/eval/reports/extraction-thresholds-phase2-url-canonical-eval-20260826.js`
+  - Production ready: false because other fields still lack threshold
+    recommendations.
+- Remaining `official_url` issues:
+  - QA/test stale `poster-link-v1` evidence remains in the operating DB and
+    requires a separate deletion/suppression approval.
+  - One Yongsan record points to the neighboring notice id (`766959` instead of
+    `766960`) and requires a source URL correction bundle.

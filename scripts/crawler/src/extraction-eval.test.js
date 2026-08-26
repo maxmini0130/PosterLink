@@ -15,6 +15,36 @@ test("valuesMatch compares dates, numbers, URLs, and grounded text", () => {
   assert.equal(valuesMatch("benefit", "교육비 무료", "참여수당 50만원"), false);
 });
 
+test("valuesMatch ignores non-identifying URL query params", () => {
+  assert.equal(
+    valuesMatch(
+      "official_url",
+      "https://culture.mapo.go.kr/site/yonggang/board/townnews/4882?cp=1&sortOrder=BA_REGDATE&sortDirection=DESC&listType=list&bcId=townnews&baNotice=false&baCommSelec=false&baOpenDay=false&baUse=true",
+      "https://culture.mapo.go.kr/site/yonggang/board/townnews/4882?bcId=townnews",
+    ),
+    true,
+  );
+  assert.equal(
+    valuesMatch(
+      "official_url",
+      "https://1in.seoul.go.kr/front/partcptn/partcptnView.do?CSRF_TOKEN=abc&miv_pageNo=1&miv_pageSize=10&total_cnt=&LISTOP=list&mode=W&partcptn_id=d7cc&p_ty=&p_atdrc=1150000000&p_atdrc_nm=&p_se=SC01&p_agrde=AG01&p_sexdstn=F%2CM&p_face=Y%",
+      "https://1in.seoul.go.kr/front/partcptn/partcptnView.do?CSRF_TOKEN=xyz&LISTOP=list&miv_pageNo=2&miv_pageSize=15&mode=W&p_agrde=AG01&p_atdrc=1150000000&p_face=Y%25&p_se=SC01&p_sexdstn=F%2CM&partcptn_id=d7cc",
+    ),
+    true,
+  );
+});
+
+test("valuesMatch keeps different source identifiers distinct", () => {
+  assert.equal(
+    valuesMatch(
+      "official_url",
+      "https://www.yongsan.go.kr/portal/bbs/B0000042/view.do?nttId=766959&menuNo=200229&pageUnit=10&pageIndex=1",
+      "https://www.yongsan.go.kr/portal/bbs/B0000042/view.do?menuNo=200229&nttId=766960&pageUnit=10",
+    ),
+    false,
+  );
+});
+
 test("bestEvidenceByField keeps the highest confidence evidence per field", () => {
   const best = bestEvidenceByField([
     { field_key: "deadline_date", confidence: 0.4, value_text: "2026-08-30" },
