@@ -2393,3 +2393,33 @@ performed for this change set.
     requires a separate deletion/suppression approval.
   - One Yongsan record points to the neighboring notice id (`766959` instead of
     `766960`) and requires a source URL correction bundle.
+
+## Phase 2 Official URL Final Corrections Applied
+
+Applied the approved final `official_url` correction bundle to the operating
+DB.
+
+- User approval:
+  - `승인합니다.`
+- Operating DB corrections:
+  - Deleted the stale QA/test `official_url` evidence row for
+    `[QA 테스트] 검수 플로우 확인 공고`.
+  - Demoted the wrong Yongsan neighboring notice link (`nttId=766959`) from
+    `official_notice` to `other` and cleared its primary flag.
+  - Ensured the Yongsan poster source key points to the correct notice
+    (`nttId=766960`).
+  - Upserted corrected `official_url` evidence for the Yongsan poster.
+- Apply result:
+  - Failed operations: 0.
+  - Apply log: `data/results/official-url-final-corrections-apply-20260826.json`.
+- Post-apply evaluation:
+  - `pnpm eval:extraction -- --set=eval/golden --extractor=current --out=data/eval/reports/extraction-phase2-official-url-final-applied-20260826.json`
+  - Golden files: 120.
+  - Evidence rows in eval: 1,556.
+  - Macro accuracy: `0.8694444444444445`.
+  - `official_url` accuracy: `1`.
+  - Remaining `official_url` mismatches: 0.
+- Threshold export:
+  - `pnpm eval:thresholds -- --input=data/eval/reports/extraction-phase2-official-url-final-applied-20260826.json --out=data/eval/reports/extraction-thresholds-phase2-official-url-final-applied-20260826.json --module-out=data/eval/reports/extraction-thresholds-phase2-official-url-final-applied-20260826.js`
+  - Production ready: false.
+  - Blocking reason: `one_or_more_fields_missing_recommendation`.
