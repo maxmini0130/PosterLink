@@ -2459,3 +2459,33 @@ correction dry-run. No operating DB writes were performed.
 - Validation:
   - `pnpm exec node --test src/extraction-eval.test.js`
   - `pnpm --filter posterlink-crawler test`
+
+## Phase 2 Golden Deadline Corrections Applied
+
+Applied the approved golden-set deadline correction bundle to the operating DB.
+
+- User approval:
+  - `golden deadline corrections 57건 운영 DB 적용 승인합니다.`
+- Apply command:
+  - `pnpm eval:plan-corrections -- --input=data/eval/reports/extraction-phase2-deadline-eval-semantics-20260826.json --fields=deadline_date,deadline_type --output=data/results/golden-deadline-corrections-apply-20260826.json --apply`
+- Apply result:
+  - Mismatches planned: 57.
+  - Correction upserts: 25.
+  - Evidence suppressions: 84.
+  - Suppression-only plans: 32.
+  - Applied plans: 57.
+  - Failed plans: 0.
+- Post-apply evaluation:
+  - `pnpm eval:extraction -- --set=eval/golden --extractor=current --out=data/eval/reports/extraction-phase2-golden-deadline-corrections-applied-20260826.json`
+  - Evidence rows in eval: 1,581.
+  - Macro accuracy: `0.9527777777777778`.
+  - `deadline_date` accuracy: `1`.
+  - `deadline_type` accuracy: `1`.
+  - Remaining `deadline_date` mismatches: 0.
+  - Remaining `deadline_type` mismatches: 0.
+- Threshold export:
+  - `pnpm eval:thresholds -- --input=data/eval/reports/extraction-phase2-golden-deadline-corrections-applied-20260826.json --out=data/eval/reports/extraction-thresholds-phase2-golden-deadline-corrections-applied-20260826.json --module-out=data/eval/reports/extraction-thresholds-phase2-golden-deadline-corrections-applied-20260826.js`
+  - Production ready: false.
+  - Blocking reason: `one_or_more_fields_missing_recommendation`.
+  - Remaining blockers are now `host_org`, `is_real_poster`, and
+    `content_type`.
