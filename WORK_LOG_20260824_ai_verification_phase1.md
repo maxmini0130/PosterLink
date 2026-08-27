@@ -2722,3 +2722,37 @@ operating DB writes were performed.
   - Recompute `exposure_tier` for the same review set after evidence is applied.
   - Do not auto-publish until a fresh auto-publish dry-run confirms eligible
     Tier A candidates.
+
+## Phase 3 Review Tier C Evidence Backfill Applied
+
+Applied the approved evidence backfill bundle for the 39 review-state Tier C
+posters. This did not change `poster_status` or `exposure_tier`.
+
+- User approval:
+  - `review Tier C evidence backfill 542건 운영 DB 적용 승인합니다.`
+- Field evidence apply:
+  - `pnpm evidence:backfill -- --limit=100 --statuses=review --output=data/results/review-c-tier-field-evidence-apply-20260827.json --apply`
+  - Applied rows: 465.
+  - Failed rows: 0.
+- Poster detection apply:
+  - `pnpm poster-detection:backfill -- --limit=100 --statuses=review --output=data/results/review-c-tier-poster-detection-apply-20260827.json --probe-missing-dimensions --probe-limit=20 --apply`
+  - Applied rows: 38.
+  - Failed rows: 0.
+- Content type apply:
+  - `pnpm content-type:backfill -- --limit=100 --statuses=review --output=data/results/review-c-tier-content-type-apply-20260827.json --apply`
+  - Applied rows: 39.
+  - Failed rows: 0.
+- Total evidence rows applied:
+  - 542.
+- Post-apply exposure-tier dry-run:
+  - `pnpm tier:compute -- --limit=5000 --statuses=review --output=data/eval/reports/exposure-tier-review-dryrun-after-evidence-20260827.json`
+  - Checked review posters: 39.
+  - Evidence rows: 543.
+  - Tier A: 29.
+  - Tier B: 1.
+  - Tier C: 9.
+  - SEO gate enabled: 38.
+  - Deadline/calendar gate enabled: 29.
+- Remaining note:
+  - `posters.exposure_tier` still needs a separate approved recompute/apply step
+    before auto-publish planning can see these updated tiers.
