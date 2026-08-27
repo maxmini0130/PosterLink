@@ -2974,3 +2974,63 @@ application-period lines.
     deadline evidence.
 - Verification:
   - `pnpm --filter posterlink-crawler tier:compute -- --limit=5000 --statuses=review --output=data/eval/reports/exposure-tier-review-after-deadline-evidence-fix-20260827.json`
+
+## Deadline Audit: Published and Review Posters
+
+Audited active public/review posters after user-reported deadline mistakes where
+event dates or stale years were being treated as application deadlines.
+
+- Full active/review audit:
+  - Checked `565` `published`/`review` posters.
+  - Initial high-confidence mismatches: `7`.
+  - Applied operator corrections for the 7 records and inserted fresh
+    `deadline_date` / `deadline_type` evidence.
+  - Suppressed stale conflicting deadline evidence by lowering confidence to
+    `0`.
+  - Report:
+    `data/eval/reports/deadline-audit-published-review-20260827.json`
+- Youth Seoul source audit:
+  - Checked `348` records whose source was `youth.seoul.go.kr`.
+  - Parsed the source `application period` line and compared it with stored
+    `application_end_at`.
+  - Found and corrected `76` mismatches after explicit operating DB approval:
+    - `71` changed to `deadline_type=fixed`.
+    - `5` kept/changed to `deadline_type=until_exhausted` where the source or
+      existing evidence contained early-close / first-come wording.
+  - Updated `field_verification.dateQuality` to the source application-period
+    end date and cleared stale date issues.
+  - Inserted grounded `deadline_date` / `deadline_type` evidence with extractor
+    `youth-seoul-application-period-audit-v1`.
+  - Reports:
+    - `data/eval/reports/youth-seoul-deadline-audit-20260827.json`
+    - `data/eval/reports/youth-seoul-deadline-audit-apply-20260827.json`
+    - `data/eval/reports/youth-seoul-deadline-audit-after-apply-20260827.json`
+- Verification:
+  - Rechecked all 76 corrected Youth Seoul records against the original source
+    audit expectations: `0` mismatches.
+  - Re-ran the Youth Seoul source audit: `348` checked, `0` mismatches, `0`
+    fetch/parse errors.
+  - Recomputed exposure tiers for affected records only:
+    - `A`: `67`
+    - `B`: `2`
+    - `C`: `7`
+  - Re-ran full active/review deadline audit:
+    - `date_quality_mismatch`: `0`
+    - `evidence_mismatch`: `0`
+    - `past_year_with_2026_context`: `0`
+    - `fixed_missing_stored_deadline`: `0`
+    - Remaining `published_past_deadline`: `37`, now reflecting corrected
+      source deadlines before the audit date rather than extraction mistakes.
+
+## Public Poster List Active Filtering Fix
+
+Aligned the `/posters` client-side refresh path with the server public discovery
+RPCs so list totals and visible rows follow the same active/exposure rules as
+the homepage and server-rendered discovery pages.
+
+- Replaced the legacy `search_posters_with_synonyms` / direct `posters` query
+  refresh path with `search_public_posters`.
+- Added `count_public_posters` for the displayed total count instead of deriving
+  totals from a limited client sample.
+- Preserved semantic search for eligible keyword searches, with client fallback
+  to the public discovery RPC.

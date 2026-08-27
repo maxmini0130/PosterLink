@@ -14,6 +14,8 @@ import { isPosterAcceptingApplications } from "../../lib/posterApplication";
 import { Search, X, History, TrendingUp, ArrowLeft, ChevronDown } from "lucide-react";
 
 const PAGE_SIZE = 12;
+const PUBLIC_POSTER_SELECT =
+  "id,title,source_org_name,application_start_at,application_end_at,deadline_type,poster_status,thumbnail_url,source_key,summary_short,created_at,exposure_tier";
 const QUICK_SEARCH_TERMS = ["청년", "취업", "무료교육", "주거", "창업", "곧 마감"];
 
 type PosterListClientProps = {
@@ -127,56 +129,54 @@ function PosterListPageContent({
 
       let semanticSearchUsed = false;
       const selectedRegionScopeIds = getRegionScopeIds(selectedRegionId, regions);
+      const includeClosed = !hideClosedPosters;
+      const searchArgs = {
+        p_query: normalizedQuery || null,
+        p_category_id: selectedCategoryId,
+        p_region_ids: selectedRegionScopeIds ? Array.from(selectedRegionScopeIds) : null,
+        p_include_closed: includeClosed,
+        p_sort: sortBy === "deadline" ? "deadline" : "latest",
+        p_limit: 240,
+      };
+      const countPromise = supabase.rpc("count_public_posters", {
+        p_query: searchArgs.p_query,
+        p_category_id: searchArgs.p_category_id,
+        p_region_ids: searchArgs.p_region_ids,
+        p_include_closed: includeClosed,
+      });
 
-      if (hideClosedPosters) {
-        if (normalizedQuery.length >= 2) {
-          const semanticResponse = await fetch("/api/posters/semantic-search", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              query: normalizedQuery,
-              limit: 80,
-              categoryId: selectedCategoryId,
-              regionIds: selectedRegionScopeIds ? Array.from(selectedRegionScopeIds) : null,
-            }),
-          }).catch(() => null);
+      if (hideClosedPosters && normalizedQuery.length >= 2) {
+        const semanticResponse = await fetch("/api/posters/semantic-search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: normalizedQuery,
+            limit: 80,
+            categoryId: selectedCategoryId,
+            regionIds: selectedRegionScopeIds ? Array.from(selectedRegionScopeIds) : null,
+          }),
+        }).catch(() => null);
 
-          if (semanticResponse?.ok) {
-            const payload = await semanticResponse.json().catch(() => null);
-            if (payload?.semantic && Array.isArray(payload.posters) && payload.posters.length > 0) {
-              data = payload.posters;
-              semanticSearchUsed = true;
-            }
+        if (semanticResponse?.ok) {
+          const payload = await semanticResponse.json().catch(() => null);
+          if (payload?.semantic && Array.isArray(payload.posters) && payload.posters.length > 0) {
+            data = payload.posters;
+            semanticSearchUsed = true;
           }
         }
+      }
 
-        if (!semanticSearchUsed) {
-          const { data: rpcData, error } = await supabase.rpc("search_posters_with_synonyms", {
-            p_query: normalizedQuery,
-            p_category_id: selectedCategoryId,
-            p_region_id: null,
-          });
-
-          if (error) throw error;
-          data = rpcData ?? [];
-        }
-      } else {
-        let query = supabase
-          .from("posters")
-          .select("id, title, source_org_name, application_start_at, application_end_at, deadline_type, poster_status, thumbnail_url, source_key, summary_short, created_at")
-          .eq("poster_status", "published");
-
-        if (normalizedQuery) {
-          query = query.or(`title.ilike.%${normalizedQuery}%,source_org_name.ilike.%${normalizedQuery}%,summary_short.ilike.%${normalizedQuery}%`);
-        }
-
-        const { data: directData, error } = await query
-          .order("created_at", { ascending: false })
-          .limit(100);
+      if (!semanticSearchUsed) {
+        const { data: rpcData, error } = await supabase
+          .rpc("search_public_posters", searchArgs)
+          .select(PUBLIC_POSTER_SELECT);
 
         if (error) throw error;
-        data = directData ?? [];
+        data = (Array.isArray(rpcData) ? rpcData : rpcData ? [rpcData] : []) as any[];
       }
+      const { data: totalCountData, error: countError } = await countPromise;
+      if (countError) throw countError;
+      const serverTotalCount = typeof totalCountData === "number" ? totalCountData : null;
 
       const dateFilteredData = hideClosedPosters
         ? data.filter((poster: any) => isPosterAcceptingApplications({
@@ -242,7 +242,11 @@ function PosterListPageContent({
       });
 
       setPosters(sortedData);
-      setResultTotalCount(sortedData.length);
+      setResultTotalCount(
+        myMatchesOnly || semanticSearchUsed
+          ? sortedData.length
+          : serverTotalCount ?? sortedData.length,
+      );
       setSemanticSearchActive(semanticSearchUsed);
       setDisplayCount(PAGE_SIZE);
 
