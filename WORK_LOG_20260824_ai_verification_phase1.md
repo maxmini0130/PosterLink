@@ -2813,3 +2813,32 @@ operating DB data.
   - `deadline_type=until_exhausted` alone was not treated as a hold reason.
   - Any actual auto-publish apply still requires a separate explicit user
     approval and the `EXPOSURE_AUTO_PUBLISH=true` kill switch.
+
+## Phase 3 Current DB Candidate Cross-Check
+
+Cross-checked the 29 Tier A review candidates against the current operating DB
+columns that PosterLink actually uses on admin/public screens. This was a
+read-only audit and did not change operating DB data.
+
+- Added a reusable read-only export helper:
+  - `scripts/crawler/src/export-review-tier-candidates.js`
+- Generated current-DB candidate sheet:
+  - `data/eval/reports/review-tier-a-candidates-current-db-20260827.csv`
+- Result:
+  - Total Tier A review candidates: 29.
+  - Current DB `verification_status=needs_review`: 29.
+  - Low `data_confidence < 0.7`: 22.
+  - Current DB sheet decision: 29 require hold/review before auto-publish.
+- Sample checked:
+  - `2026 AI 기반 소셜임팩트 기업 활성화 지원사업`
+  - `poster_status=review`, `exposure_tier=A`.
+  - `source_org_name=K-Startup`, `organizer_name=포켓컴퍼니`.
+  - Deadline evidence and stored deadline both point to `2026-09-04`.
+  - `verification_status=needs_review`, `data_confidence=0.45`.
+  - `field_verification.reason` still contains a stale/contradictory
+    needs-review message even though `dateQuality` now matches `2026-09-04`.
+- Operating conclusion:
+  - Do not run auto-publish on the 29 candidates as-is.
+  - Next safe step is to reconcile stale `verification_status` /
+    `field_verification` state with the newer field-level evidence, or require a
+    human review pass before status-changing auto-publish.
