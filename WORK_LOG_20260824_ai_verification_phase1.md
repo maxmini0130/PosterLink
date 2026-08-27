@@ -2661,3 +2661,20 @@ This did not change `poster_status` and did not auto-publish any posters.
   - `published:B`: 8.
   - `published:C`: 317.
   - `review:C`: 39.
+
+## Phase 3 Auto-Publish Candidate Dry Run
+
+Ran the Phase 3 auto-publish planner after exposure-tier cache application. No
+operating DB writes were performed.
+
+- Dry-run command:
+  - `pnpm tier:auto-publish -- --limit=5000 --tiers=A --output=data/eval/reports/auto-publish-plan-dryrun-20260827-after-tier-apply.json`
+- Dry-run result:
+  - Checked review posters: 39.
+  - Eligible Tier A auto-publish candidates: 0.
+  - Blocked posters: 39.
+  - Review queue tier distribution: `C`: 39.
+  - Block reason: `tier_not_allowed`: 39.
+- Safety conclusion:
+  - There are currently no review-state Tier A posters to auto-publish.
+  - No approval/apply step is needed for auto-publish at this point.
