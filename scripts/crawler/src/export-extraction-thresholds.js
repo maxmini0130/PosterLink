@@ -58,6 +58,7 @@ export function buildThresholdPlan(report, { minLabeled = 120 } = {}) {
   const labeledPosters = Number(report?.labeled_posters ?? 0);
   const fields = {};
   let readyFieldCount = 0;
+  let labeledFieldCount = 0;
 
   for (const [fieldKey, importance] of Object.entries(FIELD_IMPORTANCE)) {
     const metric = fieldMetrics[fieldKey] ?? null;
@@ -66,11 +67,12 @@ export function buildThresholdPlan(report, { minLabeled = 120 } = {}) {
     const recommendation = metric?.recommended_threshold ?? null;
     const precision = recommendation?.precision ?? null;
     const coverage = recommendation?.coverage ?? null;
-    const status = threshold === null
-      ? "missing_recommendation"
-      : labeled === 0
+    const status = labeled === 0
         ? "unlabeled"
+        : threshold === null
+          ? "missing_recommendation"
         : "ready";
+    if (labeled > 0) labeledFieldCount += 1;
     if (status === "ready") readyFieldCount += 1;
     fields[fieldKey] = {
       importance,
@@ -85,9 +87,9 @@ export function buildThresholdPlan(report, { minLabeled = 120 } = {}) {
     };
   }
 
-  const allFieldsReady = readyFieldCount === Object.keys(FIELD_IMPORTANCE).length;
+  const allLabeledFieldsReady = labeledFieldCount > 0 && readyFieldCount === labeledFieldCount;
   const enoughLabels = labeledPosters >= minLabeled;
-  const productionReady = Boolean(allFieldsReady && enoughLabels);
+  const productionReady = Boolean(allLabeledFieldsReady && enoughLabels);
 
   return {
     generated_at: new Date().toISOString(),
@@ -100,7 +102,7 @@ export function buildThresholdPlan(report, { minLabeled = 120 } = {}) {
     production_ready: productionReady,
     blocking_reasons: [
       !enoughLabels ? `labeled_posters_below_${minLabeled}` : null,
-      !allFieldsReady ? "one_or_more_fields_missing_recommendation" : null,
+      !allLabeledFieldsReady ? "one_or_more_labeled_fields_missing_recommendation" : null,
     ].filter(Boolean),
     thresholds: Object.fromEntries(
       Object.entries(fields).map(([fieldKey, field]) => [

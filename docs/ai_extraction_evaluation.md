@@ -84,6 +84,10 @@ has enough labels and field-level recommendations, then emits copyable candidate
 constants. Treat the generated constants as a review draft until the 120-item
 golden set is complete.
 
+Fields without human labels keep their existing fallback defaults and are
+reported as `unlabeled`; they do not block `production_ready`. A labeled field
+still blocks readiness when it lacks a qualifying threshold recommendation.
+
 ## CI
 
 `.github/workflows/ai-extraction-eval.yml` runs the same harness:

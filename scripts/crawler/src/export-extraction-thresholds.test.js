@@ -26,13 +26,36 @@ test("buildThresholdPlan exports ready recommendations from an evaluation report
     },
   }, { minLabeled: 100 });
 
-  assert.equal(plan.production_ready, false);
+  assert.equal(plan.production_ready, true);
   assert.equal(plan.fields.deadline_date.status, "ready");
   assert.equal(plan.fields.deadline_date.threshold, 0.85);
   assert.equal(plan.thresholds.deadline_date, 0.85);
-  assert.equal(plan.fields.category.status, "missing_recommendation");
+  assert.equal(plan.fields.category.status, "unlabeled");
   assert.equal(plan.thresholds.category, 0.8);
-  assert.ok(plan.blocking_reasons.includes("one_or_more_fields_missing_recommendation"));
+  assert.deepEqual(plan.blocking_reasons, []);
+});
+
+test("buildThresholdPlan blocks when a labeled field lacks a recommendation", () => {
+  const plan = buildThresholdPlan({
+    labeled_posters: 120,
+    labeled_field_count: 120,
+    field_metrics: {
+      deadline_date: {
+        labeled: 120,
+        recommended_threshold: {
+          threshold: null,
+          precision: null,
+          coverage: null,
+          predictions: 0,
+        },
+      },
+    },
+  }, { minLabeled: 100 });
+
+  assert.equal(plan.production_ready, false);
+  assert.equal(plan.fields.deadline_date.status, "missing_recommendation");
+  assert.equal(plan.fields.category.status, "unlabeled");
+  assert.deepEqual(plan.blocking_reasons, ["one_or_more_labeled_fields_missing_recommendation"]);
 });
 
 test("buildThresholdPlan blocks production use when the report is unlabeled", () => {
@@ -44,7 +67,7 @@ test("buildThresholdPlan blocks production use when the report is unlabeled", ()
   assert.equal(plan.production_ready, false);
   assert.deepEqual(plan.blocking_reasons, [
     "labeled_posters_below_120",
-    "one_or_more_fields_missing_recommendation",
+    "one_or_more_labeled_fields_missing_recommendation",
   ]);
   assert.equal(plan.thresholds.official_url, 0.9);
 });

@@ -2564,3 +2564,37 @@ operating DB writes were performed.
     `poster-detection-signals-v1` currently predicts `true`.
   - Existing false-positive poster detection evidence would be suppressed and
     replaced by `golden-correction-v1` operator evidence.
+
+## Phase 2 Golden Real Poster Corrections Applied
+
+Applied the approved golden-set `is_real_poster` correction bundle to the
+operating DB and finalized the labeled-field threshold export semantics.
+
+- User approval:
+  - `golden is_real_poster corrections 7건 운영 DB 적용 승인합니다.`
+- Apply command:
+  - `pnpm eval:plan-corrections -- --input=data/eval/reports/extraction-phase2-golden-host-org-corrections-applied-20260827.json --fields=is_real_poster --output=data/results/golden-is-real-poster-corrections-apply-20260827.json --apply`
+- Apply result:
+  - Mismatches planned: 7.
+  - Correction upserts: 7.
+  - Evidence suppressions: 7.
+  - Applied plans: 7.
+  - Failed plans: 0.
+- Threshold exporter fix:
+  - Unlabeled fields now keep fallback default thresholds but do not block
+    `production_ready`.
+  - Labeled fields still block readiness if they lack a qualifying threshold
+    recommendation.
+- Post-apply evaluation:
+  - `pnpm eval:extraction -- --set=eval/golden --extractor=current --out=data/eval/reports/extraction-phase2-golden-real-poster-corrections-applied-20260827.json`
+  - Evidence rows in eval: 1,608.
+  - Macro accuracy: `0.9916666666666667`.
+  - `is_real_poster` accuracy: `1`.
+  - Remaining `is_real_poster` mismatches: 0.
+- Threshold export:
+  - `pnpm eval:thresholds -- --input=data/eval/reports/extraction-phase2-golden-real-poster-corrections-applied-20260827.json --out=data/eval/reports/extraction-thresholds-phase2-golden-real-poster-corrections-applied-20260827.json --module-out=data/eval/reports/extraction-thresholds-phase2-golden-real-poster-corrections-applied-20260827.js`
+  - Production ready: true.
+  - Blocking reasons: none.
+- Validation:
+  - `pnpm exec node --test src/export-extraction-thresholds.test.js`
+  - `pnpm --filter posterlink-crawler test`
