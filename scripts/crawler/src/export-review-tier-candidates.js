@@ -11,6 +11,7 @@ const REPO_ROOT = path.resolve(__dirname, "../../..");
 const DEFAULT_INPUT = "data/eval/reports/auto-publish-plan-dryrun-20260827-after-review-tier-apply.json";
 const DEFAULT_OUTPUT = "data/eval/reports/review-tier-a-candidates-current-db-20260827.csv";
 const DEFAULT_REFERENCE_DATE = "2026-08-27";
+const DEFAULT_SITE_URL = "https://posterlink.kr";
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((arg) => {
@@ -40,6 +41,10 @@ function csvEscape(value) {
 
 function day(value) {
   return value ? String(value).slice(0, 10) : "";
+}
+
+function siteUrl() {
+  return String(args["site-url"] || process.env.NEXT_PUBLIC_SITE_URL || DEFAULT_SITE_URL).replace(/\/$/, "");
 }
 
 function classifyCurrentDb(row, { imageCount, referenceDate }) {
@@ -132,6 +137,9 @@ async function main() {
     "판정",
     "추가 확인 사유",
     "poster_id",
+    "포스터링크 DB 여부",
+    "관리자 확인 URL",
+    "공개 후 상세 URL",
     "제목",
     "현재상태",
     "노출등급",
@@ -149,6 +157,7 @@ async function main() {
     "field_verification_reason",
   ];
 
+  const baseUrl = siteUrl();
   const rows = candidateIds.map((id, index) => {
     const poster = posterById.get(id) ?? {};
     const posterLinks = linksByPoster.get(id) ?? [];
@@ -161,6 +170,9 @@ async function main() {
       current.decision,
       current.reason,
       id,
+      poster.id ? "가져옴" : "없음",
+      `${baseUrl}/admin/posters?posterId=${id}`,
+      `${baseUrl}/posters/${id}`,
       poster.title,
       poster.poster_status,
       poster.exposure_tier,
