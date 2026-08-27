@@ -2912,3 +2912,34 @@ deadline showed the stale past date `2023-09-10`.
   - `pnpm --filter posterlink-crawler test -- deadline-date-evidence.test.js`
   - `pnpm --filter posterlink-crawler test -- field-evidence.test.js`
   - `pnpm --filter posterlink-crawler tier:compute -- --limit=5000 --statuses=review --output=data/eval/reports/exposure-tier-review-after-nolshim-deadline-fix-20260827.json`
+
+## Stale Deadline Year Sweep
+
+Swept active `review`/`published` posters for the same error pattern: a stored
+past-year deadline while the title/body/evidence contains 2026 application
+evidence.
+
+- Corrected 4 additional review posters:
+  - `서울청년센터 강북<몸과 마음의 소리를 듣는 시간>커뮤니티원 모집`
+    - `2023-08-31` -> `2026-08-30`
+  - `장위종합사회복지관 <청년이 동네에서 함께하는 하루> 참여자 모집`
+    - `2023-09-12` -> `2026-08-31`
+  - `도봉구청 <청년성장프로젝트 - 청년새롬 9월 프로그램> 참여자 모집`
+    - `2023-09-05` -> `2026-09-04`
+  - `서울청년센터 성북 < 9월 티톡 - 천천히 피어나는 나에게 건네는 꽃> 모집`
+    - `2023-09-09` -> `2026-09-09`
+- Source check:
+  - Verified each correction against the original `youth.seoul.go.kr`
+    application-period line.
+- Operating DB correction:
+  - Updated `posters.application_end_at`, `deadline_type`, and
+    `field_verification.dateQuality`.
+  - Suppressed stale `2023-*` deadline evidence rows by setting confidence to
+    `0`.
+  - Added operator evidence for the corrected `deadline_date` and
+    `deadline_type`.
+- Final scan:
+  - Remaining active/review posters with past stored deadlines and 2026 evidence:
+    `0`.
+- Verification:
+  - `pnpm --filter posterlink-crawler tier:compute -- --limit=5000 --statuses=review --output=data/eval/reports/exposure-tier-review-after-stale-year-fix-20260827.json`
