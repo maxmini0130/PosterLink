@@ -2541,3 +2541,26 @@ DB.
   - Production ready: false.
   - Blocking reason: `one_or_more_fields_missing_recommendation`.
   - Remaining blocking field: `is_real_poster`.
+
+## Phase 2 Real Poster Corrections Dry Run
+
+Prepared the final blocking-field correction bundle for `is_real_poster`. No
+operating DB writes were performed.
+
+- Baseline report:
+  - `data/eval/reports/extraction-phase2-golden-host-org-corrections-applied-20260827.json`
+  - Macro accuracy: `0.9819444444444444`.
+  - `is_real_poster` accuracy: `0.9416666666666667`.
+  - Remaining `is_real_poster` mismatches: 7.
+- Dry-run command:
+  - `pnpm eval:plan-corrections -- --input=data/eval/reports/extraction-phase2-golden-host-org-corrections-applied-20260827.json --fields=is_real_poster --output=data/results/golden-is-real-poster-corrections-dryrun-20260827.json`
+- Dry-run result:
+  - Mismatches planned: 7.
+  - Correction upserts: 7.
+  - Evidence suppressions: 7.
+  - Suppression-only plans: 0.
+- Bundle notes:
+  - All seven rows are human-reviewed `is_real_poster=false` cases where
+    `poster-detection-signals-v1` currently predicts `true`.
+  - Existing false-positive poster detection evidence would be suppressed and
+    replaced by `golden-correction-v1` operator evidence.
