@@ -2513,3 +2513,31 @@ writes were performed.
     they conflict with the reviewed host organization.
   - The one suppression-only row is the QA/test poster with no public host
     organization truth.
+
+## Phase 2 Golden Host Organization Corrections Applied
+
+Applied the approved golden-set `host_org` correction bundle to the operating
+DB.
+
+- User approval:
+  - `golden host_org corrections 21건 운영 DB 적용 승인합니다.`
+- Apply command:
+  - `pnpm eval:plan-corrections -- --input=data/eval/reports/extraction-phase2-current-after-deadline-20260827.json --fields=host_org --output=data/results/golden-host-org-corrections-apply-20260827.json --apply`
+- Apply result:
+  - Mismatches planned: 21.
+  - Correction upserts: 20.
+  - Evidence suppressions: 9.
+  - Suppression-only plans: 1.
+  - Applied plans: 21.
+  - Failed plans: 0.
+- Post-apply evaluation:
+  - `pnpm eval:extraction -- --set=eval/golden --extractor=current --out=data/eval/reports/extraction-phase2-golden-host-org-corrections-applied-20260827.json`
+  - Evidence rows in eval: 1,601.
+  - Macro accuracy: `0.9819444444444444`.
+  - `host_org` accuracy: `1`.
+  - Remaining `host_org` mismatches: 0.
+- Threshold export:
+  - `pnpm eval:thresholds -- --input=data/eval/reports/extraction-phase2-golden-host-org-corrections-applied-20260827.json --out=data/eval/reports/extraction-thresholds-phase2-golden-host-org-corrections-applied-20260827.json --module-out=data/eval/reports/extraction-thresholds-phase2-golden-host-org-corrections-applied-20260827.js`
+  - Production ready: false.
+  - Blocking reason: `one_or_more_fields_missing_recommendation`.
+  - Remaining blocking field: `is_real_poster`.
