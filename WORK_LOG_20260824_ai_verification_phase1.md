@@ -2489,3 +2489,27 @@ Applied the approved golden-set deadline correction bundle to the operating DB.
   - Blocking reason: `one_or_more_fields_missing_recommendation`.
   - Remaining blockers are now `host_org`, `is_real_poster`, and
     `content_type`.
+
+## Phase 2 Host Organization Corrections Dry Run
+
+Prepared the next golden-set correction bundle for `host_org`. No operating DB
+writes were performed.
+
+- Baseline evaluation:
+  - `pnpm eval:extraction -- --set=eval/golden --extractor=current --out=data/eval/reports/extraction-phase2-current-after-deadline-20260827.json`
+  - Macro accuracy: `0.9527777777777778`.
+  - `host_org` accuracy: `0.825`.
+  - Remaining `host_org` mismatches: 21.
+- Dry-run command:
+  - `pnpm eval:plan-corrections -- --input=data/eval/reports/extraction-phase2-current-after-deadline-20260827.json --fields=host_org --output=data/results/golden-host-org-corrections-dryrun-20260827.json`
+- Dry-run result:
+  - Mismatches planned: 21.
+  - Correction upserts: 20.
+  - Evidence suppressions: 9.
+  - Suppression-only plans: 1.
+- Bundle notes:
+  - Most rows fill missing `host_org` evidence from human-reviewed golden labels.
+  - Existing portal-name mistakes such as `청년몽땅정보통` are suppressed where
+    they conflict with the reviewed host organization.
+  - The one suppression-only row is the QA/test poster with no public host
+    organization truth.
