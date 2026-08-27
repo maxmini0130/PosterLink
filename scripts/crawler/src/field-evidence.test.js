@@ -170,6 +170,22 @@ test("readable period facts become ISO deadline date only with application conte
   assert.deepEqual(deadline.value_json, { date: "2026-08-27" });
 });
 
+test("readable period facts carry explicit year to slash-form end date before stale stored text", () => {
+  const rows = evidenceRowsFromReadableFacts({
+    posterId: "poster-1",
+    facts: {
+      period: "\uC2E0\uCCAD\uAE30\uAC04 2026\uB144 8/26(\uC218) ~ 9/10(\uBAA9)",
+      application: "\uC628\uB77C\uC778 \uC811\uC218",
+    },
+    sourceText:
+      "\uD604\uC7AC \uC800\uC7A5 \uB9C8\uAC10\uC77C 2023-09-10. \uC2E0\uCCAD\uAE30\uAC04 2026\uB144 8/26(\uC218) ~ 9/10(\uBAA9) \uCC38\uAC00\uC790 \uBAA8\uC9D1",
+  });
+
+  const deadline = rows.find((row) => row.field_key === "deadline_date");
+  assert.equal(deadline.value_text, "2026-09-10");
+  assert.deepEqual(deadline.value_json, { date: "2026-09-10" });
+});
+
 test("readable period facts skip event or education periods without application context", () => {
   const rows = evidenceRowsFromReadableFacts({
     posterId: "poster-1",

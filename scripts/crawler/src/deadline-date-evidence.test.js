@@ -241,3 +241,24 @@ test("ignores normalized start date when application window is open-ended", () =
 
   assert.equal(row, null);
 });
+
+test("carries explicit application-period year to slash-form end date before stale stored date", () => {
+  const row = inferDeadlineDateEvidence({
+    posterId: "poster-1",
+    title: "[\uBAA8\uC9D1] 2026\uB144 \uB610\uB798\uBA58\uD1A0\uB9C1 '\uB180\uC27C\uCEA0\uD504' 2\uD68C\uCC28 \uCC38\uAC00\uC790 \uBAA8\uC9D1",
+    sourceText:
+      "\uC2E0\uCCAD\uAE30\uAC04 2026\uB144 8/26(\uC218) ~ 9/10(\uBAA9) \uCC38\uAC00\uC790 \uBAA8\uC9D1 \uC2E0\uCCAD\uBC29\uBC95 \uC628\uB77C\uC778 \uC811\uC218",
+    applicationEndAt: "2023-09-10T00:00:00Z",
+    fieldVerification: {
+      dateQuality: {
+        decision: "review",
+        normalizedDeadline: "2023-09-10",
+      },
+    },
+    createdAt: "2026-08-27T00:00:00Z",
+  });
+
+  assert.equal(row.value_text, "2026-09-10");
+  assert.deepEqual(row.value_json, { date: "2026-09-10" });
+  assert.match(row.evidence_text, /2026\uB144 8\/26/);
+});

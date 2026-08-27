@@ -2885,3 +2885,30 @@ not confuse application deadlines with program/event periods.
     period.
 - Verification:
   - `pnpm --filter web lint`
+
+## Nolshim Camp Deadline Correction
+
+Corrected the review poster
+`[모집] 2026년 또래멘토링 '놀쉼캠프' 2회차 참가자 모집` after the stored
+deadline showed the stale past date `2023-09-10`.
+
+- Operating DB poster:
+  - `1d8022b6-399b-4763-b15b-ec562a6a19cf`
+- Correction applied:
+  - `application_end_at`: `2026-09-10T00:00:00+00:00`
+  - `deadline_type`: `fixed`
+  - `field_verification.dateQuality`: updated to `2026-09-10`
+  - Suppressed stale `2023-09-10` deadline evidence rows by setting
+    confidence to `0`.
+  - Added operator evidence for `deadline_date=2026-09-10` and
+    `deadline_type=fixed`.
+  - Recomputed only this poster's `exposure_tier` to `A`; poster status remains
+    `review`.
+- Recurrence guard:
+  - Added crawler tests for application-period ranges such as
+    `2026년 8/26 ~ 9/10`, ensuring the explicit year carries to the slash-form
+    end date even if stale stored text contains `2023-09-10`.
+- Verification:
+  - `pnpm --filter posterlink-crawler test -- deadline-date-evidence.test.js`
+  - `pnpm --filter posterlink-crawler test -- field-evidence.test.js`
+  - `pnpm --filter posterlink-crawler tier:compute -- --limit=5000 --statuses=review --output=data/eval/reports/exposure-tier-review-after-nolshim-deadline-fix-20260827.json`
