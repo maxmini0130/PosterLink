@@ -2634,3 +2634,30 @@ No operating DB writes were performed.
 - Validation:
   - `pnpm exec node --test src/exposure-tier.test.js`
   - `pnpm --filter posterlink-crawler test`
+
+## Phase 3 Exposure Tier Applied
+
+Applied the approved Phase 3 exposure-tier cache update to the operating DB.
+This did not change `poster_status` and did not auto-publish any posters.
+
+- User approval:
+  - `Phase 3 exposure_tier 565건 운영 DB 적용 승인합니다.`
+- Apply command:
+  - `pnpm tier:compute -- --limit=5000 --statuses=published,review --output=data/eval/reports/exposure-tier-apply-20260827-after-phase2.json --apply`
+- Apply result:
+  - Checked posters: 565.
+  - Evidence rows: 4,855.
+  - Applied rows: 565.
+  - Failed rows: 0.
+  - Tier A: 201.
+  - Tier B: 8.
+  - Tier C: 356.
+  - SEO gate enabled: 435.
+  - Deadline/calendar gate enabled: 160.
+  - Recommendation gate enabled: 0.
+- DB verification:
+  - Rows with cached tiers among `published,review`: 565.
+  - `published:A`: 201.
+  - `published:B`: 8.
+  - `published:C`: 317.
+  - `review:C`: 39.
