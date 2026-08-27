@@ -2678,3 +2678,47 @@ operating DB writes were performed.
 - Safety conclusion:
   - There are currently no review-state Tier A posters to auto-publish.
   - No approval/apply step is needed for auto-publish at this point.
+
+## Phase 3 Review Tier C Evidence Backfill Dry Run
+
+Prepared evidence backfill dry-runs for the 39 review-state Tier C posters. No
+operating DB writes were performed.
+
+- Input state:
+  - Review-state posters checked by auto-publish planner: 39.
+  - All 39 were Tier C, mostly because they had no field evidence.
+- Field evidence dry-run:
+  - `pnpm evidence:backfill -- --limit=100 --statuses=review --output=data/results/review-c-tier-field-evidence-dryrun-20260827.json`
+  - Checked posters: 39.
+  - Poster candidates: 39.
+  - Evidence rows: 465.
+  - Key field rows:
+    - `host_org`: 77.
+    - `deadline_date`: 66.
+    - `deadline_type`: 38.
+    - `official_url`: 38.
+    - `apply_url`: 22.
+- Poster detection dry-run:
+  - `pnpm poster-detection:backfill -- --limit=100 --statuses=review --output=data/results/review-c-tier-poster-detection-dryrun-20260827.json --probe-missing-dimensions --probe-limit=20`
+  - Checked posters: 39.
+  - Evidence rows: 38.
+  - `is_real_poster=true`: 38.
+  - `is_real_poster=false`: 1.
+  - Needs VLM: 0.
+- Content type dry-run:
+  - `pnpm content-type:backfill -- --limit=100 --statuses=review --output=data/results/review-c-tier-content-type-dryrun-20260827.json`
+  - Checked posters: 39.
+  - Evidence rows: 39.
+  - `recruit`: 38.
+  - `discard`: 1.
+- Combined local simulation after applying dry-run evidence:
+  - Tier A: 29.
+  - Tier B: 1.
+  - Tier C: 9.
+  - Remaining C reasons include low-confidence deadlines, duplicate suspicion,
+    one low-confidence poster detection, and the QA discard row.
+- Proposed next operating DB write:
+  - Apply the three evidence bundles only.
+  - Recompute `exposure_tier` for the same review set after evidence is applied.
+  - Do not auto-publish until a fresh auto-publish dry-run confirms eligible
+    Tier A candidates.
