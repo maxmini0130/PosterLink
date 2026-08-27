@@ -2788,3 +2788,28 @@ auto-publish any posters.
 - Remaining note:
   - Auto-publish is still unapplied and requires a separate explicit approval
     plus the `EXPOSURE_AUTO_PUBLISH=true` kill switch.
+
+## Phase 3 Review Tier A Candidate Sheet
+
+Generated a human-readable review sheet for the 29 review-state Tier A
+auto-publish candidates. This was a reporting-only step and did not change
+operating DB data.
+
+- Source plan:
+  - `data/eval/reports/auto-publish-plan-dryrun-20260827-after-review-tier-apply.json`
+- Review sheet:
+  - `data/eval/reports/review-tier-a-candidates-20260827.md`
+- Candidate summary:
+  - Total Tier A review candidates: 29.
+  - Public-safe candidates after extra date/critical-field guard: 24.
+  - Hold candidates: 5.
+- Hold rules used for the sheet:
+  - Past deadline relative to `2026-08-27`.
+  - Suspicious legacy deadline year such as `2023`.
+  - Missing critical grounded fields.
+  - Non-recruit content type.
+  - Non-poster representative image.
+- Note:
+  - `deadline_type=until_exhausted` alone was not treated as a hold reason.
+  - Any actual auto-publish apply still requires a separate explicit user
+    approval and the `EXPOSURE_AUTO_PUBLISH=true` kill switch.
