@@ -482,6 +482,50 @@ function getImageDeadlineHint(poster: any) {
   return info?.posterTextSummary ?? "";
 }
 
+function firstLabeledSnippet(text: any, labels: string[]) {
+  const source = normalizeOrgDisplayValue(text);
+  if (!source) return "";
+  for (const label of labels) {
+    const pattern = new RegExp(`${label}\\s*[:：]?\\s*([^·\\n]{2,180})`);
+    const match = source.match(pattern);
+    if (match?.[0]) return match[0].trim();
+  }
+  return "";
+}
+
+function combinedDateEvidenceText(poster: any) {
+  return [
+    getPosterImageOcrInfo(poster)?.posterTextSummary,
+    ...getDateVerificationIssues(poster).map((issue: any) => issue?.evidence),
+    poster?.summary_short,
+    poster?.summary_long,
+  ].filter(Boolean).join("\n");
+}
+
+function getApplicationDeadlineEvidenceHint(poster: any) {
+  return firstLabeledSnippet(combinedDateEvidenceText(poster), [
+    "모집기간",
+    "접수기간",
+    "신청기간",
+    "지원기간",
+    "참여기간",
+    "모집마감",
+    "접수마감",
+    "신청마감",
+  ]);
+}
+
+function getEventPeriodEvidenceHint(poster: any) {
+  return firstLabeledSnippet(combinedDateEvidenceText(poster), [
+    "체험기간",
+    "행사기간",
+    "교육기간",
+    "프로그램 일정",
+    "운영기간",
+    "활동기간",
+  ]);
+}
+
 function getStoredDeadlineHint(poster: any) {
   const deadline = formatPosterDate(poster?.application_end_at);
   if (deadline) return `${deadline}까지`;
@@ -620,9 +664,11 @@ function getApprovalChecklist(poster: any): ApprovalCheck[] {
     [
       tip("현재 저장 마감일", getStoredDeadlineHint(poster)),
       tip("썸네일/OCR 기준", getImageDeadlineHint(poster)),
+      tip("접수/모집 근거", getApplicationDeadlineEvidenceHint(poster)),
+      tip("체험/행사 기간 근거", getEventPeriodEvidenceHint(poster) || readablePeriod),
       tip("본문/정리 정보 기준", readablePeriod || poster?.summary_short),
       tip("날짜 이슈 근거", getDateIssueTipText(dateIssues)),
-      tip("검수 포인트", "썸네일과 본문 마감일이 다르면 원문 본문 또는 첨부 공고문 기준으로 확정하세요."),
+      tip("검수 포인트", "공개 기간은 접수/모집 마감일 기준입니다. 체험기간·행사기간·교육기간을 신청 마감일로 쓰지 마세요."),
     ],
   ));
   checks.push(createApprovalCheck(

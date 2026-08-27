@@ -2864,3 +2864,24 @@ why each pass/warning/block item exists without leaving the preview.
     or still valid.
 - Verification:
   - `pnpm --filter web lint`
+
+## Admin Deadline Tip Clarification
+
+Tightened the deadline review tip copy and evidence grouping so reviewers do
+not confuse application deadlines with program/event periods.
+
+- Sample checked:
+  - `[26년 하반기, 영월] 다문화가족 서울농장 프로그램 (9월 2주차)`
+  - Current DB `application_end_at` is already `2026-09-03`.
+  - Poster/OCR contains both `모집기간: 8.31~9.3` and
+    `체험기간: 9.12~9.13`.
+- Updated:
+  - `apps/web/app/admin/posters/page.tsx`
+- Behavior:
+  - Deadline checklist tips now separate `접수/모집 근거` from
+    `체험/행사 기간 근거`.
+  - Reviewer guidance explicitly states that public availability must follow
+    the application/recruitment deadline, not the experience/event/education
+    period.
+- Verification:
+  - `pnpm --filter web lint`
