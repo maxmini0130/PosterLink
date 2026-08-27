@@ -2943,3 +2943,34 @@ evidence.
     `0`.
 - Verification:
   - `pnpm --filter posterlink-crawler tier:compute -- --limit=5000 --statuses=review --output=data/eval/reports/exposure-tier-review-after-stale-year-fix-20260827.json`
+
+## Deadline Evidence Confidence Fix
+
+Reviewed remaining review-tier blockers caused by
+`critical_low_confidence_deadline_date` and grounded them against source
+application-period lines.
+
+- Added high-confidence operator deadline evidence for 5 review posters:
+  - `서울신용보증재단 성북종합지원센터<성북동길 코스5, 나만을 위한 선물>`
+    - Source application period: `2026-08-25 ~ 2026-09-11`
+  - `송파구청 <2026 송파 청년정책연구단 모집>`
+    - Source application period: `~2026-08-31`
+  - `서울청년센터영등포 <2026 청년창업 아카데미 '모두의 창업' 2차>`
+    - Source/poster application deadline: `2026-08-30`
+  - `관악구보건소 <2026 대학동 이동건강검진> 안내`
+    - Corrected stored deadline from event date `2026-09-15` to application
+      period end `2026-09-14`
+  - `서울청년센터 성동<청년커리어패스 | 현직자와 함께하는 이론부터 실전까지 한 번에 끝내는 취업 특강> 참여자 모집`
+    - Source application period: `2026-08-21 ~ 2026-08-29`
+- Operating DB update:
+  - Added operator `deadline_date` and `deadline_type` evidence.
+  - Updated `field_verification.dateQuality` to pass for these dates.
+  - Removed stale date review issues for the corrected fields.
+  - Recomputed and applied `exposure_tier` only for the 5 affected posters.
+- Result:
+  - Review tier distribution changed from `A 29 / B 1 / C 8` to
+    `A 32 / B 2 / C 4`.
+  - Remaining non-A review posters are no longer blocked by low-confidence
+    deadline evidence.
+- Verification:
+  - `pnpm --filter posterlink-crawler tier:compute -- --limit=5000 --statuses=review --output=data/eval/reports/exposure-tier-review-after-deadline-evidence-fix-20260827.json`
