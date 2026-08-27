@@ -143,6 +143,7 @@ export function computeTier(input, thresholds = DEFAULT_EXTRACTION_THRESHOLDS) {
 export function bestFieldsFromEvidence(rows = []) {
   const fields = {};
   for (const row of rows) {
+    if (fieldConfidence(row) <= 0) continue;
     const existing = fields[row.field_key];
     if (!existing || fieldConfidence(row) > fieldConfidence(existing)) {
       fields[row.field_key] = row;

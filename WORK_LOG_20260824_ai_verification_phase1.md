@@ -2598,3 +2598,39 @@ operating DB and finalized the labeled-field threshold export semantics.
 - Validation:
   - `pnpm exec node --test src/export-extraction-thresholds.test.js`
   - `pnpm --filter posterlink-crawler test`
+
+## Phase 3 Exposure Tier Dry Run After Phase 2
+
+Started Phase 3 exposure-tier work after Phase 2 critical-field readiness.
+No operating DB writes were performed.
+
+- Safety fix:
+  - `bestFieldsFromEvidence` now ignores `poster_field_evidence` rows with
+    `confidence <= 0`, matching the Phase 2 evaluator's suppression semantics.
+  - Added a regression test so suppressed evidence cannot pass exposure gates.
+- Threshold policy:
+  - Phase 2 threshold export is production-ready, but the Phase 3 implementation
+    keeps the existing conservative defaults when a recommended threshold is
+    lower than the current default.
+- Dry-run command:
+  - `pnpm tier:compute -- --limit=5000 --statuses=published,review --output=data/eval/reports/exposure-tier-dryrun-20260827-after-phase2.json`
+- Dry-run result:
+  - Checked posters: 565.
+  - Evidence rows: 4,855.
+  - Tier A: 201.
+  - Tier B: 8.
+  - Tier C: 356.
+  - SEO gate enabled: 435.
+  - Deadline/calendar gate enabled: 160.
+  - Recommendation gate enabled: 0.
+- Top blocking reasons:
+  - `critical_missing_deadline_type`: 284.
+  - `critical_missing_deadline_date`: 274.
+  - `critical_low_confidence_host_org`: 77.
+  - `critical_low_confidence_deadline_date`: 52.
+  - `critical_missing_host_org`: 51.
+  - `critical_missing_official_url`: 40.
+  - `critical_missing_is_real_poster`: 38.
+- Validation:
+  - `pnpm exec node --test src/exposure-tier.test.js`
+  - `pnpm --filter posterlink-crawler test`

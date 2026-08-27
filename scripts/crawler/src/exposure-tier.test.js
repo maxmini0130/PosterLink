@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  bestFieldsFromEvidence,
   computeTier,
   DEFAULT_EXTRACTION_THRESHOLDS,
 } from "./exposure-tier.js";
@@ -134,4 +135,14 @@ test("missing deadline type still requires a deadline date", () => {
   assert.equal(result.tier, "C");
   assert.ok(result.reason.includes("critical_missing_deadline_date"));
   assert.ok(result.reason.includes("critical_missing_deadline_type"));
+});
+
+test("bestFieldsFromEvidence ignores suppressed zero-confidence evidence", () => {
+  const fields = bestFieldsFromEvidence([
+    { field_key: "is_real_poster", value_json: { value: true }, confidence: 0 },
+    { field_key: "host_org", value_text: "서울특별시", confidence: 0.95 },
+  ]);
+
+  assert.equal(fields.is_real_poster, undefined);
+  assert.equal(fields.host_org.value_text, "서울특별시");
 });

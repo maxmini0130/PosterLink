@@ -59,9 +59,14 @@ and writes an `admin_actions` audit row with
 
 ## Current Safety Position
 
-The default thresholds are conservative provisional values until Phase 2 has 120
-reviewed labels. `is_real_poster` is treated as a required critical field, so
-non-poster or weakly grounded rows remain blocked from tier A.
+The default thresholds remain conservative even after Phase 2 readiness. When
+Phase 2 recommends a lower threshold than the current default, keep the safer
+default unless a separate launch decision explicitly lowers it.
+`is_real_poster` is treated as a required critical field, so non-poster or
+weakly grounded rows remain blocked from tier A.
+
+Evidence rows with `confidence <= 0` are treated as suppressed and are ignored
+by tier computation.
 
 This is intentional. Phase 3 can report gates and auto-publish candidates now,
 but status-changing apply mode must remain an explicit operating decision during
