@@ -394,6 +394,7 @@ type ApprovalCheck = {
   label: string;
   status: ApprovalCheckStatus;
   detail: string;
+  tips?: Array<{ label: string; value: string }>;
 };
 
 function isValidHttpUrl(value: any) {
@@ -458,8 +459,57 @@ async function withFreshApprovalSourceUrl(poster: any) {
   };
 }
 
-function createApprovalCheck(key: string, label: string, status: ApprovalCheckStatus, detail: string): ApprovalCheck {
-  return { key, label, status, detail };
+function createApprovalCheck(
+  key: string,
+  label: string,
+  status: ApprovalCheckStatus,
+  detail: string,
+  tips: Array<{ label: string; value: string }> = [],
+): ApprovalCheck {
+  return { key, label, status, detail, tips: tips.filter((tip) => normalizeOrgDisplayValue(tip.value)) };
+}
+
+function tip(label: string, value: any) {
+  return { label, value: normalizeOrgDisplayValue(value) };
+}
+
+function getReadableFactValue(poster: any, key: string) {
+  return getReadableNoticeFacts(poster).find((fact) => fact.key === key)?.value ?? "";
+}
+
+function getImageDeadlineHint(poster: any) {
+  const info = getPosterImageOcrInfo(poster);
+  return info?.posterTextSummary ?? "";
+}
+
+function getStoredDeadlineHint(poster: any) {
+  const deadline = formatPosterDate(poster?.application_end_at);
+  if (deadline) return `${deadline}까지`;
+  const type = normalizeOrgDisplayValue(poster?.deadline_type);
+  return type ? `마감 유형: ${type}` : "";
+}
+
+function getDateIssueTipText(issues: any[]) {
+  return issues
+    .slice(0, 3)
+    .map((issue: any) => [issue.code, issue.reason, issue.evidence].filter(Boolean).join(" · "))
+    .filter(Boolean)
+    .join("\n");
+}
+
+function getVerificationIssueTipText(poster: any) {
+  const parts = [
+    ...getDateVerificationIssues(poster),
+    ...getDuplicateVerificationIssues(poster),
+    ...getQualityVerificationIssues(poster),
+    ...getClassificationVerificationIssues(poster),
+  ];
+  const issueText = parts
+    .slice(0, 5)
+    .map((issue: any) => [issue.code, issue.reason, issue.evidence].filter(Boolean).join(" · "))
+    .filter(Boolean)
+    .join("\n");
+  return issueText || normalizeOrgDisplayValue(poster?.field_verification?.reason);
 }
 
 function getApprovalChecklist(poster: any): ApprovalCheck[] {
@@ -484,24 +534,47 @@ function getApprovalChecklist(poster: any): ApprovalCheck[] {
   const deadlineInvalid = Boolean(poster?.application_end_at && Number.isNaN(deadlineTime));
   const deadlineExpired = typeof deadlineTime === "number" && !Number.isNaN(deadlineTime) && deadlineTime < Date.now();
   const hasSummary = Boolean(normalizeOrgDisplayValue(poster?.summary_short || poster?.summary_long));
+  const posterImageOcr = getPosterImageOcrInfo(poster);
+  const organizationInfo = getOrganizationVerification(poster);
+  const readablePeriod = getReadableFactValue(poster, "period");
+  const readableTarget = getReadableFactValue(poster, "target");
+  const readableApplication = getReadableFactValue(poster, "application");
+  const readableContact = getReadableFactValue(poster, "contact");
 
   checks.push(createApprovalCheck(
     "title",
     "제목",
     !title || title === "제목 없음" ? "block" : "pass",
-    title ? "제목이 있습니다." : "제목이 비어 있습니다."
+    title ? "제목이 있습니다." : "제목이 비어 있습니다.",
+    [
+      tip("저장 제목", title),
+      tip("썸네일/OCR", posterImageOcr?.posterTextSummary),
+      tip("검수 포인트", "썸네일 제목과 저장 제목이 같은 공고인지 확인하세요."),
+    ],
   ));
   checks.push(createApprovalCheck(
     "organization",
     "기관",
     orgName && !/기관\s*미상/.test(orgName) ? "pass" : "warning",
-    orgName && !/기관\s*미상/.test(orgName) ? `표시 기관: ${orgName}` : "표시 기관을 확인하세요."
+    orgName && !/기관\s*미상/.test(orgName) ? `표시 기관: ${orgName}` : "표시 기관을 확인하세요.",
+    [
+      tip("화면 표시 기관", orgName),
+      tip("수집 출처", poster?.source_org_name),
+      tip("주최/주관", poster?.organizer_name || organizationInfo?.organizerName),
+      tip("근거 문구", organizationInfo?.evidence),
+      tip("검수 포인트", "수집 출처와 실제 주관기관이 다를 수 있습니다. 원문 본문의 주관기관을 우선 확인하세요."),
+    ],
   ));
   checks.push(createApprovalCheck(
     "source",
     "원문 URL",
     sourceUrl ? "pass" : "block",
-    sourceUrl ? `원문 URL이 있습니다: ${sourceUrl}` : "원문 URL이 없거나 올바르지 않습니다. 운영자 편집 화면의 공식 공고 원문 값을 확인하세요."
+    sourceUrl ? `원문 URL이 있습니다: ${sourceUrl}` : "원문 URL이 없거나 올바르지 않습니다. 운영자 편집 화면의 공식 공고 원문 값을 확인하세요.",
+    [
+      tip("공식 원문 URL", sourceUrl),
+      tip("source_key", poster?.source_key),
+      tip("검수 포인트", "공식 원문은 목록/홈페이지가 아니라 이 공고 상세로 바로 들어가는 딥링크인지 확인하세요."),
+    ],
   ));
   if (externalOriginal) {
     checks.push(createApprovalCheck(
@@ -510,14 +583,26 @@ function getApprovalChecklist(poster: any): ApprovalCheck[] {
       externalOriginal.resolved ? "pass" : "warning",
       externalOriginal.resolved
         ? `최종 원문 추적 성공${externalOriginal.host ? `: ${externalOriginal.host}` : ""}`
-        : `원문 추적 확인 필요${externalOriginal.reason ? `: ${externalOriginal.reason}` : ""}`
+        : `원문 추적 확인 필요${externalOriginal.reason ? `: ${externalOriginal.reason}` : ""}`,
+      [
+        tip("최종 원문", externalOriginal.originalUrl),
+        tip("경유 페이지", externalOriginal.viaUrl),
+        tip("추적 사유", externalOriginal.reason),
+        tip("검수 포인트", "경유 링크가 있으면 최종 원문이 실제 공고 상세인지 확인하세요."),
+      ],
     ));
   }
   checks.push(createApprovalCheck(
     "media",
     "이미지/텍스트",
     imageSrc ? "pass" : "warning",
-    imageSrc ? "포스터 이미지가 있습니다." : isTextNotice ? "이미지 없는 텍스트 공고입니다." : "대표 이미지가 없습니다."
+    imageSrc ? "포스터 이미지가 있습니다." : isTextNotice ? "이미지 없는 텍스트 공고입니다." : "대표 이미지가 없습니다.",
+    [
+      tip("대표 이미지", imageSrc),
+      tip("이미지 판정", posterImageOcr?.imageConfidence != null ? `${posterImageOcr.imageIsPoster ? "포스터" : "확인 필요"} · ${posterImageOcr.imageConfidence}%` : ""),
+      tip("썸네일/OCR", posterImageOcr?.posterTextSummary),
+      tip("검수 포인트", "로고, 지도, 일반 사진이 아니라 모집 내용을 담은 실제 포스터인지 확인하세요."),
+    ],
   ));
   checks.push(createApprovalCheck(
     "deadline",
@@ -531,7 +616,14 @@ function getApprovalChecklist(poster: any): ApprovalCheck[] {
           ? "날짜 검증 이슈가 있습니다."
           : poster?.application_end_at
             ? "마감일이 있습니다."
-            : "상시 또는 마감일 미기재 공고입니다."
+            : "상시 또는 마감일 미기재 공고입니다.",
+    [
+      tip("현재 저장 마감일", getStoredDeadlineHint(poster)),
+      tip("썸네일/OCR 기준", getImageDeadlineHint(poster)),
+      tip("본문/정리 정보 기준", readablePeriod || poster?.summary_short),
+      tip("날짜 이슈 근거", getDateIssueTipText(dateIssues)),
+      tip("검수 포인트", "썸네일과 본문 마감일이 다르면 원문 본문 또는 첨부 공고문 기준으로 확정하세요."),
+    ],
   ));
   checks.push(createApprovalCheck(
     "category",
@@ -539,7 +631,13 @@ function getApprovalChecklist(poster: any): ApprovalCheck[] {
     !poster?.categoryName || poster.categoryName === "기타" || classificationIssues.some((issue: any) => /category/i.test(issue.code)) ? "warning" : "pass",
     primaryCategory
       ? `${primaryCategory.label ?? primaryCategory.code}${typeof primaryCategory.confidence === "number" ? ` · ${Math.round(primaryCategory.confidence * 100)}%` : ""}`
-      : poster?.categoryName || "분야 분류를 확인하세요."
+      : poster?.categoryName || "분야 분류를 확인하세요.",
+    [
+      tip("현재 표시 분야", poster?.categoryName),
+      tip("AI 분류", primaryCategory ? `${primaryCategory.label ?? primaryCategory.code}${typeof primaryCategory.confidence === "number" ? ` · ${Math.round(primaryCategory.confidence * 100)}%` : ""}` : ""),
+      tip("분류 이슈", getClassificationVerificationIssues(poster).filter((issue: any) => /category/i.test(issue.code)).map((issue: any) => [issue.code, issue.reason].filter(Boolean).join(" · ")).join("\n")),
+      tip("검수 포인트", "공고 성격이 행사/모집/교육/지원사업 중 어디에 가까운지 원문 제목과 본문 기준으로 확인하세요."),
+    ],
   ));
   checks.push(createApprovalCheck(
     "region",
@@ -547,20 +645,39 @@ function getApprovalChecklist(poster: any): ApprovalCheck[] {
     !poster?.regionName || classificationIssues.some((issue: any) => /region/i.test(issue.code)) ? "warning" : "pass",
     primaryRegion
       ? `${primaryRegion.code}${typeof primaryRegion.confidence === "number" ? ` · ${Math.round(primaryRegion.confidence * 100)}%` : ""}`
-      : poster?.regionName || "지역 분류를 확인하세요."
+      : poster?.regionName || "지역 분류를 확인하세요.",
+    [
+      tip("현재 표시 지역", poster?.regionName),
+      tip("AI 지역 근거", primaryRegion ? `${primaryRegion.code}${primaryRegion.evidence ? ` · ${primaryRegion.evidence}` : ""}` : ""),
+      tip("본문 대상", readableTarget),
+      tip("검수 포인트", "행사 장소가 아니라 신청 대상 지역인지, 전국/온라인 공고인지 구분하세요."),
+    ],
   ));
   checks.push(createApprovalCheck(
     "summary",
     "요약",
     hasSummary ? "pass" : "warning",
-    hasSummary ? "요약이 있습니다." : "요약이 없어 상세 확인이 필요합니다."
+    hasSummary ? "요약이 있습니다." : "요약이 없어 상세 확인이 필요합니다.",
+    [
+      tip("요약", poster?.summary_short || poster?.summary_long),
+      tip("대상", readableTarget),
+      tip("신청", readableApplication),
+      tip("문의", readableContact),
+      tip("검수 포인트", "요약이 실제 본문 핵심과 어긋나면 공개 전 수정하세요."),
+    ],
   ));
   if (attachmentInfo) {
     checks.push(createApprovalCheck(
       "attachments",
       "첨부 분석",
       attachmentInfo.failed > 0 && attachmentInfo.extracted === 0 ? "warning" : "pass",
-      `첨부 ${attachmentInfo.checked}개 확인, ${attachmentInfo.extracted}개 텍스트 추출`
+      `첨부 ${attachmentInfo.checked}개 확인, ${attachmentInfo.extracted}개 텍스트 추출`,
+      [
+        tip("첨부 처리", `확인 ${attachmentInfo.checked} · 추출 ${attachmentInfo.extracted} · 미지원 ${attachmentInfo.unsupported} · 실패 ${attachmentInfo.failed}`),
+        tip("첨부 추정 마감일", attachmentInfo.suggestedDeadline),
+        tip("첨부 파일", attachmentInfo.sources.map((source: any) => normalizeOrgDisplayValue(source?.name || source?.url)).filter(Boolean).join("\n")),
+        tip("검수 포인트", "첨부 공고문이 본문보다 자세하면 첨부의 모집기간/대상/신청방법을 우선 확인하세요."),
+      ],
     ));
   }
 
@@ -569,7 +686,12 @@ function getApprovalChecklist(poster: any): ApprovalCheck[] {
     "verification",
     "검증 이슈",
     reviewIssueCount > 0 ? "warning" : "pass",
-    reviewIssueCount > 0 ? `확인 필요한 이슈 ${reviewIssueCount}건` : "추가 검증 이슈가 없습니다."
+    reviewIssueCount > 0 ? `확인 필요한 이슈 ${reviewIssueCount}건` : "추가 검증 이슈가 없습니다.",
+    [
+      tip("AI 검증 상태", poster?.field_verification?.decision),
+      tip("검증 사유", getVerificationIssueTipText(poster)),
+      tip("검수 포인트", "경고가 오래된 사유인지, 현재 저장값과 원문 기준으로 아직 유효한 이슈인지 확인하세요."),
+    ],
   ));
 
   return checks;
@@ -1908,6 +2030,22 @@ export default function AdminPostersPage() {
                       >
                         <p className="text-xs font-black">{check.label}</p>
                         <p className="mt-1 text-[11px] font-bold leading-4 opacity-80">{check.detail}</p>
+                        {check.tips && check.tips.length > 0 && (
+                          <details className="group mt-2 rounded-lg bg-white/55 px-2 py-1.5 text-[11px] font-bold leading-4 text-gray-800 open:space-y-2 dark:bg-slate-950/25 dark:text-slate-100">
+                            <summary className="cursor-pointer list-none select-none text-[11px] font-black opacity-80 transition hover:opacity-100">
+                              검수 팁 보기
+                              <span className="ml-1 inline-block transition group-open:rotate-180">⌄</span>
+                            </summary>
+                            <dl className="space-y-1.5 pt-1">
+                              {check.tips.map((item, index) => (
+                                <div key={`${check.key}-tip-${index}`} className="border-t border-current/10 pt-1.5 first:border-t-0 first:pt-0">
+                                  <dt className="font-black opacity-60">{item.label}</dt>
+                                  <dd className="mt-0.5 whitespace-pre-wrap break-words font-bold opacity-90">{item.value}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                          </details>
+                        )}
                       </div>
                     ))}
                   </div>

@@ -2842,3 +2842,25 @@ read-only audit and did not change operating DB data.
   - Next safe step is to reconcile stale `verification_status` /
     `field_verification` state with the newer field-level evidence, or require a
     human review pass before status-changing auto-publish.
+
+## Admin Review Checklist Evidence Tips
+
+Improved the admin poster review preview checklist so reviewers can inspect
+why each pass/warning/block item exists without leaving the preview.
+
+- Updated:
+  - `apps/web/app/admin/posters/page.tsx`
+- Behavior:
+  - Each approval checklist card can now expand `검수 팁 보기`.
+  - Deadline tips compare the stored deadline, thumbnail/OCR summary, readable
+    body period, and date issue evidence.
+  - Title, organization, source URL, media, category, region, summary,
+    attachment, and verification cards now include focused reviewer tips.
+- Example case:
+  - `2026 AI 기반 소셜임팩트 기업 활성화 지원사업`
+  - The deadline warning now exposes the stored deadline, thumbnail/OCR text
+    such as the poster-side 모집기간, body/readable period, and the original
+    date issue evidence so the reviewer can decide whether the warning is stale
+    or still valid.
+- Verification:
+  - `pnpm --filter web lint`
