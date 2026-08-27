@@ -2756,3 +2756,35 @@ posters. This did not change `poster_status` or `exposure_tier`.
 - Remaining note:
   - `posters.exposure_tier` still needs a separate approved recompute/apply step
     before auto-publish planning can see these updated tiers.
+
+## Phase 3 Review Exposure Tier Recompute Applied
+
+Applied the approved exposure-tier recompute for the 39 review-state posters
+after evidence backfill. This did not change `poster_status` and did not
+auto-publish any posters.
+
+- User approval:
+  - `승인합니다.`
+- Apply command:
+  - `pnpm tier:compute -- --limit=5000 --statuses=review --output=data/eval/reports/exposure-tier-review-apply-after-evidence-20260827.json --apply`
+- Apply result:
+  - Checked review posters: 39.
+  - Evidence rows: 543.
+  - Applied rows: 39.
+  - Failed rows: 0.
+  - Tier A: 29.
+  - Tier B: 1.
+  - Tier C: 9.
+- DB verification:
+  - `review:A`: 29.
+  - `review:B`: 1.
+  - `review:C`: 9.
+- Fresh auto-publish dry-run:
+  - `pnpm tier:auto-publish -- --limit=5000 --tiers=A --output=data/eval/reports/auto-publish-plan-dryrun-20260827-after-review-tier-apply.json`
+  - Checked review posters: 39.
+  - Eligible Tier A candidates: 29.
+  - Blocked posters: 10.
+  - Blocked reason: `tier_not_allowed`.
+- Remaining note:
+  - Auto-publish is still unapplied and requires a separate explicit approval
+    plus the `EXPOSURE_AUTO_PUBLISH=true` kill switch.
