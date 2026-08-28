@@ -3290,3 +3290,41 @@ Post-apply verification:
   - active public posters: `153`
   - `count_public_posters` matches `search_public_posters`
   - public exposure tiers: `A 146`, `B 7`
+
+## Remaining A/B Review Queue Cleanup
+
+Cleaned up the remaining auto-publish edge cases after the track-specific
+deadline correction.
+
+- Closed `2` Tier A review rows whose verified application deadlines had
+  already expired:
+  - 서울디자인런 2026 교육 프로그램.
+  - 삼육보건대학교 앵커사업단 피부미용 실무역량 과정.
+- Rejected `1` Tier A row that was a non-recruit health screening notice rather
+  than an application/recruitment opportunity:
+  - 관악구보건소 `<2026 대학동 이동건강검진> 안내`.
+  - Added `content_type=news` operator evidence with reason
+    `non_recruit_health_screening_notice`.
+- Reviewed the remaining `2` Tier B rows:
+  - 서울신용보증재단 성북종합지원센터 `<성북동길 코스5, 나만을 위한 선물>` had
+    grounded body evidence for `target_desc`, `apply_method`, and `contact`, so
+    operator evidence was added and the row was promoted to Tier A.
+  - 성북구평생학습관 `<하반기 평생학습 프로그램> 모집 안내` remains in review
+    because it is a multi-program listing with venue/benefit ambiguity.
+- Recomputed exposure tiers and auto-published the `1` newly safe Tier A row.
+
+Post-apply verification:
+
+- `pnpm --filter posterlink-crawler tier:auto-publish -- --limit=5000 --tiers=A --output=data/eval/reports/auto-publish-final-after-b-cleanup-dryrun.json`
+  - eligible: `0`
+  - blocked: `35`
+  - remaining tiers: `B 1`, `C 34`
+- `pnpm --filter posterlink-crawler ai:healthcheck`
+  - quality gate: `pass`
+  - review queue: `35`
+  - public non-poster count: `0`
+  - field correction candidates: `0`
+- `pnpm --filter posterlink-crawler audit:public-counts -- --output=data/eval/reports/public-count-audit-after-b-cleanup.json`
+  - active public posters: `154`
+  - `count_public_posters` matches `search_public_posters`
+  - public exposure tiers: `A 147`, `B 7`
