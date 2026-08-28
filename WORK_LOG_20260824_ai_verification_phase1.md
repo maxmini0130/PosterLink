@@ -3328,3 +3328,54 @@ Post-apply verification:
   - active public posters: `154`
   - `count_public_posters` matches `search_public_posters`
   - public exposure tiers: `A 147`, `B 7`
+
+## Full Remaining Review Queue Cleanup
+
+Processed the remaining review queue after the Phase 1/3 evidence backfills.
+
+- Applied structured field evidence backfill for review/published rows:
+  - `3916` evidence rows from structured poster columns, source links, and
+    readable notice facts.
+- Applied poster detection evidence backfill:
+  - `525` `is_real_poster=true` rows from existing image classification and
+    cheap poster signals.
+- Fixed `compute-exposure-tiers` pagination stability:
+  - Evidence reads are now ordered by `poster_id`, `field_key`, `extractor`, and
+    `id` before applying `range()`.
+  - This prevents unstable PostgREST pagination from omitting evidence rows and
+    incorrectly downgrading public posters to Tier C.
+- Auto-published `30` safe Tier A review rows across three passes.
+- Manually corrected deadline/content evidence for clear application-period
+  cases, including:
+  - 서울청년센터 광진 북커넥트 페스티벌 봉사단: `2026-09-08`.
+  - 서울청년센터 영등포 영등포티톡: `2026-09-03`.
+  - 서울청년센터 강서 어쩌다 청년생활 series: `2026-09-10`.
+  - 서초1인가구지원센터 그냥, 먹고 떠들데이: `2026-08-31`.
+  - 서울청년센터 동대문 거짓주파수: `2026-09-02`.
+- Rejected `4` rows that should not remain in the review queue:
+  - non-recruit event/news: 양천구 양성평등주간 기념행사.
+  - non-recruit event/news: 고척1동 마을축제 개최 안내.
+  - internal QA discard row.
+  - duplicate 송파 청년정책연구단 row.
+- Kept `1` review row intentionally:
+  - 성북구평생학습관 `<하반기 평생학습 프로그램> 모집 안내`.
+  - Reason: this is a multi-program listing, so benefit/venue remain ambiguous
+    as a single public poster record.
+
+Post-apply verification:
+
+- `pnpm --filter posterlink-crawler test`
+  - `256` tests passed.
+- `pnpm --filter posterlink-crawler tier:auto-publish -- --limit=5000 --tiers=A --output=data/eval/reports/auto-publish-final-after-all-review-cleanup-dryrun.json`
+  - eligible: `0`
+  - blocked: `1`
+  - remaining tiers: `B 1`
+- `pnpm --filter posterlink-crawler ai:healthcheck`
+  - quality gate: `pass`
+  - review queue: `1`
+  - public non-poster count: `0`
+  - field correction candidates: `0`
+- `pnpm --filter posterlink-crawler audit:public-counts -- --output=data/eval/reports/public-count-audit-after-all-review-cleanup.json`
+  - active public posters: `196`
+  - `count_public_posters` matches `search_public_posters`
+  - public exposure tiers: `A 189`, `B 7`

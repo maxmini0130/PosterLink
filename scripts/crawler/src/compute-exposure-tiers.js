@@ -90,8 +90,12 @@ async function fetchEvidence(supabase, posterIds) {
     for (let offset = 0; ; offset += 1000) {
       const { data, error } = await supabase
         .from("poster_field_evidence")
-        .select("poster_id,field_key,value_text,value_json,confidence,evidence_text,evidence_src,extractor")
+        .select("id,poster_id,field_key,value_text,value_json,confidence,evidence_text,evidence_src,extractor")
         .in("poster_id", chunk)
+        .order("poster_id", { ascending: true })
+        .order("field_key", { ascending: true })
+        .order("extractor", { ascending: true })
+        .order("id", { ascending: true })
         .range(offset, offset + 999);
       if (error) throw error;
       rows.push(...(data ?? []));
