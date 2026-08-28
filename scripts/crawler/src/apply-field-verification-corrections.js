@@ -66,6 +66,14 @@ function dateKey(value) {
 }
 
 function getDateQualityDeadline(verification) {
+  if (verification?.dateQuality?.decision === "review") {
+    return (
+      normalizeDate(verification?.dateQuality?.suggestedDeadline)
+      ?? normalizeDate(verification?.dateQuality?.normalizedDeadline)
+      ?? normalizeDate(verification?.dateQuality?.extractedDeadline)
+    );
+  }
+
   return (
     normalizeDate(verification?.dateQuality?.normalizedDeadline)
     ?? normalizeDate(verification?.dateQuality?.suggestedDeadline)
@@ -81,15 +89,6 @@ function getYear(value) {
 
 function isStaleDeadlineCorrection(row, verification, correctedDeadline) {
   const currentDeadline = dateKey(row.application_end_at);
-  const dateQualityDeadline = getDateQualityDeadline(verification);
-  if (
-    dateQualityDeadline
-    && currentDeadline === dateQualityDeadline
-    && dateQualityDeadline !== correctedDeadline
-  ) {
-    return "current_deadline_matches_date_quality";
-  }
-
   const correctedYear = getYear(correctedDeadline);
   const referenceYear = Math.max(
     getYear(currentDeadline) ?? 0,
@@ -97,6 +96,17 @@ function isStaleDeadlineCorrection(row, verification, correctedDeadline) {
   );
   if (correctedYear && referenceYear && correctedYear < referenceYear) {
     return "corrected_deadline_is_older_than_current_context";
+  }
+
+  if (hasActionableDateQualityCorrection(verification)) return null;
+
+  const dateQualityDeadline = getDateQualityDeadline(verification);
+  if (
+    dateQualityDeadline
+    && currentDeadline === dateQualityDeadline
+    && dateQualityDeadline !== correctedDeadline
+  ) {
+    return "current_deadline_matches_date_quality";
   }
 
   return null;
@@ -111,19 +121,44 @@ function getOrganizationCandidate(verification) {
   );
 }
 
+function hasActionableDateQualityCorrection(verification) {
+  const issues = [
+    ...(Array.isArray(verification?.dateIssues) ? verification.dateIssues : []),
+    ...(Array.isArray(verification?.dateQuality?.issues) ? verification.dateQuality.issues : []),
+  ];
+  const actionableCodes = new Set(["deadline-mismatch", "missing-clear-deadline"]);
+  return verification?.deadlineMatches === false
+    && issues.some((issue) => actionableCodes.has(issue?.code))
+    && Boolean(
+      normalizeDate(verification?.correctedDeadline)
+      ?? normalizeDate(verification?.dateQuality?.suggestedDeadline)
+    );
+}
+
 export function getCorrection(row, minConfidence) {
   const verification = row.field_verification;
   if (!verification || typeof verification !== "object") return null;
 
   const confidence = Number(verification.confidence ?? 0);
-  if (!Number.isFinite(confidence) || confidence < minConfidence) return null;
+  const useOrgCorrection = Number.isFinite(confidence) && confidence >= minConfidence;
 
   const updates = {};
   const changes = [];
   const suppressed = [];
 
-  const correctedDeadline = normalizeDate(verification.correctedDeadline);
-  if (correctedDeadline && verification.deadlineMatches === false && dateKey(row.application_end_at) !== correctedDeadline) {
+  const correctedDeadline = normalizeDate(verification.correctedDeadline)
+    ?? normalizeDate(verification?.dateQuality?.suggestedDeadline);
+  const currentDeadline = dateKey(row.application_end_at);
+  const lowConfidenceExtension = Boolean(
+    currentDeadline
+    && correctedDeadline
+    && correctedDeadline > currentDeadline
+    && hasActionableDateQualityCorrection(verification)
+  );
+  const useDeadlineCorrection = Number.isFinite(confidence) && (
+    confidence >= minConfidence || lowConfidenceExtension
+  );
+  if (useDeadlineCorrection && correctedDeadline && verification.deadlineMatches === false && dateKey(row.application_end_at) !== correctedDeadline) {
     const staleReason = isStaleDeadlineCorrection(row, verification, correctedDeadline);
     if (staleReason) {
       suppressed.push({
@@ -143,7 +178,7 @@ export function getCorrection(row, minConfidence) {
   }
 
   const orgConfidence = Number(verification.organizationConfidence ?? verification.organization?.confidence ?? confidence);
-  const correctedOrgName = orgConfidence >= minConfidence ? getOrganizationCandidate(verification) : null;
+  const correctedOrgName = useOrgCorrection && orgConfidence >= minConfidence ? getOrganizationCandidate(verification) : null;
   if (correctedOrgName && verification.orgNameMatches === false && correctedOrgName !== row.source_org_name) {
     suppressed.push({
       field: "source_org_name",

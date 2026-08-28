@@ -70,6 +70,23 @@ test("마감 키워드 근처의 단일 날짜는 마감일로 채택한다", ()
   assert.ok(!codesOf(result).includes("date-end-before-start"));
 });
 
+test("연도 있는 시작일과 월일만 있는 종료일 모집기간은 종료일을 마감일로 검증한다", () => {
+  const result = evaluatePosterDateQuality({
+    content:
+      "성북구청 직업훈련프로그램 교육생 모집 기간 연장 안내 1. 모집기간: 2026.08.18.(화) ~ 08.28.(금) 2. 모집대상: 미취업 성북구민",
+    deadline: "2026-08-18",
+  });
+  assert.ok(codesOf(result).includes("deadline-mismatch"));
+  assert.equal(result.suggestedDeadline, "2026-08-28");
+});
+
+test("연도 생략 종료일 모집기간의 저장 후보도 종료일을 사용한다", () => {
+  const result = evaluatePosterDateQuality({
+    content: "모집기간: 2026.08.18.(화) ~ 08.28.(금)",
+  });
+  assert.equal(result.suggestedDeadline, "2026-08-28");
+});
+
 test("신청 대상 앞의 바우처 사용기간을 신청 마감으로 덮어쓰지 않는다", () => {
   const result = evaluatePosterDateQuality({
     content:

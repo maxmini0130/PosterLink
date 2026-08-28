@@ -39,6 +39,61 @@ test("deadline comparison uses the Seoul calendar day", () => {
   assert.equal(correction, null);
 });
 
+test("clear date quality mismatch remains actionable even with low overall confidence", () => {
+  const correction = getCorrection(
+    {
+      application_end_at: "2026-08-17T15:00:00+00:00",
+      created_at: "2026-08-26T00:00:00+00:00",
+      source_org_name: "청년몽땅정보통",
+      field_verification: {
+        confidence: 0.45,
+        correctedDeadline: "2026-08-28",
+        deadlineMatches: false,
+        dateIssues: [
+          {
+            code: "deadline-mismatch",
+            evidence: "extracted 2026-08-18, notice 2026-08-28",
+          },
+        ],
+        dateQuality: {
+          decision: "review",
+          normalizedDeadline: "2026-08-18",
+          suggestedDeadline: "2026-08-28",
+        },
+      },
+    },
+    0.85,
+  );
+
+  assert.deepEqual(correction.updates, { application_end_at: "2026-08-28" });
+  assert.equal(correction.changes.length, 1);
+  assert.equal(correction.suppressed.length, 0);
+});
+
+test("low confidence date quality mismatch does not shorten an existing deadline", () => {
+  const correction = getCorrection(
+    {
+      application_end_at: "2026-09-07T15:00:00+00:00",
+      created_at: "2026-08-26T00:00:00+00:00",
+      source_org_name: "청년몽땅정보통",
+      field_verification: {
+        confidence: 0.45,
+        correctedDeadline: "2026-08-31",
+        deadlineMatches: false,
+        dateIssues: [
+          {
+            code: "deadline-mismatch",
+            evidence: "extracted 2026-09-08, notice 2026-08-31",
+          },
+        ],
+      },
+    },
+    0.85,
+  );
+
+  assert.equal(correction, null);
+});
+
 test("organizer suggestions are not applied to source_org_name", () => {
   const correction = getCorrection(
     {

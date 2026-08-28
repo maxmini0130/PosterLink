@@ -100,6 +100,38 @@ function extractFullDates(text) {
   return dates;
 }
 
+function makeInferredDateFromStart(startDate, monthValue, dayValue) {
+  const startYear = Number(startDate.iso.slice(0, 4));
+  const startMonth = Number(startDate.iso.slice(5, 7));
+  const month = Number(monthValue);
+  const day = Number(dayValue);
+  if (!startYear || !month || !day) return null;
+
+  const year = month < startMonth ? startYear + 1 : startYear;
+  return makeIsoDate(year, month, day);
+}
+
+function findAbbreviatedRangeEnd(segment, startDate) {
+  const trailingStart = startDate.endIndex;
+  const trailing = segment.slice(trailingStart, trailingStart + 90);
+  const match = trailing.match(
+    /^\s*(?:\([^)]*\))?\s*(?:~|-|–|—|부터|에서)\s*(\d{1,2})\s*(?:[./-]|월)\s*(\d{1,2})\s*(?:일)?\.?\s*(?:\([^)]*\))?/
+  );
+  if (!match) return null;
+
+  const iso = makeInferredDateFromStart(startDate, match[1], match[2]);
+  if (!iso) return null;
+
+  return {
+    iso,
+    raw: match[0].trim(),
+    weekday: null,
+    index: trailingStart + (match.index ?? 0) + match[0].indexOf(match[1]),
+    endIndex: trailingStart + match[0].length,
+    inferredYear: true,
+  };
+}
+
 function stripFullDates(text) {
   return text.replace(/(^|[^\d])(\d{2,4})\s*(?:년|[./-])\s*(\d{1,2})\s*(?:월|[./-])\s*(\d{1,2})\s*(?:일)?\s*\.?/g, " ");
 }
@@ -179,6 +211,11 @@ function findApplicationRange(text) {
 
     // "신청기간: 2026. 8. 20. ~ 모집시까지"처럼 종료일이 없는 열린 접수기간은
     // 뒤따르는 행사일이나 "모집시까지"의 "까지"를 마감일로 승격하지 않는다.
+    for (const startDate of dates) {
+      const inferredEnd = findAbbreviatedRangeEnd(segment, startDate);
+      if (inferredEnd) return { start: startDate, end: inferredEnd, segment };
+    }
+
     if (hasOpenEndedApplicationPeriod(segment)) {
       continue;
     }

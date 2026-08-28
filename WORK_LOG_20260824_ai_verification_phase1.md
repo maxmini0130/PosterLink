@@ -3199,3 +3199,28 @@ Post-apply verification:
   - active public posters: `149`
   - `count_public_posters` matches `search_public_posters`
   - public exposure tiers: `A 142`, `B 7`
+
+## Abbreviated Application Range Deadline Guard
+
+Fixed a deadline verification gap found in the Seongbuk vocational training
+notice pattern.
+
+- `poster-date-quality` now treats application ranges like
+  `2026.08.18.(화) ~ 08.28.(금)` as a single recruitment period and infers the
+  end date as `2026-08-28`.
+- Added regression coverage so a stored/extracted start date such as
+  `2026-08-18` is flagged as `deadline-mismatch` with suggested deadline
+  `2026-08-28`.
+- Updated `verify:apply-corrections` so low overall confidence does not hide a
+  clear date-quality extension, while still blocking low-confidence changes that
+  shorten an existing deadline.
+- Dry-run after the change found `2` correction candidates:
+  - Seongbuk vocational training: `2026-08-18` -> `2026-08-28`.
+  - Gwangjin video contest: `2026-09-04` -> `2026-09-13`, needs separate source
+    confirmation before applying.
+- No operating DB write was applied in this step.
+
+Verification:
+
+- `pnpm --filter posterlink-crawler test`
+- `pnpm --filter posterlink-crawler verify:apply-corrections -- --statuses=review,published --output=data/eval/reports/field-corrections-after-abbrev-date-fix-dryrun.json`
