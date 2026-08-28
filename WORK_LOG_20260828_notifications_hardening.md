@@ -31,6 +31,14 @@
 - `pnpm dlx supabase functions deploy check-deadlines --project-ref zxndgzsfrgwahwsdbjdj --no-verify-jwt --use-api`
 - `pnpm dlx supabase functions deploy notify-new-match --project-ref zxndgzsfrgwahwsdbjdj --use-api`
 
+## 추가 감사 도구
+
+- `scripts/crawler/src/audit-notifications.js`를 추가했다.
+- `pnpm --filter posterlink-crawler audit:notifications`로 운영 알림 push 대기 상태를 읽기 전용으로 확인할 수 있다.
+- 2026-08-28 실행 결과:
+  - `new_match`: 대기 19,197건, 대상 사용자 10명, 대상 공고 2,296건, 발송 가능 1,254건, push token 없음 17,943건, 알림 OFF 0건
+  - `favorite_deadline`: 대기 5건, 대상 사용자 2명, 대상 공고 2건, 발송 가능 0건, push token 없음 5건, 알림 OFF 0건
+
 ## 미실행
 
 - `deno check`: 현재 로컬 환경에 `deno` 명령이 없어 실행하지 못했다.
