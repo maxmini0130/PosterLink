@@ -3379,3 +3379,32 @@ Post-apply verification:
   - active public posters: `196`
   - `count_public_posters` matches `search_public_posters`
   - public exposure tiers: `A 189`, `B 7`
+
+## Final Review Queue Zeroing
+
+Resolved the final remaining review row after confirming it can be represented
+as a multi-program listing without pretending it is a single class.
+
+- Added operator evidence for 성북구평생학습관 `<하반기 평생학습 프로그램> 모집 안내`:
+  - `benefit`: describes the listing-level set of available lifelong learning
+    programs, including AI, digital content, speech, finance, writing, and
+    wellness classes.
+  - `venue`: explicitly states that the venue/operating site varies by program
+    and should be checked in the original program list.
+- Recomputed exposure tiers and auto-published the final Tier A candidate.
+
+Post-apply verification:
+
+- `pnpm --filter posterlink-crawler tier:auto-publish -- --limit=5000 --tiers=A --output=data/eval/reports/auto-publish-final-zero-review-dryrun.json`
+  - checked: `0`
+  - eligible: `0`
+  - blocked: `0`
+- `pnpm --filter posterlink-crawler ai:healthcheck`
+  - quality gate: `pass`
+  - review queue: `0`
+  - public non-poster count: `0`
+  - field correction candidates: `0`
+- `pnpm --filter posterlink-crawler audit:public-counts -- --output=data/eval/reports/public-count-audit-final-zero-review.json`
+  - active public posters: `197`
+  - `count_public_posters` matches `search_public_posters`
+  - public exposure tiers: `A 190`, `B 7`
