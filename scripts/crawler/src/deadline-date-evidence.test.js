@@ -262,3 +262,17 @@ test("carries explicit application-period year to slash-form end date before sta
   assert.deepEqual(row.value_json, { date: "2026-09-10" });
   assert.match(row.evidence_text, /2026\uB144 8\/26/);
 });
+
+test("prefers application deadline over later experience period", () => {
+  const row = inferDeadlineDateEvidence({
+    posterId: "poster-1",
+    title: "[26\uB144 \uD558\uBC18\uAE30, \uC601\uC6D4] \uB2E4\uBB38\uD654\uAC00\uC871 \uC11C\uC6B8\uB18D\uC7A5 \uD504\uB85C\uADF8\uB7A8 9\uC6D4 2\uC8FC\uCC28",
+    sourceText:
+      "\uC811\uC218\uAE30\uAC04: 2026.08.20 ~ 2026.09.03 \uC811\uC218\uB294 2026.09.03\uAE4C\uC9C0\uC785\uB2C8\uB2E4. \uCCB4\uD5D8\uAE30\uAC04: 2026.09.12~2026.09.13",
+    applicationEndAt: "2026-09-13T00:00:00Z",
+    createdAt: "2026-08-25T00:00:00Z",
+  });
+
+  assert.equal(row.value_text, "2026-09-03");
+  assert.match(row.evidence_text, /\uC811\uC218/);
+});

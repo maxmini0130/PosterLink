@@ -65,6 +65,43 @@ function dateKey(value) {
   return new Date(parsed.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+function getDateQualityDeadline(verification) {
+  return (
+    normalizeDate(verification?.dateQuality?.normalizedDeadline)
+    ?? normalizeDate(verification?.dateQuality?.suggestedDeadline)
+    ?? normalizeDate(verification?.dateQuality?.extractedDeadline)
+  );
+}
+
+function getYear(value) {
+  const text = String(value ?? "").trim();
+  const match = text.match(/\b(20\d{2})\b/);
+  return match ? Number(match[1]) : null;
+}
+
+function isStaleDeadlineCorrection(row, verification, correctedDeadline) {
+  const currentDeadline = dateKey(row.application_end_at);
+  const dateQualityDeadline = getDateQualityDeadline(verification);
+  if (
+    dateQualityDeadline
+    && currentDeadline === dateQualityDeadline
+    && dateQualityDeadline !== correctedDeadline
+  ) {
+    return "current_deadline_matches_date_quality";
+  }
+
+  const correctedYear = getYear(correctedDeadline);
+  const referenceYear = Math.max(
+    getYear(currentDeadline) ?? 0,
+    getYear(row.created_at) ?? 0,
+  );
+  if (correctedYear && referenceYear && correctedYear < referenceYear) {
+    return "corrected_deadline_is_older_than_current_context";
+  }
+
+  return null;
+}
+
 function getOrganizationCandidate(verification) {
   return normalizeText(
     verification?.correctedOrgName
@@ -87,12 +124,22 @@ export function getCorrection(row, minConfidence) {
 
   const correctedDeadline = normalizeDate(verification.correctedDeadline);
   if (correctedDeadline && verification.deadlineMatches === false && dateKey(row.application_end_at) !== correctedDeadline) {
-    updates.application_end_at = correctedDeadline;
-    changes.push({
-      field: "application_end_at",
-      old: dateKey(row.application_end_at),
-      next: correctedDeadline,
-    });
+    const staleReason = isStaleDeadlineCorrection(row, verification, correctedDeadline);
+    if (staleReason) {
+      suppressed.push({
+        field: "application_end_at",
+        old: dateKey(row.application_end_at),
+        next: correctedDeadline,
+        reason: staleReason,
+      });
+    } else {
+      updates.application_end_at = correctedDeadline;
+      changes.push({
+        field: "application_end_at",
+        old: dateKey(row.application_end_at),
+        next: correctedDeadline,
+      });
+    }
   }
 
   const orgConfidence = Number(verification.organizationConfidence ?? verification.organization?.confidence ?? confidence);

@@ -3062,3 +3062,52 @@ Standardized expired application handling around the existing lifecycle status
     `pnpm dlx supabase db push --linked` after explicit approval.
   - `pnpm dlx supabase db lint --linked` passed with no schema errors.
   - Post-migration dry-run still found `0` close candidates.
+
+## Sequential Launch Readiness Follow-Up
+
+Continued the remaining launch-readiness checklist after the closed lifecycle
+migration.
+
+- Public count consistency:
+  - Added `pnpm --filter posterlink-crawler audit:public-counts`.
+  - Confirmed `count_public_posters` and `search_public_posters` both return
+    `123` active public posters.
+  - Updated sitemap poster URLs to use the public discovery RPC and active
+    application filtering.
+  - Updated institution detail poster counts to count only active public
+    posters.
+- Deadline regression prevention:
+  - Added a regression test for application deadline vs. later experience
+    period, covering the Seoul Farm/Yeongwol pattern.
+  - Suppressed stale `field_verification.correctedDeadline` suggestions when a
+    newer date-quality decision already matches the stored deadline, or when the
+    suggested correction regresses to a past year.
+  - `verify:apply-corrections` dry-run now reports `0` field correction
+    candidates across published/review posters.
+- AI verification health:
+  - `pnpm --filter posterlink-crawler ai:healthcheck` passes.
+  - Summary: embedding coverage `100%`, field verification coverage `100%`,
+    image AI coverage `100%`, public non-poster count `0`, field correction
+    candidates `0`.
+- Structured field backfill:
+  - Fixed the backfill script to prefer the service-role key for maintenance
+    reads and to accept comma or whitespace separated `--statuses`.
+  - Dry-run checked `550` published/review posters and found `1` low-risk
+    candidate: the QA test review poster can get `deadline_type='fixed'`.
+    This was not applied because operating DB writes require explicit approval.
+- Search logs:
+  - Confirmed search logs exist and the popular-keyword dashboard intentionally
+    excludes internal/admin/operator searches.
+- Deadline notification function:
+  - Cleaned the D-1 favorite deadline notification copy.
+  - Split the response counts into `notificationCount` for DB notifications and
+    `pushSentCount` for Expo push delivery.
+
+Verification:
+
+- `pnpm --filter posterlink-crawler test`
+- `pnpm --filter posterlink-crawler ai:healthcheck`
+- `pnpm --filter posterlink-crawler audit:public-counts -- --output=data/eval/reports/public-counts-audit-20260828-final.json`
+- `pnpm --filter web lint`
+- `pnpm --filter web build`
+- `git diff --check`

@@ -177,13 +177,16 @@ export async function fetchPublicInstitution(slug: string) {
     .order("created_at", { ascending: false })
     .limit(60);
 
-  const enriched = await enrichPublicPosters(client, (posters ?? []) as Record<string, unknown>[]);
+  const visiblePosters = ((posters ?? []) as Record<string, unknown>[]).filter((poster) =>
+    isAcceptingPoster(poster),
+  );
+  const enriched = await enrichPublicPosters(client, visiblePosters);
   return {
     institution: {
       ...data,
-      organizedPosterCount: (posters ?? []).filter((poster: any) => poster.organizer_id === data.id).length,
-      sourcedPosterCount: (posters ?? []).filter((poster: any) => poster.source_institution_id === data.id).length,
-      activePosterCount: (posters ?? []).filter((poster: any) => isAcceptingPoster(poster)).length,
+      organizedPosterCount: visiblePosters.filter((poster: any) => poster.organizer_id === data.id).length,
+      sourcedPosterCount: visiblePosters.filter((poster: any) => poster.source_institution_id === data.id).length,
+      activePosterCount: visiblePosters.length,
     } as PublicInstitution,
     posters: enriched,
   };

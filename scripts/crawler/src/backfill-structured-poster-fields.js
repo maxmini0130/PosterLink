@@ -50,7 +50,7 @@ Dry-run is the default. --apply requires migration 20260804000000 to be present 
 
 function createSupabase() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_KEY;
   if (!url || !key)
     throw new Error("SUPABASE_URL and SUPABASE_KEY are required");
   return createClient(url, key, {
@@ -205,7 +205,7 @@ async function main() {
   );
   const includeUserFacingText = Boolean(args["include-user-facing-text"]);
   const statuses = String(args.statuses || "published,review")
-    .split(",")
+    .split(/[,\s]+/)
     .map((value) => value.trim())
     .filter(Boolean);
   const output = path.resolve(REPO_ROOT, args.output || DEFAULT_OUTPUT);

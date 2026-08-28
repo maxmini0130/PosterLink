@@ -3,12 +3,24 @@ import { createServerClient } from "@supabase/ssr";
 import { getAppOrigin } from "../lib/siteUrl";
 import { taxonomySlug, type DiscoveryTaxonomy } from "../lib/discoveryRoutes";
 import { isPosterAcceptingApplications } from "../lib/posterApplication";
-import { PUBLIC_POSTER_EXPOSURE_FILTER } from "../lib/publicPosterVisibility";
 
 export const dynamic = "force-dynamic";
 
 const appOrigin = getAppOrigin();
 const SITEMAP_POSTER_SELECT = "id, updated_at, application_start_at, application_end_at, deadline_type";
+
+type SitemapPosterRow = {
+  id: string;
+  updated_at: string | null;
+  application_start_at: string | null;
+  application_end_at: string | null;
+  deadline_type: string | null;
+};
+
+function toRows<T>(value: T | T[] | null | undefined): T[] {
+  if (!value) return [];
+  return Array.isArray(value) ? value : [value];
+}
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const supabase = createServerClient(
@@ -19,12 +31,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const [{ data: feedPosters }, { data: archiveEvidence }] = await Promise.all([
     supabase
-      .from("posters")
-      .select(SITEMAP_POSTER_SELECT)
-      .eq("poster_status", "published")
-      .or(PUBLIC_POSTER_EXPOSURE_FILTER)
-      .order("updated_at", { ascending: false })
-      .limit(1000),
+      .rpc("search_public_posters", {
+        p_query: null,
+        p_category_id: null,
+        p_region_ids: null,
+        p_include_closed: false,
+        p_sort: "latest",
+        p_limit: 500,
+      })
+      .select(SITEMAP_POSTER_SELECT),
     supabase
       .from("poster_field_evidence")
       .select("poster_id")
@@ -44,7 +59,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         .order("updated_at", { ascending: false })
         .limit(1000)
     : { data: [] };
-  const posters = uniquePostersById([...(feedPosters ?? []), ...(archivePosters ?? [])]);
+  const posters = uniquePostersById([
+    ...toRows(feedPosters as SitemapPosterRow[] | SitemapPosterRow | null),
+    ...toRows(archivePosters as SitemapPosterRow[] | SitemapPosterRow | null),
+  ])
+    .filter((poster) => isPosterAcceptingApplications({
+      applicationStartAt: poster.application_start_at,
+      applicationEndAt: poster.application_end_at,
+      deadlineType: poster.deadline_type,
+    }));
   const posterIds = posters.map((poster) => poster.id);
 
   const [categoryLinksRes, regionLinksRes, categoriesRes, regionsRes, institutionsRes] = await Promise.all([
