@@ -35,7 +35,9 @@ export default function NotificationsPage() {
   }, []);
 
   const markAsRead = async (id: string) => {
-    await supabase.from("notifications").update({ is_read: true }).eq("id", id);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from("notifications").update({ is_read: true }).eq("id", id).eq("user_id", user.id);
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
   };
 

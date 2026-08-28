@@ -62,7 +62,7 @@ serve(async (req) => {
         .from("favorites")
         .select(`
           user_id,
-          profiles:user_id (nickname, expo_push_token)
+          profiles:user_id (nickname, expo_push_token, is_notified)
         `)
         .eq("poster_id", poster.id)
 
@@ -89,7 +89,7 @@ serve(async (req) => {
 
       for (const fav of favorites ?? []) {
         const profile = Array.isArray(fav.profiles) ? fav.profiles[0] : fav.profiles
-        if (!profile || existingUserIds.has(fav.user_id)) continue
+        if (!profile || profile.is_notified !== true || existingUserIds.has(fav.user_id)) continue
 
         const { data: notification, error: notifyError } = await supabase
           .from("notifications")
@@ -127,6 +127,15 @@ serve(async (req) => {
           const pushResult = await pushResponse.json().catch(() => null)
           const tickets = Array.isArray(pushResult?.data) ? pushResult.data : []
           const delivered = pushResponse.ok && tickets.some((ticket) => ticket?.status === "ok")
+          const invalidToken = tickets.some(
+            (ticket) => ticket?.status === "error" && ticket?.details?.error === "DeviceNotRegistered",
+          )
+          if (invalidToken) {
+            await supabase
+              .from("profiles")
+              .update({ expo_push_token: null })
+              .eq("id", fav.user_id)
+          }
           if (delivered) {
             pushNotificationsSent.push({ userId: fav.user_id, pushResult })
             await supabase

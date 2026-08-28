@@ -118,9 +118,10 @@ serve(async (req) => {
     const userIds = [...notificationIdsByUser.keys()];
     const { data: profiles, error: profileError } = await serviceClient
       .from("profiles")
-      .select("id, expo_push_token")
+      .select("id, expo_push_token, is_notified")
       .in("id", userIds)
       .not("expo_push_token", "is", null)
+      .eq("is_notified", true)
       .neq("expo_push_token", "");
 
     if (profileError) {
