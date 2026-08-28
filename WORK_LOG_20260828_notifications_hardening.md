@@ -22,6 +22,14 @@
 
 - `pnpm --filter web lint`
 - `git diff --check`
+- `pnpm dlx supabase functions list --project-ref zxndgzsfrgwahwsdbjdj`
+  - `check-deadlines`: ACTIVE v7, `verify_jwt=false`
+  - `notify-new-match`: ACTIVE v5, `verify_jwt=true`
+
+## 운영 배포
+
+- `pnpm dlx supabase functions deploy check-deadlines --project-ref zxndgzsfrgwahwsdbjdj --no-verify-jwt --use-api`
+- `pnpm dlx supabase functions deploy notify-new-match --project-ref zxndgzsfrgwahwsdbjdj --use-api`
 
 ## 미실행
 
