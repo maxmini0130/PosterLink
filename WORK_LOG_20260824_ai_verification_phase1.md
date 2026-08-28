@@ -3149,3 +3149,53 @@ Verification:
 - `pnpm --filter web lint`
 - `pnpm --filter web build`
 - `git diff --check`
+
+## Review Queue Evidence Cleanup
+
+Continued the operating DB review queue cleanup with dry-runs before each
+write and post-apply health checks.
+
+- Backfilled `content_type` evidence for all `47` remaining review posters:
+  - `45` recruit
+  - `1` news
+  - `1` discard QA test notice
+- Rejected `12` already-published non-poster/banner/admin-notice records that
+  were caught by the cleanup audit. Public search count did not change because
+  those rows were already excluded by exposure tier.
+- Corrected `4` stale past-year review deadlines where the text context pointed
+  to the current 2026 cycle:
+  - 서울청년센터 양천 `<우리동네 취향클럽 - 한줄모임 모집 안내>`:
+    `2023-09-03` -> `2026-09-03`
+  - 광진 청년아지트 `<광지트 소셜런치>`: `2023-09-07` -> `2026-09-07`
+  - 서울청년센터 성북 `<과도기 박람회 사전 방문 신청>`:
+    `2023-09-12` -> `2026-09-12`
+  - 서울청년센터 관악 신림동쓰리룸 `<9월 청년성장><이력서/자소서 특강>`:
+    `2023-09-29` -> `2026-09-26`
+- Manually elevated high-confidence `content_type=recruit` evidence for `4`
+  Tier A candidates after operator review and corrected one generic title:
+  - `[AI 메이커톤 기획단] 함께 만드는 청년 8명을 찾습니다!`
+  - 광진구청 패션판매전 참여업체 모집
+  - 서울청년센터 도봉 `<DO:봉>` 참여자 모집
+  - 서울청년센터 성북 9월 티톡 모집
+- Held back `2` visually plausible but application-weak items for manual
+  review instead of auto-publishing:
+  - 관악구보건소 이동건강검진 안내
+  - 종암동새날도서관 축제 안내
+- Auto-published the `4` remaining safe Tier A candidates after dry-run found no
+  audit failures.
+
+Post-apply verification:
+
+- `pnpm --filter posterlink-crawler ai:healthcheck`
+  - quality gate: `pass`
+  - review queue: `43`
+  - public non-poster count: `0`
+  - field correction candidates: `0`
+- `pnpm --filter posterlink-crawler tier:auto-publish -- --limit=5000 --tiers=A`
+  - eligible: `0`
+  - blocked: `43`
+  - remaining tiers: `A 6`, `B 2`, `C 35`
+- `pnpm --filter posterlink-crawler audit:public-counts`
+  - active public posters: `149`
+  - `count_public_posters` matches `search_public_posters`
+  - public exposure tiers: `A 142`, `B 7`
