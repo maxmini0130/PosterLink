@@ -9,7 +9,9 @@ import { createClient } from "@supabase/supabase-js";
 const DEFAULT_OUTPUT = "data/eval/reports/auto-publish-plan-dryrun.json";
 const DEFAULT_LIMIT = 5000;
 const DEFAULT_TIERS = "A";
+const MIN_AUTO_PUBLISH_CONTENT_TYPE_CONFIDENCE = 0.8;
 const VALID_TIERS = new Set(["A", "B", "C"]);
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "../../..");
 
@@ -60,7 +62,7 @@ async function fetchReviewPosters(supabase, limit) {
   for (let offset = 0; rows.length < limit; offset += pageSize) {
     const { data, error } = await supabase
       .from("posters")
-      .select("id,title,poster_status,exposure_tier,tier_reason,tier_computed_at,created_at,source_org_name")
+      .select("id,title,poster_status,exposure_tier,tier_reason,tier_computed_at,created_at,source_org_name,application_end_at,deadline_type")
       .eq("poster_status", "review")
       .order("created_at", { ascending: false })
       .range(offset, offset + pageSize - 1);
@@ -71,17 +73,81 @@ async function fetchReviewPosters(supabase, limit) {
   return rows.slice(0, limit);
 }
 
+async function fetchContentTypeEvidence(supabase, posterIds) {
+  const rows = [];
+  for (let index = 0; index < posterIds.length; index += 200) {
+    const chunk = posterIds.slice(index, index + 200);
+    const { data, error } = await supabase
+      .from("poster_field_evidence")
+      .select("poster_id,value_text,value_json,confidence,extractor")
+      .eq("field_key", "content_type")
+      .in("poster_id", chunk);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+  }
+  return rows;
+}
+
+function contentTypeValue(row) {
+  return String(row?.value_json?.type ?? row?.value_json?.value ?? row?.value_text ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+function bestContentTypeByPoster(rows) {
+  const byPoster = new Map();
+  for (const row of rows) {
+    const confidence = Number(row.confidence);
+    if (!Number.isFinite(confidence) || confidence <= 0) continue;
+    const existing = byPoster.get(row.poster_id);
+    if (!existing || confidence > existing.confidence) {
+      byPoster.set(row.poster_id, {
+        value: contentTypeValue(row),
+        confidence,
+        extractor: row.extractor ?? null,
+      });
+    }
+  }
+  return byPoster;
+}
+
 function isTierFresh(row) {
   return Boolean(row.tier_computed_at);
 }
 
-function buildPlans(rows, allowedTiers) {
+function kstDateKey(value) {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return null;
+  return new Date(date.getTime() + KST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+function isFixedDeadlineActive(row) {
+  if (String(row.deadline_type ?? "").toLowerCase() !== "fixed") return false;
+  const deadlineKey = kstDateKey(row.application_end_at);
+  const todayKey = kstDateKey();
+  return Boolean(deadlineKey && todayKey && deadlineKey >= todayKey);
+}
+
+function buildPlans(rows, allowedTiers, contentTypeByPoster) {
   return rows.map((row) => {
     const reasons = [];
     const tier = String(row.exposure_tier ?? "").toUpperCase();
+    const contentType = contentTypeByPoster.get(row.id) ?? null;
     if (!tier) reasons.push("missing_exposure_tier");
     if (tier && !allowedTiers.includes(tier)) reasons.push("tier_not_allowed");
     if (!isTierFresh(row)) reasons.push("missing_tier_computed_at");
+    if (String(row.deadline_type ?? "").toLowerCase() !== "fixed") reasons.push("deadline_type_not_fixed");
+    if (!row.application_end_at) reasons.push("missing_application_end_at");
+    if (row.application_end_at && !isFixedDeadlineActive(row)) reasons.push("application_deadline_expired");
+    if (!contentType) reasons.push("missing_content_type_evidence");
+    if (contentType && contentType.value !== "recruit") reasons.push(`content_type_${contentType.value || "unknown"}`);
+    if (
+      contentType
+      && contentType.value === "recruit"
+      && contentType.confidence < MIN_AUTO_PUBLISH_CONTENT_TYPE_CONFIDENCE
+    ) {
+      reasons.push("low_confidence_content_type");
+    }
 
     return {
       poster_id: row.id,
@@ -90,6 +156,9 @@ function buildPlans(rows, allowedTiers) {
       poster_status: row.poster_status,
       exposure_tier: row.exposure_tier,
       tier_computed_at: row.tier_computed_at,
+      application_end_at: row.application_end_at,
+      deadline_type: row.deadline_type,
+      content_type: contentType,
       eligible: reasons.length === 0,
       blocked_reasons: reasons,
       tier_reason: row.tier_reason,
@@ -173,7 +242,8 @@ async function main() {
 
   const supabase = createSupabase();
   const reviewPosters = await fetchReviewPosters(supabase, limit);
-  const plans = buildPlans(reviewPosters, allowedTiers);
+  const contentTypeRows = await fetchContentTypeEvidence(supabase, reviewPosters.map((poster) => poster.id));
+  const plans = buildPlans(reviewPosters, allowedTiers, bestContentTypeByPoster(contentTypeRows));
   const results = apply ? await applyPlans(supabase, plans, allowedTiers) : [];
   const summary = summarize(plans);
 

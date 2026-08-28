@@ -35,6 +35,44 @@
   - Generated 269 evidence rows.
   - Applied 0 rows.
 - `git diff --check`
+
+## Review Tier Auto-Publish Apply
+
+Applied the user-approved review tier workflow with an additional safety review.
+
+- Recomputed exposure tiers for `69` review posters in the operating DB:
+  - `A`: `32`
+  - `B`: `2`
+  - `C`: `35`
+  - Applied: `69`
+  - Failed: `0`
+- Before auto-publish, added a stricter planner guard:
+  - Requires `content_type` evidence to be `recruit` with confidence `>= 0.8`.
+  - Requires `deadline_type='fixed'`.
+  - Requires a stored `application_end_at`.
+  - Requires the deadline to be active by the `Asia/Seoul` calendar date.
+- Auto-publish result:
+  - Initial eligible tier-A candidates after the content-type guard: `26`.
+  - Applied: `26`
+  - Failed: `0`
+  - Audit failed: `0`
+- Post-apply safety correction:
+  - Reverted `4` auto-published rows back to `review` after detecting `3`
+    expired fixed deadlines and `1` unknown deadline type.
+  - Inserted follow-up `admin_actions` rows with
+    `action_reason='auto_publish_reverted_safety_guard'`.
+- Final operating state:
+  - Review queue: `47`
+  - Active public posters: `145`
+  - `count_public_posters` and `search_public_posters` remain matched.
+  - AI healthcheck remains `pass`.
+
+Reports:
+
+- `data/eval/reports/exposure-tier-review-20260828-apply.json`
+- `data/eval/reports/auto-publish-review-tier-a-20260828-apply.json`
+- `data/eval/reports/auto-publish-review-tier-a-20260828-safety-guard-postfix.json`
+- `data/eval/reports/public-counts-audit-20260828-after-revert-unsafe.json`
   - Passed; only line-ending warnings for existing Windows checkout behavior.
 
 ## Remaining Operational Steps
