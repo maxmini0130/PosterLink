@@ -3224,3 +3224,37 @@ Verification:
 
 - `pnpm --filter posterlink-crawler test`
 - `pnpm --filter posterlink-crawler verify:apply-corrections -- --statuses=review,published --output=data/eval/reports/field-corrections-after-abbrev-date-fix-dryrun.json`
+
+## Abbreviated Deadline Corrections Applied
+
+Applied the safe operating DB corrections discovered after the abbreviated range
+guard.
+
+- Corrected `2` application deadlines:
+  - 성북구청 `<2026년 성북구 직업훈련프로그램 교육생>`:
+    `2026-08-18` -> `2026-08-28`.
+  - 광진구청 `<제6회 광진구 영상 공모전>`:
+    `2026-09-04` -> `2026-09-13`.
+    The original notice has `공고기간 2026-07-27 ~ 2026-09-14`, but the actual
+    `접수기간` is `2026. 9. 4.(금)~9. 13.(일) 23:59까지`, so the application
+    deadline should be `2026-09-13`.
+- Recomputed exposure tiers for review/published posters after the date fixes.
+- Auto-published `1` safe Tier A candidate:
+  - 성북구청 `<2026년 성북구 직업훈련프로그램 교육생>`.
+- Post-apply correction dry-run found `0` remaining field correction candidates.
+
+Post-apply verification:
+
+- `pnpm --filter posterlink-crawler verify:apply-corrections -- --statuses=review,published --output=data/eval/reports/field-corrections-after-abbrev-date-fix-postapply-dryrun.json`
+- `pnpm --filter posterlink-crawler tier:compute -- --limit=5000 "--statuses=review,published" --output=data/eval/reports/exposure-tier-after-abbrev-date-corrections.json --apply`
+- `pnpm --filter posterlink-crawler tier:auto-publish -- --limit=5000 --tiers=A --output=data/eval/reports/auto-publish-after-abbrev-date-corrections-final-dryrun.json`
+  - eligible: `0`
+  - blocked: `40`
+- `pnpm --filter posterlink-crawler ai:healthcheck`
+  - quality gate: `pass`
+  - review queue: `40`
+  - field correction candidates: `0`
+- `pnpm --filter posterlink-crawler audit:public-counts -- --output=data/eval/reports/public-count-audit-after-abbrev-date-corrections.json`
+  - active public posters: `152`
+  - `count_public_posters` matches `search_public_posters`
+  - public exposure tiers: `A 145`, `B 7`
