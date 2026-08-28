@@ -3258,3 +3258,35 @@ Post-apply verification:
   - active public posters: `152`
   - `count_public_posters` matches `search_public_posters`
   - public exposure tiers: `A 145`, `B 7`
+
+## Track-Specific Deadline Correction
+
+Resolved a remaining Tier A review item where the source contained two
+application tracks with different end dates.
+
+- Corrected 통일부 `<K-Dialogue : 모두의 평화> 청년청중단 모집`:
+  - Previous structured deadline: missing / `deadline_type=unknown`.
+  - Correct deadline: `2026-08-31`.
+  - Reason: the title and target flow are for the `청년청중단` 모집 track
+    (`2026.8.20~8.31`), while the later `2026.8.20~9.11` date belongs to
+    general audience registration.
+- Inserted operator evidence for:
+  - `deadline_date=2026-08-31`
+  - `deadline_type=fixed`
+- Recomputed exposure tiers and auto-published the now-safe Tier A review row.
+
+Post-apply verification:
+
+- `pnpm --filter posterlink-crawler tier:compute -- --limit=5000 "--statuses=review,published" --output=data/eval/reports/exposure-tier-after-kdialogue-deadline.json --apply`
+- `pnpm --filter posterlink-crawler verify:apply-corrections -- "--statuses=review,published" --output=data/eval/reports/field-corrections-after-kdialogue-deadline-dryrun.json`
+  - field correction candidates: `0`
+- `pnpm --filter posterlink-crawler tier:auto-publish -- --limit=5000 --tiers=A --output=data/eval/reports/auto-publish-after-kdialogue-final-dryrun.json`
+  - eligible: `0`
+  - blocked: `39`
+- `pnpm --filter posterlink-crawler ai:healthcheck`
+  - quality gate: `pass`
+  - review queue: `39`
+- `pnpm --filter posterlink-crawler audit:public-counts -- --output=data/eval/reports/public-count-audit-after-kdialogue.json`
+  - active public posters: `153`
+  - `count_public_posters` matches `search_public_posters`
+  - public exposure tiers: `A 146`, `B 7`
