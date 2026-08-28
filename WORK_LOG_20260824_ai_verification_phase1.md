@@ -3057,3 +3057,8 @@ Standardized expired application handling around the existing lifecycle status
   - Checked published posters with a stored deadline: `171`.
   - Close candidates: `0`.
   - Applied: `0`.
+- Operating DB migration:
+  - Applied `20260828010000_close_expired_posters_kst.sql` with
+    `pnpm dlx supabase db push --linked` after explicit approval.
+  - `pnpm dlx supabase db lint --linked` passed with no schema errors.
+  - Post-migration dry-run still found `0` close candidates.
