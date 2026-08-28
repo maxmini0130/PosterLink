@@ -3034,3 +3034,26 @@ the homepage and server-rendered discovery pages.
   totals from a limited client sample.
 - Preserved semantic search for eligible keyword searches, with client fallback
   to the public discovery RPC.
+
+## Separate Expired Poster Lifecycle
+
+Standardized expired application handling around the existing lifecycle status
+`poster_status='closed'`.
+
+- Added migration `supabase/migrations/20260828010000_close_expired_posters_kst.sql`.
+  - Keeps posters visible through their application end date.
+  - Closes them only after the end date has passed in `Asia/Seoul`.
+  - Keeps the function callable only by `service_role`.
+- Added CLI:
+  - `pnpm --filter posterlink-crawler maintenance:close-expired`
+  - Dry-run by default.
+  - `--apply` changes only `published` posters whose application end date has
+    passed in KST to `closed`.
+- Aligned admin/operator UI with the real DB status:
+  - Admin poster review can filter `closed`.
+  - Operator list displays `closed` as `마감`.
+  - Operator dashboard counts `closed` separately.
+- Operating DB dry-run on `2026-08-28` KST:
+  - Checked published posters with a stored deadline: `171`.
+  - Close candidates: `0`.
+  - Applied: `0`.

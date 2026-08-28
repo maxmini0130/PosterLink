@@ -50,7 +50,7 @@ function formatPercent(value: number) {
 }
 
 export default function OperatorDashboardPage() {
-  const [stats, setStats] = useState({ draft: 0, review: 0, published: 0, rejected: 0 });
+  const [stats, setStats] = useState({ draft: 0, review: 0, published: 0, rejected: 0, closed: 0 });
   const [recent, setRecent] = useState<any[]>([]);
   const [report, setReport] = useState<PerformanceReport | null>(null);
   const [loading, setLoading] = useState(true);
@@ -60,11 +60,12 @@ export default function OperatorDashboardPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const [draftRes, reviewRes, publishedRes, rejectedRes, recentRes, reportRes] = await Promise.all([
+      const [draftRes, reviewRes, publishedRes, rejectedRes, closedRes, recentRes, reportRes] = await Promise.all([
         supabase.from("posters").select("id", { count: "exact", head: true }).eq("created_by", user.id).eq("poster_status", "draft"),
         supabase.from("posters").select("id", { count: "exact", head: true }).eq("created_by", user.id).eq("poster_status", "review"),
         supabase.from("posters").select("id", { count: "exact", head: true }).eq("created_by", user.id).eq("poster_status", "published"),
         supabase.from("posters").select("id", { count: "exact", head: true }).eq("created_by", user.id).eq("poster_status", "rejected"),
+        supabase.from("posters").select("id", { count: "exact", head: true }).eq("created_by", user.id).eq("poster_status", "closed"),
         supabase.from("posters").select("id, title, poster_status, created_at").eq("created_by", user.id).order("created_at", { ascending: false }).limit(5),
         supabase.auth.getSession().then(async ({ data: { session } }) => {
           const response = await fetch("/api/operator/performance-report?days=30", {
@@ -80,6 +81,7 @@ export default function OperatorDashboardPage() {
         review: reviewRes.count ?? 0,
         published: publishedRes.count ?? 0,
         rejected: rejectedRes.count ?? 0,
+        closed: closedRes.count ?? 0,
       });
       if (recentRes.data) setRecent(recentRes.data);
       if (reportRes) setReport(reportRes);
@@ -93,13 +95,14 @@ export default function OperatorDashboardPage() {
     review:    { label: "검수 대기", color: "text-blue-600 bg-blue-50 border-blue-100" },
     published: { label: "게시 중",  color: "text-green-600 bg-green-50 border-green-100" },
     rejected:  { label: "반려됨",   color: "text-rose-500 bg-rose-50 border-rose-100" },
-    expired:   { label: "마감",     color: "text-orange-600 bg-orange-50 border-orange-100" },
+    closed:    { label: "마감",     color: "text-orange-600 bg-orange-50 border-orange-100" },
   };
 
   const cards = [
     { key: "draft",     label: "초안",     icon: <FileText size={22} />,     color: "bg-gray-50 text-gray-500" },
     { key: "review",    label: "검수 대기", icon: <Clock size={22} />,        color: "bg-blue-50 text-blue-600" },
     { key: "published", label: "게시 중",   icon: <CheckCircle2 size={22} />, color: "bg-green-50 text-green-600" },
+    { key: "closed",    label: "마감",      icon: <Clock size={22} />,        color: "bg-orange-50 text-orange-600" },
     { key: "rejected",  label: "반려됨",    icon: <AlertCircle size={22} />,  color: "bg-rose-50 text-rose-500" },
   ];
   const performanceCards = report ? [
@@ -124,7 +127,7 @@ export default function OperatorDashboardPage() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
+      <div className="grid grid-cols-2 gap-4 mb-10 sm:grid-cols-3 lg:grid-cols-5">
         {cards.map((card) => (
           <div key={card.key} className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${card.color}`}>

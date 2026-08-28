@@ -39,7 +39,7 @@ import { PosterImageFallback } from "../../components/PosterImageFallback";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const PAGE_SIZE = 24;
 
-type PosterStatus = "review" | "published" | "rejected" | "draft";
+type PosterStatus = "review" | "published" | "rejected" | "draft" | "closed";
 type PosterMediaFilter = "" | "poster_image" | "text_notice";
 type PosterSearchFilters = {
   text: string;
@@ -63,7 +63,7 @@ const EMPTY_FILTERS: PosterSearchFilters = {
   sort: "default",
 };
 
-const POSTER_STATUS_VALUES = new Set<PosterStatus>(["review", "published", "rejected", "draft"]);
+const POSTER_STATUS_VALUES = new Set<PosterStatus>(["review", "published", "rejected", "draft", "closed"]);
 
 function isPosterStatus(value: string | null): value is PosterStatus {
   return Boolean(value && POSTER_STATUS_VALUES.has(value as PosterStatus));
@@ -1135,7 +1135,7 @@ export default function AdminPostersPage() {
     void fetchPosters(currentFilter, page, appliedFilters);
   };
 
-  const selectablePosters = posters.filter((poster) => poster.poster_status !== "published");
+  const selectablePosters = posters.filter((poster) => poster.poster_status !== "published" && poster.poster_status !== "closed");
   const selectableIds = selectablePosters.map((poster) => poster.id);
   const selectedCount = selectedIds.length;
   const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selectedIds.includes(id));
@@ -1358,6 +1358,7 @@ export default function AdminPostersPage() {
   const tabs: { label: string; value: PosterStatus }[] = [
     { label: "검수 대기", value: "review" },
     { label: "승인 완료", value: "published" },
+    { label: "마감", value: "closed" },
     { label: "반려됨", value: "rejected" },
     { label: "임시 저장", value: "draft" },
   ];
@@ -1681,7 +1682,7 @@ export default function AdminPostersPage() {
                   : "border-gray-100 dark:border-slate-800"
               }`}
             >
-              {poster.poster_status !== "published" && (
+              {poster.poster_status !== "published" && poster.poster_status !== "closed" && (
                 <button
                   type="button"
                   onClick={() => togglePosterSelection(poster.id)}
@@ -1864,7 +1865,7 @@ export default function AdminPostersPage() {
                   </button>
                 )}
 
-                {poster.poster_status !== "published" && (
+                  {poster.poster_status !== "published" && poster.poster_status !== "closed" && (
                   <button
                     onClick={() => handleStatusChange(poster.id, "published")}
                     title="승인"

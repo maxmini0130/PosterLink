@@ -66,7 +66,7 @@ export default function OperatorPostersPage() {
         return <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-600 text-[11px] font-black border border-blue-100"><Clock size={12}/> 검수 대기</span>;
       case 'rejected':
         return <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-500 text-[11px] font-black border border-rose-100"><AlertCircle size={12}/> 반려됨</span>;
-      case 'expired':
+      case 'closed':
         return <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-50 text-orange-600 text-[11px] font-black border border-orange-100">마감</span>;
       default:
         return <span className="px-2.5 py-1 rounded-lg bg-gray-100 text-gray-400 text-[11px] font-black">{status}</span>;
