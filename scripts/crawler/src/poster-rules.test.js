@@ -9,6 +9,7 @@ import { getAttachmentFailureCode } from "./attachment-text-extractor.js";
 import { choosePreferredDetailTitle, inferSpecificTitle } from "./adapters/youth-seoul.js";
 import { extractOrgFromTitle, resolveSourceOrgName } from "./poster-org.js";
 import { isLikelyApplicationLink, sanitizeKnownShortUrl } from "./source-link-rules.js";
+import { inferPosterClassification } from "./poster-classifier.js";
 import { inferRegionMatches } from "./region-rules.js";
 
 const org = "금천구";
@@ -738,4 +739,32 @@ test("Seoul resident eligibility outranks district venue addresses", () => {
   assert.equal(regions[0].code, "REG_SEOUL");
   assert.equal(regions[0].source, "eligibility_scope");
   assert.ok(regions[0].confidence >= 0.9);
+});
+
+test("contest wording classifies Seoul Dream Board copy call as contest", () => {
+  const result = inferPosterClassification({
+    title: "2026\uB144 \uAC00\uC744\uD3B8 \u300C\uC11C\uC6B8\uAFC8\uC0C8\uAE40\uD310 \u300D \uBB38\uC548 \uACF5\uBAA8",
+    category: "\uC0C8\uC18C\uC2DD",
+    summary_short: "\uACF5\uBAA8\uAE30\uAC04 : 2026. 8. 28.(\uAE08) ~ 9. 6.(\uC77C), 10\uC77C\uAC04",
+    content: [
+      "\uC11C\uC6B8\uAFC8\uC0C8\uAE40\uD310 \uBB38\uC548 \uACF5\uBAA8\uC804\uC744 \uC2E4\uC2DC\uD569\uB2C8\uB2E4.",
+      "\uACF5\uBAA8\uBB38\uC548: \uD55C\uAE00 \uC790\uC218 30\uC790 \uC774\uB0B4 \uC2DC\uBBFC \uCC3D\uC791 \uBB38\uC548",
+      "\uC751\uBAA8\uBC29\uBC95: \uC11C\uC6B8\uC2DC \uB204\uB9AC\uC9D1 \uC628\uB77C\uC778 \uC2E0\uCCAD \uBC0F \uC6B0\uD3B8 \uC2E0\uCCAD",
+      "\uC2EC\uC0AC\uAE30\uC900: \uB3C5\uCC3D\uC131, \uAC10\uB3D9\uC131, \uC0C1\uC9D5\uC131, \uC9C4\uC815\uC131",
+    ].join("\n"),
+  });
+
+  assert.equal(result.categoryCodes[0], "CAT_CONTEST");
+  assert.equal(result.issues.some((issue) => issue.code === "low-category-confidence"), false);
+});
+
+test("generic support project calls are not classified as contest by 공모 alone", () => {
+  const result = inferPosterClassification({
+    title: "2026\uB144 \uC0AC\uD68C\uC801\uACBD\uC81C \uC9C0\uC6D0\uC0AC\uC5C5 \uACF5\uBAA8",
+    category: "\uC9C0\uC6D0\uC0AC\uC5C5",
+    summary_short: "\uC0AC\uD68C\uC801\uAE30\uC5C5 \uBC0F \uD611\uB3D9\uC870\uD569 \uC131\uC7A5 \uC9C0\uC6D0",
+    content: "\uC0AC\uC5C5\uD654 \uC790\uAE08 \uBC0F \uCEE8\uC124\uD305 \uC9C0\uC6D0 \uB300\uC0C1\uC744 \uBAA8\uC9D1\uD569\uB2C8\uB2E4.",
+  });
+
+  assert.notEqual(result.categoryCodes[0], "CAT_CONTEST");
 });

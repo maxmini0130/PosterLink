@@ -2,6 +2,28 @@ import { inferRegionMatches } from "./region-rules.js";
 
 const CATEGORY_RULES = [
   {
+    code: "CAT_CONTEST",
+    label: "\uACF5\uBAA8\uC804",
+    keywords: [
+      "\uACF5\uBAA8\uC804",
+      "\uBB38\uC548 \uACF5\uBAA8",
+      "\uC544\uC774\uB514\uC5B4 \uACF5\uBAA8",
+      "\uC8FC\uBBFC\uC81C\uC548 \uACF5\uBAA8",
+      "\uC601\uC0C1 \uACF5\uBAA8",
+      "\uC0AC\uC9C4 \uACF5\uBAA8",
+      "\uC1FC\uD3FC \uACF5\uBAA8",
+      "\uAD7F\uC988 \uACF5\uBAA8",
+      "\uB514\uC790\uC778 \uACF5\uBAA8",
+      "\uC2AC\uB85C\uAC74 \uACF5\uBAA8",
+      "\uC751\uBAA8",
+      "\uCD9C\uD488",
+      "\uC791\uD488",
+      "\uC218\uC0C1\uC791",
+      "\uB2F9\uC120\uC791",
+      "\uC2EC\uC0AC\uAE30\uC900",
+    ],
+  },
+  {
     code: "CAT_WELFARE",
     label: "지원금/복지",
     keywords: ["복지", "지원금", "보조금", "수당", "급여", "바우처", "상담", "돌봄", "취약", "장애", "저소득", "고립", "위기", "긴급"],
@@ -39,6 +61,7 @@ const CATEGORY_RULES = [
 ];
 
 const SOURCE_CATEGORY_CODE_MAP = new Map([
+  ["\uACF5\uBAA8\uC804", "CAT_CONTEST"],
   ["채용", "CAT_EDUCATION"],
   ["일자리", "CAT_EDUCATION"],
   ["교육", "CAT_EDUCATION"],
