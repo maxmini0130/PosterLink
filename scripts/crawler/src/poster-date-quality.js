@@ -1,8 +1,9 @@
 const APPLICATION_LABEL_PATTERN = /(?:신청|접수|모집|응모|지원|등록)\s*(?:기간|기한|마감|일정|방법(?:은)?\s*\??)/i;
+const EXTRA_APPLICATION_LABEL_PATTERN = /(?:공모|응모)\s*(?:기간|일정|마감)/i;
 const NON_APPLICATION_PERIOD_PATTERN = /(?:여행|행사|교육|운영|활동|사용|사업|프로그램)\s*(?:기간|일정)/i;
 const ALWAYS_OPEN_PATTERN = /상시\s*(?:모집|접수|신청|운영)?|수시\s*(?:모집|접수|신청)?/i;
 const MIDNIGHT_PATTERN = /(?:^|[^\d])00\s*:\s*00(?:[^\d]|$)/;
-const RANGE_CONNECTOR_PATTERN = /(?:~|〜|∼|-|부터|에서|까지)/;
+const RANGE_CONNECTOR_PATTERN = /(?:~|～|〜|∼|-|부터|에서|까지)/;
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
 function compact(value) {
@@ -115,7 +116,7 @@ function findAbbreviatedRangeEnd(segment, startDate) {
   const trailingStart = startDate.endIndex;
   const trailing = segment.slice(trailingStart, trailingStart + 90);
   const match = trailing.match(
-    /^\s*(?:\([^)]*\))?\s*(?:~|-|–|—|부터|에서)\s*(\d{1,2})\s*(?:[./-]|월)\s*(\d{1,2})\s*(?:일)?\.?\s*(?:\([^)]*\))?/
+    /^\s*(?:\([^)]*\))?\s*(?:~|～|〜|∼|-|–|—|부터|에서)\s*(\d{1,2})\s*(?:[./-]|월)\s*(\d{1,2})\s*(?:일)?\.?\s*(?:\([^)]*\))?/
   );
   if (!match) return null;
 
@@ -141,23 +142,38 @@ function hasMonthDayWithoutYear(text) {
   return /(?:^|[^\d])\d{1,2}\s*(?:월|[./-])\s*\d{1,2}\s*(?:일)?/.test(stripped);
 }
 
+function hasResolvedAbbreviatedRange(text) {
+  return extractFullDates(text).some((date) => Boolean(findAbbreviatedRangeEnd(text, date)));
+}
+
 function applicationSegments(text) {
   const segments = [];
-  const pattern = new RegExp(APPLICATION_LABEL_PATTERN.source, "gi");
-  let match;
+  const patterns = [
+    new RegExp(APPLICATION_LABEL_PATTERN.source, "gi"),
+    new RegExp(EXTRA_APPLICATION_LABEL_PATTERN.source, "gi"),
+  ];
 
-  while ((match = pattern.exec(text)) !== null) {
-    const start = match.index ?? 0;
-    const end = Math.min(text.length, (match.index ?? 0) + 260);
-    const rawSegment = text.slice(start, end);
-    const trailingText = rawSegment.slice(match[0].length);
-    const stopAt = trailingText.search(NON_APPLICATION_PERIOD_PATTERN);
-    segments.push(stopAt >= 0
-      ? rawSegment.slice(0, match[0].length + stopAt)
-      : rawSegment);
+  for (const pattern of patterns) {
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      const start = match.index ?? 0;
+      const end = Math.min(text.length, (match.index ?? 0) + 260);
+      const rawSegment = text.slice(start, end);
+      const trailingText = rawSegment.slice(match[0].length);
+      const stopAt = trailingText.search(NON_APPLICATION_PERIOD_PATTERN);
+      segments.push({
+        start,
+        text: stopAt >= 0
+          ? rawSegment.slice(0, match[0].length + stopAt)
+          : rawSegment,
+      });
+    }
   }
 
-  return segments;
+  return segments
+    .sort((left, right) => left.start - right.start)
+    .filter((segment, index, list) => index === 0 || segment.start !== list[index - 1].start)
+    .map((segment) => segment.text);
 }
 
 const DEADLINE_KEYWORD_PATTERN = /까지|마감|종료|기한|선착순/;
@@ -284,13 +300,16 @@ export function evaluatePosterDateQuality(input = {}, options = {}) {
       appSegments.find(hasOpenEndedApplicationPeriod)
     );
   }
-  if (appSegments.some(hasMonthDayWithoutYear)) {
+  const monthDayOnlySegments = appSegments.filter((segment) =>
+    segment !== appRange?.segment && hasMonthDayWithoutYear(segment) && !hasResolvedAbbreviatedRange(segment)
+  );
+  if (monthDayOnlySegments.length > 0) {
     addIssue(
       issues,
       "date-without-year",
       "medium",
       "application/recruitment period contains month/day without a year",
-      appSegments.find(hasMonthDayWithoutYear)
+      monthDayOnlySegments[0]
     );
   }
 

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { scorePosterDuplicate } from "./poster-duplicate-detector.js";
+import { evaluatePosterDateQuality } from "./poster-date-quality.js";
 import { evaluatePosterQuality } from "./poster-quality-gate.js";
 import { getPostExclusionReason } from "./post-candidate-filter.js";
 import { buildReadableNoticeInfo } from "./upload-to-supabase.js";
@@ -347,6 +348,23 @@ test("application period outranks an earlier education period", () => {
   });
 
   assert.equal(result.facts.period, "2026.6.15.(월) ~ 2026.7.16.(목)");
+});
+
+test("contest period outranks postal arrival exception for deadline quality", () => {
+  const result = evaluatePosterDateQuality({
+    title: "2026년 가을편 「서울꿈새김판 」 문안 공모",
+    summary_short: "기간: 2026. 8. 28.(금) ~ 9. 6.(일)",
+    summary_long: [
+      "공모기간 : 2026. 8. 28.(금) ～ 9. 6.(일), 10일간",
+      "응모방법 : 서울시 누리집 온라인 신청 및 우편 신청",
+      "참고: 우편 응모는 2026. 9. 5.(토) 18:00 도착분까지 유효합니다.",
+      "결과발표 : 2026. 9. 18.(금)",
+    ].join("\n"),
+  }, { extractedDeadline: "2026-09-06" });
+
+  assert.equal(result.decision, "pass");
+  assert.equal(result.suggestedDeadline, "2026-09-06");
+  assert.equal(result.issues.some((issue) => issue.code === "deadline-mismatch"), false);
 });
 
 test("collapsed numbered facts stop before the next labeled section", () => {
