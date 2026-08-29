@@ -137,6 +137,61 @@ test("missing deadline type still requires a deadline date", () => {
   assert.ok(result.reason.includes("critical_missing_deadline_type"));
 });
 
+test("computeTier treats threshold boundary as passing for critical fields", () => {
+  const threshold = DEFAULT_EXTRACTION_THRESHOLDS.deadline_date;
+  const result = computeTier({
+    fields: completeCritical({
+      deadline_date: { value_json: { date: "2026-08-31" }, confidence: threshold },
+      deadline_type: { value_json: { type: "fixed" }, confidence: 0.95 },
+    }),
+    contentType: "recruit",
+    isDuplicate: false,
+    hasPosterImage: true,
+  });
+
+  assert.equal(result.tier, "A");
+  assert.equal(result.gates.deadlineAlert, true);
+});
+
+test("computeTier drops SEO gate when host_org is below threshold", () => {
+  const result = computeTier({
+    fields: completeCritical({
+      host_org: { value_text: "host-org", confidence: 0.89 },
+    }),
+    contentType: "recruit",
+    isDuplicate: false,
+    hasPosterImage: true,
+  });
+
+  assert.equal(result.gates.seo, false);
+  assert.equal(result.gates.recommendation, false);
+});
+
+test("computeTier drops recommendation gate when category is below threshold", () => {
+  const result = computeTier({
+    fields: completeCritical({
+      category: { value_text: "policy", confidence: 0.79 },
+    }),
+    contentType: "recruit",
+    isDuplicate: false,
+    hasPosterImage: true,
+  });
+
+  assert.equal(result.gates.recommendation, false);
+});
+
+test("computeTier stays C when poster image is missing", () => {
+  const result = computeTier({
+    fields: completeCritical(),
+    contentType: "recruit",
+    isDuplicate: false,
+    hasPosterImage: false,
+  });
+
+  assert.equal(result.tier, "C");
+  assert.ok(result.reason.includes("poster_image_missing"));
+});
+
 test("bestFieldsFromEvidence ignores suppressed zero-confidence evidence", () => {
   const fields = bestFieldsFromEvidence([
     { field_key: "is_real_poster", value_json: { value: true }, confidence: 0 },

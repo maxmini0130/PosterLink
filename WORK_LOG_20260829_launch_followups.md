@@ -88,3 +88,12 @@ Results:
 - Notification audit: passed and wrote the enriched report.
 - Public count audit: passed and wrote the non-fixed deadline list.
 - Crawler tests: 260 passed.
+
+## Verification Follow-up
+
+- `scripts/crawler/src/exposure-tier.test.js`
+  - Added boundary tests for `computeTier`:
+    - Critical threshold boundary for `deadline_date` is treated as pass.
+    - SEO gate false when `host_org` is below threshold.
+    - recommendation gate false when `category` is below threshold.
+    - poster image missing adds `poster_image_missing` reason and tier C.
