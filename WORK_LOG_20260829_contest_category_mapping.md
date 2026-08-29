@@ -73,3 +73,39 @@ pnpm --filter posterlink-crawler audit:contest-categories -- --limit=5000
 - 공모전 감사 후보 8건:
   - 각 후보의 현재 분야를 `CAT_CONTEST`로 교정 가능한지 적용 전 한 번 더 원문/요약 기준으로 확인한다.
   - 분야 교정은 공개 상태 자체를 바꾸지 않는다.
+
+## 운영 DB 적용
+
+승인 문구:
+
+```text
+공모전 분야 교정 후보 8건 및 서울꿈새김판 신청기간 2026-08-28~2026-09-06 운영 DB 적용 승인합니다.
+```
+
+적용 명령:
+
+```bash
+pnpm --filter posterlink-crawler apply:contest-category-corrections -- --apply
+```
+
+적용 결과:
+
+- 분야 교정: 8건
+- 포스터 레코드 갱신: 8건
+- `poster_field_evidence` 근거 upsert: 10건
+- 서울꿈새김판:
+  - `poster_categories`: `CAT_CONTEST`
+  - `application_start_at`: `2026-08-28`
+  - `application_end_at`: `2026-09-06`
+  - `field_verification.classification.categoryCodes`: `CAT_CONTEST`
+  - `classificationIssues`: `[]`
+
+적용 후 검증:
+
+- `pnpm --filter posterlink-crawler audit:contest-categories -- --limit=5000`
+  - 감사 대상 541건
+  - 잔여 공모전 분야 교정 후보 0건
+- 서울꿈새김판 개별 DB 조회
+  - 분야 `공모전`
+  - 신청기간 `2026-08-28 ~ 2026-09-06`
+  - `contest-category-corrections-v1` 근거: `apply_start`, `category`, `deadline_date`

@@ -20,6 +20,7 @@
     "storage:orphans": "node src/cleanup-orphan-storage.js",
     "audit:current": "node src/audit-current-posters.js",
     "audit:contest-categories": "node src/audit-contest-category-mapping.js",
+    "apply:contest-category-corrections": "node src/apply-contest-category-corrections.js",
     "audit:notifications": "node src/audit-notifications.js",
     "cleanup:notification-push-backlog": "node src/cleanup-notification-push-backlog.js",
     "audit:public-counts": "node src/audit-public-counts.js",
