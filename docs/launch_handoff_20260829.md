@@ -120,9 +120,22 @@ Results:
 
 ## Remaining Work
 
+### 2026-08-29 Follow-up Snapshot
+
+Read-only audits were re-run after this handoff was first written.
+
+- Public count remains consistent: 218 counted, 218 returned.
+- New production ingestion/review activity added 3 posters back to `review`.
+- Date-period audit now has 1 stale warning on a review poster and 0 mismatches.
+- The 3 review posters currently have no `poster_field_evidence`, so dry-run tiering keeps all 3 at C and auto-publish finds 0 eligible.
+- Notification audit still shows 414 pending `new_match` rows: 19 sendable and 395 no-token.
+- `audit:notifications` now writes sendable target details to `data/eval/reports/notification-push-audit.json`.
+- `audit:public-counts` now writes the 23 public non-fixed deadline rows under `posters.public_non_fixed_deadlines`.
+
 ### P0 - Notification Delivery Follow-up
 
 - Confirm the scheduled notification sender handles the 19 sendable `new_match` rows.
+- Current code path appears to send pushes when the admin approval UI calls `notify-new-match`; scripted auto-publish does not call that Edge Function.
 - Decide backlog policy for no-token rows:
   - Keep until users install/sign in to the app and register tokens.
   - Or mark old no-token rows as skipped after a retention window.

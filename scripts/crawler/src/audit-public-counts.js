@@ -54,6 +54,22 @@ function isAccepting(row) {
   return deadlineType === "ongoing" || deadlineType === "until_exhausted";
 }
 
+function publicNonFixedRows(rows) {
+  const nonFixedTypes = new Set(["unknown", "ongoing", "until_exhausted"]);
+  return (rows ?? [])
+    .filter((row) => nonFixedTypes.has(String(row.deadline_type ?? "")))
+    .map((row) => ({
+      id: row.id,
+      title: row.title ?? null,
+      source_org_name: row.source_org_name ?? null,
+      application_start_at: row.application_start_at ?? null,
+      application_end_at: row.application_end_at ?? null,
+      deadline_type: row.deadline_type ?? null,
+      exposure_tier: row.exposure_tier ?? null,
+    }))
+    .sort((a, b) => String(a.deadline_type).localeCompare(String(b.deadline_type)) || String(a.title).localeCompare(String(b.title)));
+}
+
 async function main() {
   const supabase = createSupabase();
   const output = String(args.output || DEFAULT_OUTPUT);
@@ -89,7 +105,7 @@ async function main() {
         p_sort: "latest",
         p_limit: 500,
       })
-      .select("id,application_start_at,application_end_at,deadline_type,exposure_tier"),
+      .select("id,title,source_org_name,application_start_at,application_end_at,deadline_type,exposure_tier"),
     exactCount(supabase.from("posters").select("id", { count: "exact", head: true }).eq("poster_status", "published")),
     exactCount(supabase.from("posters").select("id", { count: "exact", head: true }).eq("poster_status", "review")),
     exactCount(supabase.from("posters").select("id", { count: "exact", head: true }).eq("poster_status", "rejected")),
@@ -119,7 +135,7 @@ async function main() {
         p_sort: "latest",
         p_limit: 500,
       })
-      .select("id,application_start_at,application_end_at,deadline_type,exposure_tier"),
+      .select("id,title,source_org_name,application_start_at,application_end_at,deadline_type,exposure_tier"),
     supabase
       .from("poster_field_evidence")
       .select("poster_id")
@@ -197,6 +213,7 @@ async function main() {
       },
       public_search_by_exposure_tier: countBy(searchRes.data, "exposure_tier"),
       public_search_by_deadline_type: countBy(searchRes.data, "deadline_type"),
+      public_non_fixed_deadlines: publicNonFixedRows(searchRes.data),
     },
   };
 
