@@ -39,6 +39,19 @@
   - `new_match`: 대기 19,197건, 대상 사용자 10명, 대상 공고 2,296건, 발송 가능 1,254건, push token 없음 17,943건, 알림 OFF 0건
   - `favorite_deadline`: 대기 5건, 대상 사용자 2명, 대상 공고 2건, 발송 가능 0건, push token 없음 5건, 알림 OFF 0건
 
+## push backlog cleanup dry-run
+
+- `scripts/crawler/src/cleanup-notification-push-backlog.js`를 추가했다.
+- 기본값은 `push_sent_at IS NULL`이고 `created_at < now() - 24 hours`인 `new_match`, `favorite_deadline` push 대기를 후보로 본다.
+- `--apply`가 없으면 운영 DB를 수정하지 않는다.
+- 2026-08-29 dry-run 결과:
+  - 후보 18,960건
+  - `new_match` 18,955건, `favorite_deadline` 5건
+  - push token 없음 17,715건
+  - token이 있어 실수 호출 시 오래된 push가 나갈 수 있는 후보 1,245건
+  - 알림 OFF 사용자 후보 0건
+- 적용 시 후보 알림의 `push_sent_at`만 현재 시각으로 채워 push 발송 대상에서 제외한다. 앱 내 알림 레코드는 삭제하지 않는다.
+
 ## 미실행
 
 - `deno check`: 현재 로컬 환경에 `deno` 명령이 없어 실행하지 못했다.
