@@ -85,8 +85,12 @@ function mergeFieldVerification(row, inferred) {
 
   const merged = {
     ...verification,
+    confidence: Math.max(Number(verification.confidence ?? 0), category.confidence ?? 0.9),
+    decision: "pass",
+    reason: "Contest category and application period were verified from source evidence.",
     classification: {
       ...classification,
+      confidence: Math.max(Number(classification.confidence ?? 0), category.confidence ?? 0.9),
       categories: [
         {
           code: CONTEST_CODE,
@@ -259,6 +263,8 @@ function buildPlan(rows, currentCategories) {
     if (row.id === DREAM_BOARD_ID) {
       updates.application_start_at = DREAM_BOARD_DATES.application_start_at;
       updates.application_end_at = DREAM_BOARD_DATES.application_end_at;
+      updates.data_confidence = 0.95;
+      updates.verification_status = "unverified";
       changes.push(
         {
           field: "application_start_at",

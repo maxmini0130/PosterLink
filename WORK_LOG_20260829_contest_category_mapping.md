@@ -134,3 +134,29 @@ pnpm --filter posterlink-crawler apply:contest-category-corrections -- --apply
 - `dateQuality.extractedDeadline`: `2026-09-06`
 - `dateQuality.suggestedDeadline`: `2026-09-06`
 - `dateQuality.normalizedDeadline`: `2026-09-06`
+
+## 구조화 신뢰도 잔여값 보정
+
+운영 검수 화면에서 체크리스트는 통과하지만 구조화 신청 정보가 `신뢰도 45%`로 남는 문제가 있었다.
+
+원인:
+
+- 과거 날짜 mismatch 때 낮아진 값이 남아 있었다.
+  - `posters.data_confidence`: `0.45`
+  - `field_verification.confidence`: `0.45`
+  - `field_verification.decision`: `needs_review`
+  - `field_verification.reason`: 과거 `deadline-mismatch`, `low-category-confidence` 문구 포함
+- 실제 날짜, 분야, dateQuality는 이미 교정되어 있었지만 총평 점수와 상태를 같이 올리지 못했다.
+
+보정:
+
+- `posters.data_confidence`: `0.95`
+- `posters.verification_status`: `unverified`
+- `field_verification.confidence`: `0.95`
+- `field_verification.decision`: `pass`
+- `field_verification.reason`: 공모기간/공모전 분야/서울특별시 주최 확인 문구로 갱신
+- `field_verification.classification.confidence`: `0.95`
+
+재발 방지:
+
+- `apply-contest-category-corrections.js`가 서울꿈새김판 적용 시 `data_confidence`, `verification_status`, `field_verification.confidence`, `decision`, `reason`까지 함께 갱신하도록 보강했다.
