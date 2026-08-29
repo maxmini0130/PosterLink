@@ -109,3 +109,28 @@ pnpm --filter posterlink-crawler apply:contest-category-corrections -- --apply
   - 분야 `공모전`
   - 신청기간 `2026-08-28 ~ 2026-09-06`
   - `contest-category-corrections-v1` 근거: `apply_start`, `category`, `deadline_date`
+
+## 날짜 검증 잔여 경고 보정
+
+운영 화면에서 서울꿈새김판이 계속 `날짜 검증 필요`로 보이는 원인을 추가 확인했다.
+
+- 날짜 컬럼은 `2026-09-06`으로 교정되어 있었다.
+- 하지만 `field_verification` 안에 이전 검증 결과가 남아 있었다.
+  - `deadlineMatches: false`
+  - `dateIssues: deadline-mismatch`
+  - `dateQuality.storedDeadline: 2026-09-05`
+
+같은 승인 범위의 후처리 누락으로 보고 `contest-category-corrections-v1` 적용 스크립트를 보강한 뒤 재적용했다.
+
+최종 DB 확인:
+
+- `application_start_at`: `2026-08-28`
+- `application_end_at`: `2026-09-06`
+- `deadlineMatches`: `true`
+- `correctedDeadline`: `null`
+- `dateIssues`: `[]`
+- `dateQuality.decision`: `pass`
+- `dateQuality.storedDeadline`: `2026-09-06`
+- `dateQuality.extractedDeadline`: `2026-09-06`
+- `dateQuality.suggestedDeadline`: `2026-09-06`
+- `dateQuality.normalizedDeadline`: `2026-09-06`

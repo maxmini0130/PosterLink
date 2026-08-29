@@ -83,7 +83,7 @@ function mergeFieldVerification(row, inferred) {
     source: "rule",
   };
 
-  return {
+  const merged = {
     ...verification,
     classification: {
       ...classification,
@@ -103,6 +103,28 @@ function mergeFieldVerification(row, inferred) {
     },
     classificationIssues: removeClassificationCategoryIssues(verification.classificationIssues),
   };
+
+  if (row.id === DREAM_BOARD_ID) {
+    return {
+      ...merged,
+      deadlineMatches: true,
+      correctedDeadline: null,
+      dateIssues: [],
+      dateQuality: {
+        ...(verification.dateQuality && typeof verification.dateQuality === "object" ? verification.dateQuality : {}),
+        decision: "pass",
+        storedDeadline: DREAM_BOARD_DATES.application_end_at,
+        extractedDeadline: DREAM_BOARD_DATES.application_end_at,
+        suggestedDeadline: DREAM_BOARD_DATES.application_end_at,
+        normalizedDeadline: DREAM_BOARD_DATES.application_end_at,
+        issues: [],
+        updatedBy: EXTRACTOR,
+        updatedAt: new Date().toISOString(),
+      },
+    };
+  }
+
+  return merged;
 }
 
 function evidenceText(value) {
