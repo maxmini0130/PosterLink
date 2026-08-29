@@ -71,6 +71,25 @@ function hasDateWarning(verification = {}) {
   );
 }
 
+function hasAcceptedManualDeadline(verification = {}, storedDeadline) {
+  if (!storedDeadline || verification.deadlineMatches !== true) return false;
+  const dateQuality = verification.dateQuality && typeof verification.dateQuality === "object"
+    ? verification.dateQuality
+    : {};
+  const acceptedExtractors = new Set([
+    "date-period-manual-corrections-v1",
+    "date-period-contest-correction-v1",
+    "stale-date-warning-cleanup-v1",
+  ]);
+  return (
+    dateQuality.decision === "pass" &&
+    acceptedExtractors.has(dateQuality.updatedBy) &&
+    dateKey(dateQuality.storedDeadline) === storedDeadline &&
+    dateKey(dateQuality.normalizedDeadline) === storedDeadline &&
+    dateKey(dateQuality.suggestedDeadline) === storedDeadline
+  );
+}
+
 function hasActionableAuditIssue(dateQuality) {
   const actionable = new Set([
     "deadline-mismatch",
@@ -87,6 +106,7 @@ function classifyRow(row) {
   const verification = row.field_verification && typeof row.field_verification === "object"
     ? row.field_verification
     : {};
+  const acceptedManualDeadline = hasAcceptedManualDeadline(verification, storedDeadline);
   const verificationDateCandidates = dateCandidatesFromVerification(verification);
   const staleWarning = hasDateWarning(verification)
     && storedDeadline
@@ -99,7 +119,8 @@ function classifyRow(row) {
     storedDeadline &&
     suggestedDeadline &&
     storedDeadline !== suggestedDeadline &&
-    issueCodes.includes("deadline-mismatch"),
+    issueCodes.includes("deadline-mismatch") &&
+    !acceptedManualDeadline,
   );
   const missingClearDeadline = Boolean(!storedDeadline && suggestedDeadline && issueCodes.includes("missing-clear-deadline"));
 

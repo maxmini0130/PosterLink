@@ -9,6 +9,19 @@ function createSupabaseAdmin() {
   );
 }
 
+function repairUtf8Mojibake(value: string) {
+  if (/[\uac00-\ud7a3]/.test(value)) return value;
+  if (!/[ÃÂÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßà-ÿ\u0080-\u009f]/.test(value)) return value;
+
+  try {
+    const bytes = Uint8Array.from(Array.from(value), (char) => char.charCodeAt(0) & 0xff);
+    const decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return /[\uac00-\ud7a3]/.test(decoded) ? decoded : value;
+  } catch {
+    return value;
+  }
+}
+
 async function getRequestUserIdAndRole(supabaseAdmin: ReturnType<typeof createSupabaseAdmin>, request: Request) {
   const authorization = request.headers.get("authorization") ?? "";
   const token = authorization.match(/^Bearer\s+(.+)$/i)?.[1] ?? "";
@@ -42,7 +55,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const query = typeof payload.query === "string" ? payload.query.trim().slice(0, 120) : "";
+  const query = typeof payload.query === "string" ? repairUtf8Mojibake(payload.query).trim().slice(0, 120) : "";
   if (!query) {
     return NextResponse.json({ error: "Invalid query" }, { status: 400 });
   }
