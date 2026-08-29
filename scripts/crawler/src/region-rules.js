@@ -73,8 +73,21 @@ function compactEvidence(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
 }
 
+const SEOUL_ELIGIBILITY_SCOPE_PATTERN =
+  /(?:\uC11C\uC6B8\uC2DC|\uC11C\uC6B8\uD2B9\uBCC4\uC2DC|\uC11C\uC6B8)\s*(?:\uAC70\uC8FC|\uC2DC\uBBFC|\uC8FC\uBBFC)|\uC11C\uC6B8\uC2DC\uBBFC/;
+
 export function inferRegionMatches(post) {
   const source = buildRegionSource(post);
+  const seoulEligibilityScope = source.match(SEOUL_ELIGIBILITY_SCOPE_PATTERN)?.[0];
+  if (seoulEligibilityScope) {
+    return [{
+      code: "REG_SEOUL",
+      confidence: 0.9,
+      evidence: compactEvidence(seoulEligibilityScope),
+      source: "eligibility_scope",
+    }];
+  }
+
   const codes = [];
   for (const [code, keywords] of Object.entries(SEOUL_REGION_KEYWORDS)) {
     const evidence = keywords.filter((keyword) => source.includes(keyword)).slice(0, 4);

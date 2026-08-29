@@ -9,6 +9,7 @@ import { getAttachmentFailureCode } from "./attachment-text-extractor.js";
 import { choosePreferredDetailTitle, inferSpecificTitle } from "./adapters/youth-seoul.js";
 import { extractOrgFromTitle, resolveSourceOrgName } from "./poster-org.js";
 import { isLikelyApplicationLink, sanitizeKnownShortUrl } from "./source-link-rules.js";
+import { inferRegionMatches } from "./region-rules.js";
 
 const org = "금천구";
 
@@ -724,3 +725,17 @@ for (const title of [
     assert.ok(getPostExclusionReason({ title }));
   });
 }
+test("Seoul resident eligibility outranks district venue addresses", () => {
+  const regions = inferRegionMatches({
+    title: "2026 \uAE30\uC9C0\uAC1C\uD398\uC774\uC2A4 \uACE0\uB9BD\uC740\uB454\uCCAD(\uC18C)\uB144 \uBD80\uBAA8\uAD50\uC721 \uBAA8\uC9D1",
+    content: [
+      "\uAD50\uC721\uB300\uC0C1: \uC790\uB140\uC758 \uACE0\uB9BD\uC740\uB454 \uC0C1\uD0DC\uB85C \uC778\uD574 \uC27C\uACFC \uD68C\uBCF5\uC774 \uD544\uC694\uD55C \uC11C\uC6B8\uC2DC \uAC70\uC8FC \uBD80\uBAA8\uB2D8",
+      "\uAD50\uC721\uC7A5\uC18C: \uC11C\uC6B8 \uC131\uBD81\uAD6C \uBCF4\uBB38\uB85C72 2\uCE35; \uC11C\uC6B8 \uB9C8\uD3EC\uAD6C \uC6D4\uB4DC\uCEF5\uB85C 212",
+    ].join("\n"),
+  });
+
+  assert.equal(regions.length, 1);
+  assert.equal(regions[0].code, "REG_SEOUL");
+  assert.equal(regions[0].source, "eligibility_scope");
+  assert.ok(regions[0].confidence >= 0.9);
+});
