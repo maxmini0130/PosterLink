@@ -79,7 +79,33 @@ test("adjustConfidence penalizes conflicts and trusts human entries", () => {
       evidenceText: "부산",
       extractor: "human",
     }),
-    1,
+      1,
+  );
+});
+
+test("adjustConfidence treats short evidence as the upper confidence cap", () => {
+  assert.equal(
+    adjustConfidence({
+      modelConfidence: 0.85,
+      valueText: "지원 대상",
+      evidenceText: "ok",
+      extractor: "ocr",
+    }),
+    0.4,
+  );
+});
+
+test("adjustConfidence handles corroborated evidence bonus with conflicts", () => {
+  assert.equal(
+    adjustConfidence({
+      modelConfidence: 0.55,
+      evidenceText: "서울시 공고 2026-08-31",
+      valueText: "서울시",
+      extractor: "ocr",
+      corroboratedBy: ["openai", "body"],
+      conflictsWith: ["ocr"],
+    }),
+    0.38,
   );
 });
 

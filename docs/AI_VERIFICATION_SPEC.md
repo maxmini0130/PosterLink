@@ -206,7 +206,7 @@ OCR/구조화 프롬프트를 **필드별 근거를 강제하는 구조화 출�
 - [ ] 마이그레이션 적용 및 RLS 정책 설정 (읽기: 공개 필드만 / 쓰기: service role)
 - [ ] `process-ocr` 이 `poster_field_evidence` 에 기록
 - [ ] 기존 554건 백필 배치 스크립트 (재크롤 없이 저장된 원문·OCR 텍스트로 재가공)
-- [ ] `adjustConfidence` 단위 테스트 (규칙별 최소 1케이스)
+- [x] `adjustConfidence` 단위 테스트 (규칙별 최소 1케이스)
 
 ---
 
@@ -362,7 +362,7 @@ gates.recommendation =
 
 ### 4.6 완료 기준
 
-- [ ] `computeTier` + 게이트 판정 단위 테스트 (등급별·게이트별 경계값 케이스)
+- [x] `computeTier` + 게이트 판정 단위 테스트 (등급별·게이트별 경계값 케이스)
 - [ ] 554건 재판정 배치 실행 후 A/B/C 분포 리포트
 - [ ] 관리자 대시보드에 분포 표시
 - [ ] kill switch 동작 확인

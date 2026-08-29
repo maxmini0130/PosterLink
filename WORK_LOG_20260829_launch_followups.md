@@ -97,3 +97,14 @@ Results:
     - SEO gate false when `host_org` is below threshold.
     - recommendation gate false when `category` is below threshold.
     - poster image missing adds `poster_image_missing` reason and tier C.
+- `scripts/crawler/src/field-evidence.test.js`
+  - Added `adjustConfidence` boundary tests:
+    - Very short evidence text is capped at 0.4 after min-confidence logic.
+    - Corroborated evidence bonus and conflict penalty composition case.
+
+## Checklist Update
+
+- `docs/AI_VERIFICATION_SPEC.md`
+  - Checked off:
+    - `adjustConfidence` unit test requirement (209).
+    - `computeTier` + gate boundary test requirement (365).
