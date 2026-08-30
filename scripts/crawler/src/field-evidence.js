@@ -185,6 +185,63 @@ function clampConfidence(value) {
   return Math.max(0, Math.min(1, confidence));
 }
 
+export function evidenceValue(row) {
+  const json = row?.value_json;
+  if (json && typeof json === "object" && !Array.isArray(json)) {
+    if (json.date !== undefined) return json.date;
+    if (json.url !== undefined) return json.url;
+    if (json.name !== undefined) return json.name;
+    if (json.type !== undefined) return json.type;
+    if (json.min !== undefined) return json.min;
+    if (json.max !== undefined) return json.max;
+    if (json.value !== undefined) return json.value;
+  }
+  return row?.value ?? row?.value_text ?? null;
+}
+
+export function evidenceExtractorPriority(row) {
+  const extractor = String(row?.extractor ?? "");
+  if (extractor === "human" || extractor.startsWith("golden-correction")) return 3;
+  if (extractor.startsWith("operator-") && !/audit/i.test(extractor)) return 2;
+  return 1;
+}
+
+export function effectiveEvidenceConfidence(row = {}) {
+  let confidence = Number(row.confidence ?? 0);
+  if (!Number.isFinite(confidence) || confidence <= 0) return 0;
+
+  const fieldKey = String(row.field_key ?? "");
+  const extractor = String(row.extractor ?? "");
+  const evidenceText = String(row.evidence_text ?? "").normalize("NFKC");
+  const predicted = String(evidenceValue(row) ?? "").normalize("NFKC");
+  const hasApplicationCue = /신청|접수|모집|공모|참여/.test(evidenceText);
+  const hasUnboundedCue = /마감시|소진|예산\s*소진|정원\s*소진|이후에도\s*신청\s*가능/.test(evidenceText);
+  const hasOnlyFirstComeCue = /선착순/.test(evidenceText) && !hasUnboundedCue;
+
+  if (/audit/i.test(extractor)) confidence = Math.min(confidence, 0.65);
+
+  if (fieldKey === "deadline_date") {
+    if (extractor === "regex-date-v1" && !hasApplicationCue) {
+      confidence = Math.min(confidence, 0.65);
+    }
+    if (hasUnboundedCue) confidence = Math.min(confidence, 0.65);
+  }
+
+  if (fieldKey === "deadline_type") {
+    if (predicted === "fixed" && !hasApplicationCue) {
+      confidence = Math.min(confidence, 0.65);
+    }
+    if (predicted === "fixed" && hasUnboundedCue) {
+      confidence = Math.min(confidence, 0.65);
+    }
+    if (predicted === "until_exhausted" && hasOnlyFirstComeCue) {
+      confidence = Math.min(confidence, 0.65);
+    }
+  }
+
+  return Math.round(confidence * 100) / 100;
+}
+
 export function adjustConfidence(raw = {}) {
   let confidence = clampConfidence(raw.modelConfidence ?? raw.confidence ?? 0.5);
   const evidenceText = compactText(raw.evidenceText);

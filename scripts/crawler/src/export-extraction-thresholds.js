@@ -53,6 +53,13 @@ function metricThreshold(metric) {
   return roundThreshold(recommended.threshold);
 }
 
+function operationalThreshold(metric, currentDefault) {
+  const recommended = metricThreshold(metric);
+  if (recommended === null) return null;
+  if (currentDefault === null || currentDefault === undefined) return recommended;
+  return Math.max(recommended, roundThreshold(currentDefault));
+}
+
 export function buildThresholdPlan(report, { minLabeled = 120 } = {}) {
   const fieldMetrics = report?.field_metrics ?? {};
   const labeledPosters = Number(report?.labeled_posters ?? 0);
@@ -62,7 +69,9 @@ export function buildThresholdPlan(report, { minLabeled = 120 } = {}) {
 
   for (const [fieldKey, importance] of Object.entries(FIELD_IMPORTANCE)) {
     const metric = fieldMetrics[fieldKey] ?? null;
-    const threshold = metricThreshold(metric);
+    const currentDefault = DEFAULT_EXTRACTION_THRESHOLDS[fieldKey] ?? null;
+    const recommendedThreshold = metricThreshold(metric);
+    const threshold = operationalThreshold(metric, currentDefault);
     const labeled = Number(metric?.labeled ?? 0);
     const recommendation = metric?.recommended_threshold ?? null;
     const precision = recommendation?.precision ?? null;
@@ -78,7 +87,8 @@ export function buildThresholdPlan(report, { minLabeled = 120 } = {}) {
       importance,
       status,
       threshold,
-      current_default: DEFAULT_EXTRACTION_THRESHOLDS[fieldKey] ?? null,
+      recommended_threshold: recommendedThreshold,
+      current_default: currentDefault,
       target_precision: targetPrecision(importance),
       labeled,
       precision,

@@ -28,11 +28,33 @@ test("buildThresholdPlan exports ready recommendations from an evaluation report
 
   assert.equal(plan.production_ready, true);
   assert.equal(plan.fields.deadline_date.status, "ready");
-  assert.equal(plan.fields.deadline_date.threshold, 0.85);
-  assert.equal(plan.thresholds.deadline_date, 0.85);
+  assert.equal(plan.fields.deadline_date.recommended_threshold, 0.85);
+  assert.equal(plan.fields.deadline_date.threshold, 1);
+  assert.equal(plan.thresholds.deadline_date, 1);
   assert.equal(plan.fields.category.status, "unlabeled");
   assert.equal(plan.thresholds.category, 0.8);
   assert.deepEqual(plan.blocking_reasons, []);
+});
+
+test("buildThresholdPlan can raise defaults when the recommendation is stricter", () => {
+  const plan = buildThresholdPlan({
+    labeled_posters: 120,
+    field_metrics: {
+      deadline_type: {
+        labeled: 120,
+        recommended_threshold: {
+          threshold: 1,
+          precision: 1,
+          coverage: 0.2,
+          predictions: 24,
+        },
+      },
+    },
+  }, { minLabeled: 100 });
+
+  assert.equal(plan.fields.deadline_type.recommended_threshold, 1);
+  assert.equal(plan.fields.deadline_type.threshold, 1);
+  assert.equal(plan.thresholds.deadline_type, 1);
 });
 
 test("buildThresholdPlan blocks when a labeled field lacks a recommendation", () => {

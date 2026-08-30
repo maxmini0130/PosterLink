@@ -1,6 +1,12 @@
+import {
+  effectiveEvidenceConfidence,
+  evidenceExtractorPriority,
+  evidenceValue,
+} from "./field-evidence.js";
+
 export const DEFAULT_EXTRACTION_THRESHOLDS = Object.freeze({
-  deadline_date: 0.9,
-  deadline_type: 0.9,
+  deadline_date: 1,
+  deadline_type: 0.95,
   host_org: 0.9,
   official_url: 0.9,
   is_real_poster: 0.9,
@@ -48,19 +54,11 @@ export const MINOR_FIELDS = Object.freeze([
 ]);
 
 export function fieldValue(field) {
-  if (!field) return null;
-  const valueJson = field.value_json;
-  if (valueJson && typeof valueJson === "object" && !Array.isArray(valueJson)) {
-    if (valueJson.date !== undefined) return valueJson.date;
-    if (valueJson.type !== undefined) return valueJson.type;
-    if (valueJson.url !== undefined) return valueJson.url;
-    if (valueJson.value !== undefined) return valueJson.value;
-  }
-  return field.value ?? field.value_text ?? null;
+  return evidenceValue(field);
 }
 
 function fieldConfidence(field) {
-  const confidence = Number(field?.confidence);
+  const confidence = effectiveEvidenceConfidence(field);
   return Number.isFinite(confidence) ? confidence : 0;
 }
 
@@ -144,10 +142,18 @@ export function computeTier(input, thresholds = DEFAULT_EXTRACTION_THRESHOLDS) {
 export function bestFieldsFromEvidence(rows = []) {
   const fields = {};
   for (const row of rows) {
-    if (fieldConfidence(row) <= 0) continue;
+    const confidence = fieldConfidence(row);
+    if (confidence <= 0) continue;
     const existing = fields[row.field_key];
-    if (!existing || fieldConfidence(row) > fieldConfidence(existing)) {
-      fields[row.field_key] = row;
+    if (
+      !existing ||
+      evidenceExtractorPriority(row) > evidenceExtractorPriority(existing) ||
+      (
+        evidenceExtractorPriority(row) === evidenceExtractorPriority(existing) &&
+        confidence > fieldConfidence(existing)
+      )
+    ) {
+      fields[row.field_key] = { ...row, confidence };
     }
   }
   return fields;

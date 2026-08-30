@@ -13,7 +13,7 @@ function field(value, confidence = 1) {
 
 function completeCritical(overrides = {}) {
   return {
-    deadline_date: { value_json: { date: "2026-08-31" }, confidence: 0.95 },
+    deadline_date: { value_json: { date: "2026-08-31" }, confidence: 1 },
     deadline_type: { value_json: { type: "fixed" }, confidence: 0.95 },
     host_org: field("서울청년센터", 0.95),
     official_url: { value_json: { url: "https://example.go.kr/notice/1" }, confidence: 0.95 },
@@ -200,4 +200,26 @@ test("bestFieldsFromEvidence ignores suppressed zero-confidence evidence", () =>
 
   assert.equal(fields.is_real_poster, undefined);
   assert.equal(fields.host_org.value_text, "서울특별시");
+});
+
+test("bestFieldsFromEvidence prioritizes human-reviewed deadline corrections", () => {
+  const fields = bestFieldsFromEvidence([
+    {
+      field_key: "deadline_type",
+      value_json: { type: "fixed" },
+      confidence: 0.95,
+      evidence_text: "선착순 마감",
+      extractor: "deadline-type-rule-v2",
+    },
+    {
+      field_key: "deadline_type",
+      value_json: { type: "until_exhausted" },
+      confidence: 0.6,
+      evidence_text: "검수 확정: 예산 소진 시까지 신청 가능",
+      extractor: "golden-correction-v1",
+    },
+  ]);
+
+  assert.equal(fields.deadline_type.value_json.type, "until_exhausted");
+  assert.equal(fields.deadline_type.confidence, 0.6);
 });

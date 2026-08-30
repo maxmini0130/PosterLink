@@ -81,8 +81,12 @@ pnpm eval:thresholds -- --input=data/eval/reports/extraction-current.json --out=
 
 The threshold export is a local artifact step. It summarizes whether the report
 has enough labels and field-level recommendations, then emits copyable candidate
-constants. Treat the generated constants as a review draft until the 120-item
-golden set is complete.
+constants. Treat the generated constants as a review draft until
+`production_ready: true`.
+
+Candidate constants keep the current production defaults as conservative floors.
+Recommended thresholds from the eval report can raise defaults, but they do not
+lower existing operating thresholds automatically.
 
 Fields without human labels keep their existing fallback defaults and are
 reported as `unlabeled`; they do not block `production_ready`. A labeled field
@@ -148,18 +152,16 @@ See `eval/golden/README.md` for the JSON shape.
 
 ## Current Status
 
-The harness, stratified reviewer seed generator, and review batch generator are
-implemented and executable.
+The harness, stratified reviewer seed generator, review batch generator, golden
+label validation, and threshold export are implemented and executable.
 
-Latest generated reviewer package:
+Current calibrated baseline:
 
-- Seed:
-  `data/eval/extraction-golden-seed-20260825-stratified.json`
-- Review batches:
-  `data/eval/review-batches-20260825/`
-- Batch count: 6 batches of 20 posters.
-- Sample buckets: normal recruit 60, low-confidence/visual uncertainty 36,
-  non-recruit or rejected 16, duplicate suspected 8.
-
-The 120 human-reviewed labels still need to be added under `eval/golden/`
-before thresholds can be treated as production constants for Phase 3.
+- Golden labels: 120 posters, 720 labeled fields.
+- Latest eval artifact: `data/eval/reports/extraction-calibrated-20260830.json`
+  (ignored by git; see work logs for key metrics).
+- Latest threshold artifact:
+  `data/eval/reports/extraction-thresholds-calibrated-20260830.json`.
+- `production_ready`: true.
+- Reflected production defaults:
+  `deadline_date: 1`, `deadline_type: 0.95`.

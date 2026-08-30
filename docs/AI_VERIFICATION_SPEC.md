@@ -266,13 +266,13 @@ scripts/eval-extraction.ts
 - critical 필드: `precision@τ ≥ 0.98` 을 만족하는 가장 낮은 τ
 - major/minor 필드: `precision@τ ≥ 0.90`
 
-이 계산 결과를 `lib/extraction/thresholds.ts` 에 상수로 커밋하고, 리포트 링크를 주석으로 남긴다.
+이 계산 결과를 threshold 리포트로 남기고 운영 기본값은 `scripts/crawler/src/exposure-tier.js`의 `DEFAULT_EXTRACTION_THRESHOLDS`에 반영한다.
 
 ### 3.3 완료 기준
 
 - [x] 120건 라벨 완료
 - [x] `pnpm eval:extraction` 로 실행 가능
-- [ ] 필드별 임계값 표가 리포트에서 산출되어 코드에 반영됨
+- [x] 필드별 임계값 표가 리포트에서 산출되어 코드에 반영됨
 - [x] CI에서 주 1회 실행 (회귀 감지)
 
 ---

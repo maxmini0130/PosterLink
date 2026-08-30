@@ -1,3 +1,9 @@
+import {
+  effectiveEvidenceConfidence,
+  evidenceExtractorPriority,
+  evidenceValue,
+} from "./field-evidence.js";
+
 export const FIELD_IMPORTANCE = Object.freeze({
   deadline_date: "critical",
   deadline_type: "critical",
@@ -130,17 +136,7 @@ function canonicalUrlForMatch(value) {
 }
 
 function predictionValue(row) {
-  const json = row?.value_json;
-  if (json && typeof json === "object" && !Array.isArray(json)) {
-    if (json.date) return json.date;
-    if (json.url) return json.url;
-    if (json.name) return json.name;
-    if (json.type) return json.type;
-    if (json.min !== undefined) return json.min;
-    if (json.max !== undefined) return json.max;
-    if (json.value !== undefined) return json.value;
-  }
-  return row?.value_text ?? null;
+  return evidenceValue(row);
 }
 
 export function valuesMatch(fieldKey, predicted, truth) {
@@ -182,10 +178,18 @@ export function bestEvidenceByField(rows = []) {
   for (const row of rows) {
     const fieldKey = row?.field_key;
     if (!fieldKey) continue;
-    if (Number(row.confidence ?? 0) <= 0) continue;
+    const confidence = effectiveEvidenceConfidence(row);
+    if (confidence <= 0) continue;
     const existing = byField.get(fieldKey);
-    if (!existing || Number(row.confidence ?? 0) > Number(existing.confidence ?? 0)) {
-      byField.set(fieldKey, row);
+    if (
+      !existing ||
+      evidenceExtractorPriority(row) > evidenceExtractorPriority(existing) ||
+      (
+        evidenceExtractorPriority(row) === evidenceExtractorPriority(existing) &&
+        confidence > effectiveEvidenceConfidence(existing)
+      )
+    ) {
+      byField.set(fieldKey, { ...row, confidence });
     }
   }
   return byField;

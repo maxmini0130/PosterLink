@@ -68,6 +68,28 @@ test("bestEvidenceByField keeps the highest confidence evidence per field", () =
   assert.equal(best.get("deadline_date").value_text, "2026-08-31");
 });
 
+test("bestEvidenceByField prioritizes golden corrections over automated deadline evidence", () => {
+  const best = bestEvidenceByField([
+    {
+      field_key: "deadline_type",
+      value_json: { type: "fixed" },
+      confidence: 0.95,
+      evidence_text: "선착순 마감",
+      extractor: "deadline-type-rule-v2",
+    },
+    {
+      field_key: "deadline_type",
+      value_json: { type: "until_exhausted" },
+      confidence: 0.6,
+      evidence_text: "검수 확정: 예산 소진 시까지 신청 가능",
+      extractor: "golden-correction-v1",
+    },
+  ]);
+
+  assert.equal(best.get("deadline_type").value_json.type, "until_exhausted");
+  assert.equal(best.get("deadline_type").confidence, 0.6);
+});
+
 test("bestEvidenceByField ignores suppressed zero-confidence evidence", () => {
   const best = bestEvidenceByField([
     { field_key: "deadline_date", confidence: 0, value_text: "2026-08-30" },
@@ -101,7 +123,7 @@ test("evaluateGoldenSet reports field accuracy, precision, coverage, and thresho
         field_key: "deadline_date",
         value_json: { date: "2026-08-31" },
         confidence: 0.95,
-        evidence_text: "8월 31일까지",
+        evidence_text: "신청기간 8월 31일까지",
         extractor: "regex-date-v1",
       },
       {

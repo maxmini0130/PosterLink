@@ -414,3 +414,33 @@ pnpm --filter posterlink-crawler eval:extraction -- --set=eval/golden --extracto
     - `scripts/crawler/src/backfill-field-evidence.js` rebuilds evidence rows from stored poster data without recrawling.
   - Updated `docs/AI_VERIFICATION_SPEC.md` checked items for preflight, Phase 1 implementation, 120-label validation, and `eval:extraction` executability.
   - Left threshold-code reflection unchecked because the latest eval still has no `deadline_date` / `deadline_type` predictions, so generated threshold plan is not production-ready.
+
+### 2026-08-30 Deadline Evidence Calibration + Threshold Reflection
+
+- Commands:
+
+```bash
+pnpm --filter posterlink-crawler test
+pnpm --filter posterlink-crawler eval:extraction -- --set=eval/golden --extractor=current --out=data/eval/reports/extraction-calibrated-20260830.json
+pnpm --filter posterlink-crawler eval:thresholds -- --input=data/eval/reports/extraction-calibrated-20260830.json --out=data/eval/reports/extraction-thresholds-calibrated-20260830.json --module-out=data/eval/reports/extraction-thresholds-calibrated-20260830.js --min-labeled=120
+```
+
+- Results:
+  - Added shared effective evidence confidence calibration for deadline fields and reused it in both extraction evaluation and exposure tier field selection.
+  - Human and golden-correction evidence now wins over automated deadline evidence even when the automated row has higher raw confidence.
+  - Audit extractors, regex dates without application context, and ambiguous `선착순 마감` until-exhausted inferences are capped at effective confidence `0.65`.
+  - `posterlink-crawler test`: pass 275.
+  - Calibrated extraction eval:
+    - `labeled_posters`: 120
+    - `labeled_field_count`: 720
+    - `evidence_rows`: 1788
+    - `macro_accuracy`: 0.9611111111111112
+    - deadline recommendations now exist: `deadline_date` threshold `1`, `deadline_type` threshold `0.95`, both precision `1`.
+  - Threshold export:
+    - `production_ready`: true
+    - `blocking_reasons`: none
+    - candidate thresholds keep existing conservative defaults as floors.
+  - Reflected calibrated defaults in `scripts/crawler/src/exposure-tier.js`:
+    - `deadline_date`: `1`
+    - `deadline_type`: `0.95`
+  - Marked the remaining `docs/AI_VERIFICATION_SPEC.md` Phase 2 threshold-code checklist item complete.

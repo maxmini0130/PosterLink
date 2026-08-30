@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   adjustConfidence,
+  effectiveEvidenceConfidence,
   evidenceRowsFromReadableFacts,
   findEvidenceSentence,
   normalizeEvidenceRow,
@@ -92,6 +93,45 @@ test("adjustConfidence treats short evidence as the upper confidence cap", () =>
       extractor: "ocr",
     }),
     0.4,
+  );
+});
+
+test("effectiveEvidenceConfidence caps audit deadline evidence", () => {
+  assert.equal(
+    effectiveEvidenceConfidence({
+      field_key: "deadline_date",
+      value_json: { date: "2026-08-31" },
+      confidence: 0.95,
+      evidence_text: "신청기간 2026년 8월 1일 ~ 8월 31일",
+      extractor: "youth-seoul-application-period-audit-v1",
+    }),
+    0.65,
+  );
+});
+
+test("effectiveEvidenceConfidence caps ambiguous first-come deadline type", () => {
+  assert.equal(
+    effectiveEvidenceConfidence({
+      field_key: "deadline_type",
+      value_json: { type: "until_exhausted" },
+      confidence: 0.95,
+      evidence_text: "선착순 마감",
+      extractor: "deadline-type-rule-v2",
+    }),
+    0.65,
+  );
+});
+
+test("effectiveEvidenceConfidence caps regex dates without application cue", () => {
+  assert.equal(
+    effectiveEvidenceConfidence({
+      field_key: "deadline_date",
+      value_json: { date: "2026-08-31" },
+      confidence: 0.95,
+      evidence_text: "교육기간 2026년 8월 1일 ~ 8월 31일",
+      extractor: "regex-date-v1",
+    }),
+    0.65,
   );
 });
 
