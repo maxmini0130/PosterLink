@@ -213,9 +213,13 @@ export function effectiveEvidenceConfidence(row = {}) {
 
   const fieldKey = String(row.field_key ?? "");
   const extractor = String(row.extractor ?? "");
+  if (extractor === "human" || extractor.startsWith("golden-correction")) return 1;
+
   const evidenceText = String(row.evidence_text ?? "").normalize("NFKC");
   const predicted = String(evidenceValue(row) ?? "").normalize("NFKC");
   const hasApplicationCue = /신청|접수|모집|공모|참여/.test(evidenceText);
+  const hasApplicationDeadlineCue = /(?:신청|접수|모집|응모|지원)\s*(?:기간|기한|마감|일정)|(?:신청|접수|모집|응모|지원)[^\n]{0,80}\d{1,4}[^\n]{0,40}(?:까지|마감|종료|기한)|(?:신청|접수)(?:은|는)[^\n]{0,80}\d{1,4}[^\n]{0,40}(?:까지|마감)/u.test(evidenceText);
+  const isOperatorManualReview = extractor.startsWith("operator-manual-review");
   const hasUnboundedCue = /마감시|소진|예산\s*소진|정원\s*소진|이후에도\s*신청\s*가능/.test(evidenceText);
   const hasOnlyFirstComeCue = /선착순/.test(evidenceText) && !hasUnboundedCue;
 
@@ -225,11 +229,17 @@ export function effectiveEvidenceConfidence(row = {}) {
     if (extractor === "regex-date-v1" && !hasApplicationCue) {
       confidence = Math.min(confidence, 0.65);
     }
+    if (extractor === "deadline-date-grounded-v1" && !hasApplicationDeadlineCue) {
+      confidence = Math.min(confidence, 0.65);
+    }
     if (hasUnboundedCue) confidence = Math.min(confidence, 0.65);
   }
 
   if (fieldKey === "deadline_type") {
-    if (predicted === "fixed" && !hasApplicationCue) {
+    if (predicted === "fixed" && !hasApplicationCue && !isOperatorManualReview) {
+      confidence = Math.min(confidence, 0.65);
+    }
+    if (predicted === "fixed" && !hasApplicationDeadlineCue && !isOperatorManualReview) {
       confidence = Math.min(confidence, 0.65);
     }
     if (predicted === "fixed" && hasUnboundedCue) {

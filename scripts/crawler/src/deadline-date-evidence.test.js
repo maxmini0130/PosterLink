@@ -30,6 +30,36 @@ test("infers end date from explicit application period range", () => {
   assert.deepEqual(row.value_json, { date: "2026-08-25" });
 });
 
+test("infers deadline from explicit application deadline followed by closing word", () => {
+  const row = inferDeadlineDateEvidence({
+    posterId: "poster-1",
+    title: "\uCCAD\uB144 \uD504\uB85C\uADF8\uB7A8 \uCC38\uC5EC\uC790 \uBAA8\uC9D1",
+    sourceText: "\uC2E0\uCCAD\uB9C8\uAC10: 2026. 8. 31. \uAE4C\uC9C0 \uC628\uB77C\uC778 \uC811\uC218",
+    createdAt: "2026-08-20T00:00:00Z",
+  });
+
+  assert.equal(row.value_text, "2026-08-31");
+  assert.match(row.evidence_text, /\uC2E0\uCCAD\uB9C8\uAC10/);
+});
+
+test("grounds normalized deadline when application window date is followed by closing word", () => {
+  const row = inferDeadlineDateEvidence({
+    posterId: "poster-1",
+    title: "\uCCAD\uB144 \uD504\uB85C\uADF8\uB7A8 \uCC38\uC5EC\uC790 \uBAA8\uC9D1",
+    sourceText: "\uC811\uC218\uAE30\uAC04: 2026. 8. 31. \uB9C8\uAC10 \uC2E0\uCCAD\uBC29\uBC95: \uC628\uB77C\uC778 \uC811\uC218",
+    fieldVerification: {
+      dateQuality: {
+        decision: "review",
+        normalizedDeadline: "2026-08-31",
+      },
+    },
+    createdAt: "2026-08-20T00:00:00Z",
+  });
+
+  assert.equal(row.value_text, "2026-08-31");
+  assert.equal(row.extractor, "deadline-date-grounded-v1");
+});
+
 test("infers end date from generated recruitment period summary", () => {
   const row = inferDeadlineDateEvidence({
     posterId: "poster-1",
@@ -94,6 +124,17 @@ test("does not infer event period as application deadline", () => {
     posterId: "poster-1",
     title: "전시 안내",
     sourceText: "행사기간: 2026. 9. 1. ~ 9. 30. 신청은 현장 접수입니다.",
+    createdAt: "2026-08-20T00:00:00Z",
+  });
+
+  assert.equal(row, null);
+});
+
+test("does not infer recommendation notice receipt periods as deadlines", () => {
+  const row = inferDeadlineDateEvidence({
+    posterId: "poster-1",
+    title: "\uC911\uB791\uAD6C\uCCAD<\uC81C31\uD68C \uC911\uB791\uAD6C\uBBFC\uB300\uC0C1 \uC218\uC0C1\uD6C4\uBCF4\uC790 \uCD94\uCC9C \uACF5\uACE0>(~8/18)",
+    sourceText: "\uC811\uC218\uAE30\uAC04 : 2026.8.3.~8.18. \uC218\uC0C1\uD6C4\uBCF4\uC790 \uCD94\uCC9C \uACF5\uACE0",
     createdAt: "2026-08-20T00:00:00Z",
   });
 

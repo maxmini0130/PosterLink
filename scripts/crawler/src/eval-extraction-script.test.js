@@ -15,6 +15,27 @@ test("evidenceRowsFromPayload reads dry-run backfill plan evidence", () => {
   );
 });
 
+test("evidenceRowsFromPayload reads multi-row field evidence backfill plans", () => {
+  assert.deepEqual(
+    evidenceRowsFromPayload({
+      plans: [
+        {
+          id: "poster-1",
+          rows: [
+            { poster_id: "poster-1", field_key: "deadline_date" },
+            { poster_id: "poster-1", field_key: "deadline_type" },
+          ],
+        },
+        { id: "poster-2", rows: [] },
+      ],
+    }),
+    [
+      { poster_id: "poster-1", field_key: "deadline_date" },
+      { poster_id: "poster-1", field_key: "deadline_type" },
+    ],
+  );
+});
+
 test("evidenceRowsFromPayload accepts direct evidence row arrays", () => {
   const rows = [{ poster_id: "poster-1", field_key: "deadline_date" }];
 

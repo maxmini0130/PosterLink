@@ -31,6 +31,17 @@ test("does not infer fixed type from event dates without application context", (
   assert.equal(row, null);
 });
 
+test("does not infer fixed type from recommendation notice receipt periods", () => {
+  const row = inferDeadlineTypeEvidence({
+    posterId: "poster-1",
+    applicationEndAt: "2026-08-18T00:00:00.000Z",
+    sourceText: "\uC911\uB791\uAD6C\uCCAD<\uC81C31\uD68C \uC911\uB791\uAD6C\uBBFC\uB300\uC0C1 \uC218\uC0C1\uD6C4\uBCF4\uC790 \uCD94\uCC9C \uACF5\uACE0>(~8/18) \uC811\uC218\uAE30\uAC04 : 2026.8.3.~8.18.",
+    existingDeadlineType: "unknown",
+  });
+
+  assert.equal(row, null);
+});
+
 test("infers ongoing only from explicit always-open wording", () => {
   const row = inferDeadlineTypeEvidence({
     posterId: "poster-1",

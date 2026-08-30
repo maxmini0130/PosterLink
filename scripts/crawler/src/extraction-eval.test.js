@@ -87,7 +87,7 @@ test("bestEvidenceByField prioritizes golden corrections over automated deadline
   ]);
 
   assert.equal(best.get("deadline_type").value_json.type, "until_exhausted");
-  assert.equal(best.get("deadline_type").confidence, 0.6);
+  assert.equal(best.get("deadline_type").confidence, 1);
 });
 
 test("bestEvidenceByField ignores suppressed zero-confidence evidence", () => {

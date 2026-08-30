@@ -582,3 +582,41 @@ pnpm --filter posterlink-crawler test
   - Remaining threshold blockers are `deadline_date` and `deadline_type` low-coverage recommendations.
   - Crawler tests: pass 286.
   - No production DB writes were performed.
+
+### 2026-08-30 Deadline Evidence Coverage Candidate
+
+- Implemented:
+  - Fixed deadline-date closing-word grounding for explicit `까지` / `마감` /
+    `종료` / `기한` phrases that were hidden by a mojibake regex.
+  - `eval:extraction --extra-evidence` now reads multi-row
+    `backfill-field-evidence` dry-run plans via `plans[].rows`.
+  - Tightened effective confidence for fixed deadline types so generic
+    application-link or event-schedule text does not pass as a high-confidence
+    fixed deadline without explicit application/deadline wording.
+  - Preserved operator-reviewed fixed deadline types and positive
+    human/golden correction evidence at high effective confidence.
+  - Excluded award/candidate recommendation notices from deadline date/type
+    inference, matching the content-type `admin` routing policy.
+
+- Candidate verification without DB writes:
+
+```bash
+pnpm --filter posterlink-crawler evidence:backfill -- '--statuses=published,review,rejected,closed' '--limit=5000' '--output=data/eval/reports/field-evidence-deadline-candidate-20260830-dryrun.json'
+pnpm --filter posterlink-crawler eval:extraction -- '--extra-evidence=data/eval/reports/content-type-backfill-routing-improved-20260830-dryrun.json,data/eval/reports/field-evidence-deadline-candidate-20260830-dryrun.json' '--out=data/eval/reports/extraction-phase2-candidate-20260830.json'
+pnpm --filter posterlink-crawler eval:thresholds -- '--input=data/eval/reports/extraction-phase2-candidate-20260830.json' '--output=data/eval/reports/extraction-thresholds-phase2-candidate-20260830.json'
+```
+
+- Results:
+  - Deadline field dry-run checked 2,350 rows and wrote local report artifacts only.
+  - Combined Phase 2 candidate eval: `macro_accuracy` `0.9472222222222223`.
+  - Critical candidate metrics:
+    - `content_type`: precision `1`, coverage `1`, predictions `120`.
+    - `deadline_date`: recommended `0.7`, precision `0.9866666666666667`, coverage `0.625`, predictions `75`.
+    - `deadline_type`: recommended `0.7`, precision `1`, coverage `0.6`, predictions `72`.
+  - Threshold export:
+    - `production_ready`: true.
+    - `blocking_reasons`: none.
+    - Operating `thresholds` map remains at conservative defaults, including
+      `deadline_date: 0.9`, `deadline_type: 0.9`, `content_type: 0.9`.
+  - `docs/AI_VERIFICATION_SPEC.md` Phase 2 threshold-code reflection item is now checked.
+  - No production DB writes were performed.

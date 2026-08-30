@@ -127,9 +127,11 @@ export function evidenceRowsFromPayload(payload) {
   if (Array.isArray(payload.evidence_rows)) return payload.evidence_rows;
   if (Array.isArray(payload.evidenceRows)) return payload.evidenceRows;
   if (Array.isArray(payload.plans)) {
-    return payload.plans
-      .map((plan) => plan?.evidence)
-      .filter(Boolean);
+    return payload.plans.flatMap((plan) => {
+      if (Array.isArray(plan?.rows)) return plan.rows;
+      if (Array.isArray(plan?.evidence)) return plan.evidence;
+      return plan?.evidence ? [plan.evidence] : [];
+    });
   }
   return [];
 }

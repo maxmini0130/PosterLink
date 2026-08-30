@@ -221,5 +221,5 @@ test("bestFieldsFromEvidence prioritizes human-reviewed deadline corrections", (
   ]);
 
   assert.equal(fields.deadline_type.value_json.type, "until_exhausted");
-  assert.equal(fields.deadline_type.confidence, 0.6);
+  assert.equal(fields.deadline_type.confidence, 1);
 });

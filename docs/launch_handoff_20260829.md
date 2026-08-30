@@ -218,7 +218,12 @@ Read-only audits were re-run after this handoff was first written.
 
 - Threshold export now keeps low-coverage recommendations out of the copyable applied threshold map.
 - Content-type routing candidate now evaluates cleanly against the 120-row golden set when dry-run evidence is supplied through `eval:extraction --extra-evidence`.
-- Remaining blocker: expand evidence/prediction coverage for `deadline_date` and `deadline_type` before marking the Phase 2 threshold-code reflection item complete.
+- Phase 2 candidate threshold export is now production-ready with no blockers:
+  `data/eval/reports/extraction-thresholds-phase2-candidate-20260830.json`.
+- Candidate critical-field metrics: `content_type` precision/coverage `1.0/1.0`,
+  `deadline_date` `0.9867/0.625`, `deadline_type` `1.0/0.6`.
+- Operating defaults remain conservative at `0.9`; generated recommendations
+  below the default do not lower production thresholds automatically.
 
 ## Operational Notes
 

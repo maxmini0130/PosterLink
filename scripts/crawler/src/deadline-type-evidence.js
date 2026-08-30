@@ -15,6 +15,7 @@ const FIXED_RANGE_RE = /(?:~|-|부터|까지|마감|기한|종료)/u;
 
 const KOREAN_APPLICATION_CUE_RE = /(?:신청|접수|모집|지원|참여)\s*(?:방법|기간|기한|마감|일정|링크|폼|서류|서식|가능|하세요|바랍니다)?/u;
 const KOREAN_PERIOD_LABEL_RE = /(?:기간|일정)\s*[:：]/u;
+const ADMIN_RECOMMENDATION_NOTICE_RE = /(?:수상\s*후보자|후보자)\s*추천\s*공고|(?:표창|상훈|포상)\s*후보자\s*추천/u;
 
 function compact(value, limit = 12_000) {
   return String(value ?? "")
@@ -144,6 +145,7 @@ export function inferDeadlineTypeEvidence({
   existingDeadlineType,
   deadlineDateEvidence,
 } = {}) {
+  if (ADMIN_RECOMMENDATION_NOTICE_RE.test(compact(sourceText))) return null;
   const existingType = String(existingDeadlineType ?? "").trim();
   if (existingType && existingType !== "unknown") return null;
 

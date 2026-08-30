@@ -109,6 +109,30 @@ test("effectiveEvidenceConfidence caps audit deadline evidence", () => {
   );
 });
 
+test("effectiveEvidenceConfidence trusts positive human and golden corrections", () => {
+  assert.equal(
+    effectiveEvidenceConfidence({
+      field_key: "deadline_type",
+      value_json: { type: "fixed" },
+      confidence: 0.6,
+      evidence_text: "Phase 2 golden-set correction for deadline_type",
+      extractor: "golden-correction-v1",
+    }),
+    1,
+  );
+
+  assert.equal(
+    effectiveEvidenceConfidence({
+      field_key: "deadline_date",
+      value_json: { date: "2026-08-31" },
+      confidence: 0,
+      evidence_text: "suppressed old correction",
+      extractor: "golden-correction-v1",
+    }),
+    0,
+  );
+});
+
 test("effectiveEvidenceConfidence caps ambiguous first-come deadline type", () => {
   assert.equal(
     effectiveEvidenceConfidence({
@@ -130,6 +154,69 @@ test("effectiveEvidenceConfidence caps regex dates without application cue", () 
       confidence: 0.95,
       evidence_text: "교육기간 2026년 8월 1일 ~ 8월 31일",
       extractor: "regex-date-v1",
+    }),
+    0.65,
+  );
+});
+
+test("effectiveEvidenceConfidence caps event schedules presented as fixed deadlines", () => {
+  assert.equal(
+    effectiveEvidenceConfidence({
+      field_key: "deadline_type",
+      value_json: { type: "fixed" },
+      confidence: 0.9,
+      evidence_text: "\uC77C\uC2DC: 2026. 8. 26. 14:00~16:00 \uC7A5\uC18C: \uCCAD\uB144\uC13C\uD130 \uCC38\uC5EC\uC2E0\uCCAD \uB9C1\uD06C: https://example.com",
+      extractor: "deadline-type-rule-v2",
+    }),
+    0.65,
+  );
+
+  assert.equal(
+    effectiveEvidenceConfidence({
+      field_key: "deadline_date",
+      value_json: { date: "2026-08-26" },
+      confidence: 0.95,
+      evidence_text: "\uC77C\uC2DC: 2026. 8. 26. 14:00~16:00 \uC7A5\uC18C: \uCCAD\uB144\uC13C\uD130 \uCC38\uC5EC\uC2E0\uCCAD \uB9C1\uD06C: https://example.com",
+      extractor: "deadline-date-grounded-v1",
+    }),
+    0.65,
+  );
+});
+
+test("effectiveEvidenceConfidence preserves explicit application deadline evidence", () => {
+  assert.equal(
+    effectiveEvidenceConfidence({
+      field_key: "deadline_type",
+      value_json: { type: "fixed" },
+      confidence: 0.9,
+      evidence_text: "\uC811\uC218\uAE30\uAC04: 2026. 8. 1. ~ 2026. 8. 31. \uC811\uC218\uB294 8\uC6D4 31\uC77C\uAE4C\uC9C0",
+      extractor: "deadline-type-rule-v2",
+    }),
+    0.9,
+  );
+});
+
+test("effectiveEvidenceConfidence trusts operator-reviewed fixed deadline types", () => {
+  assert.equal(
+    effectiveEvidenceConfidence({
+      field_key: "deadline_type",
+      value_json: { type: "fixed" },
+      confidence: 0.9,
+      evidence_text: "\uC0AC\uC6A9\uC790 \uC218\uB3D9 \uAC80\uC218: \uD3EC\uC2A4\uD130/\uC6D0\uBB38 \uB9C8\uAC10\uC77C 2026-09-04 \uD655\uC778",
+      extractor: "operator-manual-review-v1",
+    }),
+    0.9,
+  );
+});
+
+test("effectiveEvidenceConfidence does not treat 지금까지 as a deadline closing word", () => {
+  assert.equal(
+    effectiveEvidenceConfidence({
+      field_key: "deadline_type",
+      value_json: { type: "fixed" },
+      confidence: 0.9,
+      evidence_text: "\uD0C0\uB300\uC0DD \uC2E0\uCCAD \uAC00\uB2A5! \uC9C0\uAE08\uAE4C\uC9C0\uC758 \uACBD\uD5D8\uC744 \uC0B4\uB824\uBCF4\uC138\uC694. \uC2E0\uCCAD: \uAD6C\uAE00\uD3FC",
+      extractor: "deadline-type-rule-v2",
     }),
     0.65,
   );

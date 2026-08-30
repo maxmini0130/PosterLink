@@ -159,11 +159,14 @@ Current calibrated baseline:
 
 - Golden labels: 120 posters, 720 labeled fields.
 - Latest eval artifact:
-  `data/eval/reports/extraction-calibrated-coverage-guard-20260830.json`
+  `data/eval/reports/extraction-phase2-candidate-20260830.json`
   (ignored by git; see work logs for key metrics).
 - Latest threshold artifact:
-  `data/eval/reports/extraction-thresholds-coverage-guard-20260830.json`.
-- `production_ready`: false.
-- Blocking reason: `one_or_more_labeled_fields_low_coverage_recommendation`.
+  `data/eval/reports/extraction-thresholds-phase2-candidate-20260830.json`.
+- `production_ready`: true.
+- Blocking reason: none.
 - Production defaults remain conservative operating defaults:
   `deadline_date: 0.9`, `deadline_type: 0.9`.
+- Candidate recommendations met Phase 2 precision and coverage gates:
+  `content_type` precision/coverage `1.0/1.0`, `deadline_date`
+  `0.9867/0.625`, and `deadline_type` `1.0/0.6`.

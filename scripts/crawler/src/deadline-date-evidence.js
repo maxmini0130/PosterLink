@@ -9,6 +9,7 @@ const RANGE_CONNECTOR_RE = /(?:~|-|부터|까지)/u;
 const KOREAN_APPLICATION_CUE_RE = /(?:신청|접수|모집|응모|지원|참여)\s*(?:방법|기간|기한|마감|일정|링크|및|서류|서식|가능|하세요|바랍니다)?/u;
 const KOREAN_PERIOD_LABEL_RE = /(?:기간|일정)\s*[:>]/u;
 const EXPLICIT_DATE_RE = /(?:(20\d{2}|\d{2})\s*(?:년|[.\-/])\s*)?(\d{1,2})\s*(?:월|[.\-/])\s*(\d{1,2})\s*(?:일)?/gu;
+const ADMIN_RECOMMENDATION_NOTICE_RE = /(?:수상\s*후보자|후보자)\s*추천\s*공고|(?:표창|상훈|포상)\s*후보자\s*추천/u;
 
 const APPLICATION_LABEL_RE = /(?:\uC2E0\uCCAD|\uC811\uC218|\uBAA8\uC9D1|\uCC38\uC5EC)\s*(?:\uAE30\uAC04|\uAE30\uD55C|\uB9C8\uAC10|\uC77C\uC815)\s*[:\uFF1A]?/gu;
 const NEXT_SECTION_LABEL_RE = /(?:\uD589\uC0AC\uC77C|\uD589\uC0AC\s*\uAE30\uAC04|\uAD50\uC721\s*\uAE30\uAC04|\uAC15\uC88C\s*\uAE30\uAC04|\uC5EC\uD589\s*\uAE30\uAC04|\uC9C4\uD589\s*\uAE30\uAC04|\uC6B4\uC601\s*\uAE30\uAC04|\uD504\uB85C\uADF8\uB7A8\s*\uC77C\uC815|\uC77C\uC2DC|\uC7A5\uC18C|\uB300\uC0C1|\uBB38\uC758|\uC0C1\uC138\uC815\uBCF4|\uBAA8\uC9D1\s*\uC778\uC6D0|\uC2E0\uCCAD\s*\uBC29\uBC95|\uCC38\uAC00\s*\uC778\uC6D0|\uCC38\uAC00\s*\uBE44\uC6A9|\uAC15\uC88C\s*\uC2DC\uAC04|\uC218\uAC15\uB8CC)\s*[:\uFF1A]?/gu;
@@ -189,7 +190,7 @@ function windowGroundsDeadlineDate(window, target, referenceYear) {
     const before = window.slice(Math.max(0, date.index - 20), date.index);
     if (/(?:~|\uAE4C\uC9C0)/u.test(before)) return true;
     const after = window.slice(date.endIndex, date.endIndex + 20);
-    return /(?:源뚯?|留덇컧|醫낅즺|湲고븳)/u.test(after);
+    return /(?:\uAE4C\uC9C0|\uB9C8\uAC10|\uC885\uB8CC|\uAE30\uD55C)/u.test(after);
   });
 }
 
@@ -227,7 +228,7 @@ function inferDateFromApplicationSegments({ title, sourceText, referenceYear }) 
 
       const deadlineDate = [...dates].reverse().find((date) => {
         const after = window.slice(date.endIndex, date.endIndex + 20);
-        return /(?:源뚯?|留덇컧|醫낅즺|湲고븳)/u.test(after);
+        return /(?:\uAE4C\uC9C0|\uB9C8\uAC10|\uC885\uB8CC|\uAE30\uD55C)/u.test(after);
       });
       if (deadlineDate) return { date: deadlineDate.iso, evidenceText: compact(window, 700), confidence: 0.9 };
     }
@@ -288,6 +289,7 @@ export function inferDeadlineDateEvidence({
   createdAt,
 } = {}) {
   const referenceYear = Number(String(createdAt ?? "").match(/\b(20\d{2})\b/)?.[1]) || null;
+  if (ADMIN_RECOMMENDATION_NOTICE_RE.test(compact(`${title ?? ""} ${sourceText ?? ""}`))) return null;
   const suggestedDeadline = isoDateText(fieldVerification?.dateQuality?.suggestedDeadline);
   const normalizedDeadline = isoDateText(
     fieldVerification?.dateQuality?.normalizedDeadline ??
