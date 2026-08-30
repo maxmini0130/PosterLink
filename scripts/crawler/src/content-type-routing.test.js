@@ -73,6 +73,77 @@ test("classifyPosterContentType routes event notices polluted by next links to n
   assert.equal(result.reason, "event_notice_without_application_period");
 });
 
+test("classifyPosterContentType routes campaign and event announcements without application periods away from recruit", () => {
+  assert.equal(
+    classifyPosterContentType({
+      title: "서울배달+ 땡겨요 8월 한달 간 한강 배달존 특별한 할인 혜택!",
+      source_key: "https://news.seoul.go.kr/economy/archives/573918",
+    }).contentType,
+    "news",
+  );
+
+  assert.equal(
+    classifyPosterContentType({
+      title: "서울 주얼리 브랜드 14개사, 더현대 서울에 모인다 - 「갓서울(GOAT SEOUL), 서울 주얼리 공방」",
+      summary_short: "더현대 서울에서 서울 주얼리 브랜드만을 위한 대형 팝업이 열립니다.",
+      source_key: "https://news.seoul.go.kr/economy/archives/573913",
+    }).contentType,
+    "news",
+  );
+
+  assert.equal(
+    classifyPosterContentType({
+      title: "2026년 제3회 서초 청년 FESTA x 한불수교 140주년 페스티벌 Bonjour, Fête!",
+      summary_short: "청년의 날 기념식 사전 신청자 대상 선착순 기념품 증정. 자세한 프로그램과 참여 방법은 곧 공개됩니다.",
+    }).contentType,
+    "news",
+  );
+});
+
+test("classifyPosterContentType routes general guides and candidate recommendation notices to admin", () => {
+  assert.equal(
+    classifyPosterContentType({
+      title: "수인성·식품매개감염병 6대 예방수칙",
+      source_key: "https://news.seoul.go.kr/welfare/archives/582238",
+    }).contentType,
+    "admin",
+  );
+
+  assert.equal(
+    classifyPosterContentType({
+      title: "중랑구청<제31회 중랑구민대상 수상후보자 추천 공고>(~8/18)",
+      summary_short: "추천방법: 관내 기관, 단체, 학교장 추천 또는 구민 10명 이상 연명 추천",
+    }).contentType,
+    "admin",
+  );
+
+  assert.equal(
+    classifyPosterContentType({
+      title: "교육문화사업 온라인접수 안내",
+      summary_short: "온라인접수 안내입니다.",
+    }).contentType,
+    "admin",
+  );
+});
+
+test("classifyPosterContentType keeps festival volunteer recruitment as recruit when application period is explicit", () => {
+  const result = classifyPosterContentType({
+    title: "서리풀 뮤직 페스티벌 청년봉사단 3기 모집",
+    summary_short: "신청기간: 2026. 8. 7. ~ 8. 28. 활동내용: 페스티벌 운영 지원",
+  });
+
+  assert.equal(result.contentType, "recruit");
+});
+
+test("classifyPosterContentType keeps event participant recruitment when the title has an action", () => {
+  const result = classifyPosterContentType({
+    title: "'푸른 하늘을 위한 나의 실천 인증' 이벤트 참여자 모집(8.24.~9.11.)",
+    summary_short: "인증 이벤트 참여자를 모집합니다.",
+  });
+
+  assert.equal(result.contentType, "recruit");
+});
+
 test("classifyPosterContentType separates rejected admin and news documents", () => {
   assert.equal(
     classifyPosterContentType({

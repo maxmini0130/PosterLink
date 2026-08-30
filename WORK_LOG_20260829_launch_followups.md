@@ -554,3 +554,31 @@ pnpm --filter posterlink-crawler eval:thresholds -- --input=data/eval/reports/ex
   - Syntax check: passed.
   - Threshold export: completed, still blocked for production as expected.
   - No production DB writes were performed.
+
+### 2026-08-30 Content-Type Routing Coverage Candidate
+
+- Implemented:
+  - Hardened content-type routing for non-recruit public notices:
+    - discount/campaign benefit articles without an application period route to `news`,
+    - popup or event announcement copy without an application period routes to `news`,
+    - public-health prevention guides, generic online registration guides, and award-candidate recommendation notices route to `admin`.
+  - Preserved true event/festival recruitment when the title or body has explicit participant/recruitment action.
+  - Added `eval:extraction --extra-evidence=<dryrun-report.json>` so candidate evidence from dry-run backfills can be evaluated before production writes.
+
+- Candidate verification without DB writes:
+
+```bash
+pnpm --filter posterlink-crawler content-type:backfill -- '--statuses=published,review,rejected,closed' --limit=5000 --output=data/eval/reports/content-type-backfill-routing-improved-20260830-dryrun.json
+pnpm --filter posterlink-crawler eval:extraction -- --set=eval/golden --extractor=current --extra-evidence=data/eval/reports/content-type-backfill-routing-improved-20260830-dryrun.json --out=data/eval/reports/extraction-content-type-candidate-20260830.json
+pnpm --filter posterlink-crawler eval:thresholds -- --input=data/eval/reports/extraction-content-type-candidate-20260830.json --out=data/eval/reports/extraction-thresholds-content-type-candidate-20260830.json --module-out=data/eval/reports/extraction-thresholds-content-type-candidate-20260830.js --min-labeled=120
+pnpm --filter posterlink-crawler test
+```
+
+- Results:
+  - Content-type dry-run checked 2,350 rows and wrote 2,350 candidate evidence rows to a local report only.
+  - Golden-set candidate comparison for `content_type`: `120/120` correct, precision `1.0`, coverage `1.0`.
+  - Extraction candidate report macro accuracy: `0.9694444444444444`.
+  - Threshold plan still reports `production_ready: false`, but `content_type` is now `ready`.
+  - Remaining threshold blockers are `deadline_date` and `deadline_type` low-coverage recommendations.
+  - Crawler tests: pass 286.
+  - No production DB writes were performed.

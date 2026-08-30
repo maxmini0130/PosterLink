@@ -217,7 +217,8 @@ Read-only audits were re-run after this handoff was first written.
 ### P2 - Threshold Rollout Coverage
 
 - Threshold export now keeps low-coverage recommendations out of the copyable applied threshold map.
-- Remaining blocker: expand evidence/prediction coverage for `deadline_date`, `deadline_type`, and `content_type` before marking the Phase 2 threshold-code reflection item complete.
+- Content-type routing candidate now evaluates cleanly against the 120-row golden set when dry-run evidence is supplied through `eval:extraction --extra-evidence`.
+- Remaining blocker: expand evidence/prediction coverage for `deadline_date` and `deadline_type` before marking the Phase 2 threshold-code reflection item complete.
 
 ## Operational Notes
 

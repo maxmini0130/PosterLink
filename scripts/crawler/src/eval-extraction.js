@@ -3,7 +3,7 @@ import "./load-env.js";
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 
 import { evaluateGoldenSet } from "./extraction-eval.js";
@@ -22,11 +22,14 @@ const args = Object.fromEntries(
 
 if (args.help || args.h) {
   console.log(`Usage:
-  node src/eval-extraction.js [--set=eval/golden] [--extractor=current] [--out=data/eval/reports/<timestamp>.json]
+  node src/eval-extraction.js [--set=eval/golden] [--extractor=current] [--out=data/eval/reports/<timestamp>.json] [--extra-evidence=data/eval/reports/content-type-dryrun.json]
 
 Reads git-managed JSON labels from eval/golden/*.json, fetches current
 poster_field_evidence rows, and reports field accuracy, precision@threshold,
 coverage@threshold, hallucination rate, and recommended thresholds.
+
+Use --extra-evidence with a dry-run backfill report to evaluate candidate
+evidence rows before writing them to poster_field_evidence.
 
 Golden JSON shape:
   {
@@ -118,10 +121,39 @@ async function fetchEvidence(supabase, posterIds, extractorMode) {
   return rows;
 }
 
-async function main() {
+export function evidenceRowsFromPayload(payload) {
+  if (!payload || typeof payload !== "object") return [];
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload.evidence_rows)) return payload.evidence_rows;
+  if (Array.isArray(payload.evidenceRows)) return payload.evidenceRows;
+  if (Array.isArray(payload.plans)) {
+    return payload.plans
+      .map((plan) => plan?.evidence)
+      .filter(Boolean);
+  }
+  return [];
+}
+
+async function readExtraEvidence(pathsValue) {
+  if (!pathsValue) return [];
+  const paths = String(pathsValue)
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const rows = [];
+  for (const extraPath of paths) {
+    const absolutePath = path.resolve(REPO_ROOT, extraPath);
+    const payload = JSON.parse(await fs.readFile(absolutePath, "utf8"));
+    rows.push(...evidenceRowsFromPayload(payload));
+  }
+  return rows;
+}
+
+export async function main() {
   const setPath = args.set || DEFAULT_SET;
   const output = path.resolve(REPO_ROOT, args.out || DEFAULT_OUT);
   const extractor = args.extractor || "current";
+  const extraEvidencePath = args["extra-evidence"] || args.extraEvidence;
   const { files, goldens } = await readGoldenSet(setPath);
 
   if (goldens.length === 0) {
@@ -142,13 +174,20 @@ async function main() {
 
   const supabase = createSupabase();
   const posterIds = [...new Set(goldens.map((item) => item.poster_id))];
-  const evidenceRows = await fetchEvidence(supabase, posterIds, extractor);
+  const dbEvidenceRows = await fetchEvidence(supabase, posterIds, extractor);
+  const extraEvidenceRows = await readExtraEvidence(extraEvidencePath);
+  const evidenceRows = [...dbEvidenceRows, ...extraEvidenceRows];
   const evaluation = evaluateGoldenSet(goldens, evidenceRows);
   const report = {
     generated_at: new Date().toISOString(),
     set: path.resolve(REPO_ROOT, setPath),
     extractor,
+    extra_evidence: extraEvidencePath
+      ? String(extraEvidencePath).split(",").map((value) => value.trim()).filter(Boolean)
+      : [],
     golden_files: files.length,
+    db_evidence_rows: dbEvidenceRows.length,
+    extra_evidence_rows: extraEvidenceRows.length,
     evidence_rows: evidenceRows.length,
     ...evaluation,
   };
@@ -159,6 +198,8 @@ async function main() {
     output,
     extractor,
     golden_files: files.length,
+    db_evidence_rows: dbEvidenceRows.length,
+    extra_evidence_rows: extraEvidenceRows.length,
     evidence_rows: evidenceRows.length,
     labeled_posters: report.labeled_posters,
     labeled_field_count: report.labeled_field_count,
@@ -172,7 +213,9 @@ async function main() {
   }, null, 2));
 }
 
-main().catch((error) => {
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
   console.error(error);
   process.exit(1);
-});
+  });
+}

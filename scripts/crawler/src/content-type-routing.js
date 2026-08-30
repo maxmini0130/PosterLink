@@ -31,8 +31,17 @@ const ADMIN_RE = new RegExp([
   "\\uC785\\uCC30\\s*\\uACF5\\uACE0",
   "\\uACE0\\uC2DC\\s*\\uACF5\\uACE0",
   "\\uAD50\\uC721\\s*\\uBC0F\\s*\\uD1B5\\uC9C0\\uC11C\\s*\\uC218\\uB839\\s*\\uC548\\uB0B4",
+  "\\uC628\\uB77C\\uC778\\s*\\uC811\\uC218\\s*\\uC548\\uB0B4",
+  "\\uC608\\uBC29\\uC218\\uCE59",
+  "\\uC218\\uC0C1\\uD6C4\\uBCF4\\uC790\\s*\\uCD94\\uCC9C\\s*\\uACF5\\uACE0",
   "\\uCD95\\uC81C\\uCD94\\uC9C4\\uC704\\uC6D0\\s*\\uACF5\\uAC1C\\uBAA8\\uC9D1\\s*\\uACF5\\uACE0",
   "\\uACF5\\uAC1C\\uBAA8\\uC9D1\\s*\\uACF5\\uACE0",
+].join("|"), "i");
+
+const ADMIN_ALWAYS_RE = new RegExp([
+  "\\uC628\\uB77C\\uC778\\s*\\uC811\\uC218\\s*\\uC548\\uB0B4",
+  "\\uC608\\uBC29\\uC218\\uCE59",
+  "\\uC218\\uC0C1\\uD6C4\\uBCF4\\uC790\\s*\\uCD94\\uCC9C\\s*\\uACF5\\uACE0",
 ].join("|"), "i");
 
 const NEWS_RE = new RegExp([
@@ -45,6 +54,11 @@ const NEWS_RE = new RegExp([
   "\\uACBD\\uBE44\\uB178\\uB3D9\\uC790\\s*\\uAD50\\uC721\\s*\\uBC0F\\s*\\uD55C\\uB9C8\\uB2F9",
   "\\uD589\\uC0AC\\s*(?:\\uAC1C\\uCD5C\\s*)?\\uC548\\uB0B4",
   "\\uC774\\uBCA4\\uD2B8",
+  "\\uD560\\uC778\\s*\\uD61C\\uD0DD",
+  "\\uD31D\\uC5C5",
+  "\\uBE0C\\uB79C\\uB4DC\\s*\\d+\\uAC1C\\uC0AC",
+  "festa",
+  "\\uD398\\uC2A4\\uD2F0\\uBC8C",
 ].join("|"), "i");
 
 const RECRUIT_RE = new RegExp([
@@ -164,6 +178,24 @@ export function classifyPosterContentType(row = {}) {
       contentType: "news",
       confidence: 0.85,
       reason: "event_notice_without_application_period",
+      evidenceText: compact(text),
+    };
+  }
+
+  if (ADMIN_ALWAYS_RE.test(title)) {
+    return {
+      contentType: "admin",
+      confidence: 0.9,
+      reason: "admin_strong_title_rule",
+      evidenceText: title,
+    };
+  }
+
+  if (hasNewsTitle && !RECRUIT_RE.test(title) && !APPLICATION_PERIOD_RE.test(text)) {
+    return {
+      contentType: "news",
+      confidence: 0.85,
+      reason: "news_title_without_application_period",
       evidenceText: compact(text),
     };
   }
