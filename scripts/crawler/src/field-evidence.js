@@ -202,6 +202,7 @@ export function evidenceValue(row) {
 export function evidenceExtractorPriority(row) {
   const extractor = String(row?.extractor ?? "");
   if (extractor === "human" || extractor.startsWith("golden-correction")) return 3;
+  if (extractor.includes("correction")) return 2;
   if (extractor.startsWith("operator-") && !/audit/i.test(extractor)) return 2;
   return 1;
 }

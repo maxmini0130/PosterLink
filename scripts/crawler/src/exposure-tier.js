@@ -5,8 +5,8 @@ import {
 } from "./field-evidence.js";
 
 export const DEFAULT_EXTRACTION_THRESHOLDS = Object.freeze({
-  deadline_date: 1,
-  deadline_type: 0.95,
+  deadline_date: 0.9,
+  deadline_type: 0.9,
   host_org: 0.9,
   official_url: 0.9,
   is_real_poster: 0.9,

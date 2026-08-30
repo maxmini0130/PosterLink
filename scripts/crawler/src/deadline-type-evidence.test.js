@@ -53,6 +53,28 @@ test("infers until_exhausted from explicit exhaustion wording", () => {
   assert.deepEqual(row.value_json, { type: "until_exhausted" });
 });
 
+test("keeps fixed type when a bounded application period also mentions first-come capacity", () => {
+  const row = inferDeadlineTypeEvidence({
+    posterId: "poster-1",
+    existingDeadlineType: "unknown",
+    sourceText: "모집 인원은 선착순 마감입니다.",
+    deadlineDateEvidence: {
+      value_text: "2026-09-14",
+      value_json: { date: "2026-09-14" },
+      confidence: 0.95,
+      evidence_text: "신청기간 2026.08.25 09:00 ~ 2026.09.14 17:00 까지",
+      extractor: "deadline-date-grounded-v1",
+    },
+  });
+
+  assert.equal(row.field_key, "deadline_type");
+  assert.equal(row.value_text, "fixed");
+  assert.deepEqual(row.value_json, {
+    type: "fixed",
+    deadline_date: "2026-09-14",
+  });
+});
+
 test("infers fixed type from high-confidence application deadline evidence", () => {
   const row = inferDeadlineTypeEvidence({
     posterId: "poster-1",

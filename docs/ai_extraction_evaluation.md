@@ -158,10 +158,12 @@ label validation, and threshold export are implemented and executable.
 Current calibrated baseline:
 
 - Golden labels: 120 posters, 720 labeled fields.
-- Latest eval artifact: `data/eval/reports/extraction-calibrated-20260830.json`
+- Latest eval artifact:
+  `data/eval/reports/extraction-calibrated-coverage-guard-20260830.json`
   (ignored by git; see work logs for key metrics).
 - Latest threshold artifact:
-  `data/eval/reports/extraction-thresholds-calibrated-20260830.json`.
-- `production_ready`: true.
-- Reflected production defaults:
-  `deadline_date: 1`, `deadline_type: 0.95`.
+  `data/eval/reports/extraction-thresholds-coverage-guard-20260830.json`.
+- `production_ready`: false.
+- Blocking reason: `one_or_more_labeled_fields_low_coverage_recommendation`.
+- Production defaults remain conservative operating defaults:
+  `deadline_date: 0.9`, `deadline_type: 0.9`.

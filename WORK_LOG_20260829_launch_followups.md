@@ -444,3 +444,34 @@ pnpm --filter posterlink-crawler eval:thresholds -- --input=data/eval/reports/ex
     - `deadline_date`: `1`
     - `deadline_type`: `0.95`
   - Marked the remaining `docs/AI_VERIFICATION_SPEC.md` Phase 2 threshold-code checklist item complete.
+
+### 2026-08-30 Threshold Coverage Guard Follow-up
+
+- Commands:
+
+```bash
+pnpm --filter posterlink-crawler tier:compute -- --statuses=published --limit=5000 --output=data/eval/reports/exposure-tier-published-after-threshold-calibration-20260830.json
+pnpm --filter posterlink-crawler audit:public-counts -- --output=data/eval/reports/public-counts-after-threshold-calibration-20260830.json
+pnpm --filter posterlink-crawler test
+pnpm --filter posterlink-crawler eval:extraction -- --set=eval/golden --extractor=current --out=data/eval/reports/extraction-calibrated-coverage-guard-20260830.json
+pnpm --filter posterlink-crawler eval:thresholds -- --input=data/eval/reports/extraction-calibrated-coverage-guard-20260830.json --out=data/eval/reports/extraction-thresholds-coverage-guard-20260830.json --module-out=data/eval/reports/extraction-thresholds-coverage-guard-20260830.js --min-labeled=120
+pnpm --filter posterlink-crawler tier:compute -- --statuses=published --limit=5000 --output=data/eval/reports/exposure-tier-published-after-threshold-coverage-guard-20260830.json
+```
+
+- Results:
+  - Dry-run showed directly raising operating thresholds from low-coverage recommendations would demote published tiering too aggressively:
+    - with strict threshold defaults: `A:24, B:1, C:490` for 515 published rows.
+  - Reverted operating defaults to `deadline_date: 0.9`, `deadline_type: 0.9`.
+  - Added threshold export coverage floors:
+    - critical `0.5`
+    - major `0.3`
+    - minor `0.2`
+  - Threshold export now reports:
+    - `production_ready`: false
+    - `blocking_reasons`: `one_or_more_labeled_fields_low_coverage_recommendation`
+  - Re-ran published dry-run after the guard and default rollback:
+    - `A:151, B:9, C:355`
+    - This is still too disruptive for an apply run, so no DB writes were performed.
+  - Added deadline-type hardening so a bounded application period is not overridden by a separate `선착순 마감` capacity phrase.
+  - Updated docs to keep the Phase 2 threshold-code checklist item open until coverage is sufficient.
+  - `posterlink-crawler test`: pass 277.

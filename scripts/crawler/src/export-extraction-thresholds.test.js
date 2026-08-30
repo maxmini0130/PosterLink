@@ -29,14 +29,14 @@ test("buildThresholdPlan exports ready recommendations from an evaluation report
   assert.equal(plan.production_ready, true);
   assert.equal(plan.fields.deadline_date.status, "ready");
   assert.equal(plan.fields.deadline_date.recommended_threshold, 0.85);
-  assert.equal(plan.fields.deadline_date.threshold, 1);
-  assert.equal(plan.thresholds.deadline_date, 1);
+  assert.equal(plan.fields.deadline_date.threshold, 0.9);
+  assert.equal(plan.thresholds.deadline_date, 0.9);
   assert.equal(plan.fields.category.status, "unlabeled");
   assert.equal(plan.thresholds.category, 0.8);
   assert.deepEqual(plan.blocking_reasons, []);
 });
 
-test("buildThresholdPlan can raise defaults when the recommendation is stricter", () => {
+test("buildThresholdPlan blocks low-coverage recommendations", () => {
   const plan = buildThresholdPlan({
     labeled_posters: 120,
     field_metrics: {
@@ -52,9 +52,35 @@ test("buildThresholdPlan can raise defaults when the recommendation is stricter"
     },
   }, { minLabeled: 100 });
 
+  assert.equal(plan.production_ready, false);
+  assert.equal(plan.fields.deadline_type.status, "low_coverage_recommendation");
   assert.equal(plan.fields.deadline_type.recommended_threshold, 1);
   assert.equal(plan.fields.deadline_type.threshold, 1);
   assert.equal(plan.thresholds.deadline_type, 1);
+  assert.deepEqual(plan.blocking_reasons, ["one_or_more_labeled_fields_low_coverage_recommendation"]);
+});
+
+test("buildThresholdPlan can raise defaults when the recommendation is stricter and covered", () => {
+  const plan = buildThresholdPlan({
+    labeled_posters: 120,
+    field_metrics: {
+      category: {
+        labeled: 120,
+        recommended_threshold: {
+          threshold: 0.9,
+          precision: 0.95,
+          coverage: 0.5,
+          predictions: 60,
+        },
+      },
+    },
+  }, { minLabeled: 100 });
+
+  assert.equal(plan.production_ready, true);
+  assert.equal(plan.fields.category.status, "ready");
+  assert.equal(plan.fields.category.recommended_threshold, 0.9);
+  assert.equal(plan.fields.category.threshold, 0.9);
+  assert.equal(plan.thresholds.category, 0.9);
 });
 
 test("buildThresholdPlan blocks when a labeled field lacks a recommendation", () => {
@@ -89,7 +115,6 @@ test("buildThresholdPlan blocks production use when the report is unlabeled", ()
   assert.equal(plan.production_ready, false);
   assert.deepEqual(plan.blocking_reasons, [
     "labeled_posters_below_120",
-    "one_or_more_labeled_fields_missing_recommendation",
   ]);
   assert.equal(plan.thresholds.official_url, 0.9);
 });

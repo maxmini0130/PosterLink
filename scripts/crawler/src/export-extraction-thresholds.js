@@ -8,6 +8,11 @@ import { DEFAULT_EXTRACTION_THRESHOLDS } from "./exposure-tier.js";
 
 const DEFAULT_INPUT = "data/eval/reports/extraction-current.json";
 const DEFAULT_OUTPUT = "data/eval/reports/extraction-thresholds-candidate.json";
+const MIN_RECOMMENDATION_COVERAGE = Object.freeze({
+  critical: 0.5,
+  major: 0.3,
+  minor: 0.2,
+});
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "../../..");
 
@@ -45,6 +50,10 @@ function targetPrecision(importance) {
   return importance === "critical" ? 0.98 : 0.9;
 }
 
+function targetCoverage(importance) {
+  return MIN_RECOMMENDATION_COVERAGE[importance] ?? 0.2;
+}
+
 function metricThreshold(metric) {
   const recommended = metric?.recommended_threshold;
   if (!recommended || recommended.threshold === null || recommended.threshold === undefined) {
@@ -76,11 +85,15 @@ export function buildThresholdPlan(report, { minLabeled = 120 } = {}) {
     const recommendation = metric?.recommended_threshold ?? null;
     const precision = recommendation?.precision ?? null;
     const coverage = recommendation?.coverage ?? null;
+    const minCoverage = targetCoverage(importance);
+    const hasEnoughCoverage = typeof coverage === "number" && coverage >= minCoverage;
     const status = labeled === 0
         ? "unlabeled"
         : threshold === null
           ? "missing_recommendation"
-        : "ready";
+          : hasEnoughCoverage
+            ? "ready"
+            : "low_coverage_recommendation";
     if (labeled > 0) labeledFieldCount += 1;
     if (status === "ready") readyFieldCount += 1;
     fields[fieldKey] = {
@@ -90,6 +103,7 @@ export function buildThresholdPlan(report, { minLabeled = 120 } = {}) {
       recommended_threshold: recommendedThreshold,
       current_default: currentDefault,
       target_precision: targetPrecision(importance),
+      min_coverage: minCoverage,
       labeled,
       precision,
       coverage,
@@ -100,6 +114,12 @@ export function buildThresholdPlan(report, { minLabeled = 120 } = {}) {
   const allLabeledFieldsReady = labeledFieldCount > 0 && readyFieldCount === labeledFieldCount;
   const enoughLabels = labeledPosters >= minLabeled;
   const productionReady = Boolean(allLabeledFieldsReady && enoughLabels);
+  const hasMissingRecommendation = Object.values(fields).some(
+    (field) => field.status === "missing_recommendation",
+  );
+  const hasLowCoverageRecommendation = Object.values(fields).some(
+    (field) => field.status === "low_coverage_recommendation",
+  );
 
   return {
     generated_at: new Date().toISOString(),
@@ -112,7 +132,11 @@ export function buildThresholdPlan(report, { minLabeled = 120 } = {}) {
     production_ready: productionReady,
     blocking_reasons: [
       !enoughLabels ? `labeled_posters_below_${minLabeled}` : null,
-      !allLabeledFieldsReady ? "one_or_more_labeled_fields_missing_recommendation" : null,
+      hasMissingRecommendation ? "one_or_more_labeled_fields_missing_recommendation" : null,
+      hasLowCoverageRecommendation ? "one_or_more_labeled_fields_low_coverage_recommendation" : null,
+      labeledFieldCount > 0 && !hasMissingRecommendation && !hasLowCoverageRecommendation && !allLabeledFieldsReady
+        ? "one_or_more_labeled_fields_not_ready"
+        : null,
     ].filter(Boolean),
     thresholds: Object.fromEntries(
       Object.entries(fields).map(([fieldKey, field]) => [

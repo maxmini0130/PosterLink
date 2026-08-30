@@ -5,6 +5,8 @@ const DATE_TOKEN_RE = /(?:20\d{2}\s*(?:[.\-/년]\s*)?)?\d{1,2}\s*(?:[.\-/월]\s*
 const RANGE_OR_DEADLINE_RE = /(?:~|부터|까지|마감|종료|기한|접수기간|신청기간|모집기간)/u;
 const ONGOING_RE = /(?:상시|수시|연중)\s*(?:모집|접수|신청|운영)/u;
 const UNTIL_EXHAUSTED_RE = /(?:예산|재원|인원|정원)?\s*소진\s*시|소진\s*시까지|소진\s*시\s*마감|선착순\s*(?:마감|접수|모집)|마감\s*시까지|모집\s*시까지/u;
+const FIRST_COME_ONLY_RE = /선착순\s*(?:마감|접수|모집)/u;
+const TRUE_EXHAUSTION_RE = /(?:예산|재원|인원|정원)?\s*소진\s*시|소진\s*시까지|소진\s*시\s*마감|마감\s*시까지|모집\s*시까지/u;
 const OPEN_ENDED_RE = /(?:상시|수시|연중)\s*(?:모집|접수|신청|운영)|(?:모집|마감)\s*시까지|소진\s*시/u;
 
 const APPLICATION_LABEL_RE = /(?:신청|접수|모집|응모|지원)\s*(?:[·ㆍ:：-]\s*)?(?:기간|기한|마감|일정)/gu;
@@ -121,6 +123,19 @@ function fixedTypeFromDeadlineDateEvidence(deadlineDateEvidence) {
   return null;
 }
 
+function makeFixedEvidenceRow(posterId, fixedFromDeadlineDate) {
+  return normalizeEvidenceRow({
+    posterId,
+    fieldKey: "deadline_type",
+    valueText: "fixed",
+    valueJson: { type: "fixed", deadline_date: fixedFromDeadlineDate.date },
+    confidence: 0.9,
+    evidenceText: fixedFromDeadlineDate.evidenceText,
+    evidenceSrc: "rule",
+    extractor: "deadline-type-from-date-evidence-v1",
+  });
+}
+
 export function inferDeadlineTypeEvidence({
   posterId,
   sourceText,
@@ -137,6 +152,7 @@ export function inferDeadlineTypeEvidence({
 
   const ongoingEvidence = firstMatchingSegment(segments, ONGOING_RE);
   const exhaustedEvidence = firstMatchingSegment(segments, UNTIL_EXHAUSTED_RE);
+  const fixedFromDeadlineDate = fixedTypeFromDeadlineDateEvidence(deadlineDateEvidence);
 
   if (ongoingEvidence && !exhaustedEvidence) {
     return normalizeEvidenceRow({
@@ -149,6 +165,15 @@ export function inferDeadlineTypeEvidence({
       evidenceSrc: "rule",
       extractor: "deadline-type-rule-v2",
     });
+  }
+
+  if (
+    fixedFromDeadlineDate &&
+    exhaustedEvidence &&
+    FIRST_COME_ONLY_RE.test(exhaustedEvidence) &&
+    !TRUE_EXHAUSTION_RE.test(exhaustedEvidence)
+  ) {
+    return makeFixedEvidenceRow(posterId, fixedFromDeadlineDate);
   }
 
   if (exhaustedEvidence && !ongoingEvidence) {
@@ -164,18 +189,8 @@ export function inferDeadlineTypeEvidence({
     });
   }
 
-  const fixedFromDeadlineDate = fixedTypeFromDeadlineDateEvidence(deadlineDateEvidence);
   if (fixedFromDeadlineDate) {
-    return normalizeEvidenceRow({
-      posterId,
-      fieldKey: "deadline_type",
-      valueText: "fixed",
-      valueJson: { type: "fixed", deadline_date: fixedFromDeadlineDate.date },
-      confidence: 0.9,
-      evidenceText: fixedFromDeadlineDate.evidenceText,
-      evidenceSrc: "rule",
-      extractor: "deadline-type-from-date-evidence-v1",
-    });
+    return makeFixedEvidenceRow(posterId, fixedFromDeadlineDate);
   }
 
   const endDate = isoDateText(applicationEndAt);
