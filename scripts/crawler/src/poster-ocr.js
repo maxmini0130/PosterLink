@@ -42,6 +42,13 @@ async function saveCache(cache) {
 }
 
 async function imageUrlToDataUrl(imageUrl) {
+  const imagePath = String(imageUrl ?? "");
+  if (path.isAbsolute(imagePath) || path.win32.isAbsolute(imagePath)) {
+    const imageBytes = await fs.readFile(imageUrl);
+    const contentType = resolveImageContentType("", imageBytes) || "image/jpeg";
+    return `data:${contentType};base64,${imageBytes.toString("base64")}`;
+  }
+
   const response = await axios.get(imageUrl, {
     responseType: "arraybuffer",
     timeout: 15000,

@@ -189,6 +189,7 @@ export function adjustConfidence(raw = {}) {
   let confidence = clampConfidence(raw.modelConfidence ?? raw.confidence ?? 0.5);
   const evidenceText = compactText(raw.evidenceText);
   const valueText = compactText(raw.valueText, 500);
+  const shortEvidence = !evidenceText || evidenceText.length < 4;
 
   if (!evidenceText || evidenceText.length < 4) {
     confidence = Math.min(confidence, 0.4);
@@ -197,6 +198,7 @@ export function adjustConfidence(raw = {}) {
   if (
     evidenceText &&
     valueText &&
+    !shortEvidence &&
     !valueAppearsInEvidence({
       fieldKey: raw.fieldKey,
       valueText,

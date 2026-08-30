@@ -41,6 +41,8 @@
     "eval:validate": "node src/validate-extraction-golden.js",
     "eval:extraction": "node src/eval-extraction.js",
     "eval:thresholds": "node src/export-extraction-thresholds.js",
+    "eval:poster-detection": "node src/measure-poster-detection.js",
+    "eval:imageless": "node src/measure-imageless-candidates.js",
     "eval:plan-corrections": "node src/plan-golden-evidence-corrections.js",
     "eval:status": "node src/summarize-extraction-golden.js",
     "review:audit-notes": "node src/audit-human-review-notes.js",

@@ -13,6 +13,16 @@ export default function AdminDashboardPage() {
     totalUsers: 0,
     linkClicks: 0,
   });
+  const [exposureSummary, setExposureSummary] = useState({
+    A: 0,
+    B: 0,
+    C: 0,
+    seo: 0,
+    calendar: 0,
+    deadlineAlert: 0,
+    recommendation: 0,
+    autoPublishEligible: 0,
+  });
   const [popularKeywords, setPopularKeywords] = useState<string[]>([]);
   const [recentActions, setRecentActions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,9 +39,23 @@ export default function AdminDashboardPage() {
         supabase
           .from("admin_actions")
           .select("target_type, action_type, action_reason, metadata_json, created_at")
-          .order("created_at", { ascending: false })
-          .limit(6),
+        .order("created_at", { ascending: false })
+        .limit(6),
       ]);
+      const aiSummaryRes = await fetch("/api/admin/ai-verification?days=7", { cache: "no-store" });
+      const aiSummary = await aiSummaryRes.json().catch(() => ({}));
+      if (aiSummaryRes.ok && aiSummary?.exposureSummary?.tierCounts) {
+        setExposureSummary({
+          A: aiSummary.exposureSummary.tierCounts.A ?? 0,
+          B: aiSummary.exposureSummary.tierCounts.B ?? 0,
+          C: aiSummary.exposureSummary.tierCounts.C ?? 0,
+          seo: aiSummary.exposureSummary.gateCounts?.seo ?? 0,
+          calendar: aiSummary.exposureSummary.gateCounts?.calendar ?? 0,
+          deadlineAlert: aiSummary.exposureSummary.gateCounts?.deadlineAlert ?? 0,
+          recommendation: aiSummary.exposureSummary.gateCounts?.recommendation ?? 0,
+          autoPublishEligible: aiSummary.exposureSummary.autoPublish?.eligibleCandidates ?? 0,
+        });
+      }
 
       setStats({
         reviewPending: reviewRes.count ?? 0,
@@ -95,6 +119,7 @@ export default function AdminDashboardPage() {
     { label: "포스터 검수", desc: "운영자가 등록한 포스터를 승인하거나 반려합니다", icon: <FileCheck size={22} />, href: "/admin/posters" },
     { label: "신고 관리", desc: "사용자 신고 댓글을 검토하고 처리합니다", icon: <AlertTriangle size={22} />, href: "/admin/reports" },
     { label: "기준정보 관리", desc: "카테고리와 지역 정보를 추가하거나 삭제합니다", icon: <Settings size={22} />, href: "/admin/settings" },
+    { label: "AI 검증 현황", desc: "노출 티어 분포와 게이트 통과 건수를 확인합니다", icon: <TrendingUp size={22} />, href: "/admin/ai-verification" },
   ];
 
   return (
@@ -120,6 +145,35 @@ export default function AdminDashboardPage() {
           </Link>
         ))}
       </div>
+      <section className="rounded-[2rem] border border-gray-100 bg-white p-7 shadow-sm mb-12">
+        <h2 className="text-sm font-black text-gray-900 mb-4">AI 노출 티어 · 게이트 현황</h2>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+          <div className="rounded-2xl bg-gray-50 p-4">
+            <p className="text-xs font-black text-gray-400 uppercase">A 티어</p>
+            <p className="text-2xl font-black text-emerald-600">{exposureSummary.A}</p>
+          </div>
+          <div className="rounded-2xl bg-gray-50 p-4">
+            <p className="text-xs font-black text-gray-400 uppercase">B 티어</p>
+            <p className="text-2xl font-black text-blue-600">{exposureSummary.B}</p>
+          </div>
+          <div className="rounded-2xl bg-gray-50 p-4">
+            <p className="text-xs font-black text-gray-400 uppercase">C 티어</p>
+            <p className="text-2xl font-black text-amber-600">{exposureSummary.C}</p>
+          </div>
+          <div className="rounded-2xl bg-gray-50 p-4">
+            <p className="text-xs font-black text-gray-400 uppercase">SEO 통과</p>
+            <p className="text-2xl font-black text-gray-900">{exposureSummary.seo}</p>
+          </div>
+          <div className="rounded-2xl bg-gray-50 p-4">
+            <p className="text-xs font-black text-gray-400 uppercase">캘린더 통과</p>
+            <p className="text-2xl font-black text-gray-900">{exposureSummary.calendar}</p>
+          </div>
+          <div className="rounded-2xl bg-gray-50 p-4">
+            <p className="text-xs font-black text-gray-400 uppercase">알림 게이트 통과</p>
+            <p className="text-2xl font-black text-gray-900">{exposureSummary.deadlineAlert}</p>
+          </div>
+        </div>
+      </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-12">
         <section className="rounded-[2rem] border border-gray-100 bg-white p-7 shadow-sm">

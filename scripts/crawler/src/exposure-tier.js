@@ -109,6 +109,7 @@ export function computeTier(input, thresholds = DEFAULT_EXTRACTION_THRESHOLDS) {
 
   const criticalPassed = missingCritical.length === 0 && lowCritical.length === 0;
   const eligibleRecruit = !input?.isDuplicate && (input?.contentType ?? "recruit") === "recruit";
+  const hasPosterImage = input?.hasPosterImage !== false;
 
   const incompleteMajorMinor = [...MAJOR_FIELDS, ...MINOR_FIELDS].filter(
     (fieldKey) => fields[fieldKey] && !passesField(fields, fieldKey, thresholds),
@@ -118,7 +119,7 @@ export function computeTier(input, thresholds = DEFAULT_EXTRACTION_THRESHOLDS) {
   }
 
   let tier = "C";
-  if (criticalPassed && eligibleRecruit) {
+  if (criticalPassed && eligibleRecruit && hasPosterImage) {
     tier = incompleteMajorMinor.length === 0 ? "A" : "B";
   }
 

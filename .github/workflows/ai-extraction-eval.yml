@@ -10,6 +10,7 @@ on:
       - "scripts/crawler/src/eval-extraction.js"
       - "scripts/crawler/src/extraction-eval.js"
       - "scripts/crawler/src/validate-extraction-golden.js"
+      - "scripts/crawler/src/measure-poster-detection.js"
       - ".github/workflows/ai-extraction-eval.yml"
 
 jobs:
@@ -46,6 +47,13 @@ jobs:
             --set=eval/golden \
             --extractor=current \
             --out=data/results/extraction-eval-${GITHUB_RUN_ID}.json
+
+      - name: Score poster detection routing
+        if: ${{ env.SUPABASE_URL != '' && env.SUPABASE_KEY != '' }}
+        run: |
+          npm run eval:poster-detection -- \
+            --set=eval/golden \
+            --out=data/results/poster-detection-${GITHUB_RUN_ID}.json
 
       - name: Skip scoring without DB secrets
         if: ${{ env.SUPABASE_URL == '' || env.SUPABASE_KEY == '' }}

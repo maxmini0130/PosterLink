@@ -1,3 +1,6 @@
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+
 const RASTER_IMAGE_EXTENSION_PATTERN = /\.(?:jpe?g|png|gif|webp|avif)(?:$|[?#])/i;
 const POSTER_NAME_PATTERN = /(?:포스터|홍보물|홍보\s*이미지|전단|flyer|poster)/i;
 const RASTER_IMAGE_CONTENT_TYPES = new Set([
@@ -9,12 +12,14 @@ const RASTER_IMAGE_CONTENT_TYPES = new Set([
   "image/avif",
 ]);
 
-function resolveHttpUrl(value, baseUrl) {
+function resolveImageUrl(value, baseUrl) {
   const text = String(value ?? "").trim();
   if (!text || /^javascript:/i.test(text)) return null;
+  if (path.isAbsolute(text) || path.win32.isAbsolute(text)) return text;
 
   try {
     const url = new URL(text, baseUrl || undefined);
+    if (url.protocol === "file:") return fileURLToPath(url);
     return /^https?:$/i.test(url.protocol) ? url.href : null;
   } catch {
     return null;
@@ -49,7 +54,7 @@ export function collectAttachmentImageCandidates(attachments = [], baseUrl = nul
   for (const attachment of attachments ?? []) {
     if (!isRasterImageAttachment(attachment)) continue;
 
-    const url = resolveHttpUrl(attachment?.url ?? attachment?.href, baseUrl);
+    const url = resolveImageUrl(attachment?.url ?? attachment?.href, baseUrl);
     if (!url || seen.has(url)) continue;
 
     seen.add(url);
@@ -75,7 +80,7 @@ export function mergeAttachmentImageCandidates(images = [], attachments = [], ba
     ...attachmentCandidates.map((candidate) => candidate.url),
     ...(images ?? []),
   ]) {
-    const url = resolveHttpUrl(imageUrl, baseUrl);
+    const url = resolveImageUrl(imageUrl, baseUrl);
     if (!url || seen.has(url)) continue;
     seen.add(url);
     merged.push(url);

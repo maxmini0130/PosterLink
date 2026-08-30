@@ -656,6 +656,29 @@ export async function crawlSite(site, adapter, options = {}) {
             if (board.analyzeAttachments !== false && site.analyzeAttachments !== false) {
               const attachmentAnalysis = await analyzePostAttachments(fullPost);
               rememberAttachmentAnalysis(stats, fullPost, attachmentAnalysis);
+              if (attachmentAnalysis.renderedImageCandidates?.length > 0) {
+                const renderedAttachmentImages = mergeAttachmentImageCandidates(
+                  fullPost.images,
+                  attachmentAnalysis.renderedImageCandidates,
+                  fullPost.sourceUrl || fullPost.url,
+                );
+                const addedRenderedImage = renderedAttachmentImages.images.some(
+                  (imageUrl) => !fullPost.images.includes(imageUrl),
+                );
+                fullPost.images = renderedAttachmentImages.images;
+                fullPost.attachmentImageCandidates = [
+                  ...(fullPost.attachmentImageCandidates ?? []),
+                  ...renderedAttachmentImages.attachmentCandidates,
+                ];
+                fullPost.preferredImageUrls = [
+                  ...(fullPost.preferredImageUrls ?? []),
+                  ...renderedAttachmentImages.attachmentImageUrls,
+                ];
+                if (addedRenderedImage) {
+                  fullPost.posterImageRule = null;
+                  fullPost.posterImageCandidates = null;
+                }
+              }
               if (attachmentAnalysis.contentAdded) {
                 fullPost.content = [fullPost.content, attachmentAnalysis.addedText].filter(Boolean).join("\n\n");
                 fullPost.attachmentAnalysis = attachmentAnalysis;

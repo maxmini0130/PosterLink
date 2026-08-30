@@ -51,3 +51,15 @@ test("image bytes override generic attachment download MIME types", () => {
   );
   assert.equal(resolveImageContentType("application/pdf", Buffer.from("%PDF")), null);
 });
+
+test("rendered local attachment images are preserved as candidates", () => {
+  const localPoster = "C:\\Users\\runner\\AppData\\Local\\Temp\\posterlink-pdf-render-1\\page-1.png";
+  const result = mergeAttachmentImageCandidates(
+    ["https://example.com/thumb.jpg"],
+    [{ name: "notice PDF page 1", url: localPoster, contentType: "image/png" }],
+    "https://example.org/notice/1",
+  );
+
+  assert.equal(result.images[0], localPoster);
+  assert.equal(result.attachmentImageUrls[0], localPoster);
+});

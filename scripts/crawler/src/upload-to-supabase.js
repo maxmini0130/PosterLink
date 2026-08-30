@@ -1450,22 +1450,40 @@ function getImageExtension(imageUrl, contentType) {
   return "jpg";
 }
 
+function isLocalFilePath(value) {
+  const text = String(value ?? "");
+  return path.isAbsolute(text) || path.win32.isAbsolute(text);
+}
+
+function isCrawlerTempImagePath(value) {
+  const normalized = path.normalize(String(value ?? ""));
+  return normalized.includes(`${path.sep}posterlink-pdf-render-`)
+    || normalized.includes("\\posterlink-pdf-render-")
+    || normalized.includes("/posterlink-pdf-render-");
+}
+
 async function importImageToStorage(imageUrl, sourceKey, index) {
-  if (!/^https?:\/\//i.test(imageUrl)) return imageUrl;
+  if (!/^https?:\/\//i.test(imageUrl) && !isLocalFilePath(imageUrl)) return imageUrl;
   if (imageUrl.includes("/storage/v1/object/public/")) return imageUrl;
 
-  const response = await fetch(imageUrl, {
-    headers: {
-      "User-Agent": "PosterLink-Crawler/1.0 image import",
-      "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-      "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.3",
-    },
-  });
+  let imageBytes;
+  let declaredContentType = "";
+  if (isLocalFilePath(imageUrl)) {
+    imageBytes = new Uint8Array(await fs.readFile(imageUrl));
+  } else {
+    const response = await fetch(imageUrl, {
+      headers: {
+        "User-Agent": "PosterLink-Crawler/1.0 image import",
+        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.3",
+      },
+    });
 
-  if (!response.ok) throw new Error(`image download failed (${response.status})`);
+    if (!response.ok) throw new Error(`image download failed (${response.status})`);
 
-  const imageBytes = new Uint8Array(await response.arrayBuffer());
-  const declaredContentType = response.headers.get("content-type") ?? "";
+    imageBytes = new Uint8Array(await response.arrayBuffer());
+    declaredContentType = response.headers.get("content-type") ?? "";
+  }
   const contentType = resolveImageContentType(declaredContentType, imageBytes);
   if (!contentType) throw new Error(`not an image content type: ${declaredContentType || "unknown"}`);
   const hash = crypto.createHash("sha256").update(`${sourceKey}:${imageUrl}:${index}`).digest("hex").slice(0, 24);
@@ -1483,14 +1501,20 @@ async function importImageToStorage(imageUrl, sourceKey, index) {
 export async function importPostImagesToStorage(post, sourceUrl, sourceKey) {
   const imageUrls = normalizePostImages(post, sourceUrl);
   const imported = [];
+  const tempDirsToCleanup = new Set();
 
   for (const [index, imageUrl] of imageUrls.entries()) {
+    if (isCrawlerTempImagePath(imageUrl)) tempDirsToCleanup.add(path.dirname(imageUrl));
     try {
       imported.push(await importImageToStorage(imageUrl, sourceKey, index));
     } catch (error) {
       console.warn(`\n  이미지 스토리지 가져오기 실패: ${imageUrl} — ${error.message}`);
-      imported.push(imageUrl);
+      if (!isLocalFilePath(imageUrl)) imported.push(imageUrl);
     }
+  }
+
+  for (const tempDir of tempDirsToCleanup) {
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
   }
 
   return [...new Set(imported)];

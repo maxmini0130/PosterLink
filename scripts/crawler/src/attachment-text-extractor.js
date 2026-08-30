@@ -17,6 +17,9 @@ const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_MAX_TOTAL_TEXT = 8_000;
 const DEFAULT_MAX_TEXT_PER_ATTACHMENT = 4_000;
 const DEFAULT_HWP_TIMEOUT_MS = 20_000;
+const DEFAULT_PDF_RENDER_TIMEOUT_MS = 20_000;
+const DEFAULT_PDF_RENDER_PAGES = 2;
+const DEFAULT_PDF_RENDER_DPI = 144;
 
 const TEXT_KINDS = new Set(["pdf", "hwpx", "docx", "txt", "html", "xml", "json", "csv"]);
 const UNSUPPORTED_BINARY_KINDS = new Set(["hwp", "image", "archive", "unknown"]);
@@ -41,6 +44,10 @@ function readPositiveInt(name, fallback) {
 
 function enabled() {
   return process.env.CRAWLER_ATTACHMENT_ANALYSIS !== "0";
+}
+
+function pdfRenderingEnabled() {
+  return process.env.CRAWLER_ATTACHMENT_RENDER_PDF_IMAGES !== "0";
 }
 
 function safeUrl(value, baseUrl) {
@@ -460,6 +467,80 @@ async function extractLegacyHwpText(buffer) {
   }
 }
 
+async function renderPdfImageCandidates(buffer, candidate) {
+  if (!pdfRenderingEnabled()) {
+    return {
+      status: "skipped",
+      reason: "PDF attachment image rendering disabled",
+      images: [],
+    };
+  }
+
+  const command = process.env.CRAWLER_PDF_RENDER_COMMAND?.trim() || "pdftoppm";
+  const pageLimit = readPositiveInt("CRAWLER_ATTACHMENT_RENDER_PDF_PAGES", DEFAULT_PDF_RENDER_PAGES);
+  const dpi = readPositiveInt("CRAWLER_ATTACHMENT_RENDER_PDF_DPI", DEFAULT_PDF_RENDER_DPI);
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "posterlink-pdf-render-"));
+  const pdfPath = path.join(tempDir, "attachment.pdf");
+  const outputPrefix = path.join(tempDir, "page");
+
+  try {
+    await fs.writeFile(pdfPath, buffer);
+    await execFileAsync(command, [
+      "-f", "1",
+      "-l", String(pageLimit),
+      "-png",
+      "-r", String(dpi),
+      pdfPath,
+      outputPrefix,
+    ], {
+      timeout: readPositiveInt("CRAWLER_ATTACHMENT_RENDER_PDF_TIMEOUT_MS", DEFAULT_PDF_RENDER_TIMEOUT_MS),
+      maxBuffer: readPositiveInt("CRAWLER_ATTACHMENT_RENDER_PDF_MAX_BUFFER", 2_000_000),
+      windowsHide: true,
+    });
+
+    const entries = await fs.readdir(tempDir);
+    const images = entries
+      .filter((entry) => /^page-\d+\.png$/i.test(entry))
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+      .map((entry, index) => {
+        const pageMatch = entry.match(/page-(\d+)\.png$/i);
+        const page = Number(pageMatch?.[1] ?? index + 1);
+        return {
+          name: `${candidate.name || "PDF attachment"} page ${page}`,
+          url: path.join(tempDir, entry),
+          sourceUrl: candidate.url,
+          source: candidate.source,
+          kind: "pdf_render",
+          contentType: "image/png",
+          page,
+        };
+      });
+
+    if (images.length === 0) {
+      await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+      return {
+        status: "failed",
+        reason: "pdftoppm produced no page images",
+        images: [],
+      };
+    }
+
+    return {
+      status: "rendered",
+      reason: "",
+      tempDir,
+      images,
+    };
+  } catch (error) {
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    return {
+      status: "failed",
+      reason: String(error?.message ?? error).slice(0, 240),
+      images: [],
+    };
+  }
+}
+
 async function extractAttachmentText(buffer, kind, contentType) {
   if (kind === "hwp") return extractLegacyHwpText(buffer);
 
@@ -498,6 +579,9 @@ async function analyzeAttachment(candidate, maxBytes) {
   }
 
   const kind = guessKind(candidate, contentType);
+  const rendered = kind === "pdf"
+    ? await renderPdfImageCandidates(buffer, candidate)
+    : { status: "skipped", reason: kind === "hwp" ? "legacy HWP image rendering requires PDF conversion" : "", images: [] };
   const extracted = await extractAttachmentText(buffer, kind, contentType);
   const text = cleanExtractedText(extracted.text ?? "");
   if (extracted.status === "unsupported") {
@@ -508,6 +592,9 @@ async function analyzeAttachment(candidate, maxBytes) {
       status: "unsupported",
       reason: extracted.reason,
       textLength: 0,
+      renderStatus: rendered.status,
+      renderReason: rendered.reason,
+      renderedImages: rendered.images,
     };
   }
   if (!text || text.length < 20) {
@@ -518,6 +605,9 @@ async function analyzeAttachment(candidate, maxBytes) {
       status: "failed",
       reason: "no readable text extracted",
       textLength: 0,
+      renderStatus: rendered.status,
+      renderReason: rendered.reason,
+      renderedImages: rendered.images,
     };
   }
 
@@ -529,6 +619,9 @@ async function analyzeAttachment(candidate, maxBytes) {
     reason: "",
     text,
     textLength: text.length,
+    renderStatus: rendered.status,
+    renderReason: rendered.reason,
+    renderedImages: rendered.images,
   };
 }
 
@@ -555,6 +648,9 @@ function publicSourceSummary(source) {
     textLength: source.textLength ?? 0,
     contentHash: source.contentHash ?? null,
     failureCode: getAttachmentFailureCode(source),
+    renderStatus: source.renderStatus ?? "skipped",
+    renderReason: source.renderReason ?? "",
+    renderedImageCount: Array.isArray(source.renderedImages) ? source.renderedImages.length : 0,
   };
 }
 
@@ -595,6 +691,9 @@ export async function analyzePostAttachments(post, options = {}) {
         content: [post.content, addedText].filter(Boolean).join("\n\n"),
       }, { extractedDeadline: post.deadline ?? null })
     : null;
+  const renderedImageCandidates = results.flatMap((result) => (
+    Array.isArray(result.renderedImages) ? result.renderedImages : []
+  ));
 
   return {
     checked: results.length,
@@ -604,6 +703,7 @@ export async function analyzePostAttachments(post, options = {}) {
     contentAdded: Boolean(addedText),
     addedText,
     suggestedDeadline: dateQuality?.suggestedDeadline ?? null,
+    renderedImageCandidates,
     sources: results.map(publicSourceSummary),
   };
 }

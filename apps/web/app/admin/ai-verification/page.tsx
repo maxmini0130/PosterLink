@@ -53,11 +53,41 @@ type FieldReport = {
   } | null;
 };
 
+type ExposureSummary = {
+  statusCounts: {
+    published: number;
+    review: number;
+  };
+  tierCounts: {
+    A: number;
+    B: number;
+    C: number;
+    uncategorized: number;
+  };
+  uncomputedCount: number;
+  computedCount: number;
+  gateCounts: {
+    seo: number;
+    calendar: number;
+    deadlineAlert: number;
+    recommendation: number;
+  };
+  autoPublish: {
+    enabled: boolean;
+    tiers: string[];
+    reviewCandidates: number;
+    eligibleCandidates: number;
+    blockedReasons: Record<string, number>;
+    requiresApply: boolean;
+  };
+};
+
 type AiVerificationData = {
   days: number;
   generatedAt: string;
   usageRows: UsageRow[];
   fieldOverview: FieldOverviewRow[];
+  exposureSummary: ExposureSummary;
   fieldReports: FieldReport[];
 };
 
@@ -153,7 +183,7 @@ export default function AdminAiVerificationPage() {
         <div>
           <h1 className="text-4xl font-black italic tracking-tight text-gray-900 dark:text-white">AI 검증 현황</h1>
           <p className="mt-2 text-sm font-bold text-gray-400 dark:text-slate-500">
-            모델 사용량과 필드별 오류 신고를 확인합니다.
+            모델 사용량, 노출 티어, 노출 게이트 상태를 함께 확인합니다.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -208,6 +238,87 @@ export default function AdminAiVerificationPage() {
 
           <div className="mb-8 grid gap-4 lg:grid-cols-2">
             <section className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <h2 className="mb-4 text-sm font-black text-gray-900 dark:text-white">노출 티어 분포</h2>
+              <div className="space-y-3">
+                {Object.entries(data?.exposureSummary?.tierCounts ?? {}).map(([tier, count]) => {
+                  const isUncategorized = tier === "uncategorized";
+                  const tone = isUncategorized
+                    ? "bg-gray-100 text-gray-700"
+                    : tier === "A"
+                      ? "bg-emerald-100 text-emerald-700"
+                      : tier === "B"
+                        ? "bg-blue-100 text-blue-700"
+                        : "bg-amber-100 text-amber-700";
+                  const label = isUncategorized ? "미분류" : `티어 ${tier}`;
+                  return (
+                    <div key={tier} className="flex items-center justify-between rounded-2xl bg-gray-50 px-4 py-3 dark:bg-slate-800">
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex rounded-lg px-2 py-1 text-[11px] font-black ${tone}`}>{label}</span>
+                        <span className="text-xs font-bold text-gray-500">published/review 기준</span>
+                      </div>
+                      <span className="text-sm font-black text-indigo-600">{formatNumber(count)}</span>
+                    </div>
+                  );
+                })}
+                <div className="rounded-2xl bg-gray-50 px-4 py-3 dark:bg-slate-800">
+                  <p className="text-[11px] font-bold text-gray-500">
+                    미분류 게시물: {formatNumber(data?.exposureSummary?.uncomputedCount ?? 0)}건
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <h2 className="mb-4 text-sm font-black text-gray-900 dark:text-white">자동 공개 킬 스위치</h2>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between rounded-2xl bg-gray-50 px-4 py-3 dark:bg-slate-800">
+                  <span className="text-sm font-black text-gray-700 dark:text-slate-200">현재 상태</span>
+                  <span className={`rounded-lg px-2 py-1 text-xs font-black ${data?.exposureSummary?.autoPublish.enabled ? "bg-emerald-100 text-emerald-700" : "bg-gray-200 text-gray-600"}`}>
+                    {data?.exposureSummary?.autoPublish.enabled ? "ON" : "OFF"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between rounded-2xl bg-gray-50 px-4 py-3 dark:bg-slate-800">
+                  <span className="text-sm font-black text-gray-700 dark:text-slate-200">허용 티어</span>
+                  <span className="text-sm font-black text-gray-700 dark:text-slate-200">
+                    {(data?.exposureSummary?.autoPublish.tiers ?? []).join(", ") || "A"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between rounded-2xl bg-gray-50 px-4 py-3 dark:bg-slate-800">
+                  <span className="text-sm font-black text-gray-700 dark:text-slate-200">자동 공개 후보(review)</span>
+                  <span className="text-sm font-black text-indigo-600">
+                    {formatNumber(data?.exposureSummary?.autoPublish.reviewCandidates ?? 0)}건
+                  </span>
+                </div>
+                <div className="flex items-center justify-between rounded-2xl bg-gray-50 px-4 py-3 dark:bg-slate-800">
+                  <span className="text-sm font-black text-gray-700 dark:text-slate-200">실제 적용 가능 후보</span>
+                  <span className="text-sm font-black text-emerald-600">
+                    {formatNumber(data?.exposureSummary?.autoPublish.eligibleCandidates ?? 0)}건
+                  </span>
+                </div>
+                {Object.keys(data?.exposureSummary?.autoPublish.blockedReasons ?? {}).length > 0 && (
+                  <div className="rounded-2xl bg-gray-50 px-4 py-3 dark:bg-slate-800">
+                    <p className="mb-2 text-[11px] font-black text-gray-500">자동 공개 차단 사유</p>
+                    <div className="space-y-2">
+                      {Object.entries(data?.exposureSummary?.autoPublish.blockedReasons ?? {}).map(([reason, count]) => (
+                        <div key={reason} className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-gray-600 dark:text-slate-300">{reason}</span>
+                          <span className="font-black text-gray-900 dark:text-white">{formatNumber(count)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-4 dark:border-slate-700">
+                  <p className="text-[11px] font-black text-gray-500">
+                    적용 전 조건: 환경변수 `EXPOSURE_AUTO_PUBLISH=true` 및 `--apply`가 함께 필요합니다.
+                  </p>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div className="mb-8 grid gap-4 lg:grid-cols-2">
+            <section className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <h2 className="mb-4 text-sm font-black text-gray-900 dark:text-white">단계별 사용량</h2>
               <div className="space-y-3">
                 {Object.entries(usageSummary.byStage).length > 0 ? Object.entries(usageSummary.byStage).map(([stage, count]) => (
@@ -220,6 +331,20 @@ export default function AdminAiVerificationPage() {
                     아직 기록된 AI 사용량이 없습니다.
                   </p>
                 )}
+              </div>
+            </section>
+
+            <section className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <h2 className="mb-4 text-sm font-black text-gray-900 dark:text-white">티어 게이트 통과 현황</h2>
+              <div className="space-y-3">
+                {Object.entries(data?.exposureSummary?.gateCounts ?? {}).map(([gate, count]) => (
+                  <div key={gate} className="flex items-center justify-between rounded-2xl bg-gray-50 px-4 py-3 dark:bg-slate-800">
+                    <span className="text-sm font-black text-gray-700 dark:text-slate-200">
+                      {gate === "deadlineAlert" ? "데드라인 알림 게이트" : gate === "recommendation" ? "추천 게이트" : gate === "calendar" ? "캘린더 게이트" : "SEO 게이트"}
+                    </span>
+                    <span className="text-sm font-black text-indigo-600">{formatNumber(count)} / {formatNumber(data?.exposureSummary?.computedCount ?? 0)}</span>
+                  </div>
+                ))}
               </div>
             </section>
 

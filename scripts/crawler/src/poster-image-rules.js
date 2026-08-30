@@ -1,4 +1,6 @@
 ﻿import axios from "axios";
+import fs from "node:fs/promises";
+import path from "node:path";
 
 const MIN_SCORE = Number(process.env.POSTER_IMAGE_RULE_MIN_SCORE ?? "45");
 const PROBE_BYTES = 512 * 1024;
@@ -222,6 +224,16 @@ function parseImageSize(buffer) {
 }
 
 export async function probeImage(imageUrl) {
+  const imagePath = String(imageUrl ?? "");
+  if (path.isAbsolute(imagePath) || path.win32.isAbsolute(imagePath)) {
+    const buffer = await fs.readFile(imagePath);
+    return {
+      contentType: "",
+      contentLength: buffer.length,
+      dimensions: parseImageSize(buffer),
+    };
+  }
+
   const requestOptions = {
     responseType: "arraybuffer",
     timeout: 12000,

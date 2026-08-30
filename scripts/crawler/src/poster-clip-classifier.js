@@ -49,6 +49,9 @@ function execFileJson(command, args) {
 }
 
 async function imageUrlToTempFile(imageUrl) {
+  const imagePath = String(imageUrl ?? "");
+  if (path.isAbsolute(imagePath) || path.win32.isAbsolute(imagePath)) return imageUrl;
+
   const response = await axios.get(imageUrl, {
     responseType: "arraybuffer",
     timeout: 15000,
@@ -90,8 +93,10 @@ export async function classifyPosterImageClip(imageUrl) {
   }
 
   let tempPath;
+  let shouldDeleteTemp = false;
   try {
     tempPath = await imageUrlToTempFile(imageUrl);
+    shouldDeleteTemp = tempPath !== imageUrl;
     const prediction = await execFileJson(PYTHON_BIN, [
       CLIP_SCRIPT,
       "--image",
@@ -122,6 +127,6 @@ export async function classifyPosterImageClip(imageUrl) {
       model: "none",
     };
   } finally {
-    if (tempPath) await fs.unlink(tempPath).catch(() => {});
+    if (tempPath && shouldDeleteTemp) await fs.unlink(tempPath).catch(() => {});
   }
 }
