@@ -33,12 +33,12 @@
 
 이 문서는 관찰된 UI/동작을 기반으로 작성되었다. 아래를 실제 스키마와 대조한 뒤 시작할 것.
 
-- [ ] `posters` 테이블의 현재 컬럼 및 `verification` / `status` enum 실제 값
-- [ ] `poster_links` 의 `type` enum (관찰된 값: `official_notice`, 신청 페이지용 값)
-- [ ] `poster_images` 구조 및 대표 이미지 지정 방식
-- [ ] `collection_sources` 와 `source_key` 의 관계
-- [ ] 관리자 승인 체크리스트 로직 위치 (파일 경로)
-- [ ] OCR Edge Function `process-ocr` 의 현재 출력 JSON 형태
+- [x] `posters` 테이블의 현재 컬럼 및 `verification` / `status` enum 실제 값
+- [x] `poster_links` 의 `type` enum (관찰된 값: `official_notice`, 신청 페이지용 값)
+- [x] `poster_images` 구조 및 대표 이미지 지정 방식
+- [x] `collection_sources` 와 `source_key` 의 관계
+- [x] 관리자 승인 체크리스트 로직 위치 (파일 경로)
+- [x] OCR Edge Function `process-ocr` 의 현재 출력 JSON 형태
 
 **스키마 이름이 다르면 이 문서의 이름이 아니라 실제 스키마를 따르고, 문서를 갱신할 것.**
 
@@ -203,9 +203,9 @@ OCR/구조화 프롬프트를 **필드별 근거를 강제하는 구조화 출�
 
 ### 2.6 완료 기준
 
-- [ ] 마이그레이션 적용 및 RLS 정책 설정 (읽기: 공개 필드만 / 쓰기: service role)
-- [ ] `process-ocr` 이 `poster_field_evidence` 에 기록
-- [ ] 기존 554건 백필 배치 스크립트 (재크롤 없이 저장된 원문·OCR 텍스트로 재가공)
+- [x] 마이그레이션 적용 및 RLS 정책 설정 (읽기: 공개 필드만 / 쓰기: service role)
+- [x] `process-ocr` 이 `poster_field_evidence` 에 기록
+- [x] 기존 554건 백필 배치 스크립트 (재크롤 없이 저장된 원문·OCR 텍스트로 재가공)
 - [x] `adjustConfidence` 단위 테스트 (규칙별 최소 1케이스)
 
 ---
@@ -270,8 +270,8 @@ scripts/eval-extraction.ts
 
 ### 3.3 완료 기준
 
-- [ ] 120건 라벨 완료
-- [ ] `pnpm eval:extraction` 로 실행 가능
+- [x] 120건 라벨 완료
+- [x] `pnpm eval:extraction` 로 실행 가능
 - [ ] 필드별 임계값 표가 리포트에서 산출되어 코드에 반영됨
 - [x] CI에서 주 1회 실행 (회귀 감지)
 

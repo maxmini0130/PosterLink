@@ -395,3 +395,22 @@ pnpm --filter posterlink-crawler eval:validate -- --set=eval/golden
     - `tiering_health` all zero-share (no model usage in measured window)
   - `eval:validate`:
     - `ok: true`, `files: 120`, `truth_fields: 720`
+
+### 2026-08-30 Spec Checklist Reconciliation
+
+- Commands:
+
+```bash
+pnpm --filter posterlink-crawler eval:validate -- --set=eval/golden
+pnpm --filter posterlink-crawler eval:extraction -- --set=eval/golden --extractor=current --out=data/eval/reports/extraction-next-check-20260830.json
+```
+
+- Results:
+  - Golden set validation: `files=120`, `items=120`, `truth_fields=720`, `ok=true`.
+  - Extraction eval: `labeled_posters=120`, `labeled_field_count=720`, `evidence_rows=1788`, `macro_accuracy=0.9333333333333332`.
+  - Confirmed Phase 1 implementation exists:
+    - `supabase/migrations/20260824030000_add_poster_field_evidence.sql` creates `poster_field_evidence`, RLS select policy for published posters, and exposure tier columns.
+    - `supabase/functions/process-ocr/index.ts` writes `poster_field_evidence` when `posterId` is provided.
+    - `scripts/crawler/src/backfill-field-evidence.js` rebuilds evidence rows from stored poster data without recrawling.
+  - Updated `docs/AI_VERIFICATION_SPEC.md` checked items for preflight, Phase 1 implementation, 120-label validation, and `eval:extraction` executability.
+  - Left threshold-code reflection unchecked because the latest eval still has no `deadline_date` / `deadline_type` predictions, so generated threshold plan is not production-ready.
