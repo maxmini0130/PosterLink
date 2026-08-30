@@ -44,7 +44,7 @@ type PosterMediaFilter = "" | "poster_image" | "text_notice";
 type PosterSearchFilters = {
   text: string;
   org: string;
-  categoryId: string;
+  categoryIds: string[];
   regionId: string;
   media: PosterMediaFilter;
   deadlineType: AdminPosterDeadlineFilter;
@@ -55,7 +55,7 @@ type PosterSearchFilters = {
 const EMPTY_FILTERS: PosterSearchFilters = {
   text: "",
   org: "",
-  categoryId: "",
+  categoryIds: [],
   regionId: "",
   media: "",
   deadlineType: "",
@@ -789,18 +789,18 @@ export default function AdminPostersPage() {
   const fetchPosters = useCallback(async (status: PosterStatus, pageIndex: number, filters: PosterSearchFilters) => {
     setLoading(true);
 
-    const categoryId = filters.categoryId || null;
+    const categoryIds = filters.categoryIds.filter(Boolean);
     const regionScopeIds = getRegionScopeIds(filters.regionId || null, regions);
     let scopedPosterIds: string[] | null = null;
 
     try {
-      if (categoryId) {
+      if (categoryIds.length > 0) {
         const { data, error } = await supabase
           .from("poster_categories")
           .select("poster_id")
-          .eq("category_id", categoryId);
+          .in("category_id", categoryIds);
         if (error) throw error;
-        scopedPosterIds = (data ?? []).map((row: any) => row.poster_id).filter(Boolean);
+        scopedPosterIds = [...new Set((data ?? []).map((row: any) => row.poster_id).filter(Boolean))];
       }
 
       if (regionScopeIds) {
@@ -918,6 +918,7 @@ export default function AdminPostersPage() {
     if (isAdminPosterDeadlineFilter(deadlineParam)) initialFilters.deadlineType = deadlineParam;
     if (isAdminPosterVerificationFilter(verificationParam)) initialFilters.verificationStatus = verificationParam;
     if (isAdminPosterSort(sortParam)) initialFilters.sort = sortParam;
+    initialFilters.categoryIds = params.getAll("category").filter(Boolean);
     setDraftFilters(initialFilters);
     setAppliedFilters(initialFilters);
     if (posterId) setFocusedPosterId(posterId);
@@ -1160,6 +1161,15 @@ export default function AdminPostersPage() {
         deadlineType: previewPoster.deadline_type,
       })
     : "";
+
+  const toggleFilterCategory = (categoryId: string) => {
+    setDraftFilters((filters) => {
+      const selected = filters.categoryIds.includes(categoryId)
+        ? filters.categoryIds.filter((id) => id !== categoryId)
+        : [...filters.categoryIds, categoryId];
+      return { ...filters, categoryIds: selected };
+    });
+  };
 
   const applySearchFilters = () => {
     setPage(0);
@@ -1438,19 +1448,41 @@ export default function AdminPostersPage() {
             />
           </label>
 
-          <label className="block">
-            <span className="mb-1.5 block text-[11px] font-black text-gray-400">카테고리</span>
-            <select
-              value={draftFilters.categoryId}
-              onChange={(event) => setDraftFilters((filters) => ({ ...filters, categoryId: event.target.value }))}
-              className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-900 outline-none transition-all focus:border-indigo-200 focus:ring-4 focus:ring-indigo-50 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:focus:ring-indigo-950"
-            >
-              <option value="">전체 카테고리</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>{category.name}</option>
-              ))}
-            </select>
-          </label>
+          <div className="block">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <span className="block text-[11px] font-black text-gray-400">카테고리</span>
+              {draftFilters.categoryIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setDraftFilters((filters) => ({ ...filters, categoryIds: [] }))}
+                  className="text-[11px] font-black text-indigo-500 hover:text-indigo-700 dark:text-indigo-300"
+                >
+                  전체
+                </button>
+              )}
+            </div>
+            <div className="flex min-h-[46px] flex-wrap gap-2 rounded-2xl border border-gray-100 bg-gray-50 p-2 dark:border-slate-800 dark:bg-slate-950">
+              {categories.map((category) => {
+                const checked = draftFilters.categoryIds.includes(category.id);
+                return (
+                  <button
+                    key={category.id}
+                    type="button"
+                    aria-pressed={checked}
+                    onClick={() => toggleFilterCategory(category.id)}
+                    className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-black transition-colors ${
+                      checked
+                        ? "border-indigo-500 bg-white text-indigo-700 shadow-sm dark:border-indigo-300 dark:bg-indigo-500/20 dark:text-indigo-100"
+                        : "border-gray-200 bg-white text-gray-500 hover:border-indigo-200 hover:text-indigo-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-indigo-500/10"
+                    }`}
+                  >
+                    {checked && <Check size={12} />}
+                    {category.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           <label className="block">
             <span className="mb-1.5 block text-[11px] font-black text-gray-400">지역</span>

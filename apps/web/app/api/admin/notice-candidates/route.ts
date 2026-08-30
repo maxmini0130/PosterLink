@@ -160,12 +160,16 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const [candidatesRes, summaryRes] = await Promise.all([
+  const [candidatesRes, summaryRes, categoriesRes] = await Promise.all([
     candidatesQuery,
     admin
       .from("poster_notice_candidates")
       .select("candidate_status")
       .limit(10000),
+    admin
+      .from("categories")
+      .select("id,code,name,sort_order")
+      .order("sort_order", { ascending: true }),
   ]);
 
   if (isMissingTableError(candidatesRes.error) || isMissingTableError(summaryRes.error)) {
@@ -183,11 +187,15 @@ export async function GET(request: NextRequest) {
   if (summaryRes.error) {
     return NextResponse.json({ error: summaryRes.error.message }, { status: 500 });
   }
+  if (categoriesRes.error) {
+    return NextResponse.json({ error: categoriesRes.error.message }, { status: 500 });
+  }
 
   return NextResponse.json({
     configured: true,
     candidates: candidatesRes.data ?? [],
     summary: summarize(summaryRes.data ?? []),
+    categories: categoriesRes.data ?? [],
   });
 }
 

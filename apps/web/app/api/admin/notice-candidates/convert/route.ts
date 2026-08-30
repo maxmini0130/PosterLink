@@ -152,6 +152,43 @@ function compactText(value: unknown) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
+function normalizeCategoryCode(value: unknown) {
+  const code = compactText(value);
+  return /^CAT_[A-Z_]+$/.test(code) ? code : null;
+}
+
+function normalizeCategoryCodes(values: unknown[]) {
+  const codes = new Set<string>();
+  for (const value of values) {
+    const code = normalizeCategoryCode(value);
+    if (code) codes.add(code);
+  }
+  return [...codes].slice(0, 3);
+}
+
+function parseCategoryCodeOverrides(formData: FormData) {
+  const rawValues = formData.getAll("category_codes");
+  const values: unknown[] = [];
+
+  for (const rawValue of rawValues) {
+    if (typeof rawValue !== "string") continue;
+    const trimmed = rawValue.trim();
+    if (!trimmed) continue;
+    if (trimmed.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) values.push(...parsed);
+      } catch {
+        throw new HttpError("invalid category_codes", 400);
+      }
+    } else {
+      values.push(...trimmed.split(","));
+    }
+  }
+
+  return normalizeCategoryCodes(values);
+}
+
 function firstCompactText(values: unknown[], limit = 2000) {
   for (const value of values) {
     const text = compactText(value);
@@ -263,7 +300,13 @@ function getCandidateClassification(candidate: Record<string, unknown>) {
   return asPlainObject(fieldVerification.classification);
 }
 
-function collectCandidateCategoryCodes(candidate: Record<string, unknown>, categoryNameOverride: string | null) {
+function collectCandidateCategoryCodes(
+  candidate: Record<string, unknown>,
+  categoryNameOverride: string | null,
+  categoryCodeOverrides: string[] = []
+) {
+  if (categoryCodeOverrides.length > 0) return normalizeCategoryCodes(categoryCodeOverrides);
+
   const classification = getCandidateClassification(candidate);
   const codes = new Set<string>();
 
@@ -277,10 +320,10 @@ function collectCandidateCategoryCodes(candidate: Record<string, unknown>, categ
   }
 
   const categoryName = categoryNameOverride ?? compactText(candidate.category_name);
-  if (categoryName) {
-    const mapped = CATEGORY_LABEL_CODE_MAP.get(categoryName);
+  for (const categoryNamePart of categoryName.split(/[,/|·]+/).map((part) => part.trim()).filter(Boolean)) {
+    const mapped = CATEGORY_LABEL_CODE_MAP.get(categoryNamePart);
     if (mapped) codes.add(mapped);
-    if (/^CAT_[A-Z_]+$/.test(categoryName)) codes.add(categoryName);
+    if (/^CAT_[A-Z_]+$/.test(categoryNamePart)) codes.add(categoryNamePart);
   }
 
   return [...codes].slice(0, 3);
@@ -306,11 +349,12 @@ async function attachPosterTaxonomy(
   admin: ReturnType<typeof createAdminClient>,
   posterId: string,
   candidate: Record<string, unknown>,
-  categoryNameOverride: string | null
+  categoryNameOverride: string | null,
+  categoryCodeOverrides: string[] = []
 ) {
   const assignedCategoryCodes: string[] = [];
   const assignedRegionCodes: string[] = [];
-  const categoryCodes = collectCandidateCategoryCodes(candidate, categoryNameOverride);
+  const categoryCodes = collectCandidateCategoryCodes(candidate, categoryNameOverride, categoryCodeOverrides);
   const regionCodes = collectCandidateRegionCodes(candidate);
 
   if (categoryCodes.length > 0) {
@@ -391,6 +435,7 @@ export async function POST(request: NextRequest) {
     const summaryOverride = normalizeOptionalText(formData.get("summary_short"), 1000);
     const summaryLongOverride = formData.has("summary_long") ? normalizeOptionalLongText(formData.get("summary_long"), 8000) : undefined;
     const categoryNameOverride = normalizeOptionalText(formData.get("category_name"), 100);
+    const categoryCodeOverrides = parseCategoryCodeOverrides(formData);
     const noticeDateOverride = formData.has("notice_date") ? normalizeOptionalDate(formData.get("notice_date"), "notice_date") : undefined;
     const applicationStartOverride = formData.has("application_start_at")
       ? normalizeOptionalDate(formData.get("application_start_at"), "application_start_at")
@@ -515,7 +560,7 @@ export async function POST(request: NextRequest) {
     }
     createdPosterId = poster.id;
 
-    const taxonomy = await attachPosterTaxonomy(admin, poster.id, candidate, categoryNameOverride);
+    const taxonomy = await attachPosterTaxonomy(admin, poster.id, candidate, categoryNameOverride, categoryCodeOverrides);
     if (taxonomy.assignedCategoryCodes.length > 0 || taxonomy.assignedRegionCodes.length > 0) {
       const { error: taxonomyMetaError } = await admin
         .from("posters")

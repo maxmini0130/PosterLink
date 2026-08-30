@@ -124,7 +124,8 @@ export function getAdminPosterSortOrders(
 export function countAdminPosterConditions(filters: {
   text: string;
   org: string;
-  categoryId: string;
+  categoryIds?: string[];
+  categoryId?: string;
   regionId: string;
   media: string;
   deadlineType: string;
@@ -134,7 +135,7 @@ export function countAdminPosterConditions(filters: {
   const filterCount = [
     filters.text,
     filters.org,
-    filters.categoryId,
+    filters.categoryIds && filters.categoryIds.length > 0 ? "category" : filters.categoryId,
     filters.regionId,
     filters.media,
     filters.deadlineType,

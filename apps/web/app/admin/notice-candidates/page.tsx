@@ -78,8 +78,16 @@ type ApiPayload = {
   configured: boolean;
   candidates: NoticeCandidate[];
   summary: Summary;
+  categories?: CategoryOption[];
   message?: string;
   error?: string;
+};
+
+type CategoryOption = {
+  id: string;
+  code: string;
+  name: string;
+  sort_order?: number | null;
 };
 
 type ConvertedPosterLink = {
@@ -101,6 +109,7 @@ type EditDraft = {
   source_org_name: string;
   source_url: string;
   category_name: string;
+  category_codes: string[];
   notice_date: string;
   application_start_at: string;
   application_end_at: string;
@@ -113,6 +122,7 @@ type PosterMakerDraft = {
   title: string;
   source_org_name: string;
   category_name: string;
+  category_codes: string[];
   period_text: string;
   summary: string;
   accent: string;
@@ -123,6 +133,7 @@ type ConvertCandidateOverrides = {
   source_org_name?: string | null;
   source_url?: string | null;
   category_name?: string | null;
+  category_codes?: string[];
   notice_date?: string | null;
   application_start_at?: string | null;
   application_end_at?: string | null;
@@ -205,12 +216,14 @@ function toDateTimeLocalValue(value?: string | null) {
   ].join("-") + `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function buildEditDraft(candidate: NoticeCandidate): EditDraft {
+function buildEditDraft(candidate: NoticeCandidate, categoryOptions: CategoryOption[] = []): EditDraft {
+  const categoryCodes = getCandidateCategoryCodes(candidate, categoryOptions);
   return {
     title: candidate.title ?? "",
     source_org_name: candidate.source_org_name ?? "",
     source_url: candidate.source_url ?? candidate.source_key ?? "",
-    category_name: candidate.category_name ?? "",
+    category_name: getCategoryLabel(categoryOptions, categoryCodes, candidate.category_name),
+    category_codes: categoryCodes,
     notice_date: toDateTimeLocalValue(candidate.notice_date),
     application_start_at: toDateTimeLocalValue(candidate.application_start_at),
     application_end_at: toDateTimeLocalValue(candidate.application_end_at),
@@ -250,6 +263,75 @@ function buildDefaultPeriodText(candidate: NoticeCandidate) {
 function normalizePosterText(value?: string | null, fallback = "") {
   const normalized = (value ?? "").replace(/\s+/g, " ").trim();
   return normalized || fallback;
+}
+
+function getCandidateClassification(candidate: NoticeCandidate) {
+  return asPlainObject(candidate.field_verification?.classification);
+}
+
+function normalizeCategoryCodes(codes: string[]) {
+  const seen = new Set<string>();
+  return codes
+    .map((code) => code.trim())
+    .filter((code) => /^CAT_[A-Z_]+$/.test(code))
+    .filter((code) => {
+      if (seen.has(code)) return false;
+      seen.add(code);
+      return true;
+    })
+    .slice(0, 3);
+}
+
+function splitCategoryName(value?: string | null) {
+  return normalizePosterText(value)
+    .split(/[,/|·]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function getCategoryNameByCode(categoryOptions: CategoryOption[], code: string) {
+  return categoryOptions.find((category) => category.code === code)?.name ?? code;
+}
+
+function getCategoryCodeByName(categoryOptions: CategoryOption[], name: string) {
+  return categoryOptions.find((category) => category.name === name || category.code === name)?.code ?? null;
+}
+
+function getCategoryLabel(categoryOptions: CategoryOption[], codes: string[], fallback?: string | null) {
+  const names = normalizeCategoryCodes(codes).map((code) => getCategoryNameByCode(categoryOptions, code));
+  if (names.length > 0) return names.join(", ");
+  return normalizePosterText(fallback);
+}
+
+function getCandidateCategoryCodes(candidate: NoticeCandidate, categoryOptions: CategoryOption[]) {
+  const classification = getCandidateClassification(candidate);
+  const codes: string[] = [];
+
+  if (Array.isArray(classification?.categories)) {
+    for (const category of classification.categories) {
+      if (!category || typeof category !== "object" || Array.isArray(category)) continue;
+      const code = normalizePosterText(String((category as Record<string, unknown>).code ?? ""));
+      if (code) codes.push(code);
+    }
+  }
+  if (Array.isArray(classification?.categoryCodes)) {
+    for (const code of classification.categoryCodes) {
+      const normalized = normalizePosterText(String(code ?? ""));
+      if (normalized) codes.push(normalized);
+    }
+  }
+  for (const name of splitCategoryName(candidate.category_name)) {
+    const code = getCategoryCodeByName(categoryOptions, name);
+    if (code) codes.push(code);
+  }
+
+  return normalizeCategoryCodes(codes);
+}
+
+function getNextCategoryCodes(currentCodes: string[], code: string) {
+  const normalized = normalizeCategoryCodes(currentCodes);
+  if (normalized.includes(code)) return normalized.filter((item) => item !== code);
+  return normalizeCategoryCodes([...normalized, code]);
 }
 
 const READABLE_FACT_LABELS: Array<[string, string]> = [
@@ -491,11 +573,13 @@ function getCandidatePreflightToneClass(status: CandidatePreflightStatus) {
   return "border-emerald-100 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-100";
 }
 
-function buildPosterMakerDraft(candidate: NoticeCandidate): PosterMakerDraft {
+function buildPosterMakerDraft(candidate: NoticeCandidate, categoryOptions: CategoryOption[] = []): PosterMakerDraft {
+  const categoryCodes = getCandidateCategoryCodes(candidate, categoryOptions);
   return {
     title: normalizePosterText(candidate.title, "공고 제목"),
     source_org_name: normalizePosterText(candidate.source_org_name, "기관명 확인"),
-    category_name: normalizePosterText(candidate.category_name, "공고"),
+    category_name: getCategoryLabel(categoryOptions, categoryCodes, candidate.category_name) || "공고",
+    category_codes: categoryCodes,
     period_text: buildDefaultPeriodText(candidate),
     summary: normalizePosterText(candidate.summary_short ?? candidate.summary_long, "자세한 내용은 원문 공고를 확인하세요."),
     accent: DEFAULT_ACCENT,
@@ -739,11 +823,77 @@ function EmptyBlock({ text }: { text: string }) {
   );
 }
 
+function CategoryMultiSelect({
+  label,
+  options,
+  selectedCodes,
+  fallbackValue,
+  disabled,
+  onToggle,
+  onFallbackChange,
+}: {
+  label: string;
+  options: CategoryOption[];
+  selectedCodes: string[];
+  fallbackValue: string;
+  disabled?: boolean;
+  onToggle: (code: string) => void;
+  onFallbackChange: (value: string) => void;
+}) {
+  const selected = normalizeCategoryCodes(selectedCodes);
+
+  if (options.length === 0) {
+    return (
+      <label className="block text-xs font-black text-gray-500 dark:text-slate-300">
+        {label}
+        <input
+          value={fallbackValue}
+          disabled={disabled}
+          onChange={(event) => onFallbackChange(event.target.value)}
+          className="mt-2 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 outline-none focus:border-indigo-400 disabled:opacity-50 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+        />
+      </label>
+    );
+  }
+
+  return (
+    <div className="block text-xs font-black text-gray-500 dark:text-slate-300">
+      <div className="flex items-center justify-between gap-3">
+        <span>{label}</span>
+        <span className="text-[11px] font-bold text-gray-400">{selected.length}/3</span>
+      </div>
+      <div className="mt-2 flex min-h-10 flex-wrap gap-2 rounded-lg border border-gray-200 bg-white p-2 dark:border-slate-800 dark:bg-slate-950">
+        {options.map((category) => {
+          const checked = selected.includes(category.code);
+          const maxed = selected.length >= 3 && !checked;
+          return (
+            <button
+              key={category.code}
+              type="button"
+              disabled={disabled || maxed}
+              aria-pressed={checked}
+              onClick={() => onToggle(category.code)}
+              className={`inline-flex h-8 items-center rounded-full border px-3 text-xs font-black transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                checked
+                  ? "border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-300 dark:bg-indigo-500/20 dark:text-indigo-100"
+                  : "border-gray-200 bg-white text-gray-500 hover:border-indigo-200 hover:bg-indigo-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-indigo-500/10"
+              }`}
+            >
+              {category.name}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminNoticeCandidatesPage() {
   const [status, setStatus] = useState<CandidateStatus | "all">("pending");
   const [query, setQuery] = useState("");
   const [urlParamsReady, setUrlParamsReady] = useState(false);
   const [data, setData] = useState<ApiPayload | null>(null);
+  const categoryOptions = data?.categories ?? [];
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -954,7 +1104,7 @@ export default function AdminNoticeCandidatesPage() {
 
   const startEditing = (candidate: NoticeCandidate) => {
     setEditingId(candidate.id);
-    setEditDraft(buildEditDraft(candidate));
+    setEditDraft(buildEditDraft(candidate, categoryOptions));
   };
 
   const cancelEditing = () => {
@@ -964,6 +1114,18 @@ export default function AdminNoticeCandidatesPage() {
 
   const updateDraft = (field: keyof EditDraft, value: string) => {
     setEditDraft((prev) => prev ? { ...prev, [field]: value } : prev);
+  };
+
+  const toggleDraftCategory = (code: string) => {
+    setEditDraft((prev) => {
+      if (!prev) return prev;
+      const nextCodes = getNextCategoryCodes(prev.category_codes, code);
+      return {
+        ...prev,
+        category_codes: nextCodes,
+        category_name: getCategoryLabel(categoryOptions, nextCodes),
+      };
+    });
   };
 
   const saveCandidate = async (candidate: NoticeCandidate) => {
@@ -1031,6 +1193,9 @@ export default function AdminNoticeCandidatesPage() {
       source_org_name: activeCandidate.source_org_name,
       source_url: activeCandidate.source_url ?? activeCandidate.source_key,
       category_name: activeCandidate.category_name,
+      category_codes: editingId === candidate.id && editDraft
+        ? editDraft.category_codes
+        : getCandidateCategoryCodes(activeCandidate, categoryOptions),
       notice_date: activeCandidate.notice_date,
       application_start_at: activeCandidate.application_start_at,
       application_end_at: activeCandidate.application_end_at,
@@ -1046,7 +1211,7 @@ export default function AdminNoticeCandidatesPage() {
       return;
     }
     setMakerCandidate(activeCandidate);
-    setMakerDraft(buildPosterMakerDraft(activeCandidate));
+    setMakerDraft(buildPosterMakerDraft(activeCandidate, categoryOptions));
   };
 
   const closePosterMaker = () => {
@@ -1057,6 +1222,18 @@ export default function AdminNoticeCandidatesPage() {
 
   const updateMakerDraft = (field: keyof PosterMakerDraft, value: string) => {
     setMakerDraft((prev) => prev ? { ...prev, [field]: value } : prev);
+  };
+
+  const toggleMakerDraftCategory = (code: string) => {
+    setMakerDraft((prev) => {
+      if (!prev) return prev;
+      const nextCodes = getNextCategoryCodes(prev.category_codes, code);
+      return {
+        ...prev,
+        category_codes: nextCodes,
+        category_name: getCategoryLabel(categoryOptions, nextCodes) || "공고",
+      };
+    });
   };
 
   const convertCandidateWithImage = async (
@@ -1103,7 +1280,7 @@ export default function AdminNoticeCandidatesPage() {
       const formData = new FormData();
       formData.append("id", candidate.id);
       formData.append("image", file);
-      const appendOverride = (field: keyof ConvertCandidateOverrides) => {
+      const appendOverride = (field: Exclude<keyof ConvertCandidateOverrides, "category_codes">) => {
         if (!overrides || !Object.prototype.hasOwnProperty.call(overrides, field)) return;
         const value = overrides[field];
         if (value !== undefined) formData.append(field, value ?? "");
@@ -1112,6 +1289,9 @@ export default function AdminNoticeCandidatesPage() {
       appendOverride("source_org_name");
       appendOverride("source_url");
       appendOverride("category_name");
+      if (overrides?.category_codes) {
+        formData.append("category_codes", JSON.stringify(normalizeCategoryCodes(overrides.category_codes)));
+      }
       appendOverride("notice_date");
       appendOverride("application_start_at");
       appendOverride("application_end_at");
@@ -1162,6 +1342,7 @@ export default function AdminNoticeCandidatesPage() {
         summary_short: makerDraft.summary,
         summary_long: makerCandidate.summary_long,
         category_name: makerDraft.category_name,
+        category_codes: makerDraft.category_codes,
         image_source: "template_canvas",
       });
       if (converted) closePosterMaker();
@@ -1679,14 +1860,15 @@ export default function AdminNoticeCandidatesPage() {
                           className="mt-2 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
                         />
                       </label>
-                      <label className="block text-xs font-black text-gray-500 dark:text-slate-300">
-                        카테고리
-                        <input
-                          value={editDraft.category_name}
-                          onChange={(event) => updateDraft("category_name", event.target.value)}
-                          className="mt-2 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
-                        />
-                      </label>
+                      <CategoryMultiSelect
+                        label="분류"
+                        options={categoryOptions}
+                        selectedCodes={editDraft.category_codes}
+                        fallbackValue={editDraft.category_name}
+                        disabled={disabled}
+                        onToggle={toggleDraftCategory}
+                        onFallbackChange={(value) => updateDraft("category_name", value)}
+                      />
                       <label className="block text-xs font-black text-gray-500 dark:text-slate-300">
                         원문 URL
                         <input
@@ -2022,14 +2204,15 @@ export default function AdminNoticeCandidatesPage() {
                       className="mt-2 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
                     />
                   </label>
-                  <label className="block text-xs font-black text-gray-500 dark:text-slate-300">
-                    분류
-                    <input
-                      value={makerDraft.category_name}
-                      onChange={(event) => updateMakerDraft("category_name", event.target.value)}
-                      className="mt-2 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 outline-none focus:border-indigo-400 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
-                    />
-                  </label>
+                  <CategoryMultiSelect
+                    label="분류"
+                    options={categoryOptions}
+                    selectedCodes={makerDraft.category_codes}
+                    fallbackValue={makerDraft.category_name}
+                    disabled={makerDisabled}
+                    onToggle={toggleMakerDraftCategory}
+                    onFallbackChange={(value) => updateMakerDraft("category_name", value)}
+                  />
                   <label className="block text-xs font-black text-gray-500 dark:text-slate-300">
                     기간
                     <input
