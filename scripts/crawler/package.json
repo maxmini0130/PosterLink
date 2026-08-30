@@ -31,6 +31,7 @@
     "repair:search-log-mojibake": "node src/repair-search-log-mojibake.js",
     "apply:review-safe-release-corrections": "node src/apply-review-safe-release-corrections.js",
     "apply:review-final-release-corrections": "node src/apply-review-final-release-corrections.js",
+    "apply:other-category-corrections": "node src/apply-other-category-corrections.js",
     "audit:public-counts": "node src/audit-public-counts.js",
     "cleanup:review-nonposters": "node src/cleanup-review-nonposters.js",
     "baseline:sample": "node src/create-baseline-goldenset.js",
