@@ -134,8 +134,11 @@ Read-only audits were re-run after this handoff was first written.
 
 ### P0 - Notification Delivery Follow-up
 
-- Confirm the scheduled notification sender handles the 19 sendable `new_match` rows.
-- Current code path appears to send pushes when the admin approval UI calls `notify-new-match`; scripted auto-publish does not call that Edge Function.
+- Added a scriptable notification sender path:
+  `pnpm --filter posterlink-crawler notifications:send-pushes -- --type=new_match --limit=500`.
+- Dry-run confirms the current `new_match` backlog has 414 pending rows: 19 sendable and 395 without push tokens.
+- Actual sending remains a deliberate operator action requiring both `--apply` and `SEND_NOTIFICATION_PUSHES=true`.
+- The admin poster approval UI still calls `notify-new-match`; scripted auto-publish does not send pushes by itself.
 - Decide backlog policy for no-token rows:
   - Keep until users install/sign in to the app and register tokens.
   - Or mark old no-token rows as skipped after a retention window.

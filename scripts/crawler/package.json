@@ -26,6 +26,7 @@
     "apply:date-period-manual-corrections": "node src/apply-date-period-manual-corrections.js",
     "apply:contest-category-corrections": "node src/apply-contest-category-corrections.js",
     "audit:notifications": "node src/audit-notifications.js",
+    "notifications:send-pushes": "node src/send-notification-pushes.js",
     "cleanup:notification-push-backlog": "node src/cleanup-notification-push-backlog.js",
     "repair:search-log-mojibake": "node src/repair-search-log-mojibake.js",
     "apply:review-safe-release-corrections": "node src/apply-review-safe-release-corrections.js",

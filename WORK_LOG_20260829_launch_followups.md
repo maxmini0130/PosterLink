@@ -475,3 +475,27 @@ pnpm --filter posterlink-crawler tier:compute -- --statuses=published --limit=50
   - Added deadline-type hardening so a bounded application period is not overridden by a separate `선착순 마감` capacity phrase.
   - Updated docs to keep the Phase 2 threshold-code checklist item open until coverage is sufficient.
   - `posterlink-crawler test`: pass 277.
+
+### 2026-08-30 Notification Push Sender Dry-run Path
+
+- Commands:
+
+```bash
+pnpm --filter posterlink-crawler test
+pnpm --filter posterlink-crawler notifications:send-pushes -- --type=new_match --limit=500 --json
+pnpm --filter posterlink-crawler audit:notifications
+```
+
+- Results:
+  - Added `pnpm --filter posterlink-crawler notifications:send-pushes` for pending push delivery after scripted releases.
+  - Default mode is dry-run. Actual Expo push sending requires both `--apply` and `SEND_NOTIFICATION_PUSHES=true`.
+  - Dry-run result for `new_match`:
+    - `checked_count`: 414
+    - `eligible_count`: 19
+    - `blocked_count`: 395
+    - `blocked_reasons`: `missing_push_token: 395`
+  - Read-only notification audit matched the same backlog:
+    - `new_match` pending 414, sendable 19, no-token 395
+    - `favorite_deadline` pending 0
+  - No push messages were sent and no DB writes were performed.
+  - `posterlink-crawler test`: pass 280.

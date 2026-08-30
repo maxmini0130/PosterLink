@@ -55,6 +55,20 @@ pnpm dlx supabase functions list --project-ref zxndgzsfrgwahwsdbjdj
 - `Poster is not published.`나 `No pending push notifications found.`는 200 정상 응답일 수 있다.
 - `DeviceNotRegistered`가 포함된 티켓은 push token 정리 대상이다.
 
+예약 또는 scripted release 뒤 남은 pending push는 먼저 dry-run으로 확인한다.
+
+```bash
+pnpm --filter posterlink-crawler notifications:send-pushes -- --type=new_match --limit=500 --json
+```
+
+실제 전송은 운영 승인 후에만 실행한다.
+
+```bash
+SEND_NOTIFICATION_PUSHES=true pnpm --filter posterlink-crawler notifications:send-pushes -- --type=new_match --limit=500 --apply
+```
+
+이 스크립트는 전송 성공 알림의 `push_sent_at`을 채우고, Expo가 `DeviceNotRegistered`를 반환한 사용자 push token을 null로 정리한다.
+
 ## 장애 대응 기록
 
 로그 확인 후 다음 정보를 작업 로그나 이슈에 남긴다.
@@ -64,4 +78,3 @@ pnpm dlx supabase functions list --project-ref zxndgzsfrgwahwsdbjdj
 - HTTP status와 오류 메시지 요약
 - 영향받은 poster id, user id는 필요한 범위만 기록하고 개인정보는 남기지 않는다.
 - 조치 내용과 재발 방지 항목
-
