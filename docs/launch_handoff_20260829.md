@@ -162,7 +162,11 @@ Read-only audits were re-run after this handoff was first written.
   - `deadline_type = unknown` - 6 public rows.
   - `deadline_type = ongoing` - 8 public rows.
   - `deadline_type = until_exhausted` - 9 public rows.
-- Confirm whether each should remain public and whether the listing copy clearly explains the non-fixed deadline.
+- Listing/detail copy now avoids confident fixed D-day labels for explicit non-fixed deadlines:
+  - `ongoing`: `상시 모집`
+  - `until_exhausted`: `소진 시 마감`
+  - explicit `unknown` with an end date: active, but marked `일정 확인 필요`
+- Remaining manual check: confirm whether each of the 23 public non-fixed rows should stay public or receive a structured-data correction.
 
 ### P1 - Browser QA for Newly Published Posters
 

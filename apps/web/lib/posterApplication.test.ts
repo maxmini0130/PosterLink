@@ -33,6 +33,59 @@ test("only an explicit ongoing deadline becomes always open", () => {
   assert.equal(formatApplicationPeriod({ deadlineType: "상시" }), "상시 모집");
 });
 
+test("explicit non-fixed deadline types do not inherit fixed D-day copy from an end date", () => {
+  assert.deepEqual(
+    getPosterApplicationState({
+      applicationStartAt: "2026-08-01T00:00:00.000Z",
+      applicationEndAt: "2026-12-31T14:59:59.000Z",
+      deadlineType: "ongoing",
+      now,
+    }),
+    { status: "ongoing", label: "상시 모집", daysLeft: null },
+  );
+  assert.equal(
+    formatApplicationPeriod({
+      applicationStartAt: "2026-08-01T00:00:00.000Z",
+      applicationEndAt: "2026-12-31T14:59:59.000Z",
+      deadlineType: "ongoing",
+    }),
+    "2026.08.01부터 상시 모집",
+  );
+
+  assert.deepEqual(
+    getPosterApplicationState({
+      applicationEndAt: "2026-08-10T14:59:59.000Z",
+      deadlineType: "until_exhausted",
+      now,
+    }),
+    { status: "until_exhausted", label: "소진 시 마감", daysLeft: null },
+  );
+  assert.equal(
+    formatApplicationPeriod({
+      applicationEndAt: "2026-08-10T14:59:59.000Z",
+      deadlineType: "until_exhausted",
+    }),
+    "소진 시까지",
+  );
+
+  assert.deepEqual(
+    getPosterApplicationState({
+      applicationEndAt: "2026-08-10T14:59:59.000Z",
+      deadlineType: "unknown",
+      now,
+    }),
+    { status: "open", label: "일정 확인 필요", daysLeft: null },
+  );
+  assert.equal(
+    formatApplicationPeriod({
+      applicationStartAt: "2026-08-01T00:00:00.000Z",
+      applicationEndAt: "2026-08-10T14:59:59.000Z",
+      deadlineType: "unknown",
+    }),
+    "2026.08.01 ~ 2026.08.10 · 일정 확인 필요",
+  );
+});
+
 test("deadline labels use the Asia/Seoul calendar day", () => {
   assert.deepEqual(
     getPosterApplicationState({

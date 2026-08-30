@@ -499,3 +499,26 @@ pnpm --filter posterlink-crawler audit:notifications
     - `favorite_deadline` pending 0
   - No push messages were sent and no DB writes were performed.
   - `posterlink-crawler test`: pass 280.
+
+### 2026-08-30 Public Non-Fixed Deadline Copy
+
+- Implemented:
+  - Public deadline state now respects explicit non-fixed `deadline_type` values even when `application_end_at` is present.
+  - `ongoing` and `until_exhausted` rows no longer inherit fixed D-day copy from a stored end date.
+  - Explicit `unknown` rows with an end date remain visible as active while showing `일정 확인 필요` instead of a confident D-day.
+  - Legacy rows with no explicit `deadline_type` and a valid end date keep the existing fixed-deadline behavior.
+  - Poster cards now show `상시 모집` / `소진 시 마감` directly for non-fixed rows instead of reattaching `YYYY.MM.DD까지`.
+
+- Verification:
+
+```bash
+pnpm test
+pnpm --filter web lint
+pnpm --filter web build
+```
+
+- Results:
+  - Root web/lib tests: pass 59.
+  - Web lint: passed.
+  - Web build: passed.
+  - No production DB writes were performed.

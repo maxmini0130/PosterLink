@@ -87,6 +87,8 @@ export function getPosterApplicationState(input: PosterApplicationInput): Poster
   const endTime = parseTime(input.applicationEndAt);
   const invalidStart = Boolean(input.applicationStartAt && startTime === null);
   const invalidEnd = Boolean(input.applicationEndAt && endTime === null);
+  const hasExplicitDeadlineType = String(input.deadlineType ?? "").trim().length > 0;
+  const deadlineType = normalizePosterDeadlineType(input.deadlineType);
 
   if (invalidStart || invalidEnd) {
     return {
@@ -104,6 +106,28 @@ export function getPosterApplicationState(input: PosterApplicationInput): Poster
     return { status: "scheduled", label: "모집 예정", daysLeft: null };
   }
 
+  if (deadlineType === "ongoing") {
+    if (endDay !== null && endDay < today)
+      return { status: "closed", label: "마감됨", daysLeft: endDay - today };
+    return { status: "ongoing", label: "상시 모집", daysLeft: null };
+  }
+
+  if (deadlineType === "until_exhausted") {
+    if (endDay !== null && endDay < today)
+      return { status: "closed", label: "마감됨", daysLeft: endDay - today };
+    return {
+      status: "until_exhausted",
+      label: "소진 시 마감",
+      daysLeft: null,
+    };
+  }
+
+  if (deadlineType === "unknown" && hasExplicitDeadlineType && endDay !== null) {
+    const daysLeft = endDay - today;
+    if (daysLeft < 0) return { status: "closed", label: "마감됨", daysLeft };
+    return { status: "open", label: "일정 확인 필요", daysLeft: null };
+  }
+
   if (endDay !== null) {
     const daysLeft = endDay - today;
     if (daysLeft < 0) return { status: "closed", label: "마감됨", daysLeft };
@@ -114,15 +138,7 @@ export function getPosterApplicationState(input: PosterApplicationInput): Poster
     return { status: "open", label: "신청 가능", daysLeft };
   }
 
-  switch (normalizePosterDeadlineType(input.deadlineType)) {
-    case "ongoing":
-      return { status: "ongoing", label: "상시 모집", daysLeft: null };
-    case "until_exhausted":
-      return {
-        status: "until_exhausted",
-        label: "소진 시 마감",
-        daysLeft: null,
-      };
+  switch (deadlineType) {
     case "scheduled":
       return { status: "scheduled", label: "모집 예정", daysLeft: null };
     default:
@@ -180,14 +196,19 @@ export function formatApplicationPeriod(input: {
     Boolean(input.applicationStartAt && !startLabel) ||
     Boolean(input.applicationEndAt && !endLabel);
   const deadlineType = normalizePosterDeadlineType(input.deadlineType);
+  const hasExplicitDeadlineType = String(input.deadlineType ?? "").trim().length > 0;
 
   if (hasInvalidDate) return "기관 공고 확인 필요";
-  if (startLabel && endLabel) return `${startLabel} ~ ${endLabel}`;
-  if (endLabel) return `${endLabel}까지`;
   if (deadlineType === "ongoing")
     return startLabel ? `${startLabel}부터 상시 모집` : "상시 모집";
   if (deadlineType === "until_exhausted")
     return startLabel ? `${startLabel}부터 소진 시까지` : "소진 시까지";
+  if (deadlineType === "unknown" && hasExplicitDeadlineType) {
+    if (startLabel && endLabel) return `${startLabel} ~ ${endLabel} · 일정 확인 필요`;
+    if (endLabel) return `${endLabel}까지 · 일정 확인 필요`;
+  }
+  if (startLabel && endLabel) return `${startLabel} ~ ${endLabel}`;
+  if (endLabel) return `${endLabel}까지`;
   if (deadlineType === "scheduled")
     return startLabel ? `${startLabel} 모집 예정` : "모집 일정 발표 예정";
   if (startLabel) return `${startLabel}부터 · 종료 일정 확인 필요`;

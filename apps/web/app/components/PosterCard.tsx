@@ -134,6 +134,8 @@ function deadlineLabel(
   if (!deadline) return state.label;
   if (state.status === "closed") return "신청 마감";
   if (state.status === "due_today") return "오늘 마감";
+  if (state.status === "ongoing" || state.status === "until_exhausted")
+    return state.label;
   if (state.status === "needs_confirmation") return state.label;
 
   const formatted = formatPosterDate(deadline);
