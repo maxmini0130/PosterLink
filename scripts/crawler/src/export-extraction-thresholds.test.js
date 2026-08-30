@@ -30,6 +30,7 @@ test("buildThresholdPlan exports ready recommendations from an evaluation report
   assert.equal(plan.fields.deadline_date.status, "ready");
   assert.equal(plan.fields.deadline_date.recommended_threshold, 0.85);
   assert.equal(plan.fields.deadline_date.threshold, 0.9);
+  assert.equal(plan.fields.deadline_date.applied_threshold, 0.9);
   assert.equal(plan.thresholds.deadline_date, 0.9);
   assert.equal(plan.fields.category.status, "unlabeled");
   assert.equal(plan.thresholds.category, 0.8);
@@ -56,7 +57,18 @@ test("buildThresholdPlan blocks low-coverage recommendations", () => {
   assert.equal(plan.fields.deadline_type.status, "low_coverage_recommendation");
   assert.equal(plan.fields.deadline_type.recommended_threshold, 1);
   assert.equal(plan.fields.deadline_type.threshold, 1);
-  assert.equal(plan.thresholds.deadline_type, 1);
+  assert.equal(plan.fields.deadline_type.applied_threshold, 0.9);
+  assert.equal(plan.thresholds.deadline_type, 0.9);
+  assert.deepEqual(plan.blocked_fields, [{
+    field_key: "deadline_type",
+    status: "low_coverage_recommendation",
+    recommended_threshold: 1,
+    applied_threshold: 0.9,
+    precision: 1,
+    coverage: 0.2,
+    min_coverage: 0.5,
+    predictions: 24,
+  }]);
   assert.deepEqual(plan.blocking_reasons, ["one_or_more_labeled_fields_low_coverage_recommendation"]);
 });
 
@@ -80,6 +92,7 @@ test("buildThresholdPlan can raise defaults when the recommendation is stricter 
   assert.equal(plan.fields.category.status, "ready");
   assert.equal(plan.fields.category.recommended_threshold, 0.9);
   assert.equal(plan.fields.category.threshold, 0.9);
+  assert.equal(plan.fields.category.applied_threshold, 0.9);
   assert.equal(plan.thresholds.category, 0.9);
 });
 
@@ -133,4 +146,5 @@ test("renderThresholdModule creates a copyable candidate module", () => {
   assert.match(moduleText, /Generated from data\/eval\/reports\/extraction-empty\.json/);
   assert.match(moduleText, /EXTRACTION_THRESHOLDS_CANDIDATE/);
   assert.match(moduleText, /"production_ready": false/);
+  assert.match(moduleText, /"blocked_fields": \[\]/);
 });

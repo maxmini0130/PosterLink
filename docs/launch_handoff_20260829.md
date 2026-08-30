@@ -214,6 +214,11 @@ Read-only audits were re-run after this handoff was first written.
   - Same organization and same deadline but different program duplicate false positives.
   - Open public events that should still be treated as actionable opportunities.
 
+### P2 - Threshold Rollout Coverage
+
+- Threshold export now keeps low-coverage recommendations out of the copyable applied threshold map.
+- Remaining blocker: expand evidence/prediction coverage for `deadline_date`, `deadline_type`, and `content_type` before marking the Phase 2 threshold-code reflection item complete.
+
 ## Operational Notes
 
 - Production DB write operations in this phase were applied only after user approval.

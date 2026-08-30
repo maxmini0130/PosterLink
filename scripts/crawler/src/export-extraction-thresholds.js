@@ -69,6 +69,13 @@ function operationalThreshold(metric, currentDefault) {
   return Math.max(recommended, roundThreshold(currentDefault));
 }
 
+function appliedThresholdForStatus({ status, threshold, currentDefault }) {
+  if (status !== "ready" && currentDefault !== null && currentDefault !== undefined) {
+    return currentDefault;
+  }
+  return threshold ?? currentDefault;
+}
+
 export function buildThresholdPlan(report, { minLabeled = 120 } = {}) {
   const fieldMetrics = report?.field_metrics ?? {};
   const labeledPosters = Number(report?.labeled_posters ?? 0);
@@ -109,6 +116,11 @@ export function buildThresholdPlan(report, { minLabeled = 120 } = {}) {
       coverage,
       predictions: recommendation?.predictions ?? 0,
     };
+    fields[fieldKey].applied_threshold = appliedThresholdForStatus({
+      status,
+      threshold,
+      currentDefault,
+    });
   }
 
   const allLabeledFieldsReady = labeledFieldCount > 0 && readyFieldCount === labeledFieldCount;
@@ -120,6 +132,18 @@ export function buildThresholdPlan(report, { minLabeled = 120 } = {}) {
   const hasLowCoverageRecommendation = Object.values(fields).some(
     (field) => field.status === "low_coverage_recommendation",
   );
+  const blockedFields = Object.entries(fields)
+    .filter(([, field]) => field.labeled > 0 && field.status !== "ready")
+    .map(([fieldKey, field]) => ({
+      field_key: fieldKey,
+      status: field.status,
+      recommended_threshold: field.recommended_threshold,
+      applied_threshold: field.applied_threshold,
+      precision: field.precision,
+      coverage: field.coverage,
+      min_coverage: field.min_coverage,
+      predictions: field.predictions,
+    }));
 
   return {
     generated_at: new Date().toISOString(),
@@ -138,10 +162,11 @@ export function buildThresholdPlan(report, { minLabeled = 120 } = {}) {
         ? "one_or_more_labeled_fields_not_ready"
         : null,
     ].filter(Boolean),
+    blocked_fields: blockedFields,
     thresholds: Object.fromEntries(
       Object.entries(fields).map(([fieldKey, field]) => [
         fieldKey,
-        field.threshold ?? field.current_default,
+        field.applied_threshold,
       ]),
     ),
     fields,
@@ -163,6 +188,7 @@ export const EXTRACTION_THRESHOLD_METADATA = Object.freeze(${JSON.stringify({
     extractor: plan.extractor,
     production_ready: plan.production_ready,
     blocking_reasons: plan.blocking_reasons,
+    blocked_fields: plan.blocked_fields,
   }, null, 2)});
 `;
 }

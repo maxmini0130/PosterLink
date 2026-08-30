@@ -522,3 +522,35 @@ pnpm --filter web build
   - Web lint: passed.
   - Web build: passed.
   - No production DB writes were performed.
+
+### 2026-08-30 Threshold Export Safety Follow-up
+
+- Implemented:
+  - Threshold export reports now separate:
+    - `recommended_threshold`: the measured recommendation from the evaluation report.
+    - `threshold`: the strict candidate threshold before rollout gating.
+    - `applied_threshold`: the value exported in copyable threshold maps.
+  - Low-coverage recommendations no longer raise the copyable `thresholds` map; they keep the current production default while preserving the recommendation and blocker metadata.
+  - Generated threshold modules now include `blocked_fields` metadata so operators can see the exact fields blocking production rollout.
+
+- Current latest threshold plan:
+  - `production_ready`: false
+  - blocker: `one_or_more_labeled_fields_low_coverage_recommendation`
+  - blocked critical fields include:
+    - `deadline_date`: recommended `1`, coverage `0.1833`, applied `0.9`
+    - `deadline_type`: recommended `0.95`, coverage `0.0083`, applied `0.9`
+    - `content_type`: recommended `0.85`, coverage `0.1167`, applied `0.9`
+
+- Commands:
+
+```bash
+pnpm --filter posterlink-crawler test -- src/export-extraction-thresholds.test.js
+node --check scripts/crawler/src/export-extraction-thresholds.js
+pnpm --filter posterlink-crawler eval:thresholds -- --input=data/eval/reports/extraction-calibrated-coverage-guard-20260830.json --out=data/eval/reports/extraction-thresholds-coverage-guard-20260830.json --module-out=data/eval/reports/extraction-thresholds-coverage-guard-20260830.js --min-labeled=120
+```
+
+- Results:
+  - Crawler tests: pass 280.
+  - Syntax check: passed.
+  - Threshold export: completed, still blocked for production as expected.
+  - No production DB writes were performed.
