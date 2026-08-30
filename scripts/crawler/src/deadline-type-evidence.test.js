@@ -129,6 +129,24 @@ test("infers fixed type from grounded Korean period summary deadline evidence", 
   assert.equal(row.extractor, "deadline-type-from-date-evidence-v1");
 });
 
+test("infers fixed type from grounded application period with startless deadline", () => {
+  const row = inferDeadlineTypeEvidence({
+    posterId: "poster-1",
+    existingDeadlineType: "unknown",
+    deadlineDateEvidence: {
+      value_text: "2026-09-03",
+      value_json: { date: "2026-09-03" },
+      confidence: 0.95,
+      evidence_text: "\uC2E0\uCCAD\uAE30\uAC04 ~ 2026. 9. 3.(\uBAA9) \uC138\uBD80\uD504\uB85C\uADF8\uB7A8",
+      extractor: "deadline-date-grounded-v1",
+    },
+  });
+
+  assert.equal(row.field_key, "deadline_type");
+  assert.equal(row.value_text, "fixed");
+  assert.equal(row.confidence, 0.9);
+});
+
 test("does not infer fixed type from a travel period after an open application period", () => {
   const row = inferDeadlineTypeEvidence({
     posterId: "poster-1",

@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 
 import {
+  effectiveEvidenceConfidence,
   evidenceRowsFromReadableFacts,
   findEvidenceSentence,
   normalizeEvidenceRow,
@@ -174,7 +175,7 @@ function buildEvidenceRowsForPoster(row, links = []) {
 
   const deadlineDateEvidence = rows
     .filter((evidenceRow) => evidenceRow.field_key === "deadline_date")
-    .sort((left, right) => Number(right.confidence) - Number(left.confidence))[0];
+    .sort((left, right) => effectiveEvidenceConfidence(right) - effectiveEvidenceConfidence(left))[0];
   const inferredDeadlineTypeEvidence = inferDeadlineTypeEvidence({
     posterId: row.id,
     sourceText,

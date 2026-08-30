@@ -144,6 +144,17 @@ test("classifyPosterContentType keeps event participant recruitment when the tit
   assert.equal(result.contentType, "recruit");
 });
 
+test("classifyPosterContentType keeps ticket reservation events with application periods as recruit", () => {
+  const result = classifyPosterContentType({
+    title: "\uC11C\uCD08\uAD6C\uCCAD <\uC81C1300\uD68C \uC11C\uCD08\uAE08\uC694\uC74C\uC545\uD68C -\uD55C\uC5EC\uB984 \uBC24\uC758 \uBC14\uB85C\uD06C Festa> \uC548\uB0B4",
+    summary_short: "\uBAA8\uC9D1\uAE30\uAC04 : [\uC628\uB77C\uC778\uC608\uB9E4] 2026\uB144 8\uC6D4 21\uC77C ~ 2026\uB144 9\uC6D4 3\uC77C. \uC2E0\uCCAD: YES24 \uC628\uB77C\uC778 \uC0AC\uC804 \uC608\uB9E4",
+  });
+
+  assert.equal(result.contentType, "recruit");
+  assert.equal(result.confidence, 0.82);
+  assert.equal(result.reason, "recruit_reservation_period_signal");
+});
+
 test("classifyPosterContentType separates rejected admin and news documents", () => {
   assert.equal(
     classifyPosterContentType({

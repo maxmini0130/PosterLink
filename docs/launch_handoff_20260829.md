@@ -236,5 +236,13 @@ Read-only audits were re-run after this handoff was first written.
   - post-apply public audit returned `137` public posters and matched search count.
 - No poster status changes or auto-publish actions were performed during the
   Phase 2 production apply.
+- Review queue follow-up was then applied after user requested remaining work:
+  - review-only content-type evidence applied `3` rows, failed `0`.
+  - review-only field evidence applied `38` rows, failed `0`.
+  - review-only exposure tiers became `A 2`, `C 1`.
+  - A-tier auto-publish applied `2` rows with audit failures `0`.
+  - final public audit returned `139` public posters and matched search count.
+  - final review queue count is `1`; the remaining row is C-tier and blocked
+    by duplicate/low-confidence poster-image evidence.
 - No secrets should be copied into logs, commits, or final reports.
 - The review queue is currently empty, so the next operational focus should be Android approval and notification delivery.

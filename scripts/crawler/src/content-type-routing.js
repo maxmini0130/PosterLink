@@ -94,6 +94,7 @@ const PROGRAM_RE = new RegExp([
 const QA_TEST_RE = /QA\s*(?:\uD14C\uC2A4\uD2B8)?/i;
 const CONTAMINATED_EVENT_NOTICE_RE = /(?:\uC81C\uB85C\uB9C8\uCF13|(?:\uAC1C\uCD5C\s*\uC548\uB0B4[\s\S]{0,500}\uB2E4\uC74C\uAE00)|(?:\uB2E4\uC74C\uAE00[\s\S]{0,500}\uAC1C\uCD5C\s*\uC548\uB0B4))/i;
 const APPLICATION_PERIOD_RE = /(?:\uC2E0\uCCAD|\uC811\uC218|\uBAA8\uC9D1)\s*(?:\uAE30\uAC04|\uBC29\uBC95|\uB9C8\uAC10)/i;
+const RESERVATION_PROGRAM_RE = /(?:\uC608\uB9E4|\uC608\uC57D|\uC0AC\uC804\s*\uC608\uB9E4|\uAD00\uB78C|\uACF5\uC5F0|\uC74C\uC545\uD68C|\uCC38\uAC00)/i;
 
 function compact(value, limit = 300) {
   return Array.from(String(value ?? "").replace(/\s+/g, " ").trim()).slice(0, limit).join("");
@@ -223,6 +224,15 @@ export function classifyPosterContentType(row = {}) {
       contentType: "recruit",
       confidence: 0.82,
       reason: "recruit_action_program_signal",
+      evidenceText: compact(text),
+    };
+  }
+
+  if (hasRecruitAction && APPLICATION_PERIOD_RE.test(text) && RESERVATION_PROGRAM_RE.test(text)) {
+    return {
+      contentType: "recruit",
+      confidence: 0.82,
+      reason: "recruit_reservation_period_signal",
       evidenceText: compact(text),
     };
   }

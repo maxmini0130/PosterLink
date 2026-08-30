@@ -665,3 +665,46 @@ pnpm --filter posterlink-crawler eval:thresholds -- '--input=data/eval/reports/e
   - Search count matched: true.
   - Public search tiers: `A 132`, `B 5`.
 - No poster status changes or auto-publish actions were performed.
+
+### 2026-08-30 Review Queue Follow-up Apply
+
+- Continued the remaining review queue work after user approval.
+- Initial auto-publish dry-run after Phase 2 production apply:
+  - Command:
+    `pnpm --filter posterlink-crawler tier:auto-publish -- '--output=data/eval/reports/auto-publish-plan-20260830-post-phase2-dryrun.json' '--limit=200' '--tiers=A'`
+  - Checked review rows: `3`.
+  - Eligible: `0`.
+  - Blocked: `3`.
+  - Blocking split: `tier_not_allowed 2`, `low_confidence_content_type 2`.
+- Implemented review-queue hardening:
+  - `backfill-field-evidence` now chooses deadline date evidence by effective
+    confidence when deriving `deadline_type`, so grounded application-period
+    evidence outranks short regex date snippets.
+  - Content-type routing now treats reservation/ticketed program notices with
+    an explicit application period as `recruit` with confidence `0.82`.
+- Review-only dry-runs after hardening:
+  - `content-type:backfill --statuses=review`: checked `3`, candidate rows `3`.
+  - `evidence:backfill --statuses=review`: checked `3`, candidate rows `38`.
+  - `tier:compute --statuses=review`: `A 2`, `C 1`.
+- Applied review-only backfills:
+  - Content-type evidence applied `3`, failed `0`.
+  - Field evidence applied `38`, failed `0`.
+  - Exposure tier recomputed for `3`, failed `0`.
+- Auto-published eligible A-tier review rows:
+  - Dry-run:
+    `pnpm --filter posterlink-crawler tier:auto-publish -- '--output=data/eval/reports/auto-publish-plan-20260830-post-phase2-fix-dryrun.json' '--limit=200' '--tiers=A'`
+  - Apply:
+    `$env:EXPOSURE_AUTO_PUBLISH='true'; pnpm --filter posterlink-crawler tier:auto-publish -- '--output=data/eval/reports/auto-publish-plan-20260830-post-phase2-fix-apply.json' '--limit=200' '--tiers=A' '--apply'`
+  - Checked review rows: `3`.
+  - Applied published rows: `2`.
+  - Failed rows: `0`.
+  - Audit failed rows: `0`.
+- Final post-apply checks:
+  - Public audit: public posters `139`, search returned `139`,
+    search count matched `true`; public search tiers `A 134`, `B 5`.
+  - AI healthcheck: `quality_gate_status` `pass`, violations `[]`,
+    review queue count `1`, reject candidates `0`.
+  - Final auto-publish dry-run: checked `1`, eligible `0`, blocked `1`
+    (`tier_not_allowed`, `low_confidence_content_type`).
+- Remaining review row is intentionally blocked as C-tier due to duplicate and
+  low-confidence poster-image evidence; it should stay in manual review.
