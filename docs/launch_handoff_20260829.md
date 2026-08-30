@@ -228,5 +228,13 @@ Read-only audits were re-run after this handoff was first written.
 ## Operational Notes
 
 - Production DB write operations in this phase were applied only after user approval.
+- Phase 2 evidence backfills and exposure tier recomputation were applied after
+  explicit user approval on 2026-08-30:
+  - `content_type` evidence upserted `2350` rows, failed `0`.
+  - field evidence upserted `16582` rows, failed `0`.
+  - exposure tiers recomputed for `518` published/review rows, failed `0`.
+  - post-apply public audit returned `137` public posters and matched search count.
+- No poster status changes or auto-publish actions were performed during the
+  Phase 2 production apply.
 - No secrets should be copied into logs, commits, or final reports.
 - The review queue is currently empty, so the next operational focus should be Android approval and notification delivery.

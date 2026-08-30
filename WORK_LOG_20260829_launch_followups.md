@@ -620,3 +620,48 @@ pnpm --filter posterlink-crawler eval:thresholds -- '--input=data/eval/reports/e
       `deadline_date: 0.9`, `deadline_type: 0.9`, `content_type: 0.9`.
   - `docs/AI_VERIFICATION_SPEC.md` Phase 2 threshold-code reflection item is now checked.
   - No production DB writes were performed.
+
+### 2026-08-30 Phase 2 Production Apply
+
+- User explicitly approved production application.
+- Applied content-type evidence backfill to `poster_field_evidence`:
+  - Command:
+    `pnpm --filter posterlink-crawler content-type:backfill -- '--statuses=published,review,rejected,closed' '--limit=5000' '--output=data/eval/reports/content-type-backfill-routing-improved-20260830-apply.json' '--apply'`
+  - Checked rows: `2350`.
+  - Applied rows: `2350`.
+  - Failed rows: `0`.
+  - Content types: `recruit 2225`, `news 61`, `discard 50`, `admin 14`.
+- Applied field evidence backfill to `poster_field_evidence`:
+  - Command:
+    `pnpm --filter posterlink-crawler evidence:backfill -- '--statuses=published,review,rejected,closed' '--limit=5000' '--output=data/eval/reports/field-evidence-deadline-candidate-20260830-apply.json' '--apply'`
+  - Checked rows: `2350`.
+  - Applied rows: `16582`.
+  - Failed rows: `0`.
+- Verified current production DB evidence without extra dry-run evidence:
+  - Command:
+    `pnpm --filter posterlink-crawler eval:extraction -- '--out=data/eval/reports/extraction-phase2-production-20260830.json'`
+  - `macro_accuracy`: `0.9472222222222223`.
+  - `content_type`: precision `1`, coverage `1`, predictions `120`.
+  - `deadline_date`: precision `0.9866666666666667`, coverage `0.625`, predictions `75`.
+  - `deadline_type`: precision `1`, coverage `0.6`, predictions `72`.
+- Exported production threshold report:
+  - `data/eval/reports/extraction-thresholds-phase2-production-20260830.json`.
+  - `production_ready`: true.
+  - `blocking_reasons`: none.
+- Applied exposure tier recomputation to published/review rows:
+  - Dry-run first:
+    `pnpm --filter posterlink-crawler tier:compute -- '--statuses=published,review' '--limit=5000' '--output=data/eval/reports/exposure-tier-phase2-production-20260830-dryrun.json'`
+  - Apply:
+    `pnpm --filter posterlink-crawler tier:compute -- '--statuses=published,review' '--limit=5000' '--output=data/eval/reports/exposure-tier-phase2-production-20260830-apply.json' '--apply'`
+  - Checked rows: `518`.
+  - Applied rows: `518`.
+  - Failed rows: `0`.
+  - Tier distribution: `A 154`, `B 7`, `C 357`.
+  - Gates: `seo 445`, `calendar 134`, `deadlineAlert 134`, `recommendation 6`.
+- Post-apply public audit:
+  - Command: `pnpm --filter posterlink-crawler audit:public-counts`.
+  - Public poster count: `137`.
+  - Public search returned: `137`.
+  - Search count matched: true.
+  - Public search tiers: `A 132`, `B 5`.
+- No poster status changes or auto-publish actions were performed.
