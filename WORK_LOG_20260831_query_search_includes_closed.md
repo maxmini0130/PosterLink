@@ -26,4 +26,9 @@
 
 ## Apply Note
 
-- Migration `20260831020000_allow_public_read_closed_search_posters.sql` is prepared but must be applied to production after explicit approval.
+- Applied production migration `20260831020000_allow_public_read_closed_search_posters.sql` after user approval.
+- Anonymous public RPC verification after apply:
+  - `search_public_posters('강서영어도서관', includeClosed=false)` returned 0.
+  - `search_public_posters('강서영어도서관', includeClosed=true)` returned 1 closed poster:
+    `19444f77-f9a4-441b-bcd8-d33d1b71569d`.
+  - `count_public_posters('강서영어도서관', includeClosed=true)` returned 1.
