@@ -85,12 +85,13 @@ export async function fetchPublicDiscovery(filters: PublicDiscoveryFilters = {})
   const selectedRegion = resolveTaxonomyByRouteValue(regions, filters.region);
   const sort = readDiscoverySort(filters.sort);
   const search = sanitizeSearchTerm(filters.query);
+  const includeClosed = Boolean(filters.includeClosed || search);
   const regionIds = selectedRegion ? getRegionScopeIds(selectedRegion.id, regions) : null;
   const searchArgs = {
     p_query: search || null,
     p_category_id: selectedCategory?.id ?? null,
     p_region_ids: regionIds,
-    p_include_closed: Boolean(filters.includeClosed),
+    p_include_closed: includeClosed,
     p_sort: sort === "deadline" ? "deadline" : "latest",
     p_limit: Math.min(Math.max(filters.limit ?? 240, 1), 500),
   };
@@ -102,11 +103,11 @@ export async function fetchPublicDiscovery(filters: PublicDiscoveryFilters = {})
       p_query: search || null,
       p_category_id: selectedCategory?.id ?? null,
       p_region_ids: regionIds,
-      p_include_closed: Boolean(filters.includeClosed),
+      p_include_closed: includeClosed,
     }),
   ]);
   const posters = await enrichPublicPosters(client, (postersRes.data ?? []) as Record<string, unknown>[]);
-  const filteredPosters = filters.includeClosed ? posters : posters.filter(isAcceptingPoster);
+  const filteredPosters = includeClosed ? posters : posters.filter(isAcceptingPoster);
   const totalCount = typeof countRes.data === "number" ? countRes.data : filteredPosters.length;
   return { posters: filteredPosters, totalCount, categories, regions, selectedCategory, selectedRegion, sort };
 }

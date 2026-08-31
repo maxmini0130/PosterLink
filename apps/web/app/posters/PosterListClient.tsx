@@ -129,7 +129,7 @@ function PosterListPageContent({
 
       let semanticSearchUsed = false;
       const selectedRegionScopeIds = getRegionScopeIds(selectedRegionId, regions);
-      const includeClosed = !hideClosedPosters;
+      const includeClosed = !hideClosedPosters || normalizedQuery.length > 0;
       const searchArgs = {
         p_query: normalizedQuery || null,
         p_category_id: selectedCategoryId,
@@ -166,25 +166,27 @@ function PosterListPageContent({
         }
       }
 
-      if (!semanticSearchUsed) {
+      if (!semanticSearchUsed || includeClosed) {
         const { data: rpcData, error } = await supabase
           .rpc("search_public_posters", searchArgs)
           .select(PUBLIC_POSTER_SELECT);
 
         if (error) throw error;
-        data = (Array.isArray(rpcData) ? rpcData : rpcData ? [rpcData] : []) as any[];
+        const keywordData = (Array.isArray(rpcData) ? rpcData : rpcData ? [rpcData] : []) as any[];
+        data = semanticSearchUsed ? mergeUniquePosters(data, keywordData) : keywordData;
       }
       const { data: totalCountData, error: countError } = await countPromise;
       if (countError) throw countError;
       const serverTotalCount = typeof totalCountData === "number" ? totalCountData : null;
 
-      const dateFilteredData = hideClosedPosters
-        ? data.filter((poster: any) => isPosterAcceptingApplications({
+      let dateFilteredData = data;
+      if (!includeClosed && hideClosedPosters) {
+        dateFilteredData = data.filter((poster: any) => isPosterAcceptingApplications({
             applicationStartAt: poster.application_start_at,
             applicationEndAt: poster.application_end_at,
             deadlineType: poster.deadline_type,
-          }))
-        : data;
+          }));
+      }
 
       const basePosterIds = dateFilteredData.map((poster: any) => poster.id);
       const [baseMetaMap, baseMetricCounts, baseImageMap] = await Promise.all([
@@ -602,6 +604,18 @@ function shouldRecordSearchLog(
   if (previous?.key === key && now - previous.loggedAt < 60_000) return false;
   ref.current = { key, loggedAt: now };
   return true;
+}
+
+function mergeUniquePosters(primary: any[], secondary: any[]) {
+  const seen = new Set(primary.map((poster) => poster.id).filter(Boolean));
+  return [
+    ...primary,
+    ...secondary.filter((poster) => {
+      if (!poster.id || seen.has(poster.id)) return false;
+      seen.add(poster.id);
+      return true;
+    }),
+  ];
 }
 
 async function recordSearchLog(query: string, resultCount: number) {
