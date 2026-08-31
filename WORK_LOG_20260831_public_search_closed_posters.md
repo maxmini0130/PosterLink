@@ -19,9 +19,15 @@
 - Production read check before migration:
   - `search_public_posters('강서영어도서관', includeClosed=false)` returned 0.
   - `search_public_posters('강서영어도서관', includeClosed=true)` also returned 0 because of the RPC status filter.
+- Applied production migration with `pnpm dlx supabase db push --linked`.
+- Production read check after migration:
+  - `search_public_posters('강서영어도서관', includeClosed=false)` returned 0.
+  - `search_public_posters('강서영어도서관', includeClosed=true)` returned 1 closed poster:
+    `19444f77-f9a4-441b-bcd8-d33d1b71569d`.
+  - `count_public_posters('강서영어도서관', includeClosed=true)` returned 1.
+- `pnpm --filter posterlink-crawler audit:public-counts`
 - `git diff --check`
 
 ## Apply Note
 
-- Production DB migration is not applied in this work log yet.
-- Apply the migration after explicit production DB approval.
+- Production DB migration was applied after user approval on 2026-08-31.
