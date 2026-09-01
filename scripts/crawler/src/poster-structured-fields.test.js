@@ -60,6 +60,38 @@ test("structured fields preserve organization and readable notice facts", () => 
   assert.equal(fields.data_confidence, 0.91);
 });
 
+test("first-come single-day event notices reuse the event day for application and event dates", () => {
+  const fields = buildStructuredPosterFields({
+    fieldVerification: {
+      confidence: 0.9,
+      organization: {
+        organizerName: "강서구립가양도서관",
+      },
+    },
+    applicationEndAt: "2026-09-16",
+    sourceText:
+      "강서구립가양도서관 <9월 퇴근길 영화관 <죽은 시인의 사회>> [가양]퇴근길 영화관 <죽은 시인의 사회> 만12세 이상, 저녁 7시, 제2강의실 선착순!",
+  });
+
+  assert.equal(fields.deadline_type, "fixed");
+  assert.equal(fields.application_start_at.slice(0, 10), "2026-09-16");
+  assert.equal(fields.application_end_at.slice(0, 10), "2026-09-16");
+  assert.equal(fields.event_start_at.slice(0, 10), "2026-09-16");
+  assert.equal(fields.event_end_at.slice(0, 10), "2026-09-16");
+});
+
+test("first-come fallback does not override notices with an explicit application period", () => {
+  const fields = buildStructuredPosterFields({
+    applicationEndAt: "2026-09-16",
+    sourceText:
+      "신청기간 2026.09.01 ~ 2026.09.10 선착순 접수 행사일시 2026.09.16 영화 상영",
+  });
+
+  assert.equal(fields.application_start_at, null);
+  assert.equal(fields.event_start_at, null);
+  assert.equal(fields.event_end_at, null);
+});
+
 test("unsafe readable facts never reach structured poster columns", () => {
   const fields = buildStructuredPosterFields({
     fieldVerification: {

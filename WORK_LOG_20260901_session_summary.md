@@ -10,6 +10,7 @@
 - Added multi-select category support for posters.
 - Reviewed and applied category corrections to existing production data.
 - Investigated the Gangseo English Library poster search issue.
+- Added a structured-field fallback for first-come single-day cultural event notices, so notices like Gangseo Gayang Library's 2026-09-16 movie screening can prefill application start/end and event start/end with the same event day when no explicit application period is present.
 - Fixed public search RPC behavior so closed posters can be returned when explicitly included.
 - Updated web search behavior so any non-empty query includes past/closed notices.
 - Preserved active-first default browsing when there is no search query.
@@ -41,5 +42,6 @@
 - `pnpm --filter web lint`
 - `pnpm --filter web build`
 - `pnpm test`
+- `pnpm --filter posterlink-crawler test -- poster-structured-fields.test.js`
 - `git diff --check`
 - Production anonymous RPC read checks for the closed Gangseo English Library poster.

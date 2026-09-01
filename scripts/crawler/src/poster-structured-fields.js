@@ -52,6 +52,27 @@ function normalizeIsoDate(value) {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
+function sameDayScheduleFallback({
+  applicationStartAt,
+  applicationEndAt,
+  eventStartAt,
+  eventEndAt,
+  sourceText,
+  periodText,
+} = {}) {
+  const normalizedEndAt = normalizeIsoDate(applicationEndAt);
+  if (!normalizedEndAt) return null;
+  if (applicationStartAt || eventStartAt || eventEndAt) return null;
+
+  const text = compactText([sourceText, periodText].filter(Boolean).join(" "), 4000) ?? "";
+  if (!text) return null;
+  if (!/선착순/.test(text)) return null;
+  if (/(?:신청|접수|모집|공모)\s*(?:기간|일시|마감|기한)/.test(text)) return null;
+  if (!/(?:영화관|영화|상영|애니메이션|공연|강연|특강|체험|행사|클래스|프로그램)/.test(text)) return null;
+
+  return normalizedEndAt;
+}
+
 export function normalizeStructuredDeadlineType(value) {
   switch (
     String(value ?? "")
@@ -100,6 +121,8 @@ export function buildStructuredPosterFields({
   deadlineType,
   applicationStartAt,
   applicationEndAt,
+  eventStartAt,
+  eventEndAt,
   sourceText,
   fallbackOrganizerName,
   target,
@@ -119,6 +142,17 @@ export function buildStructuredPosterFields({
   });
   const trustedFacts = excludeLlmFilledFacts(facts, readableNotice);
   const normalizedEndAt = normalizeIsoDate(applicationEndAt);
+  const sameDayFallback = sameDayScheduleFallback({
+    applicationStartAt,
+    applicationEndAt: normalizedEndAt,
+    eventStartAt,
+    eventEndAt,
+    sourceText,
+    periodText: trustedFacts.period,
+  });
+  const normalizedStartAt = normalizeIsoDate(applicationStartAt) ?? sameDayFallback;
+  const normalizedEventStartAt = normalizeIsoDate(eventStartAt) ?? sameDayFallback;
+  const normalizedEventEndAt = normalizeIsoDate(eventEndAt) ?? sameDayFallback;
   const confidence = Number(verification.confidence ?? organization.confidence);
 
   return {
@@ -145,8 +179,10 @@ export function buildStructuredPosterFields({
       periodText: trustedFacts.period,
       sourceText,
     }),
-    application_start_at: normalizeIsoDate(applicationStartAt),
+    application_start_at: normalizedStartAt,
     application_end_at: normalizedEndAt,
+    event_start_at: normalizedEventStartAt,
+    event_end_at: normalizedEventEndAt,
     eligibility_summary: firstSafeFactText(
       [target, trustedFacts.target],
       "target",

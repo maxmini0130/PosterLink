@@ -2130,6 +2130,8 @@ async function uploadToSupabase(filePath) {
       fieldVerification: posterFieldVerification,
       readableFacts: readableInfo.facts,
       applicationEndAt: finalDeadline,
+      eventStartAt: post.eventStartAt ?? post.event_start_at ?? null,
+      eventEndAt: post.eventEndAt ?? post.event_end_at ?? null,
       sourceText: `${post.title ?? ""}\n${post.content ?? ""}`,
       fallbackOrganizerName: verifiedOrgName,
     });
@@ -2160,7 +2162,7 @@ async function uploadToSupabase(filePath) {
     let existingLookup = await supabase
       .from("posters")
       .select(
-        "id, poster_status, title, summary_short, summary_long, thumbnail_url, source_key, embedding, field_verification, application_start_at, application_end_at, organizer_name, application_organization_name, deadline_type, eligibility_summary, benefits_summary, application_method, contact_info, event_location, verification_status, data_confidence"
+        "id, poster_status, title, summary_short, summary_long, thumbnail_url, source_key, embedding, field_verification, application_start_at, application_end_at, event_start_at, event_end_at, organizer_name, application_organization_name, deadline_type, eligibility_summary, benefits_summary, application_method, contact_info, event_location, verification_status, data_confidence"
       )
       .in("source_key", sourceKeyCandidates)
       .limit(1)
@@ -2222,6 +2224,8 @@ async function uploadToSupabase(filePath) {
       if (supportsStructuredPosterFields) {
         for (const field of [
           "application_start_at",
+          "event_start_at",
+          "event_end_at",
           "organizer_name",
           "application_organization_name",
           "eligibility_summary",
