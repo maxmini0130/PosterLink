@@ -11,6 +11,8 @@
 - Reviewed and applied category corrections to existing production data.
 - Investigated the Gangseo English Library poster search issue.
 - Added a structured-field fallback for first-come single-day cultural event notices, so notices like Gangseo Gayang Library's 2026-09-16 movie screening can prefill application start/end and event start/end with the same event day when no explicit application period is present.
+- Added structured-field extraction from readable OCR facts for open-ended first-come event notices, so the Gangseo Deungbit Library `곽재식 작가와의 만남` record keeps the application start date separate from the event date.
+- Tuned category classification so an institution name like `사회복지관` does not overrule the actual program content; lifestyle repair/interior coaching programs now classify as `교육/취업` when the text is education/coaching-focused.
 - Fixed public search RPC behavior so closed posters can be returned when explicitly included.
 - Updated web search behavior so any non-empty query includes past/closed notices.
 - Preserved active-first default browsing when there is no search query.
@@ -27,6 +29,14 @@
 - Applied `20260831010000_include_closed_posters_in_public_search.sql`.
 - Applied `20260831020000_allow_public_read_closed_search_posters.sql`.
 - Confirmed anonymous public RPC search returns the target closed poster after RLS apply.
+- Corrected `강서구립등빛도서관<곽재식 작가와의 만남>` in production:
+  - category `지원금/복지` -> `문화/행사`
+  - `application_start_at=2026-09-04`
+  - `application_end_at=null`
+  - `event_start_at=2026-09-15`
+  - `event_end_at=2026-09-15`
+  - `deadline_type=until_exhausted`
+- Corrected `신길종합사회복지관 <일상생활 인테리어 코칭>` category in production from `지원금/복지` to `교육/취업`.
 
 ## Relevant Commits
 
@@ -43,5 +53,7 @@
 - `pnpm --filter web build`
 - `pnpm test`
 - `pnpm --filter posterlink-crawler test -- poster-structured-fields.test.js`
+- `pnpm --filter posterlink-crawler test -- poster-rules.test.js`
 - `git diff --check`
 - Production anonymous RPC read checks for the closed Gangseo English Library poster.
+- Production read checks for the Gangseo Deungbit Library and Singil Social Welfare Center corrections.

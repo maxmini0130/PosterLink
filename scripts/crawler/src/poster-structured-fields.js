@@ -52,6 +52,82 @@ function normalizeIsoDate(value) {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
+function toIsoDateTime(dateOnly) {
+  return dateOnly ? normalizeIsoDate(`${dateOnly}T00:00:00.000Z`) : null;
+}
+
+function makeDateOnly(yearValue, monthValue, dayValue) {
+  const year = Number(yearValue);
+  const month = Number(monthValue);
+  const day = Number(dayValue);
+  if (!year || !month || !day || month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function extractDateOnlyTokens(text) {
+  const source = String(text ?? "");
+  const dates = [];
+  const pattern = /(^|[^\d])(\d{4})\s*(?:년|[./-])\s*(\d{1,2})\s*(?:월|[./-])\s*(\d{1,2})\s*(?:일)?/g;
+  let match;
+
+  while ((match = pattern.exec(source)) !== null) {
+    const iso = makeDateOnly(match[2], match[3], match[4]);
+    if (!iso) continue;
+    dates.push({
+      iso,
+      index: (match.index ?? 0) + (match[1]?.length ?? 0),
+      endIndex: pattern.lastIndex,
+    });
+  }
+  return dates;
+}
+
+function inferApplicationDateRangeFromPeriod(periodText) {
+  const text = compactText(periodText, 1000) ?? "";
+  if (!text) return {};
+
+  const dates = extractDateOnlyTokens(text);
+  if (dates.length === 0) return {};
+
+  const start = dates[0]?.iso ?? null;
+  let end = null;
+  for (let index = 0; index + 1 < dates.length; index += 1) {
+    const between = text.slice(dates[index].endIndex, dates[index + 1].index);
+    if (between.length <= 30 && /(?:~|～|〜|∼|-|부터|에서)/.test(between)) {
+      end = dates[index + 1].iso;
+      break;
+    }
+  }
+
+  return {
+    applicationStartAt: toIsoDateTime(start),
+    applicationEndAt: toIsoDateTime(end),
+  };
+}
+
+function inferSingleEventDateFromFacts({ contentText, sourceText } = {}) {
+  for (const value of [contentText, sourceText]) {
+    const text = compactText(value, 3000) ?? "";
+    if (!text) continue;
+    if (!/(?:일시|행사일|강연|특강|체험|공연|상영|만남|개최|진행)/.test(text)) continue;
+
+    const dates = extractDateOnlyTokens(text);
+    const uniqueDates = [...new Set(dates.map((date) => date.iso))];
+    if (uniqueDates.length === 1) return toIsoDateTime(uniqueDates[0]);
+  }
+
+  return null;
+}
+
 function sameDayScheduleFallback({
   applicationStartAt,
   applicationEndAt,
@@ -110,6 +186,7 @@ export function inferStructuredDeadlineType({
   if (/(?:상시|수시)\s*(?:모집|접수|신청|운영)/.test(text)) return "ongoing";
   if (/(?:예산|재원|인원)?\s*소진\s*시/.test(text)) return "until_exhausted";
   if (applicationEndAt) return "fixed";
+  if (/(?:선착순|선착)\s*(?:모집|접수|신청|마감)?/.test(text)) return "until_exhausted";
   if (/(?:모집|접수|신청)\s*(?:예정|추후\s*공고)/.test(text))
     return "scheduled";
   return "unknown";
@@ -141,18 +218,24 @@ export function buildStructuredPosterFields({
     content: rawFacts.content ?? rawFacts.benefits,
   });
   const trustedFacts = excludeLlmFilledFacts(facts, readableNotice);
-  const normalizedEndAt = normalizeIsoDate(applicationEndAt);
+  const inferredApplicationRange = inferApplicationDateRangeFromPeriod(trustedFacts.period);
+  const inferredEventDate = inferSingleEventDateFromFacts({
+    contentText: trustedFacts.content,
+    sourceText,
+  });
+  const normalizedEndAt = normalizeIsoDate(applicationEndAt) ?? inferredApplicationRange.applicationEndAt ?? null;
+  const inferredStartAt = inferredApplicationRange.applicationStartAt;
   const sameDayFallback = sameDayScheduleFallback({
-    applicationStartAt,
+    applicationStartAt: applicationStartAt ?? inferredStartAt,
     applicationEndAt: normalizedEndAt,
     eventStartAt,
     eventEndAt,
     sourceText,
     periodText: trustedFacts.period,
   });
-  const normalizedStartAt = normalizeIsoDate(applicationStartAt) ?? sameDayFallback;
-  const normalizedEventStartAt = normalizeIsoDate(eventStartAt) ?? sameDayFallback;
-  const normalizedEventEndAt = normalizeIsoDate(eventEndAt) ?? sameDayFallback;
+  const normalizedStartAt = normalizeIsoDate(applicationStartAt) ?? inferredStartAt ?? sameDayFallback;
+  const normalizedEventStartAt = normalizeIsoDate(eventStartAt) ?? inferredEventDate ?? sameDayFallback;
+  const normalizedEventEndAt = normalizeIsoDate(eventEndAt) ?? inferredEventDate ?? sameDayFallback;
   const confidence = Number(verification.confidence ?? organization.confidence);
 
   return {

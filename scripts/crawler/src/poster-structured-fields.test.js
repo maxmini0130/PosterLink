@@ -92,6 +92,29 @@ test("first-come fallback does not override notices with an explicit application
   assert.equal(fields.event_end_at, null);
 });
 
+test("open-ended first-come library notices keep start date and event date separate", () => {
+  const fields = buildStructuredPosterFields({
+    fieldVerification: {
+      confidence: 0.9,
+      readableNotice: {
+        facts: {
+          period: "2026-09-04 ~ [선착순 마감]",
+          content: "곽재식 작가와의 만남(강서구립등빛도서관에서 진행) — 2026-09-15에 개최",
+          location: "강서구립등빛도서관",
+          application: "신청기간: 2026-09-04 ~ [선착순 마감]",
+        },
+      },
+    },
+    sourceText: "강서구립등빛도서관<곽재식 작가와의 만남>",
+  });
+
+  assert.equal(fields.deadline_type, "until_exhausted");
+  assert.equal(fields.application_start_at.slice(0, 10), "2026-09-04");
+  assert.equal(fields.application_end_at, null);
+  assert.equal(fields.event_start_at.slice(0, 10), "2026-09-15");
+  assert.equal(fields.event_end_at.slice(0, 10), "2026-09-15");
+});
+
 test("unsafe readable facts never reach structured poster columns", () => {
   const fields = buildStructuredPosterFields({
     fieldVerification: {

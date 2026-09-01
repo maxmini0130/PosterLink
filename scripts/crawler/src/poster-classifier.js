@@ -31,7 +31,7 @@ const CATEGORY_RULES = [
   {
     code: "CAT_EDUCATION",
     label: "교육/취업",
-    keywords: ["교육", "취업", "채용", "일자리", "훈련", "강좌", "강의", "수강", "아카데미", "커리어", "직무", "멘토링", "자격증", "인턴", "장학"],
+    keywords: ["교육", "취업", "채용", "일자리", "훈련", "강좌", "강의", "수강", "아카데미", "커리어", "직무", "멘토링", "코칭", "실습", "워크숍", "자격증", "인턴", "장학"],
   },
   {
     code: "CAT_CULTURE",
@@ -154,9 +154,24 @@ function lower(value) {
   return compact(value).toLowerCase();
 }
 
+function categoryTitleText(title) {
+  const text = compact(title);
+  const match = text.match(/^([^<]{2,50})<([^>]{2,120})>(.*)$/);
+  if (!match) return text;
+
+  const prefix = match[1].trim();
+  const programName = match[2].trim();
+  const suffix = match[3].trim();
+  if (!/(?:구청|시청|도서관|센터|복지관|재단|공단|청|관|협회|기관|학교|병원)$/.test(prefix)) {
+    return text;
+  }
+
+  return compact([programName, suffix].filter(Boolean).join(" "));
+}
+
 function buildFields(post = {}) {
   return [
-    ["title", post.title, 5],
+    ["title", categoryTitleText(post.title), 5],
     ["category", post.category, 6],
     ["summary", post.summary_short, 3],
     ["content", post.content, 2],
