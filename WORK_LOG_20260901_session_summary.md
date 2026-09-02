@@ -83,3 +83,9 @@
 - `pnpm --filter web test:e2e -- home.spec.ts --project=chromium`
 - `pnpm --filter web lint`
 - `pnpm --filter web build`
+
+## 2026-09-03 Production Apply
+
+- Deployed the verified home feed tab fix directly to Vercel production because the previous push only updated the feature branch.
+- Production deployment `dpl_EAXosnfrSPq2jg9xa5b8CT1iYvLc` reached `READY` and was aliased to `https://www.posterlink.kr`.
+- Re-ran `pnpm --filter web test:e2e -- home.spec.ts --project=chromium` with `E2E_BASE_URL=https://www.posterlink.kr`; all 11 home E2E tests passed against production.
