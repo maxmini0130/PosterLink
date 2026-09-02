@@ -59,3 +59,15 @@
 - `git diff --check`
 - Production anonymous RPC read checks for the closed Gangseo English Library poster.
 - Production read checks for the Gangseo Deungbit Library and Singil Social Welfare Center corrections.
+
+## 2026-09-02 UI Follow-up
+
+- Fixed the home notice feed tab rendering so the `popular` feed no longer relies on viewport-entry animation after a tab switch.
+- Verified that clicking the `popular` tab keeps poster cards directly under the feed controls at a `770x918` viewport.
+
+## 2026-09-02 UI Validation
+
+- `pnpm --filter web lint`
+- `pnpm --filter web build`
+- `git diff --check`
+- Local Playwright smoke check for the home `popular` feed tab.

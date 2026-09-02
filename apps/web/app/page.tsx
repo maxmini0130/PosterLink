@@ -400,17 +400,14 @@ export default function Home() {
             </div>
           ) : feedPosters.length > 0 ? (
             <motion.div
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true }}
-              variants={{ visible: { transition: { staggerChildren: 0.05 } } }}
+              key={activeFeed}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
               className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
             >
               {feedPosters.map((poster) => (
-                <motion.div
-                  key={poster.id}
-                  variants={{ hidden: { opacity: 0, y: 12 }, visible: { opacity: 1, y: 0 } }}
-                >
+                <div key={poster.id}>
                   <PosterCard
                     poster={{
                       id: poster.id,
@@ -429,7 +426,7 @@ export default function Home() {
                       tags: [poster.categoryName, poster.regionName].filter((tag): tag is string => Boolean(tag)),
                     }}
                   />
-                </motion.div>
+                </div>
               ))}
             </motion.div>
           ) : (
