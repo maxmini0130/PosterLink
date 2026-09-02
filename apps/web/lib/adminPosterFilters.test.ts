@@ -45,6 +45,7 @@ test("condition count ignores the default sort", () => {
   };
 
   assert.equal(countAdminPosterConditions(base), 0);
+  assert.equal(countAdminPosterConditions({ ...base, categoryIds: [] }), 0);
   assert.equal(
     countAdminPosterConditions({
       ...base,

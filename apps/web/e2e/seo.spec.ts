@@ -28,16 +28,28 @@ test.describe("SEO / 공개 페이지", () => {
     }
   });
 
-  test("기관 목록과 기관 상세 공개", async ({ request }) => {
+  test("public institution list and details are crawlable", async ({ request }) => {
     const listRes = await request.get("/institutions");
     expect(listRes.status()).toBeLessThan(400);
-    expect(await listRes.text()).toContain("/institutions/mapo-gu");
+    const listHtml = await listRes.text();
+    const institutionPaths = [...listHtml.matchAll(/href="(\/institutions\/[^"#?]+)"/g)]
+      .map((match) => match[1])
+      .filter((path) => path !== "/institutions");
+    expect(institutionPaths.length).toBeGreaterThan(0);
 
-    const detailRes = await request.get("/institutions/mapo-gu");
+    const detailRes = await request.get(institutionPaths[0]);
     expect(detailRes.status()).toBeLessThan(400);
     const detailHtml = await detailRes.text();
-    expect(detailHtml).toContain("이 기관에서 게시·수집한 공고");
-    expect(detailHtml).toMatch(/href="\/posters\/[0-9a-f-]{36}"/);
+    expect(detailHtml).toContain("<main");
+
+    let detailWithPoster = detailHtml;
+    for (const path of institutionPaths.slice(1, 20)) {
+      if (/href="\/posters\/[0-9a-f-]{36}"/.test(detailWithPoster)) break;
+      const nextDetailRes = await request.get(path);
+      if (nextDetailRes.status() >= 400) continue;
+      detailWithPoster = await nextDetailRes.text();
+    }
+    expect(detailWithPoster).toMatch(/href="\/posters\/[0-9a-f-]{36}"/);
   });
 
   test("이용약관 200 응답", async ({ page }) => {

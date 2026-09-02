@@ -140,7 +140,7 @@ export function countAdminPosterConditions(filters: {
     filters.media,
     filters.deadlineType,
     filters.verificationStatus,
-  ].filter((value) => value.trim()).length;
+  ].filter((value) => String(value ?? "").trim()).length;
 
   return filterCount + (filters.sort === "default" ? 0 : 1);
 }

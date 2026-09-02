@@ -89,3 +89,15 @@
 - Deployed the verified home feed tab fix directly to Vercel production because the previous push only updated the feature branch.
 - Production deployment `dpl_EAXosnfrSPq2jg9xa5b8CT1iYvLc` reached `READY` and was aliased to `https://www.posterlink.kr`.
 - Re-ran `pnpm --filter web test:e2e -- home.spec.ts --project=chromium` with `E2E_BASE_URL=https://www.posterlink.kr`; all 11 home E2E tests passed against production.
+
+## 2026-09-03 Full E2E Audit
+
+- Ran the full web Playwright suite locally: first pass found 7 failures, then targeted fixes and a full rerun completed with 117 passed, 2 skipped, 0 failed.
+- Fixed a real `/admin/posters` crash where empty category filters could call `.trim()` on `undefined`.
+- Hardened the public institution SEO E2E so it no longer assumes `mapo-gu` always has public poster links.
+- Verified:
+  - `pnpm test -- apps/web/lib/adminPosterFilters.test.ts`
+  - `pnpm --filter web test:e2e -- seo.spec.ts authenticated/admin/review.spec.ts --project=chromium --project=admin`
+  - `pnpm --filter web test:e2e`
+  - `pnpm --filter web lint`
+  - `pnpm --filter web build`
