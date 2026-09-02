@@ -37,6 +37,7 @@
   - `event_end_at=2026-09-15`
   - `deadline_type=until_exhausted`
 - Corrected `신길종합사회복지관 <일상생활 인테리어 코칭>` category in production from `지원금/복지` to `교육/취업`.
+- Updated the production `field_verification.classification` audit metadata for both corrected records so internal review evidence matches the public category links.
 
 ## Relevant Commits
 
