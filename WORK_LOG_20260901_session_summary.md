@@ -101,3 +101,9 @@
   - `pnpm --filter web test:e2e`
   - `pnpm --filter web lint`
   - `pnpm --filter web build`
+
+## 2026-09-03 Production Full E2E
+
+- Deployed `bfe108f` to Vercel production.
+- Production deployment `dpl_6LM5CPXUoXB5r1EAkxUE8GTCzKBi` reached `READY` and was aliased to `https://www.posterlink.kr`.
+- Ran the full Playwright suite against production with `E2E_BASE_URL=https://www.posterlink.kr`: 116 passed, 3 skipped, 0 failed.
