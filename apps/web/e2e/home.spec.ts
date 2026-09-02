@@ -23,6 +23,30 @@ test.describe("메인 화면", () => {
   });
 });
 
+test.describe("home feed tabs", () => {
+  test("keep cards directly below controls after every feed tab click", async ({ page }) => {
+    await page.setViewportSize({ width: 770, height: 918 });
+    await page.goto("/");
+    await page.waitForLoadState("networkidle");
+
+    const feedGrid = page.getByTestId("home-feed-grid");
+    const categoryFilters = page.getByTestId("home-feed-category-filters");
+    const tabNames = ["마감 임박", "새로 등록", "많이 본 공고"];
+
+    for (const tabName of tabNames) {
+      await page.getByRole("button", { name: tabName }).click();
+      await expect(feedGrid).toBeVisible();
+
+      const filtersBox = await categoryFilters.boundingBox();
+      const firstCardBox = await feedGrid.locator("a[href^='/posters/']").first().boundingBox();
+
+      expect(filtersBox).toBeTruthy();
+      expect(firstCardBox).toBeTruthy();
+      expect(firstCardBox!.y - (filtersBox!.y + filtersBox!.height)).toBeLessThan(80);
+    }
+  });
+});
+
 test.describe("헤더", () => {
   test("헤더 로고 이미지 표시", async ({ page }) => {
     await page.goto("/");

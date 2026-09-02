@@ -380,7 +380,7 @@ export default function Home() {
             </button>
           </div>
 
-          <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
+          <div data-testid="home-feed-category-filters" className="mb-5 flex gap-2 overflow-x-auto pb-1">
             {categories.map((category) => (
               <Link
                 key={category}
@@ -399,11 +399,8 @@ export default function Home() {
               ))}
             </div>
           ) : feedPosters.length > 0 ? (
-            <motion.div
-              key={activeFeed}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
+            <div
+              data-testid="home-feed-grid"
               className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
             >
               {feedPosters.map((poster) => (
@@ -428,7 +425,7 @@ export default function Home() {
                   />
                 </div>
               ))}
-            </motion.div>
+            </div>
           ) : (
             <div className="border border-dashed border-slate-300 bg-white py-16 text-center text-sm font-bold text-slate-500">
               조건에 맞는 진행 중 공고가 없습니다.

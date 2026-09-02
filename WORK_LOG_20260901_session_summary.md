@@ -71,3 +71,15 @@
 - `pnpm --filter web build`
 - `git diff --check`
 - Local Playwright smoke check for the home `popular` feed tab.
+
+## 2026-09-03 UI Follow-up
+
+- Removed animation from the home notice feed grid entirely so feed tab clicks cannot leave hidden card rows in layout.
+- Added stable test IDs for the home feed grid and category filters.
+- Added a Playwright E2E regression test that clicks `deadline`, `recent`, and `popular` feed tabs at a `770x918` viewport and verifies cards stay directly below the controls.
+
+## 2026-09-03 UI Validation
+
+- `pnpm --filter web test:e2e -- home.spec.ts --project=chromium`
+- `pnpm --filter web lint`
+- `pnpm --filter web build`
