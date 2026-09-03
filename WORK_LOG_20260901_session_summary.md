@@ -70,6 +70,8 @@
 - `pnpm --filter web lint`
 - `pnpm --filter web build`
 - `git diff --check`
+- Deployed `cc9aadb` to Vercel production as `dpl_7QN8nrDi248Rsrfz1q7KumHJjwWb`, aliased to `https://www.posterlink.kr`.
+- Production Playwright smoke check with admin storage state confirmed the review poster renders `연령 조건 확인 필요` and no longer includes `만 0세` / `0세 ~ 20세`.
 - Local Playwright smoke check for the home `popular` feed tab.
 
 ## 2026-09-03 UI Follow-up
