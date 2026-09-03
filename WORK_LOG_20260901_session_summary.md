@@ -107,3 +107,28 @@
 - Deployed `bfe108f` to Vercel production.
 - Production deployment `dpl_6LM5CPXUoXB5r1EAkxUE8GTCzKBi` reached `READY` and was aliased to `https://www.posterlink.kr`.
 - Ran the full Playwright suite against production with `E2E_BASE_URL=https://www.posterlink.kr`: 116 passed, 3 skipped, 0 failed.
+
+## 2026-09-03 Mapo History Exploration Structured Fields
+
+- Confirmed the Mapo source notice for `2026년 마포구 청소년 역사유적 탐방 참가자 모집 안내` includes:
+  - application period `2026. 9. 1.(화) ~ 9. 6.(일)`
+  - `선착순 접수`
+  - event date `2026. 9. 12.(토) 9:00 ~ 16:00`
+  - venue `수원화성 일대`
+  - target/capacity `관내 초등학생 4~6학년 48명`
+- Updated the production review row `526ba446-60c9-4033-9854-a163c6c2a860` with deadline type, application dates, event dates, grade-derived age range, capacity, eligibility, and venue.
+- Hardened structured field extraction for source-grounded labeled fields:
+  - yearless month/day dates with a nearby year hint
+  - multiple application-period labels, preferring a complete range over a generated deadline-only summary
+  - labeled event dates such as `탐방일시`
+  - grade-to-age range mapping
+  - labeled capacity extraction
+  - labeled event venue extraction
+  - first-come deadline type only when supported by exhaustion wording, open-ended first-come wording, or capacity evidence
+- Extended structured backfill selection so event dates, age range, and capacity can be carried through future backfill plans.
+- Scanned 47 current review rows for the strict same pattern `school grade + capacity + first-come + event/venue label`; only the Mapo history exploration notice matched, and it was already corrected.
+
+Validation:
+
+- `pnpm --filter posterlink-crawler test -- poster-structured-fields.test.js` (303 passed)
+- `git diff --check`

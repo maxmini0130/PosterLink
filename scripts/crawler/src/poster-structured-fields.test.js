@@ -87,9 +87,10 @@ test("first-come fallback does not override notices with an explicit application
       "신청기간 2026.09.01 ~ 2026.09.10 선착순 접수 행사일시 2026.09.16 영화 상영",
   });
 
-  assert.equal(fields.application_start_at, null);
-  assert.equal(fields.event_start_at, null);
-  assert.equal(fields.event_end_at, null);
+  assert.equal(fields.application_start_at.slice(0, 10), "2026-09-01");
+  assert.equal(fields.application_end_at.slice(0, 10), "2026-09-16");
+  assert.equal(fields.event_start_at.slice(0, 10), "2026-09-16");
+  assert.equal(fields.event_end_at.slice(0, 10), "2026-09-16");
 });
 
 test("open-ended first-come library notices keep start date and event date separate", () => {
@@ -99,7 +100,8 @@ test("open-ended first-come library notices keep start date and event date separ
       readableNotice: {
         facts: {
           period: "2026-09-04 ~ [선착순 마감]",
-          content: "곽재식 작가와의 만남(강서구립등빛도서관에서 진행) — 2026-09-15에 개최",
+          content:
+            "곽재식 작가와의 만남(강서구립등빛도서관에서 진행) — 2026-09-15에 개최",
           location: "강서구립등빛도서관",
           application: "신청기간: 2026-09-04 ~ [선착순 마감]",
         },
@@ -113,6 +115,43 @@ test("open-ended first-come library notices keep start date and event date separ
   assert.equal(fields.application_end_at, null);
   assert.equal(fields.event_start_at.slice(0, 10), "2026-09-15");
   assert.equal(fields.event_end_at.slice(0, 10), "2026-09-15");
+});
+
+test("history exploration notices extract labeled dates, location, grade ages, capacity, and first-come deadline", () => {
+  const sourceText = `
+    2026년 마포구 청소년 역사유적 탐방 참가자 모집 안내
+    1. 행 사 명: 2026년 마포구 청소년 역사유적 탐방
+    2. 탐방일시: 2026. 9. 12.(토) 9:00 ~ 16:00
+    3. 탐방장소: 수원화성 일대
+    4. 탐방주제: 정조의 효심을 넘어 새로운 시대를 꿈꾼 백성의 도시
+    5. 주 관: 마포구 청소년지도협의회
+    6. 모집대상: 관내 초등학생 4~6학년 48명
+    7. 모집기간: 2026. 9. 1.(화) ~ 9. 6.(일) ※ 선착순 접수
+  `;
+
+  const fields = buildStructuredPosterFields({
+    fieldVerification: {
+      confidence: 0.86,
+      readableNotice: {
+        facts: {
+          period:
+            "~9월 6일(일)까지, 탐방일: 2026년 9월 12일(토) 09:00~16:00, 탐방장소: 수원화성 일대",
+          target: "마포구 거주 초등학교 4~6학년",
+        },
+      },
+    },
+    sourceText,
+  });
+
+  assert.equal(fields.deadline_type, "until_exhausted");
+  assert.equal(fields.application_start_at.slice(0, 10), "2026-09-01");
+  assert.equal(fields.application_end_at.slice(0, 10), "2026-09-06");
+  assert.equal(fields.event_start_at.slice(0, 10), "2026-09-12");
+  assert.equal(fields.event_end_at.slice(0, 10), "2026-09-12");
+  assert.equal(fields.target_age_min, 10);
+  assert.equal(fields.target_age_max, 12);
+  assert.equal(fields.recruitment_count, "48명");
+  assert.equal(fields.event_location, "수원화성 일대");
 });
 
 test("unsafe readable facts never reach structured poster columns", () => {

@@ -14,15 +14,20 @@ const REPO_ROOT = path.resolve(__dirname, "../../..");
 const DEFAULT_OUTPUT = "data/results/structured-poster-backfill.json";
 const DEFAULT_MIN_CONFIDENCE = 0.8;
 const STRUCTURED_SELECT =
-  "id,title,source_org_name,source_key,summary_short,summary_long,poster_status,application_start_at,application_end_at,field_verification,organizer_name,application_organization_name,deadline_type,eligibility_summary,benefits_summary,application_method,contact_info,event_location,verification_status,data_confidence,created_at";
+  "id,title,source_org_name,source_key,summary_short,summary_long,poster_status,application_start_at,application_end_at,event_start_at,event_end_at,field_verification,organizer_name,application_organization_name,deadline_type,eligibility_summary,target_age_min,target_age_max,benefits_summary,recruitment_count,application_method,contact_info,event_location,verification_status,data_confidence,created_at";
 const LEGACY_SELECT =
   "id,title,source_org_name,source_key,summary_short,summary_long,poster_status,application_start_at,application_end_at,field_verification,created_at";
 const STRUCTURED_FIELDS = [
   "organizer_name",
   "application_organization_name",
   "deadline_type",
+  "event_start_at",
+  "event_end_at",
   "eligibility_summary",
+  "target_age_min",
+  "target_age_max",
   "benefits_summary",
+  "recruitment_count",
   "application_method",
   "contact_info",
   "event_location",
@@ -120,19 +125,15 @@ async function fetchRows(supabase, statuses, limit) {
   return { rows: rows.slice(0, limit), schemaReady };
 }
 
-function buildPlan(
-  row,
-  schemaReady,
-  { minConfidence, includeUserFacingText },
-) {
+function buildPlan(row, schemaReady, { minConfidence, includeUserFacingText }) {
   const reviewIssues = hasReviewIssues(row.field_verification);
-  const verificationStatus = reviewIssues
-    ? "needs_review"
-    : "unverified";
+  const verificationStatus = reviewIssues ? "needs_review" : "unverified";
   const derived = buildStructuredPosterFields({
     fieldVerification: row.field_verification,
     applicationStartAt: row.application_start_at,
     applicationEndAt: row.application_end_at,
+    eventStartAt: row.event_start_at,
+    eventEndAt: row.event_end_at,
     sourceText: compactSourceText(row),
     verificationStatus,
   });
