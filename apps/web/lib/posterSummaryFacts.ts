@@ -70,11 +70,18 @@ export function extractTargetAgeRange(text: string | null | undefined) {
   const source = String(text ?? "");
   if (!source) return { targetAgeMin: null, targetAgeMax: null };
 
-  const rangeMatch = source.match(/(?:만\s*)?(\d{1,2})\s*세?\s*(?:~|-|부터|이상\s*~)\s*(?:만\s*)?(\d{1,2})\s*세?/);
+  const rangeMatch = source.match(
+    /(?:만\s*)?(\d{1,2})\s*세\s*(?:~|-|부터|이상\s*~)\s*(?:만\s*)?(\d{1,2})\s*세/,
+  );
   if (rangeMatch) {
+    const targetAgeMin = Number(rangeMatch[1]);
+    const targetAgeMax = Number(rangeMatch[2]);
+    if (targetAgeMin > targetAgeMax) {
+      return { targetAgeMin: null, targetAgeMax: null };
+    }
     return {
-      targetAgeMin: Number(rangeMatch[1]),
-      targetAgeMax: Number(rangeMatch[2]),
+      targetAgeMin,
+      targetAgeMax,
     };
   }
 

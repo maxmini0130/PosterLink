@@ -148,3 +148,18 @@ Validation:
 Validation:
 
 - `pnpm --filter posterlink-crawler test -- poster-structured-fields.test.js` (304 passed)
+
+## 2026-09-03 Poster Detail Age Fallback Fix
+
+- Confirmed poster `519b551c-dc16-4619-84e6-c351b40e51ee` already had no structured `target_age_min` / `target_age_max` in the database, but the public detail page rendered `만 0세 ~ 20세`.
+- Root cause: the detail-page summary fallback could still supply an age even when trusted `eligibility_summary` existed, and the fallback age parser accepted numeric ranges without requiring the Korean age marker `세`, allowing dates/times such as `00:00 ~ 2026...` to be misread as ages.
+- Updated the poster detail page to derive fallback age only from the structured eligibility text when that text exists.
+- Hardened age extraction so ranges must explicitly be age ranges and invalid reversed ranges are ignored.
+- Added regressions for date/time text and `누구나` eligibility text.
+
+Validation:
+
+- `pnpm test -- apps/web/lib/posterSummaryFacts.test.ts` (61 passed)
+- `pnpm --filter web lint`
+- `pnpm --filter web build`
+- `git diff --check`

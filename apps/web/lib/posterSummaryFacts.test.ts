@@ -60,3 +60,31 @@ test("extracts one-sided age conditions", () => {
     targetAgeMax: 39,
   });
 });
+
+test("does not read dates or times as target ages", () => {
+  assert.deepEqual(
+    extractTargetAgeRange(
+      "신청기간: 2026.08.31(월) 00:00 ~ 2026.09.17(목) 12:30 까지",
+    ),
+    {
+      targetAgeMin: null,
+      targetAgeMax: null,
+    },
+  );
+});
+
+test("does not infer an age range from anyone eligibility text", () => {
+  const facts = derivePosterSummaryFallbackFacts([
+    {
+      label: "신청대상",
+      text: "사회적 협동조합에 관심있는 누구나 (온·오프라인 병행)",
+    },
+  ]);
+
+  assert.equal(
+    facts.eligibilitySummary,
+    "사회적 협동조합에 관심있는 누구나 (온·오프라인 병행)",
+  );
+  assert.equal(facts.targetAgeMin, null);
+  assert.equal(facts.targetAgeMax, null);
+});

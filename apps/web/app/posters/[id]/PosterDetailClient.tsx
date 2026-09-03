@@ -16,7 +16,10 @@ import {
 import { buildVerifiedPosterCalendar } from "../../../lib/posterCalendar";
 import { getVerifiedPosterCalendarSource } from "../../../lib/posterStructuredTrust";
 import { resolvePosterImageGallery } from "../../../lib/posterImage";
-import { derivePosterSummaryFallbackFacts } from "../../../lib/posterSummaryFacts";
+import {
+  derivePosterSummaryFallbackFacts,
+  extractTargetAgeRange,
+} from "../../../lib/posterSummaryFacts";
 import { Footer } from "../../components/Footer";
 import { CalendarPlus, ChevronLeft, ChevronRight, Eye, Heart, Share2, X } from "lucide-react";
 import { FieldReportButton } from "./FieldReportButton";
@@ -571,6 +574,15 @@ export function PosterDetailClient({
   const canSaveCalendar = getVerifiedPosterCalendarSource(poster) !== null;
   const summaryLines = formatSummaryLines(poster.summary_long || poster.summary_short);
   const summaryFallbackFacts = derivePosterSummaryFallbackFacts(summaryLines);
+  const structuredEligibilityAgeRange = extractTargetAgeRange(
+    poster.eligibility_summary,
+  );
+  const fallbackTargetAgeMin =
+    structuredEligibilityAgeRange.targetAgeMin ??
+    (poster.eligibility_summary ? null : summaryFallbackFacts.targetAgeMin);
+  const fallbackTargetAgeMax =
+    structuredEligibilityAgeRange.targetAgeMax ??
+    (poster.eligibility_summary ? null : summaryFallbackFacts.targetAgeMax);
   const applicationPeriodLabel = formatApplicationPeriod({
     applicationStartAt: poster.application_start_at,
     applicationEndAt: poster.application_end_at,
@@ -611,8 +623,8 @@ export function PosterDetailClient({
       fieldKey: "age_min",
       label: "연령",
       value: formatTargetAge(
-        poster.target_age_min ?? summaryFallbackFacts.targetAgeMin,
-        poster.target_age_max ?? summaryFallbackFacts.targetAgeMax
+        poster.target_age_min ?? fallbackTargetAgeMin,
+        poster.target_age_max ?? fallbackTargetAgeMax
       )
     },
     { fieldKey: "cost", label: "비용", value: poster.participation_fee || summaryFallbackFacts.participationFee || "기관 문의 필요" },
