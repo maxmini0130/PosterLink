@@ -132,3 +132,19 @@ Validation:
 
 - `pnpm --filter posterlink-crawler test -- poster-structured-fields.test.js` (303 passed)
 - `git diff --check`
+
+## 2026-09-03 Welfare Rights Counseling Structured Fields Follow-up
+
+- Confirmed `사회복지종사자 권익지원센터 <사회복지종사자 집단상담 - 숨비소리> 참여자 모집` was missed because the previous strict similar-case scan only looked for the `school grade + capacity + first-come + event/venue label` pattern.
+- Confirmed the source notice contains:
+  - application period `2026년 9월 3일(목) ~ 9월 20일(일)`
+  - program period `2026년 10월 6일(화) ~ 11월 24일(화)`
+  - venue `어텀인남산 (서울 용산구 만리재로186 3층)`
+  - target/capacity `부장·국장·시설장 급을 제외한 사회복지종사자 5명`
+- Updated production review row `501bded9-c2f0-4551-8a13-e356d5086699` with organizer, fixed deadline type, application dates, event dates, eligibility, capacity, and venue.
+- Hardened structured field extraction for attached-label program notices such as `📆일정2026...`, `🚩장소...`, `🎯대상...`, and `📢모집기간...`.
+- Added a regression test for the counseling program pattern and preserved the Mapo history exploration regression.
+
+Validation:
+
+- `pnpm --filter posterlink-crawler test -- poster-structured-fields.test.js` (304 passed)

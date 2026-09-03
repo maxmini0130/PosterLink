@@ -154,6 +154,46 @@ test("history exploration notices extract labeled dates, location, grade ages, c
   assert.equal(fields.event_location, "수원화성 일대");
 });
 
+test("counseling program notices extract attached emoji labels and event ranges", () => {
+  const sourceText = `
+    [모집] 집단상담 프로그램 '숨비소리' 2기 참여자 모집
+    📆일정2026년 10월 6일(화) ~ 11월 24일(화) 매주 화요일, 19:00 ~ 21:00 (총 8회기)
+    🚩장소어텀인남산 (서울 용산구 만리재로186 3층)
+    🎯대상부장·국장·시설장 급을 제외한 사회복지종사자 5명
+    📢모집기간2026년 9월 3일(목) ~ 9월 20일(일)
+  `;
+
+  const fields = buildStructuredPosterFields({
+    fieldVerification: {
+      confidence: 0.9,
+      organization: {
+        organizerName: "사회복지종사자 권익지원센터",
+      },
+      readableNotice: {
+        facts: {
+          period: "2026년 9월 3일(목) ~ 9월 20일(일)",
+        },
+      },
+    },
+    sourceText,
+  });
+
+  assert.equal(fields.deadline_type, "fixed");
+  assert.equal(fields.application_start_at.slice(0, 10), "2026-09-03");
+  assert.equal(fields.application_end_at.slice(0, 10), "2026-09-20");
+  assert.equal(fields.event_start_at.slice(0, 10), "2026-10-06");
+  assert.equal(fields.event_end_at.slice(0, 10), "2026-11-24");
+  assert.equal(
+    fields.eligibility_summary,
+    "부장·국장·시설장 급을 제외한 사회복지종사자 5명",
+  );
+  assert.equal(fields.recruitment_count, "5명");
+  assert.equal(
+    fields.event_location,
+    "어텀인남산 (서울 용산구 만리재로186 3층)",
+  );
+});
+
 test("unsafe readable facts never reach structured poster columns", () => {
   const fields = buildStructuredPosterFields({
     fieldVerification: {

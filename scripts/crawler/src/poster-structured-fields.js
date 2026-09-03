@@ -190,40 +190,64 @@ function inferApplicationDateRangeFromPeriod(periodText, { yearHint } = {}) {
   return fallback;
 }
 
-function extractFirstDateNearLabel(
-  text,
-  labelPattern,
-  { yearHint, windowSize = 80 } = {},
-) {
-  const source = compactText(text, 12000) ?? "";
-  if (!source) return null;
-  const label = new RegExp(labelPattern, "g");
-  let match;
-  while ((match = label.exec(source)) !== null) {
-    const snippet = source.slice(match.index, match.index + windowSize);
-    const dates = extractDateOnlyTokens(snippet, { yearHint });
-    if (dates.length > 0) return dates[0].iso;
-  }
-  return null;
-}
-
-function inferSingleEventDateFromFacts({
+function inferEventDateRangeFromFacts({
   contentText,
   sourceText,
   yearHint,
 } = {}) {
-  const labeledDate =
-    extractFirstDateNearLabel(
-      sourceText,
-      "(?:탐방|행사|교육|강연|공연|상영|운영|진행)\\s*(?:일시|일자|일|기간|일정)",
-      { yearHint },
-    ) ??
-    extractFirstDateNearLabel(
-      contentText,
-      "(?:탐방|행사|교육|강연|공연|상영|운영|진행)\\s*(?:일시|일자|일|기간|일정)",
-      { yearHint },
-    );
-  if (labeledDate) return toIsoDateTime(labeledDate);
+  const explicitEventLabelPattern = "(?:탐방|행사)\\s*일(?:시|자)?";
+  for (const value of [contentText, sourceText]) {
+    const source = compactText(value, 12000) ?? "";
+    if (!source) continue;
+
+    const label = new RegExp(explicitEventLabelPattern, "g");
+    let match;
+    while ((match = label.exec(source)) !== null) {
+      const snippet = source.slice(match.index, match.index + 120);
+      const dates = extractDateOnlyTokens(snippet, { yearHint });
+      if (dates.length === 0) continue;
+      const eventAt = toIsoDateTime(dates[0].iso);
+      return { eventStartAt: eventAt, eventEndAt: eventAt };
+    }
+  }
+
+  const labelPattern =
+    "(?:(?:탐방|행사|교육|강연|공연|상영|운영|진행)\\s*(?:일시|일자|일|기간|일정)|일정(?=\\s*(?:\\d{4}|\\d{1,2}\\s*월|\\d{1,2}[./])))";
+
+  for (const value of [sourceText, contentText]) {
+    const source = compactText(value, 12000) ?? "";
+    if (!source) continue;
+
+    const label = new RegExp(labelPattern, "g");
+    let match;
+    while ((match = label.exec(source)) !== null) {
+      const snippet = source.slice(match.index, match.index + 220);
+      const dates = extractDateOnlyTokens(snippet, { yearHint });
+      if (dates.length === 0) continue;
+
+      for (let index = 0; index + 1 < dates.length; index += 1) {
+        const between = snippet.slice(
+          dates[index].endIndex,
+          dates[index + 1].index,
+        );
+        if (/(?:장소|대상|모집\s*기간|신청\s*방법|문의|\d+\.\s*)/.test(between))
+          continue;
+        if (between.length <= 80 && /(?:~|～|〜|∼|부터|에서)/.test(between)) {
+          return {
+            eventStartAt: toIsoDateTime(dates[index].iso),
+            eventEndAt: toIsoDateTime(dates[index + 1].iso),
+          };
+        }
+      }
+
+      if (match[0].includes("일정") && dates[0].index > 30) continue;
+
+      if (dates.length >= 1) {
+        const eventAt = toIsoDateTime(dates[0].iso);
+        return { eventStartAt: eventAt, eventEndAt: eventAt };
+      }
+    }
+  }
 
   for (const value of [contentText, sourceText]) {
     const text = compactText(value, 3000) ?? "";
@@ -233,10 +257,13 @@ function inferSingleEventDateFromFacts({
 
     const dates = extractDateOnlyTokens(text, { yearHint });
     const uniqueDates = [...new Set(dates.map((date) => date.iso))];
-    if (uniqueDates.length === 1) return toIsoDateTime(uniqueDates[0]);
+    if (uniqueDates.length === 1) {
+      const eventAt = toIsoDateTime(uniqueDates[0]);
+      return { eventStartAt: eventAt, eventEndAt: eventAt };
+    }
   }
 
-  return null;
+  return {};
 }
 
 function extractGradeAgeRange(text) {
@@ -305,12 +332,24 @@ function extractRecruitmentCount(text) {
   return null;
 }
 
+function extractEligibilitySummary(text) {
+  const source = compactText(text, 12000) ?? "";
+  if (!source) return null;
+
+  const match = source.match(
+    /(?:모집\s*)?대상\s*[:：]?\s*(.{1,180}?)(?=\s*(?:🎯|📢|🔗|📆|🚩|모집\s*기간|신청|일정|장소|문의|$))/,
+  );
+  if (!match) return null;
+
+  return compactText(match[1], 300);
+}
+
 function extractEventLocation(text) {
   const source = compactText(text, 12000) ?? "";
   if (!source) return null;
 
   const match = source.match(
-    /(?:탐방|행사|교육|강연|공연|상영|운영|진행)?\s*장소\s*[:：]\s*([^,\n\r·]+(?:\s+일대)?)/,
+    /(?:탐방|행사|교육|강연|공연|상영|운영|진행)?\s*장소\s*[:：]?\s*(.{1,160}?)(?=\s*(?:🎯|📢|🔗|📆|모집대상|대상|모집기간|신청방법|문의|$))/,
   );
   if (!match) return null;
 
@@ -465,7 +504,7 @@ export function buildStructuredPosterFields({
         : factApplicationRange.applicationEndAt) ??
       sourceApplicationRange.applicationEndAt,
   };
-  const inferredEventDate = inferSingleEventDateFromFacts({
+  const inferredEventRange = inferEventDateRangeFromFacts({
     contentText: trustedFacts.content,
     sourceText: sourceEvidenceText,
     yearHint,
@@ -486,12 +525,25 @@ export function buildStructuredPosterFields({
   const normalizedStartAt =
     normalizeIsoDate(applicationStartAt) ?? inferredStartAt ?? sameDayFallback;
   const normalizedEventStartAt =
-    normalizeIsoDate(eventStartAt) ?? inferredEventDate ?? sameDayFallback;
-  const normalizedEventEndAt =
-    normalizeIsoDate(eventEndAt) ?? inferredEventDate ?? sameDayFallback;
+    normalizeIsoDate(eventStartAt) ??
+    inferredEventRange.eventStartAt ??
+    sameDayFallback;
+  let normalizedEventEndAt =
+    normalizeIsoDate(eventEndAt) ??
+    inferredEventRange.eventEndAt ??
+    sameDayFallback;
+  if (
+    normalizedEventStartAt &&
+    normalizedEventEndAt &&
+    normalizedEventEndAt < normalizedEventStartAt
+  ) {
+    normalizedEventEndAt = normalizedEventStartAt;
+  }
   const confidence = Number(verification.confidence ?? organization.confidence);
+  const inferredEligibilitySummary =
+    extractEligibilitySummary(sourceEvidenceText);
   const eligibilitySummary = firstSafeFactText(
-    [target, trustedFacts.target],
+    [target, trustedFacts.target, inferredEligibilitySummary],
     "target",
     2000,
   );
