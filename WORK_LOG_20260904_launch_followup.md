@@ -46,10 +46,28 @@
   - 비밀값을 파일에 복사하지 않고, 검증 프로세스에 루트 env를 주입해 재실행했을 때 해당 오류는 사라졌다.
 - `pnpm.cmd install --frozen-lockfile`로 pull 이후 누락된 모바일 의존성 트리를 lockfile 기준으로 재동기화했다.
 
+## Google Play Console Progress
+
+- 개발자 계정 신원 확인이 완료되어 첫 앱 생성을 진행할 수 있게 됐다.
+- Play Console에서 `PosterLink` 앱을 생성했다.
+  - 앱 이름: `PosterLink`
+  - 패키지명: `com.maxmini.posterlink`
+  - 기본 언어: 한국어(`ko-KR`)
+  - 앱/게임: 앱
+  - 무료/유료: 무료
+- 스토어 등록정보 초안 저장 후 게시 개요에 변경사항이 표시되는 것을 확인했다.
+- 앱 설정 완료 체크리스트의 개인정보처리방침 항목에 사용할 URL을 확정했다.
+  - `https://www.posterlink.kr/privacy`
+- 로그인 세부정보는 앱에 제한된 기능이 있으므로 `예`로 입력해야 한다.
+  - Google Play 검토용 일반 사용자 테스트 계정이 필요하다.
+  - 테스트 계정은 관리자/운영자 권한이 아닌 일반 사용자 권한으로 유지한다.
+  - Play Console에는 실제 PosterLink 로그인이 가능한 이메일과 앱 로그인용 비밀번호를 제공한다.
+
 ## Still Blocked Or Manual
 
-- Google Play Console 개발자 계정 신원 확인과 연락처 전화번호 인증.
-- Play Console Data safety, 계정 삭제, 앱 액세스, 콘텐츠 등급, 대상 연령 답변 최종 입력.
+- Google Play Console 연락처 전화번호 인증 최종 상태 확인.
+- Play Console Data safety, 계정 삭제, 앱 액세스, 콘텐츠 등급, 대상 연령 답변 최종 입력 및 제출.
+- Google Play 검토용 일반 사용자 테스트 계정 생성 및 로그인 성공 확인.
 - Android/iOS 실제 기기 설치, OAuth callback, 카메라/갤러리, push token 저장, 알림 딥링크 확인.
 - `posterlink.co.kr` / `www.posterlink.co.kr` DNS 및 Vercel domain 연결. 현재 curl 기준 HTTP code `000`.
 - Sentry 클라이언트 오류 실제 수집 여부는 Sentry 프로젝트 접근 또는 의도적 테스트 이벤트 확인이 필요하다.

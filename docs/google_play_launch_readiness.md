@@ -28,15 +28,25 @@ PosterLink Android 앱을 Google Play 내부 테스트 또는 프로덕션 심�
 - `pnpm --dir apps/mobile typecheck` 통과
 - `pnpm --dir apps/mobile dlx expo-doctor` 18/18 통과
 - 로컬 Gradle `:app:assembleDebug`는 코드 문제가 아니라 로컬 `JAVA_HOME`/`java` 미설정 때문에 실행되지 않았다.
-- Google Play Console은 개발자 신원 확인 심사 중이다.
-  - 신원 확인 완료 전에는 첫 앱 생성과 연락처 전화번호 인증이 막혀 있다.
-  - Google 승인 메일 수신 후 앱 생성, 정책 입력, 내부 테스트 트랙 생성을 이어간다.
+- Google Play Console 개발자 계정 신원 확인이 완료됐다.
+- Play Console에서 첫 앱 `PosterLink`를 생성했다.
+  - 앱 이름: `PosterLink`
+  - 패키지명: `com.maxmini.posterlink`
+  - 기본 언어: 한국어(`ko-KR`)
+  - 앱/게임: 앱
+  - 무료/유료: 무료
+- 스토어 등록정보 초안 저장 후 게시 개요에 변경사항이 표시되는 것을 확인했다.
+- 앱 콘텐츠 설정을 진행 중이다.
+  - 개인정보처리방침 URL: `https://www.posterlink.kr/privacy`
+  - 로그인 세부정보: 제한된 기능이 있으므로 `예`; 검토용 일반 사용자 테스트 계정 필요
 
 ## 남은 차단 또는 수동 확인
 
 - Android 실기기에서 설치, 로그인, 카메라 권한, 갤러리 선택, 포스터 촬영/업로드, push token 저장, 알림 클릭 딥링크를 확인한다.
 - Play Console에서 Data safety, 계정 삭제, 앱 액세스, 콘텐츠 등급, 대상 연령을 실제 정책과 맞춰 입력한다.
 - Google Play 계정 삭제 요구사항에 맞는 웹 계정 삭제 URL과 앱 내 계정 삭제 경로를 최종 확인한다.
+- Google Play 검토용 일반 사용자 테스트 계정을 생성하고 실제 로그인 성공을 확인한다.
+- 연락처 전화번호 인증 완료 여부를 Play Console에서 재확인한다.
 
 ## Play Console 입력
 
@@ -53,9 +63,9 @@ PosterLink Android 앱을 Google Play 내부 테스트 또는 프로덕션 심�
   - 스마트폰 스크린샷
   - 태블릿을 지원하지 않으므로 태블릿 스크린샷은 제외 또는 미지원으로 정리
 - 앱 콘텐츠:
-  - 개인정보처리방침 URL
+  - 개인정보처리방침 URL: `https://www.posterlink.kr/privacy`
   - 광고 포함 여부: 광고 SDK가 없으면 `아니요`
-  - 앱 액세스: 로그인이 필요한 기능과 테스트 계정 안내
+  - 앱 액세스: `예`; 로그인이 필요한 기능과 테스트 계정 안내
   - 대상 연령 및 콘텐츠 등급
   - 데이터 보안
   - 계정 삭제
@@ -141,4 +151,17 @@ pnpm --filter @posterlink/mobile submit:android
 - Android `targetSdkVersion`: `36`
 - Android `buildToolsVersion`: `36.0.0`
 - iOS `buildNumber`: `11`
-- 남은 차단 항목은 Google Play Console 개발자 계정 신원 확인과 연락처 전화번호 인증이다.
+- 당시 남은 차단 항목은 Google Play Console 개발자 계정 신원 확인과 연락처 전화번호 인증이었다.
+
+## 2026-09-04 Play Console 진행
+
+- 개발자 계정 신원 확인 완료.
+- 첫 앱 `PosterLink` 생성 완료.
+- 패키지명은 앱 설정과 같은 `com.maxmini.posterlink`로 입력.
+- 개인정보처리방침 URL은 `https://www.posterlink.kr/privacy` 사용.
+- 로그인 세부정보는 제한된 기능이 있으므로 `예`로 진행.
+- 다음 작업:
+  - Google Play 검토용 일반 사용자 테스트 계정 생성
+  - Data safety 입력
+  - 콘텐츠 등급, 대상 연령, 광고 여부, 정부/금융/건강 여부 입력
+  - 내부 테스트 트랙 생성 및 Android AAB 업로드

@@ -122,7 +122,9 @@
 - [x] Google Play 출시 준비 체크리스트 확인 (`docs/google_play_launch_readiness.md`)
 - [x] `pnpm --dir apps/mobile check:play-readiness` 통과
 - [x] Android target SDK를 Google Play 최신 요구사항에 맞게 업그레이드
+- [x] Google Play Console 개발자 신원 확인 완료 및 첫 앱 `PosterLink` 생성
 - [ ] Play Console Data safety, 계정 삭제, 앱 액세스, 대상 연령 답변 최종 확인
+- [ ] Google Play 검토용 일반 사용자 테스트 계정 생성 및 로그인 성공 확인
 - [ ] Android 실기기 설치 및 카메라 권한 확인
 - [ ] iOS 실기기 설치 및 카메라 권한 확인
 
