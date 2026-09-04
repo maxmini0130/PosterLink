@@ -92,6 +92,14 @@ Validation:
 - `pnpm --filter posterlink-crawler test -- poster-structured-fields.test.js` (306 passed)
 - `pnpm --filter posterlink-crawler test -- poster-rules.test.js` (306 passed)
 - Local Playwright smoke check for the home `popular` feed tab.
+- `pnpm --filter web build`
+- `git diff --check`
+
+Production:
+
+- Committed as `687128e` (`Handle library movie single-day events`) and pushed to `origin/feat/ai-verification-phase-1`.
+- Deployed to Vercel production as `dpl_4BdNYWRQhnwUzPgSdhPKbkAJUEDB`.
+- Deployment reached `READY` and was aliased to `https://www.posterlink.kr`.
 
 ## 2026-09-03 UI Follow-up
 
