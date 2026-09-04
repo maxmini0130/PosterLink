@@ -102,6 +102,7 @@
 - [x] Supabase Edge Function 로그 조회 절차 확인 (`docs/edge_function_logs_runbook_20260823.md`)
 - [x] 장애 시 임시 공지 발송 절차 확인 (`docs/incident_notice_runbook_20260823.md`)
 - [ ] 관리자/운영자 비상 계정 확보
+- [x] Supabase DB schema lint 재확인 (`pnpm dlx supabase db lint --linked`, 2026-09-04)
 - [ ] Supabase security advisor 경고 정리
   - 1차/2차 low-risk hardening migration 운영 DB 적용 완료
   - 공개 검색/추천 RPC, extension schema, Auth 설정은 후속으로 분리
@@ -113,7 +114,8 @@
 ## 6. 배포
 
 - [x] Vercel production build 성공 확인
-- [ ] 운영 도메인 `posterlink.kr` / `posterlink.co.kr` 연결 확인
+- [x] 운영 도메인 `posterlink.kr` / `www.posterlink.kr` 연결 확인
+- [ ] `posterlink.co.kr` / `www.posterlink.co.kr` DNS 및 Vercel domain 연결
 - [x] `robots.txt`와 `sitemap.xml` 접근 확인
 - [x] Open Graph 이미지/메타데이터 확인
 - [x] 모바일 앱 EAS 빌드 프로필 확인
@@ -155,6 +157,7 @@
 - [x] `pnpm --dir apps/mobile exec expo install --check` 통과
 - [x] `pnpm --dir apps/mobile typecheck` 통과
 - [x] `pnpm --dir apps/mobile dlx expo-doctor` 18/18 통과
+- [x] `pnpm --dir apps/mobile exec expo config --type public` 정상 출력 재확인 (2026-09-04)
 - [x] EAS Android production AAB 빌드 확인
 - [ ] Android 실기기 설치, 카메라 권한, OAuth, 알림 딥링크 확인
 
@@ -166,7 +169,7 @@
 - [x] 사용자 인증 E2E 11/11 통과
 - [x] 원격 Supabase DB lint 오류 수정 및 재검증 통과
 - [x] `poster-originals`, `poster-requests` Storage bucket 존재 및 public 상태 확인
-- [x] `www.posterlink.kr` 정책 페이지, robots, sitemap, OG 이미지 접근 확인
+- [x] `www.posterlink.kr` 정책 페이지, robots, sitemap, OG 이미지 접근 확인 (2026-09-04 curl 200 재확인)
 - [x] 빌드 산출물에 `SUPABASE_SERVICE_ROLE_KEY` 미포함 확인
 - [ ] `posterlink.co.kr` / `www.posterlink.co.kr` DNS 및 Vercel domain 연결
 - [x] Vercel Production `OPENAI_API_KEY` 등록 및 운영 semantic search 확인
