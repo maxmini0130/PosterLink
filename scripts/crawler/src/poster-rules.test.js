@@ -802,3 +802,16 @@ test("welfare center lifestyle coaching is classified by program content, not ho
   assert.equal(result.categoryCodes[0], "CAT_EDUCATION");
   assert.equal(result.categoryCodes.includes("CAT_WELFARE"), false);
 });
+
+test("library movie screening is classified as culture even when source category says welfare", () => {
+  const result = inferPosterClassification({
+    title: "강서구립가양도서관<9월 퇴근길 영화관 <죽은 시인의 사회>>",
+    category: "복지",
+    summary_short: "기간: 2026-08-31 ~ 00 : 00",
+    content:
+      "문화/예술 강서구립가양도서관 9월 퇴근길 영화관 죽은 시인의 사회 상영 선착순 마감",
+  });
+
+  assert.equal(result.categoryCodes[0], "CAT_CULTURE");
+  assert.equal(result.categoryCodes.includes("CAT_WELFARE"), false);
+});

@@ -126,6 +126,49 @@ function extractDateOnlyTokens(text, { yearHint } = {}) {
         });
       }
     }
+
+    const englishMonths = new Map([
+      ["january", 1],
+      ["jan", 1],
+      ["february", 2],
+      ["feb", 2],
+      ["march", 3],
+      ["mar", 3],
+      ["april", 4],
+      ["apr", 4],
+      ["may", 5],
+      ["june", 6],
+      ["jun", 6],
+      ["july", 7],
+      ["jul", 7],
+      ["august", 8],
+      ["aug", 8],
+      ["september", 9],
+      ["sept", 9],
+      ["sep", 9],
+      ["october", 10],
+      ["oct", 10],
+      ["november", 11],
+      ["nov", 11],
+      ["december", 12],
+      ["dec", 12],
+    ]);
+    const englishMonthPattern =
+      /(^|[^A-Za-z\d])(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sept|sep|october|oct|november|nov|december|dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?/gi;
+    while ((match = englishMonthPattern.exec(source)) !== null) {
+      const month = englishMonths.get(match[2].toLowerCase());
+      const iso = makeDateOnly(yearHint, month, match[3]);
+      if (!iso) continue;
+      const index = (match.index ?? 0) + (match[1]?.length ?? 0);
+      const key = `${iso}:${index}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      dates.push({
+        iso,
+        index,
+        endIndex: englishMonthPattern.lastIndex,
+      });
+    }
   }
 
   return dates.sort((a, b) => a.index - b.index);
@@ -164,6 +207,7 @@ function inferApplicationDateRangeFromPeriod(periodText, { yearHint } = {}) {
     if (
       !end &&
       dates.length === 1 &&
+      !/00\s*:\s*00/.test(rangeText) &&
       !/(?:~|～|〜|∼|-)\s*\[/.test(rangeText) &&
       !/(?:선착순|선착)\s*(?:모집|접수|신청|마감)?/.test(rangeText) &&
       /(?:모집|신청|접수)\s*(?:기간|일시)?|(?:까지|마감)/.test(rangeText)
@@ -252,11 +296,31 @@ function inferEventDateRangeFromFacts({
   for (const value of [contentText, sourceText]) {
     const text = compactText(value, 3000) ?? "";
     if (!text) continue;
-    if (!/(?:일시|행사일|강연|특강|체험|공연|상영|만남|개최|진행)/.test(text))
+    if (!/(?:일시|행사일|강연|특강|체험|공연|상영|만남|개최|진행|screening|movie|film|event)/i.test(text))
       continue;
 
     const dates = extractDateOnlyTokens(text, { yearHint });
     const uniqueDates = [...new Set(dates.map((date) => date.iso))];
+    const eventKeywordPattern =
+      /(?:일시|행사일|강연|특강|체험|공연|상영|만남|개최|진행|screening|movie|film|event)/gi;
+    const eventKeywordMatches = [...text.matchAll(eventKeywordPattern)];
+    const eventKeywordIndex =
+      eventKeywordMatches.length > 0
+        ? eventKeywordMatches[eventKeywordMatches.length - 1].index
+        : -1;
+    if (eventKeywordIndex >= 0) {
+      const eventDates = [
+        ...new Set(
+          dates
+            .filter((date) => date.index >= eventKeywordIndex)
+            .map((date) => date.iso),
+        ),
+      ];
+      if (eventDates.length === 1) {
+        const eventAt = toIsoDateTime(eventDates[0]);
+        return { eventStartAt: eventAt, eventEndAt: eventAt };
+      }
+    }
     if (uniqueDates.length === 1) {
       const eventAt = toIsoDateTime(uniqueDates[0]);
       return { eventStartAt: eventAt, eventEndAt: eventAt };
@@ -392,6 +456,32 @@ function sameDayScheduleFallback({
   return normalizedEndAt;
 }
 
+function shouldUseSingleEventDayAsApplicationPeriod({
+  applicationEndAt,
+  eventStartAt,
+  eventEndAt,
+  sourceText,
+  periodText,
+} = {}) {
+  if (!eventStartAt) return false;
+  if (eventEndAt && eventEndAt.slice(0, 10) !== eventStartAt.slice(0, 10))
+    return false;
+
+  const text = compactText([sourceText, periodText].filter(Boolean).join(" "), 5000) ?? "";
+  if (!text) return false;
+  if (!/(?:선착순|first\s*come)/i.test(text)) return false;
+  if (!/(?:영화관|영화|상영|애니메이션|공연|강연|특강|체험|행사|클래스|프로그램|screening|movie|film|event)/i.test(text))
+    return false;
+
+  const hasApplicationPeriodLabel =
+    /(?:신청|접수|모집)\s*(?:기간|일시|마감|기한)?/u.test(text);
+  const hasInvalidOpenEndedMidnightPeriod =
+    /00\s*:\s*00/.test(String(periodText ?? ""));
+  if (applicationEndAt && !hasInvalidOpenEndedMidnightPeriod) return false;
+
+  return hasInvalidOpenEndedMidnightPeriod || !hasApplicationPeriodLabel;
+}
+
 export function normalizeStructuredDeadlineType(value) {
   switch (
     String(value ?? "")
@@ -469,6 +559,8 @@ export function buildStructuredPosterFields({
     content: rawFacts.content ?? rawFacts.benefits,
   });
   const trustedFacts = excludeLlmFilledFacts(facts, readableNotice);
+  const posterImageOcr = asObject(verification.posterImageOcr);
+  const posterTextSummary = compactText(posterImageOcr.posterTextSummary, 1000);
   const sourceEvidenceText = [
     sourceText,
     trustedFacts.period,
@@ -478,7 +570,10 @@ export function buildStructuredPosterFields({
   ]
     .filter(Boolean)
     .join("\n");
-  const yearHint = inferYearHint(sourceEvidenceText);
+  const eventEvidenceText = [sourceEvidenceText, posterTextSummary]
+    .filter(Boolean)
+    .join("\n");
+  const yearHint = inferYearHint(eventEvidenceText);
   const factApplicationRange = inferApplicationDateRangeFromPeriod(
     trustedFacts.period,
     { yearHint },
@@ -506,7 +601,7 @@ export function buildStructuredPosterFields({
   };
   const inferredEventRange = inferEventDateRangeFromFacts({
     contentText: trustedFacts.content,
-    sourceText: sourceEvidenceText,
+    sourceText: eventEvidenceText,
     yearHint,
   });
   const normalizedEndAt =
@@ -524,7 +619,7 @@ export function buildStructuredPosterFields({
   });
   const normalizedStartAt =
     normalizeIsoDate(applicationStartAt) ?? inferredStartAt ?? sameDayFallback;
-  const normalizedEventStartAt =
+  let normalizedEventStartAt =
     normalizeIsoDate(eventStartAt) ??
     inferredEventRange.eventStartAt ??
     sameDayFallback;
@@ -539,6 +634,30 @@ export function buildStructuredPosterFields({
   ) {
     normalizedEventEndAt = normalizedEventStartAt;
   }
+  if (
+    /00\s*:\s*00/.test(String(trustedFacts.period ?? "")) &&
+    normalizedEventStartAt &&
+    normalizedEventEndAt &&
+    inferredStartAt &&
+    normalizedEventStartAt.slice(0, 10) === inferredStartAt.slice(0, 10) &&
+    normalizedEventEndAt.slice(0, 10) !== normalizedEventStartAt.slice(0, 10)
+  ) {
+    normalizedEventStartAt = normalizedEventEndAt;
+  }
+  const singleEventDayApplicationFallback =
+    shouldUseSingleEventDayAsApplicationPeriod({
+      applicationEndAt: normalizedEndAt,
+      eventStartAt: normalizedEventStartAt,
+      eventEndAt: normalizedEventEndAt,
+      sourceText: eventEvidenceText,
+      periodText: trustedFacts.period,
+    })
+      ? normalizedEventStartAt
+      : null;
+  const finalApplicationStartAt =
+    singleEventDayApplicationFallback ?? normalizedStartAt;
+  const finalApplicationEndAt =
+    singleEventDayApplicationFallback ?? normalizedEndAt;
   const confidence = Number(verification.confidence ?? organization.confidence);
   const inferredEligibilitySummary =
     extractEligibilitySummary(sourceEvidenceText);
@@ -571,14 +690,16 @@ export function buildStructuredPosterFields({
       ],
       300,
     ),
-    deadline_type: inferStructuredDeadlineType({
-      deadlineType,
-      applicationEndAt: normalizedEndAt,
-      periodText: trustedFacts.period,
-      sourceText,
-    }),
-    application_start_at: normalizedStartAt,
-    application_end_at: normalizedEndAt,
+    deadline_type: singleEventDayApplicationFallback
+      ? "fixed"
+      : inferStructuredDeadlineType({
+          deadlineType,
+          applicationEndAt: finalApplicationEndAt,
+          periodText: trustedFacts.period,
+          sourceText,
+        }),
+    application_start_at: finalApplicationStartAt,
+    application_end_at: finalApplicationEndAt,
     event_start_at: normalizedEventStartAt,
     event_end_at: normalizedEventEndAt,
     eligibility_summary: eligibilitySummary,

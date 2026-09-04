@@ -72,6 +72,25 @@
 - `git diff --check`
 - Deployed `cc9aadb` to Vercel production as `dpl_7QN8nrDi248Rsrfz1q7KumHJjwWb`, aliased to `https://www.posterlink.kr`.
 - Production Playwright smoke check with admin storage state confirmed the review poster renders `연령 조건 확인 필요` and no longer includes `만 0세` / `0세 ~ 20세`.
+
+## 2026-09-04 Library Movie Single-Day Event Correction
+
+- Confirmed `강서구립가양도서관<9월 퇴근길 영화관 <죽은 시인의 사회>>` is a library movie screening, so its public category should be `문화/행사`, not `지원금/복지`.
+- Corrected production review row `fd4e7eb3-01ea-42b3-8656-011fc535e161`:
+  - category links now keep only `문화/행사`
+  - `deadline_type` is `fixed`
+  - application date is `2026-09-16`
+  - event date/time is `2026-09-16 19:00`
+  - venue is `강서구립가양도서관 제2강의실`
+  - target is `만 12세 이상`
+- Hardened classification so library/culture/movie screening evidence can override a generic source category of `복지`.
+- Hardened structured date extraction so OCR event dates such as `September 16` can be used, invalid `00:00` open-ended application periods are not treated as confirmed same-day deadlines, and single-day first-come event notices can reuse the event day as the application period.
+
+Validation:
+
+- `node --test src/poster-structured-fields.test.js`
+- `pnpm --filter posterlink-crawler test -- poster-structured-fields.test.js` (306 passed)
+- `pnpm --filter posterlink-crawler test -- poster-rules.test.js` (306 passed)
 - Local Playwright smoke check for the home `popular` feed tab.
 
 ## 2026-09-03 UI Follow-up

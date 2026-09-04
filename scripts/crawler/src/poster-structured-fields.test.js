@@ -80,6 +80,38 @@ test("first-come single-day event notices reuse the event day for application an
   assert.equal(fields.event_end_at.slice(0, 10), "2026-09-16");
 });
 
+test("library movie notices use OCR event day when application period is an invalid midnight range", () => {
+  const fields = buildStructuredPosterFields({
+    fieldVerification: {
+      confidence: 0.45,
+      organization: {
+        organizerName: "강서구립가양도서관",
+      },
+      posterImageOcr: {
+        posterTextSummary:
+          "강서구립가양도서관 is screening '죽은 시인의 사회' on September 16, at 7 PM in Room 2, targeting audiences aged 12 and older.",
+      },
+      readableNotice: {
+        facts: {
+          period: "2026-08-31 ~ 00 : 00",
+          application: "선착순 마감",
+        },
+        factsLlmMeta: {
+          filledByLlm: ["application"],
+        },
+      },
+    },
+    sourceText:
+      "문화/예술 강서구립가양도서관<9월 퇴근길 영화관 <죽은 시인의 사회>> 신청기간 2026-08-31 ~ 00 : 00 [ 선착순 마감 ] 진행일정 대상 담당기관 기타",
+  });
+
+  assert.equal(fields.deadline_type, "fixed");
+  assert.equal(fields.application_start_at.slice(0, 10), "2026-09-16");
+  assert.equal(fields.application_end_at.slice(0, 10), "2026-09-16");
+  assert.equal(fields.event_start_at.slice(0, 10), "2026-09-16");
+  assert.equal(fields.event_end_at.slice(0, 10), "2026-09-16");
+});
+
 test("first-come fallback does not override notices with an explicit application period", () => {
   const fields = buildStructuredPosterFields({
     applicationEndAt: "2026-09-16",

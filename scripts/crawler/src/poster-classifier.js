@@ -181,6 +181,11 @@ function buildFields(post = {}) {
   ].map(([field, value, weight]) => ({ field, text: lower(value), raw: compact(value), weight }));
 }
 
+function isCultureEventNotice(fields) {
+  const source = fields.map((field) => field.raw).filter(Boolean).join(" ");
+  return /(?:문화\/예술|도서관|영화관|영화|상영|애니메이션|공연|전시|축제|체험|행사|콘서트)/.test(source);
+}
+
 function addScore(scores, code, amount, evidence) {
   const current = scores.get(code) ?? { code, score: 0, evidence: [] };
   current.score += amount;
@@ -199,7 +204,10 @@ function inferCategoryMatches(post = {}) {
   const scores = new Map();
   const sourceCategory = compact(post.category);
   const mappedCode = SOURCE_CATEGORY_CODE_MAP.get(sourceCategory);
-  if (mappedCode && mappedCode !== "CAT_OTHER") {
+  const cultureEventNotice = isCultureEventNotice(fields);
+  if (mappedCode === "CAT_WELFARE" && cultureEventNotice) {
+    addScore(scores, "CAT_CULTURE", 12, `culture event content overrides source category: ${sourceCategory}`);
+  } else if (mappedCode && mappedCode !== "CAT_OTHER") {
     addScore(scores, mappedCode, 9, `source category: ${sourceCategory}`);
   }
 
