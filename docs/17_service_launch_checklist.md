@@ -125,7 +125,7 @@
 - [x] Google Play Console 개발자 신원 확인 완료 및 첫 앱 `PosterLink` 생성
 - [x] Play Console Data safety, 계정 삭제, 앱 액세스, 대상 연령 답변 최종 확인
 - [x] Play Console 앱 카테고리 및 스토어 연락처 저장
-- [ ] Play Console 스토어 등록정보 이미지 애셋 수동 업로드 및 최종 저장
+- [x] Play Console 스토어 등록정보 이미지 애셋 수동 업로드 및 최종 저장
 - [x] Google Play 검토용 일반 사용자 테스트 계정 준비 및 Play Console 로그인 세부정보 입력
 - [ ] Google Play 검토용 일반 사용자 테스트 계정의 실제 로그인 가능 상태 재확인
 - [ ] Android 실기기 설치 및 카메라 권한 확인
@@ -141,9 +141,9 @@
 - App content overview currently shows no declarations requiring attention.
 - Store settings saved with category `Events`, public support email, and `https://www.posterlink.kr`.
 - Default Korean store listing text is draft-saved, and Play Console upload-ready images are in `apps/mobile/store-assets/google-play/`.
-- Store listing is still blocked on manual image uploads because the remote browser session cannot inject local files into the Play Console asset picker.
+- Default store listing assets were manually uploaded and the listing is ready to send for review.
 - EAS Android submit is configured for the Play `internal` track, but `apps/mobile/private/google-service-account.json` is not present locally.
-- Play Console dashboard still shows app setup as 9/11 complete until the store listing images are uploaded and the default listing is saved.
+- Play Console dashboard no longer shows the app setup checklist as an active blocker; the remaining launch gate is closed testing.
 
 ## 7. 오픈 후 24시간 모니터링
 

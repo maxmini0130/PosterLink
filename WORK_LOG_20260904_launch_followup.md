@@ -208,3 +208,20 @@ Next action:
   - Publish a closed testing release.
   - 12 or more testers must opt in.
   - The opted-in testers must remain opted in for at least 14 consecutive days.
+
+## 2026-09-05 Store listing saved
+
+- Operator manually uploaded the Play Console store listing assets:
+  - app icon
+  - feature graphic
+  - 4 phone screenshots
+- Verified the default store listing review page showed:
+  - App icon: `app-icon-512.png`
+  - Feature graphic: `feature-graphic-1024x500.png`
+  - Phone screenshots: `phone-04-request.png`, `phone-03-deadline.png`, `phone-01-home.png`, `phone-02-posters.png`
+  - Status: ready to send for review
+- Verified the Play Console dashboard now shows the app identity card and no longer shows the app setup checklist as an active blocker.
+- Remaining Play Console launch gate is closed testing:
+  - Publish a closed testing release.
+  - 12 or more testers must opt in.
+  - Run closed testing for at least 14 consecutive days before applying for production access.

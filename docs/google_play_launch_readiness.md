@@ -47,13 +47,12 @@ PosterLink Android 앱을 Google Play 내부 테스트 또는 프로덕션 심�
   - 연락처 이메일: `privacy@posterlink.kr`
   - 웹사이트: `https://www.posterlink.kr`
 - 기본 스토어 등록정보 텍스트 초안은 Play Console에 임시 저장했다.
-- 기본 스토어 등록정보 이미지는 로컬에 준비했으나, Play Console 파일 업로드는 브라우저 보안 제한 때문에 수동 업로드가 필요하다.
+- 기본 스토어 등록정보 이미지는 Play Console에 수동 업로드했고, 등록정보는 검토 전송 준비 완료 상태다.
 
 ## 남은 차단 또는 수동 확인
 
 - Android 실기기에서 설치, 로그인, 카메라 권한, 갤러리 선택, 포스터 촬영/업로드, push token 저장, 알림 클릭 딥링크를 확인한다.
 - Play Console 게시 개요에서 저장된 앱 콘텐츠 변경사항을 검토 전송한다.
-- Play Console 기본 스토어 등록정보에 로컬 이미지 애셋을 수동 업로드하고 최종 저장한다.
 - Google Play 검토용 일반 사용자 테스트 계정의 실제 로그인 성공을 재확인한다.
 - 연락처 전화번호 인증 완료 여부를 Play Console에서 재확인한다.
 
@@ -67,13 +66,13 @@ PosterLink Android 앱을 Google Play 내부 테스트 또는 프로덕션 심�
 - 스토어 등록정보:
   - 간단한 설명: `공공 공고·지원사업·교육·행사를 한곳에서 찾고 신청 경로를 확인하세요`
   - 자세한 설명: Play Console에 한국어 초안 임시 저장 완료. 정부 또는 공공기관 공식 앱이 아니라는 고지 포함.
-  - 앱 아이콘: `apps/mobile/store-assets/google-play/app-icon-512.png`
-  - 피처 그래픽: `apps/mobile/store-assets/google-play/feature-graphic-1024x500.png`
+  - 앱 아이콘: `apps/mobile/store-assets/google-play/app-icon-512.png` 업로드 완료
+  - 피처 그래픽: `apps/mobile/store-assets/google-play/feature-graphic-1024x500.png` 업로드 완료
   - 스마트폰 스크린샷:
-    - `apps/mobile/store-assets/google-play/phone-01-home.png`
-    - `apps/mobile/store-assets/google-play/phone-02-posters.png`
-    - `apps/mobile/store-assets/google-play/phone-03-deadline.png`
-    - `apps/mobile/store-assets/google-play/phone-04-request.png`
+    - `apps/mobile/store-assets/google-play/phone-01-home.png` 업로드 완료
+    - `apps/mobile/store-assets/google-play/phone-02-posters.png` 업로드 완료
+    - `apps/mobile/store-assets/google-play/phone-03-deadline.png` 업로드 완료
+    - `apps/mobile/store-assets/google-play/phone-04-request.png` 업로드 완료
   - 태블릿을 지원하지 않으므로 태블릿 스크린샷은 제외 또는 미지원으로 정리
 - 앱 콘텐츠:
   - 개인정보처리방침 URL: `https://www.posterlink.kr/privacy`
