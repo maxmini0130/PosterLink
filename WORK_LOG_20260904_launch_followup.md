@@ -104,3 +104,15 @@ Next action:
 - Prepare and confirm Play Console policy answers before saving them in the external console.
 - Create/confirm a normal non-admin reviewer test account before entering login details in Play Console.
 - Upload the existing Android AAB to a closed/internal testing track only after confirming the Google service account and target track.
+
+## 2026-09-05 Play Console policy updates
+
+- Saved the following Play Console app-content declarations after operator confirmation:
+  - Government app: No
+  - Financial features: App does not provide financial features
+  - Health app: App has no health features
+- Verified the App content overview now shows 4 declarations requiring attention:
+  - Content rating
+  - Target audience and content
+  - Data safety
+  - Advertising ID
