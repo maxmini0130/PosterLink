@@ -123,7 +123,7 @@
 - [x] `pnpm --dir apps/mobile check:play-readiness` 통과
 - [x] Android target SDK를 Google Play 최신 요구사항에 맞게 업그레이드
 - [x] Google Play Console 개발자 신원 확인 완료 및 첫 앱 `PosterLink` 생성
-- [ ] Play Console Data safety, 계정 삭제, 앱 액세스, 대상 연령 답변 최종 확인
+- [x] Play Console Data safety, 계정 삭제, 앱 액세스, 대상 연령 답변 최종 확인
 - [ ] Google Play 검토용 일반 사용자 테스트 계정 생성 및 로그인 성공 확인
 - [ ] Android 실기기 설치 및 카메라 권한 확인
 - [ ] iOS 실기기 설치 및 카메라 권한 확인
@@ -133,6 +133,9 @@
 - App setup is 3/11 complete for `PosterLink` / `com.maxmini.posterlink`.
 - Remaining setup items are documented in `docs/google_play_launch_readiness.md`.
 - Production access requires a closed testing release, 12+ opted-in testers, and at least 14 days of closed testing.
+- App content declarations completed so far: government app, financial features, health app, advertising ID, content rating, target audience and content, and data safety.
+- Target audience is currently set to `16-17` only. Recheck family-policy requirements before review submission because Play Console warned that some countries or regions may treat this age range as children.
+- App content overview currently shows no declarations requiring attention.
 
 ## 7. 오픈 후 24시간 모니터링
 

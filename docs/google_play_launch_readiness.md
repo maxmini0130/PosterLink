@@ -36,15 +36,17 @@ PosterLink Android 앱을 Google Play 내부 테스트 또는 프로덕션 심�
   - 앱/게임: 앱
   - 무료/유료: 무료
 - 스토어 등록정보 초안 저장 후 게시 개요에 변경사항이 표시되는 것을 확인했다.
-- 앱 콘텐츠 설정을 진행 중이다.
+- 앱 콘텐츠 선언을 완료했다.
   - 개인정보처리방침 URL: `https://www.posterlink.kr/privacy`
   - 로그인 세부정보: 제한된 기능이 있으므로 `예`; 검토용 일반 사용자 테스트 계정 필요
+  - 완료된 선언: 정부 앱, 금융 기능, 건강 앱, 광고 ID, 콘텐츠 등급, 대상 연령 및 콘텐츠, 데이터 보안
+  - 앱 콘텐츠 개요는 주의 필요 선언이 없다고 표시한다.
+  - 저장된 변경사항은 출시 준비 시 게시 개요에서 검토 전송해야 한다.
 
 ## 남은 차단 또는 수동 확인
 
 - Android 실기기에서 설치, 로그인, 카메라 권한, 갤러리 선택, 포스터 촬영/업로드, push token 저장, 알림 클릭 딥링크를 확인한다.
-- Play Console에서 Data safety, 계정 삭제, 앱 액세스, 콘텐츠 등급, 대상 연령을 실제 정책과 맞춰 입력한다.
-- Google Play 계정 삭제 요구사항에 맞는 웹 계정 삭제 URL과 앱 내 계정 삭제 경로를 최종 확인한다.
+- Play Console 게시 개요에서 저장된 앱 콘텐츠 변경사항을 검토 전송한다.
 - Google Play 검토용 일반 사용자 테스트 계정을 생성하고 실제 로그인 성공을 확인한다.
 - 연락처 전화번호 인증 완료 여부를 Play Console에서 재확인한다.
 
@@ -190,25 +192,44 @@ Use this as an operator checklist before saving answers in Play Console. Final e
 - Government app: No, PosterLink is not an official government app.
 - Financial features: No, PosterLink does not provide financial products, trading, banking, credit, insurance, or payment services.
 - Health: No, PosterLink does not provide health, medical, wellness treatment, diagnosis, or health-data features.
+- Advertising ID: No for the current release. Update this declaration before any future release that adds ads, Google Mobile Ads SDK, or another SDK that uses advertising ID.
 - App category: likely `Lifestyle` or `Productivity`; choose the category that best matches public opportunity discovery in the current Play Console options.
 - Contact details: use the official support contact for PosterLink. Confirm the email/phone before entering it.
 - Account deletion:
   - Web URL: `https://www.posterlink.kr`
   - In-app path must remain reachable after login through the account/profile area.
   - Confirm the exact public account deletion instruction URL if Play Console requires a dedicated URL.
-- Data safety expected data classes:
-  - Account info: email address and user ID.
-  - User-generated content: comments, reports, poster requests, and uploaded poster images.
-  - App activity: favorites, notification reads, search logs, poster views, and official-link clicks.
-  - Photos/videos: images selected or captured for poster upload.
-  - Device or other IDs: Expo push token for notifications.
-  - Diagnostics: Sentry web error/diagnostic data when enabled.
-  - Biometrics: local device authentication only; biometric data is not sent to PosterLink servers.
-- Content rating expectation:
-  - No graphic violence, sexual content, gambling, alcohol/tobacco/drugs promotion, or user-to-user social networking as the core app purpose.
-  - User comments/reviews exist, so answer any UGC/moderation questions according to the current comment/report/admin moderation flow.
-- Target audience expectation:
-  - Not designed for children.
-  - Select an adult/general audience range that matches public-service opportunity discovery.
+- Data safety submitted on 2026-09-05:
+  - User data is collected but not shared with third parties.
+  - Collected data is encrypted in transit.
+  - Account creation methods: username/password and OAuth.
+  - Account deletion URL: `https://www.posterlink.kr/privacy`.
+  - Privacy policy URL: `https://www.posterlink.kr/privacy`.
+  - Personal info: name, email address, user ID.
+  - Photos and videos: photos.
+  - App activity: app interactions, in-app search history, other user-generated content.
+  - Device or other IDs: device or other IDs.
+- Content rating submitted on 2026-09-05:
+  - Category: All other app types.
+  - Korea: 3+.
+  - IARC generic: 3+.
+  - PEGI: 3.
+  - ESRB/ClassInd/USK: Everyone or equivalent.
+  - Interaction element: user interaction.
+- Target audience submitted on 2026-09-05:
+  - Selected age range: `16-17` only.
+  - Recheck family-policy requirements before review submission because Play Console warned that some countries or regions may treat this age range as children.
+
+Current App content overview:
+
+- Requires attention: none.
+- Completed declarations:
+  - Government app
+  - Financial features
+  - Health app
+  - Advertising ID
+  - Content rating
+  - Target audience and content
+  - Data safety
 
 Do not enter passwords, phone numbers, or private support details into Play Console until the operator confirms the exact values.

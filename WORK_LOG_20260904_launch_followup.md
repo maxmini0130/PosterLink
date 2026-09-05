@@ -116,3 +116,57 @@ Next action:
   - Target audience and content
   - Data safety
   - Advertising ID
+
+## 2026-09-05 Advertising ID declaration
+
+- Operator clarified that ads are not planned for the current release, though they may be added later.
+- Saved the Play Console Advertising ID declaration as `No` for the current app version because the app currently has no ads SDK and no AD_ID permission usage.
+- Noted that the declaration must be updated before any future release that adds ads, Google Mobile Ads SDK, or another SDK that uses advertising ID.
+- Verified the App content overview now shows 3 declarations requiring attention:
+  - Content rating
+  - Target audience and content
+  - Data safety
+
+## 2026-09-05 Content rating declaration
+
+- Completed and saved the Google Play IARC content rating questionnaire after operator confirmation.
+- Used the developer Google account contact email in the questionnaire without recording it in this log.
+- Submitted the app as `All other app types`.
+- Key questionnaire signals:
+  - User interaction/content exchange: Yes
+  - User-generated shared content as primary source: No
+  - User/UGC reporting: Yes
+  - Online content recommendation or promotion: Yes
+  - Age-restricted goods, digital goods purchases, rewards/crypto/NFTs, precise user location sharing, web browser/search engine, and news/education primary category: No
+- Verified the submitted rating summary:
+  - Korea: 3+
+  - IARC generic: 3+
+  - PEGI: 3
+  - ESRB/ClassInd/USK: Everyone or equivalent
+  - Interaction element: user interaction
+- Verified the App content overview now shows 2 declarations requiring attention:
+  - Target audience and content
+  - Data safety
+
+## 2026-09-05 Target audience declaration
+
+- Saved the target audience declaration after operator confirmation.
+- Selected only the `16-17` age range for the current Google Play release.
+- Noted the Play Console warning that some countries or regions may still treat this age range as children, so family-policy requirements must be rechecked before review submission.
+- Verified the App content overview then showed 1 declaration requiring attention:
+  - Data safety
+
+## 2026-09-05 Data safety declaration
+
+- Completed and saved the Google Play Data safety declaration after operator confirmation.
+- Declared that PosterLink collects user data but does not share user data with third parties.
+- Declared all collected data is encrypted in transit.
+- Declared account creation through username/password and OAuth.
+- Used `https://www.posterlink.kr/privacy` for the account deletion and privacy policy URLs.
+- Declared the collected data classes shown in the Play Console preview:
+  - Personal info: name, email address, user ID
+  - Photos and videos: photos
+  - App activity: app interactions, in-app search history, other user-generated content
+  - Device or other IDs: device or other IDs
+- Verified the App content overview shows no declarations requiring attention and displays the message that all app-content declarations have been checked.
+- Play Console now instructs that the saved changes are ready to be sent for review from Publishing overview.
