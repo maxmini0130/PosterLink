@@ -124,6 +124,8 @@
 - [x] Android target SDK를 Google Play 최신 요구사항에 맞게 업그레이드
 - [x] Google Play Console 개발자 신원 확인 완료 및 첫 앱 `PosterLink` 생성
 - [x] Play Console Data safety, 계정 삭제, 앱 액세스, 대상 연령 답변 최종 확인
+- [x] Play Console 앱 카테고리 및 스토어 연락처 저장
+- [ ] Play Console 스토어 등록정보 이미지 애셋 수동 업로드 및 최종 저장
 - [ ] Google Play 검토용 일반 사용자 테스트 계정 생성 및 로그인 성공 확인
 - [ ] Android 실기기 설치 및 카메라 권한 확인
 - [ ] iOS 실기기 설치 및 카메라 권한 확인
@@ -136,6 +138,9 @@
 - App content declarations completed so far: government app, financial features, health app, advertising ID, content rating, target audience and content, and data safety.
 - Target audience is currently set to `16-17` only. Recheck family-policy requirements before review submission because Play Console warned that some countries or regions may treat this age range as children.
 - App content overview currently shows no declarations requiring attention.
+- Store settings saved with category `Events`, public support email, and `https://www.posterlink.kr`.
+- Default Korean store listing text is draft-saved, and Play Console upload-ready images are in `apps/mobile/store-assets/google-play/`.
+- Store listing is still blocked on manual image uploads because the remote browser session cannot inject local files into the Play Console asset picker.
 
 ## 7. 오픈 후 24시간 모니터링
 

@@ -170,3 +170,25 @@ Next action:
   - Device or other IDs: device or other IDs
 - Verified the App content overview shows no declarations requiring attention and displays the message that all app-content declarations have been checked.
 - Play Console now instructs that the saved changes are ready to be sent for review from Publishing overview.
+
+## 2026-09-05 Store settings and listing draft
+
+- Saved Play Console Store settings:
+  - App/game type: App
+  - Category: Events
+  - Store listing email: `privacy@posterlink.kr`
+  - Store listing website: `https://www.posterlink.kr`
+  - Phone number left blank because it is optional and no public support phone number was confirmed.
+- Created Google Play upload-ready visual assets in `apps/mobile/store-assets/google-play/`:
+  - `app-icon-512.png` (`512x512`, under 1 MB)
+  - `feature-graphic-1024x500.png` (`1024x500`)
+  - `phone-01-home.png` (`1080x1920`)
+  - `phone-02-posters.png` (`1080x1920`)
+  - `phone-03-deadline.png` (`1080x1920`)
+  - `phone-04-request.png` (`1080x1920`)
+- Entered and draft-saved the default Korean store listing text:
+  - App name: `PosterLink`
+  - Short description: public notices, support programs, education, and events in one place with official application paths.
+  - Full description includes the non-government-app disclaimer and tells users to confirm final details on the source institution's official notice.
+- Attempted automated Play Console asset upload, but browser file injection was blocked by the remote browser security boundary.
+- Remaining manual Play Console action: upload the generated icon, feature graphic, and at least 2 phone screenshots through each `Asset add > Upload` control, then save/review the default store listing.
