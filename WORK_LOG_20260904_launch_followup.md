@@ -192,3 +192,18 @@ Next action:
   - Full description includes the non-government-app disclaimer and tells users to confirm final details on the source institution's official notice.
 - Attempted automated Play Console asset upload, but browser file injection was blocked by the remote browser security boundary.
 - Remaining manual Play Console action: upload the generated icon, feature graphic, and at least 2 phone screenshots through each `Asset add > Upload` control, then save/review the default store listing.
+
+## 2026-09-05 Launch gate recheck
+
+- Rechecked the Play Console dashboard after the store settings and listing draft work.
+- Dashboard still shows app setup as `9/11 complete`.
+- The remaining setup blockers are:
+  - Store listing images must be manually uploaded in Play Console.
+  - The default store listing must then be reviewed and saved.
+- Rechecked EAS Android submit prerequisites:
+  - `apps/mobile/eas.json` is configured to submit Android to the `internal` track.
+  - `apps/mobile/private/google-service-account.json` is not present locally, so automated Google Play submission cannot run from this workspace yet.
+- Production access remains gated by closed testing:
+  - Publish a closed testing release.
+  - 12 or more testers must opt in.
+  - The opted-in testers must remain opted in for at least 14 consecutive days.

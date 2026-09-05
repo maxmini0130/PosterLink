@@ -141,6 +141,8 @@
 - Store settings saved with category `Events`, public support email, and `https://www.posterlink.kr`.
 - Default Korean store listing text is draft-saved, and Play Console upload-ready images are in `apps/mobile/store-assets/google-play/`.
 - Store listing is still blocked on manual image uploads because the remote browser session cannot inject local files into the Play Console asset picker.
+- EAS Android submit is configured for the Play `internal` track, but `apps/mobile/private/google-service-account.json` is not present locally.
+- Play Console dashboard still shows app setup as 9/11 complete until the store listing images are uploaded and the default listing is saved.
 
 ## 7. 오픈 후 24시간 모니터링
 
