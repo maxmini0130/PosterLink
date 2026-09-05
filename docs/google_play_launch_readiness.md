@@ -165,3 +165,50 @@ pnpm --filter @posterlink/mobile submit:android
   - Data safety 입력
   - 콘텐츠 등급, 대상 연령, 광고 여부, 정부/금융/건강 여부 입력
   - 내부 테스트 트랙 생성 및 Android AAB 업로드
+
+## 2026-09-05 Play Console dashboard check
+
+- Active branch docs were merged from `origin/main` into `feat/ai-verification-phase-1`.
+- Play Console dashboard state:
+  - App: `PosterLink`
+  - Package: `com.maxmini.posterlink`
+  - Status: draft
+  - App setup: 3/11 complete
+  - Completed: app content information, privacy policy, login details, ads
+  - Remaining: content rating, target audience, data safety, government app, financial features, health, app category/contact details, store listing
+- Production access is gated by closed testing:
+  - Publish a closed testing release.
+  - 12 or more testers must opt in.
+  - Closed testing must run for at least 14 days.
+
+## Play Console answer draft
+
+Use this as an operator checklist before saving answers in Play Console. Final entries should be confirmed in the console UI.
+
+- Ads: No, the current app does not include an ads SDK.
+- App access: Yes, some features require login. Provide a normal user reviewer account, not an admin or operator account.
+- Government app: No, PosterLink is not an official government app.
+- Financial features: No, PosterLink does not provide financial products, trading, banking, credit, insurance, or payment services.
+- Health: No, PosterLink does not provide health, medical, wellness treatment, diagnosis, or health-data features.
+- App category: likely `Lifestyle` or `Productivity`; choose the category that best matches public opportunity discovery in the current Play Console options.
+- Contact details: use the official support contact for PosterLink. Confirm the email/phone before entering it.
+- Account deletion:
+  - Web URL: `https://www.posterlink.kr`
+  - In-app path must remain reachable after login through the account/profile area.
+  - Confirm the exact public account deletion instruction URL if Play Console requires a dedicated URL.
+- Data safety expected data classes:
+  - Account info: email address and user ID.
+  - User-generated content: comments, reports, poster requests, and uploaded poster images.
+  - App activity: favorites, notification reads, search logs, poster views, and official-link clicks.
+  - Photos/videos: images selected or captured for poster upload.
+  - Device or other IDs: Expo push token for notifications.
+  - Diagnostics: Sentry web error/diagnostic data when enabled.
+  - Biometrics: local device authentication only; biometric data is not sent to PosterLink servers.
+- Content rating expectation:
+  - No graphic violence, sexual content, gambling, alcohol/tobacco/drugs promotion, or user-to-user social networking as the core app purpose.
+  - User comments/reviews exist, so answer any UGC/moderation questions according to the current comment/report/admin moderation flow.
+- Target audience expectation:
+  - Not designed for children.
+  - Select an adult/general audience range that matches public-service opportunity discovery.
+
+Do not enter passwords, phone numbers, or private support details into Play Console until the operator confirms the exact values.

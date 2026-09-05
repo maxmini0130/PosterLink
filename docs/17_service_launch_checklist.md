@@ -128,6 +128,12 @@
 - [ ] Android 실기기 설치 및 카메라 권한 확인
 - [ ] iOS 실기기 설치 및 카메라 권한 확인
 
+2026-09-05 Play Console note:
+
+- App setup is 3/11 complete for `PosterLink` / `com.maxmini.posterlink`.
+- Remaining setup items are documented in `docs/google_play_launch_readiness.md`.
+- Production access requires a closed testing release, 12+ opted-in testers, and at least 14 days of closed testing.
+
 ## 7. 오픈 후 24시간 모니터링
 
 - [ ] 회원가입/로그인 실패율 확인

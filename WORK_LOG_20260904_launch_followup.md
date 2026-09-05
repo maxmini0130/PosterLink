@@ -74,3 +74,33 @@
 - 관리자/운영자 비상 계정 확보.
 - 운영 데이터 변경을 수반하는 공지 발송, 댓글 숨김/신고 기각, 사용자 역할 변경, 기준정보 변경 수동 검수.
 - Supabase Advisor의 Auth leaked password protection, extension schema, 공개 RPC 권한 관련 후속 보안 점검.
+
+## 2026-09-05 Follow-up
+
+- Merged `origin/main` into `feat/ai-verification-phase-1` so the Google Play launch-progress docs are now present on the active AI verification branch.
+- Pushed the merge to `origin/feat/ai-verification-phase-1` as `8a9911a`.
+- Re-opened the Play Console app dashboard for `PosterLink`.
+- Confirmed current Play Console state:
+  - App name: `PosterLink`
+  - Package: `com.maxmini.posterlink`
+  - App status: draft
+  - App setup progress: 3 of 11 completed
+  - Completed setup items: app content information, privacy policy, login details, ads
+  - Remaining setup items: content rating, target audience, data safety, government app, financial features, health, app category/contact details, store listing
+  - Production access is still disabled until closed testing requirements are satisfied.
+- Confirmed the production access gate shown in Play Console:
+  - Publish a closed testing release.
+  - At least 12 testers must opt in.
+  - Run closed testing for at least 14 days with those testers.
+- Rechecked local code signals for Play Console answers:
+  - Mobile uses camera and photo library access for poster capture/upload.
+  - Mobile uses Expo push notifications and stores Expo push tokens in user profiles.
+  - Mobile uses local biometric authentication only on device.
+  - Web/mobile account features use Supabase auth, profiles, favorites, notifications, reports, comments, search logs, and link-click logs.
+  - Sentry is configured on the web app for error/diagnostic collection.
+
+Next action:
+
+- Prepare and confirm Play Console policy answers before saving them in the external console.
+- Create/confirm a normal non-admin reviewer test account before entering login details in Play Console.
+- Upload the existing Android AAB to a closed/internal testing track only after confirming the Google service account and target track.
