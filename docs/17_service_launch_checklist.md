@@ -126,7 +126,8 @@
 - [x] Play Console Data safety, 계정 삭제, 앱 액세스, 대상 연령 답변 최종 확인
 - [x] Play Console 앱 카테고리 및 스토어 연락처 저장
 - [ ] Play Console 스토어 등록정보 이미지 애셋 수동 업로드 및 최종 저장
-- [ ] Google Play 검토용 일반 사용자 테스트 계정 생성 및 로그인 성공 확인
+- [x] Google Play 검토용 일반 사용자 테스트 계정 준비 및 Play Console 로그인 세부정보 입력
+- [ ] Google Play 검토용 일반 사용자 테스트 계정의 실제 로그인 가능 상태 재확인
 - [ ] Android 실기기 설치 및 카메라 권한 확인
 - [ ] iOS 실기기 설치 및 카메라 권한 확인
 

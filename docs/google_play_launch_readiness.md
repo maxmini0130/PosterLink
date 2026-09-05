@@ -38,7 +38,7 @@ PosterLink Android 앱을 Google Play 내부 테스트 또는 프로덕션 심�
 - 스토어 등록정보 초안 저장 후 게시 개요에 변경사항이 표시되는 것을 확인했다.
 - 앱 콘텐츠 선언을 완료했다.
   - 개인정보처리방침 URL: `https://www.posterlink.kr/privacy`
-  - 로그인 세부정보: 제한된 기능이 있으므로 `예`; 검토용 일반 사용자 테스트 계정 필요
+  - 로그인 세부정보: 제한된 기능이 있으므로 `예`; 검토용 일반 사용자 테스트 계정 입력 완료
   - 완료된 선언: 정부 앱, 금융 기능, 건강 앱, 광고 ID, 콘텐츠 등급, 대상 연령 및 콘텐츠, 데이터 보안
   - 앱 콘텐츠 개요는 주의 필요 선언이 없다고 표시한다.
   - 저장된 변경사항은 출시 준비 시 게시 개요에서 검토 전송해야 한다.
@@ -54,7 +54,7 @@ PosterLink Android 앱을 Google Play 내부 테스트 또는 프로덕션 심�
 - Android 실기기에서 설치, 로그인, 카메라 권한, 갤러리 선택, 포스터 촬영/업로드, push token 저장, 알림 클릭 딥링크를 확인한다.
 - Play Console 게시 개요에서 저장된 앱 콘텐츠 변경사항을 검토 전송한다.
 - Play Console 기본 스토어 등록정보에 로컬 이미지 애셋을 수동 업로드하고 최종 저장한다.
-- Google Play 검토용 일반 사용자 테스트 계정을 생성하고 실제 로그인 성공을 확인한다.
+- Google Play 검토용 일반 사용자 테스트 계정의 실제 로그인 성공을 재확인한다.
 - 연락처 전화번호 인증 완료 여부를 Play Console에서 재확인한다.
 
 ## Play Console 입력
@@ -78,7 +78,7 @@ PosterLink Android 앱을 Google Play 내부 테스트 또는 프로덕션 심�
 - 앱 콘텐츠:
   - 개인정보처리방침 URL: `https://www.posterlink.kr/privacy`
   - 광고 포함 여부: 광고 SDK가 없으면 `아니요`
-  - 앱 액세스: `예`; 로그인이 필요한 기능과 테스트 계정 안내
+  - 앱 액세스: `예`; 로그인이 필요한 기능과 테스트 계정 안내 입력 완료
   - 대상 연령 및 콘텐츠 등급
   - 데이터 보안
   - 계정 삭제
@@ -172,11 +172,10 @@ pnpm --filter @posterlink/mobile submit:android
 - 첫 앱 `PosterLink` 생성 완료.
 - 패키지명은 앱 설정과 같은 `com.maxmini.posterlink`로 입력.
 - 개인정보처리방침 URL은 `https://www.posterlink.kr/privacy` 사용.
-- 로그인 세부정보는 제한된 기능이 있으므로 `예`로 진행.
+- 로그인 세부정보는 제한된 기능이 있으므로 `예`로 진행했고 Play Console에서 완료 처리됨.
 - 다음 작업:
-  - Google Play 검토용 일반 사용자 테스트 계정 생성
-  - Data safety 입력
-  - 콘텐츠 등급, 대상 연령, 광고 여부, 정부/금융/건강 여부 입력
+  - Google Play 검토용 일반 사용자 테스트 계정의 실제 로그인 성공 재확인
+  - 기본 스토어 등록정보 이미지 수동 업로드 및 최종 저장
   - 내부 테스트 트랙 생성 및 Android AAB 업로드
 
 ## 2026-09-05 Play Console dashboard check

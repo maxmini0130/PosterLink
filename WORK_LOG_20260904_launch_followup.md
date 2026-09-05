@@ -203,6 +203,7 @@ Next action:
 - Rechecked EAS Android submit prerequisites:
   - `apps/mobile/eas.json` is configured to submit Android to the `internal` track.
   - `apps/mobile/private/google-service-account.json` is not present locally, so automated Google Play submission cannot run from this workspace yet.
+- Corrected the remaining-account wording: the Google Play reviewer account had already been prepared and app access/login details were already marked complete in Play Console; the remaining task is to recheck that the existing normal-user account can still log in successfully.
 - Production access remains gated by closed testing:
   - Publish a closed testing release.
   - 12 or more testers must opt in.
