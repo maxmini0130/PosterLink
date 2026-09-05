@@ -225,3 +225,17 @@ Next action:
   - Publish a closed testing release.
   - 12 or more testers must opt in.
   - Run closed testing for at least 14 consecutive days before applying for production access.
+
+## 2026-09-05 Closed testing release draft saved
+
+- Uploaded Android App Bundle version `4 (1.0.0)` was present in the Play Console closed testing release review page.
+- Fixed the release blocking error by adding `Republic of Korea / South Korea` as the Alpha closed testing track country/region.
+- Saved the Alpha closed testing release draft after the country error disappeared.
+- Saved the tester feedback contact as `privacy@posterlink.kr`.
+- Verified Publishing overview now contains unsubmitted changes for the Alpha release, store listing, app content, and store settings.
+- Did not submit changes to Google review yet.
+- Remaining Play Console actions:
+  - Create or select a closed testing email list.
+  - Add tester Google account emails to that list.
+  - Submit the pending Play Console changes for review after the operator confirms the tester list.
+  - Collect 12 or more opted-in closed testers and run the test for at least 14 consecutive days before requesting production access.

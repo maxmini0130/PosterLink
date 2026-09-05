@@ -144,6 +144,11 @@
 - Default store listing assets were manually uploaded and the listing is ready to send for review.
 - EAS Android submit is configured for the Play `internal` track, but `apps/mobile/private/google-service-account.json` is not present locally.
 - Play Console dashboard no longer shows the app setup checklist as an active blocker; the remaining launch gate is closed testing.
+- Closed testing Alpha release draft for Android App Bundle `4 (1.0.0)` is saved.
+- Alpha closed testing country/region is set to `Republic of Korea / South Korea`.
+- Tester feedback contact is saved as `privacy@posterlink.kr`.
+- Pending Play Console changes have not been submitted to Google review yet.
+- A closed testing email list and tester Google account emails still need to be added before review submission.
 
 ## 7. 오픈 후 24시간 모니터링
 

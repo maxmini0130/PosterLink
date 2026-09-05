@@ -192,6 +192,24 @@ pnpm --filter @posterlink/mobile submit:android
   - 12 or more testers must opt in.
   - Closed testing must run for at least 14 days.
 
+## 2026-09-05 Closed testing release draft
+
+- Play Console closed testing Alpha track has Android App Bundle `4 (1.0.0)` saved as a draft/review-ready change.
+- Alpha country/region availability is set to `Republic of Korea / South Korea`.
+- Tester feedback contact is set to `privacy@posterlink.kr`.
+- Publishing overview shows pending, unsubmitted changes including:
+  - Alpha release `4 (1.0.0)`
+  - Alpha country/region addition for South Korea
+  - Default store listing
+  - App content declarations
+  - Store settings
+- Changes have not yet been submitted to Google review.
+- Remaining closed testing setup:
+  - Create or select an email tester list in the Alpha track.
+  - Add tester Google account emails.
+  - Submit pending changes from Publishing overview after the tester list is confirmed.
+  - Collect at least 12 opted-in testers and keep the closed test running for 14 consecutive days before requesting production access.
+
 ## Play Console answer draft
 
 Use this as an operator checklist before saving answers in Play Console. Final entries should be confirmed in the console UI.
