@@ -338,6 +338,10 @@ Next action:
   - id: `dpl_CQxUuBBdMKUvLjaoqdV6QrQu9wMx`
   - alias: `https://www.posterlink.kr`
   - status: `Ready`
+- Deployed the multi-category representative-display correction to Vercel Production:
+  - id: `dpl_BRs2kZnNo9GmVZHirLLijhnF6WaC`
+  - alias: `https://www.posterlink.kr`
+  - status: `Ready`
 
 ## 2026-09-06 Home feed tab production deployment
 
