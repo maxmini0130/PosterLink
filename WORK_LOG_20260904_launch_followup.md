@@ -263,3 +263,13 @@ Next action:
   - `pnpm --filter web lint` passed.
   - `pnpm --dir apps/web test:e2e e2e/home.spec.ts -g "home feed tabs"` passed.
   - `pnpm --filter web build` passed.
+
+## 2026-09-06 Home feed tab production deployment
+
+- Deployed commit `e768ff7` to Vercel Production.
+- Vercel deployment:
+  - id: `dpl_CRheqZvYHZbyposUq4fKVFygSy53`
+  - alias: `https://www.posterlink.kr`
+  - status: `Ready`
+- Production verification:
+  - `E2E_BASE_URL=https://www.posterlink.kr pnpm --dir apps/web test:e2e e2e/home.spec.ts -g "home feed tabs"` passed.
