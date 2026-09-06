@@ -417,3 +417,19 @@ Next action:
   - The duplicate candidate was the earlier 2026-08-26 session with application deadline `2026-08-21`, so it was treated as a different recurring-session notice.
   - Final organizer/application organization: `을지유니크팩토리`.
 - Corrected obvious stale-year or missing-deadline records before approval, including `두쫀쿠 만들기`, `복주머니&한복 모양 비누 만들기`, `광진로펀`, `서초 랜딩패키지 2기`, `마포청년축제 자원봉사자`, and `청년정책 종합상담 - 세무편`.
+
+## 2026-09-06 Review queue operating standard
+
+- Agreed that future moderation queue work should use detailed source-grounded review rather than treating all queue rows as simple approve/reject tasks.
+- Review checklist for future queue passes:
+  - confirm the original source is an actual recruitment/application/participation notice;
+  - confirm the selected poster image matches the same notice, or keep text-only/image concerns visible when it does not;
+  - separate application period/deadline from event, class, screening, selection, or announcement dates;
+  - approve useful past notices as `closed` instead of rejecting them solely because the date has passed;
+  - treat repeated sessions as separate notices when the session date or application deadline differs;
+  - distinguish collection source from actual organizer/application organization;
+  - keep multiple regions when the notice clearly targets or operates across more than one region;
+  - classify by the whole title/body/user outcome, not by one keyword or the source-board category alone.
+- Specific examples that set the standard:
+  - `서울청년기지개센터 <마포서대문권역센터 9월 테마 관계형성프로그램>`: approved as a closed notice after confirming the official source, recruitment period, and actual Mapo-side institution.
+  - `을지유니크팩토리 <면접 1day 11기> 참여자 모집`: approved as a separate 2026-09-09 session after resolving the earlier 2026-08-26 duplicate candidate as a different recurring-session notice.
