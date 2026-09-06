@@ -29,14 +29,12 @@ test.describe("home feed tabs", () => {
     await page.goto("/");
     await page.waitForLoadState("networkidle");
 
-    const feedResults = page.getByTestId("home-feed-results");
     const feedGrid = page.getByTestId("home-feed-grid");
     const categoryFilters = page.getByTestId("home-feed-category-filters");
     const tabIds = ["home-feed-tab-urgent", "home-feed-tab-new", "home-feed-tab-popular"];
 
     for (const tabId of tabIds) {
       await page.getByTestId(tabId).click();
-      await expect(feedResults).toBeInViewport();
       await expect(feedGrid).toBeVisible();
 
       const filtersBox = await categoryFilters.boundingBox();

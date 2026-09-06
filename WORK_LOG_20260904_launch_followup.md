@@ -273,3 +273,12 @@ Next action:
   - status: `Ready`
 - Production verification:
   - `E2E_BASE_URL=https://www.posterlink.kr pnpm --dir apps/web test:e2e e2e/home.spec.ts -g "home feed tabs"` passed.
+
+## 2026-09-06 Home feed tab scroll correction
+
+- Removed the automatic scroll/focus movement added to home feed tab clicks because tab switching should keep the user's viewport stable.
+- Kept stable home feed tab/result test IDs and the regression coverage that verifies `마감 임박`, `새로 등록`, and `많이 본 공고` render cards directly below the controls.
+- Verification:
+  - `pnpm --filter web lint` passed.
+  - `pnpm --dir apps/web test:e2e e2e/home.spec.ts -g "home feed tabs"` passed.
+  - `pnpm --filter web build` passed.

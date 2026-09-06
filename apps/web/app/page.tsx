@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
@@ -75,7 +75,6 @@ export default function Home() {
   const [hideClosedPosters, setHideClosedPosters] = useState(true);
   const [activeFeed, setActiveFeed] = useState<FeedTabKey>("urgent");
   const [loadError, setLoadError] = useState<string | null>(null);
-  const feedResultsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const fetchHomeData = async () => {
@@ -271,13 +270,6 @@ export default function Home() {
       ? userProfile?.regions?.full_name || userProfile?.regions?.name
       : userProfile?.regions?.name || "전국";
 
-  const handleFeedTabClick = (nextFeed: FeedTabKey) => {
-    setActiveFeed(nextFeed);
-    window.requestAnimationFrame(() => {
-      feedResultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  };
-
   return (
     <div className="min-h-screen bg-[#f6f8fb] pb-24 text-slate-950">
       <Header />
@@ -366,7 +358,7 @@ export default function Home() {
                   type="button"
                   data-testid={`home-feed-tab-${tab.key}`}
                   aria-pressed={activeFeed === tab.key}
-                  onClick={() => handleFeedTabClick(tab.key)}
+                  onClick={() => setActiveFeed(tab.key)}
                   className={`shrink-0 border px-3 py-2 text-xs font-black transition-colors ${
                     activeFeed === tab.key
                       ? "border-slate-950 bg-slate-950 text-white"
@@ -403,7 +395,7 @@ export default function Home() {
             ))}
           </div>
 
-          <div ref={feedResultsRef} data-testid="home-feed-results" className="scroll-mt-24">
+          <div data-testid="home-feed-results">
             {loading && feedPosters.length === 0 ? (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {[1, 2, 3, 4].map((item) => (
