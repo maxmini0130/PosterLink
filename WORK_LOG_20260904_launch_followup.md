@@ -263,6 +263,17 @@ Next action:
   - `pnpm --filter web lint` passed.
   - `pnpm --dir apps/web test:e2e e2e/home.spec.ts -g "home feed tabs"` passed.
   - `pnpm --filter web build` passed.
+
+## 2026-09-06 Welfare-center education category follow-up
+
+- Strengthened category classification so welfare-center notices are classified by program content rather than host organization alone.
+- Added an override that sends coaching/course notices such as `신길종합사회복지관 <일상생활 인테리어 코칭>` to `CAT_EDUCATION`.
+- Added a direct-housing-support guard so `주거환경 개선`, `집수리 지원`, `주거비`, `임대주택`, and similar notices remain `CAT_HOUSING` even if the text contains education/course terms.
+- Expanded education category keywords used by upload support definitions with `수업`, `클래스`, `워크숍`, `세미나`, and `코칭`.
+- Verification:
+  - `pnpm --filter posterlink-crawler exec node --test src/poster-classifier-category-regression.test.js` passed, 4 tests.
+  - `pnpm --filter posterlink-crawler test` passed, 310 tests.
+  - `pnpm --filter web build` passed.
 - Deployed the stationary tab-click correction to Vercel Production:
   - id: `dpl_4HxS7wHqWzdQVhdxX2Et53UUSKq2`
   - alias: `https://www.posterlink.kr`

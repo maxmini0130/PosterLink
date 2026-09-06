@@ -31,3 +31,28 @@ test("mental health counseling notices override welfare source categories", () =
   assert.equal(result.categoryCodes[0], "CAT_HEALTH");
   assert.equal(result.categoryCodes.includes("CAT_WELFARE"), false);
 });
+
+test("welfare-center coaching programs are classified as education", () => {
+  const result = inferPosterClassification({
+    title: "신길종합사회복지관 <일상생활 인테리어 코칭> 참여자 모집",
+    category: "복지",
+    summary_short: "일상생활 공간 정리와 인테리어 방법을 배우는 코칭 프로그램입니다.",
+    content: "복지관에서 진행하는 생활 인테리어 코칭 강좌로 참여자를 모집합니다.",
+    source_org_name: "신길종합사회복지관",
+  });
+
+  assert.equal(result.categoryCodes[0], "CAT_EDUCATION");
+  assert.equal(result.categoryCodes.includes("CAT_WELFARE"), false);
+});
+
+test("direct housing repair support is not overridden by education keywords", () => {
+  const result = inferPosterClassification({
+    title: "종합사회복지관 <주거환경 개선 집수리 지원 교육 안내>",
+    category: "복지",
+    summary_short: "저소득 가구의 주거환경 개선과 집수리 지원을 안내합니다.",
+    content: "수리비 지원과 주거환경 개선 대상자를 모집하며 사전 교육이 포함됩니다.",
+    source_org_name: "종합사회복지관",
+  });
+
+  assert.equal(result.categoryCodes[0], "CAT_HOUSING");
+});

@@ -208,6 +208,16 @@ function isMentalHealthCounselingNotice(fields) {
   return /(?:심리|마음건강|정신건강|TCI|기질검사|심리상담|상담데이|해석상담|개인 심리상담)/i.test(source);
 }
 
+function isEducationalCourseNotice(fields) {
+  const source = fields.map((field) => field.raw).filter(Boolean).join(" ");
+  return /(?:교육|강좌|강의|특강|수업|클래스|워크숍|세미나|아카데미|코칭|멘토링|교육생|수강|참여자\s*모집)/i.test(source);
+}
+
+function isDirectHousingSupportNotice(fields) {
+  const source = fields.map((field) => field.raw).filter(Boolean).join(" ");
+  return /(?:주거\s*환경\s*개선|집수리\s*지원|수리비\s*지원|주거비|월세\s*지원|전세\s*지원|임대\s*주택|이사비\s*지원)/i.test(source);
+}
+
 function addScore(scores, code, amount, evidence) {
   const current = scores.get(code) ?? { code, score: 0, evidence: [] };
   current.score += amount;
@@ -228,9 +238,15 @@ function inferCategoryMatches(post = {}) {
   const mappedCode = SOURCE_CATEGORY_CODE_MAP.get(sourceCategory);
   const cultureEventNotice = isCultureEventNotice(fields);
   const mentalHealthCounselingNotice = isMentalHealthCounselingNotice(fields);
+  const educationalCourseNotice = isEducationalCourseNotice(fields);
+  const directHousingSupportNotice = isDirectHousingSupportNotice(fields);
   const sourceLooksWelfare = mappedCode === "CAT_WELFARE" || /(?:복지|지원금)/.test(sourceCategory);
   if (sourceLooksWelfare && mentalHealthCounselingNotice) {
     addScore(scores, "CAT_HEALTH", 16, `mental health counseling content overrides source category: ${sourceCategory}`);
+  } else if (sourceLooksWelfare && directHousingSupportNotice) {
+    addScore(scores, "CAT_HOUSING", 16, `direct housing support content overrides welfare source category: ${sourceCategory}`);
+  } else if (sourceLooksWelfare && educationalCourseNotice && !directHousingSupportNotice) {
+    addScore(scores, "CAT_EDUCATION", 16, `educational course content overrides welfare source category: ${sourceCategory}`);
   } else if (mappedCode === "CAT_WELFARE" && cultureEventNotice) {
     addScore(scores, "CAT_CULTURE", 12, `culture event content overrides source category: ${sourceCategory}`);
   } else if (mappedCode && mappedCode !== "CAT_OTHER") {
