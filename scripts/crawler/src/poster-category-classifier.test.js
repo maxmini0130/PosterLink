@@ -34,10 +34,12 @@ test("semantic poster category classifier returns labels with confidence", async
     });
 
     assert.equal(module.CATEGORY_CODE_BY_LABEL["교육강좌"], "CAT_COURSE");
+    assert.equal(module.CATEGORY_CODE_BY_LABEL["건강/의료"], "CAT_HEALTH");
     assert.deepEqual(result.categories, ["교육강좌"]);
     assert.equal(result.confidence, 0.89);
     assert.match(result.reason, /코칭 교육/);
     assert.match(requestBody.input[0].content[0].text, /핵심 목적/);
+    assert.match(requestBody.input[0].content[0].text, /심리상담.*건강\/의료/);
   } finally {
     globalThis.fetch = originalFetch;
     if (originalKey === undefined) {

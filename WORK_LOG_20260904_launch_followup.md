@@ -310,6 +310,27 @@ Next action:
 - Production verification:
   - `E2E_BASE_URL=https://www.posterlink.kr pnpm --dir apps/web test:e2e e2e/home.spec.ts -g "home feed tabs"` passed.
 
+## 2026-09-06 Semantic category v2 reclassification
+
+- Expanded semantic category classification beyond the initial 10-category set to include active specific categories that should not be collapsed into generic participation buckets:
+  - `주거/금융`, `소상공인`, `육아/가족`, `건강/의료`.
+- Added explicit semantic guidance that mental-health/counseling notices such as `심리상담`, `마음건강`, `정신건강`, `TCI/기질검사`, and `마음치유` should prefer `건강/의료` even when the title uses `참여자 모집`.
+- Changed full reclassification and future crawler uploads to keep one representative category link per poster, preventing unordered `poster_categories` joins from showing a secondary category as the visible field.
+- Bumped the semantic category cache key version so v2 does not reuse v1 10-category-only cached classifications.
+- Applied production reclassification:
+  - v2 dry-run checked 2,415 posters (`published`, `closed`, `review`).
+  - 2,412 records were high-confidence/applicable; 3 low-confidence records already matched their current representative category.
+  - v2 apply replaced category links/evidence for 2,412 records; 209 records changed from the already-applied v1 result.
+- Manually reviewed and normalized the 13 v1 low-confidence leftovers before v2:
+  - all 2,415 production target posters now have exactly one category link.
+  - multi-category target posters: 0.
+  - zero-category target posters: 0.
+- Verified representative samples:
+  - `서울청년센터 은평 <9월 은평 바로(BARO) 심리상담데이> 참여자 모집` -> `CAT_HEALTH` (`건강/의료`)
+  - `은평구 심리지원센터 다독임 <청년 진로탐색을 위한 마음치유> 참여자 모집` -> `CAT_HEALTH` (`건강/의료`)
+  - `신길종합사회복지관 <일상생활 인테리어 코칭>` -> `CAT_COURSE` (`교육강좌`)
+  - `구로구청<추석귀성길 전 확인! 자동차 무상안전점검 실시(9/6)>` -> `CAT_LIFE_INFO` (`생활정보`)
+
 ## 2026-09-06 Home feed tab production deployment
 
 - Deployed commit `e768ff7` to Vercel Production.

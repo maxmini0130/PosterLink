@@ -6,12 +6,12 @@ import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { CATEGORY_CODE_BY_LABEL, classifyPosterCategoryBatch } from "./poster-category-classifier.js";
 
-const EXTRACTOR = "semantic-category-reclassification-v1";
+const EXTRACTOR = "semantic-category-reclassification-v2";
 const DEFAULT_STATUSES = ["published", "closed", "review"];
 const DEFAULT_LIMIT = 5000;
 const PAGE_SIZE = 500;
 const ID_FILTER_PAGE_SIZE = 100;
-const CLASSIFY_BATCH_SIZE = 20;
+const CLASSIFY_BATCH_SIZE = 40;
 const DEFAULT_OUTPUT = "data/results/poster-category-reclassification.json";
 const CONFIRM_TOKEN = "RECLASSIFY_ALL_CATEGORIES";
 
@@ -46,7 +46,7 @@ function unique(values) {
 }
 
 function normalizeCodes(labels) {
-  return unique((labels ?? []).map((label) => CATEGORY_CODE_BY_LABEL[label]).filter(Boolean)).slice(0, 2);
+  return unique((labels ?? []).map((label) => CATEGORY_CODE_BY_LABEL[label]).filter(Boolean)).slice(0, 1);
 }
 
 function sameCodes(left, right) {
@@ -117,7 +117,7 @@ function buildEvidenceRow(row, codes, categoryByCode, classification) {
     },
     confidence: classification.confidence,
     evidence_text: classification.reason,
-    evidence_src: "ai",
+    evidence_src: "rule",
     extractor: EXTRACTOR,
   };
 }
@@ -141,6 +141,21 @@ async function fetchRows(supabase, { statuses, limit }) {
     if (data.length < PAGE_SIZE) break;
   }
   return rows;
+}
+
+async function fetchRowsByIds(supabase, posterIds) {
+  const rows = [];
+  for (let index = 0; index < posterIds.length; index += ID_FILTER_PAGE_SIZE) {
+    const ids = posterIds.slice(index, index + ID_FILTER_PAGE_SIZE);
+    const { data, error } = await supabase
+      .from("posters")
+      .select("id,title,source_org_name,poster_status,source_key,summary_short,summary_long,field_verification")
+      .in("id", ids);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+  }
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return posterIds.map((id) => byId.get(id)).filter(Boolean);
 }
 
 async function fetchCategories(supabase) {
@@ -232,6 +247,38 @@ async function buildPlan(rows, currentCategories, categoryByCode, minConfidence)
   return plan;
 }
 
+async function buildPlanFromReport(supabase, reportPath, categoryByCode) {
+  const report = JSON.parse(await fs.readFile(reportPath, "utf-8"));
+  const sourceItems = (report.items ?? []).filter((item) => !item.skipped_reason && item.next_labels?.length);
+  const rows = await fetchRowsByIds(supabase, sourceItems.map((item) => item.id));
+  const rowById = new Map(rows.map((row) => [row.id, row]));
+
+  return sourceItems.map((item) => {
+    const row = rowById.get(item.id);
+    if (!row) {
+      return { ...item, skipped_reason: "missing_poster", updates: null, evidence_row: null };
+    }
+    const classification = {
+      categories: item.next_labels,
+      reason: item.reason,
+      confidence: item.confidence,
+      model: item.model,
+    };
+    const nextCodes = normalizeCodes(item.next_labels);
+    return {
+      ...item,
+      current_codes: item.current_codes ?? [],
+      next_codes: nextCodes,
+      changed: !sameCodes(item.current_codes ?? [], nextCodes),
+      status: row.poster_status,
+      updates: {
+        field_verification: mergeFieldVerification(row, nextCodes, categoryByCode, classification),
+      },
+      evidence_row: buildEvidenceRow(row, nextCodes, categoryByCode, classification),
+    };
+  });
+}
+
 async function applyPlan(supabase, plan, categoryByCode) {
   const applicable = plan.filter((item) => !item.skipped_reason);
   for (const item of applicable) {
@@ -258,10 +305,11 @@ async function applyPlan(supabase, plan, categoryByCode) {
   }
 
   const evidenceRows = applicable.map((item) => item.evidence_row);
-  if (evidenceRows.length > 0) {
+  for (let index = 0; index < evidenceRows.length; index += 200) {
+    const chunk = evidenceRows.slice(index, index + 200);
     const { error: evidenceError } = await supabase
       .from("poster_field_evidence")
-      .upsert(evidenceRows, { onConflict: "poster_id,field_key,extractor" });
+      .upsert(chunk, { onConflict: "poster_id,field_key,extractor" });
     if (evidenceError) throw evidenceError;
   }
 
@@ -306,12 +354,15 @@ async function main() {
   const limit = Math.max(1, Number(args.limit ?? DEFAULT_LIMIT));
   const minConfidence = Math.max(0, Math.min(1, Number(args["min-confidence"] ?? 0.7)));
   const output = args.output ?? DEFAULT_OUTPUT;
+  const input = args.input;
 
   const supabase = createSupabase();
   const categoryByCode = await fetchCategories(supabase);
-  const rows = await fetchRows(supabase, { statuses, limit });
-  const currentCategories = await fetchCurrentCategories(supabase, rows.map((row) => row.id));
-  const plan = await buildPlan(rows, currentCategories, categoryByCode, minConfidence);
+  const rows = input ? [] : await fetchRows(supabase, { statuses, limit });
+  const currentCategories = input ? new Map() : await fetchCurrentCategories(supabase, rows.map((row) => row.id));
+  const plan = input
+    ? await buildPlanFromReport(supabase, input, categoryByCode)
+    : await buildPlan(rows, currentCategories, categoryByCode, minConfidence);
   const result = apply ? await applyPlan(supabase, plan, categoryByCode) : {
     category_replacements: 0,
     changed_posters: 0,
