@@ -398,3 +398,22 @@ Next action:
   - `application_end_at`: `2026-09-02`
   - `organizer_name` / `application_organization_name`: `사랑의전화마포종합사회복지관`
   - cleared date and region review issues after operator confirmation.
+
+## 2026-09-06 Remaining review queue approval
+
+- Reviewed and approved the remaining poster moderation queue after operator confirmation.
+- Added a guarded bulk approval script:
+  - `pnpm --filter posterlink-crawler exec node src/approve-remaining-review-posters.js`
+  - production writes require `--apply --confirm=APPROVE_REMAINING_REVIEW_POSTERS`.
+- Applied production approval:
+  - candidates: 48 review posters
+  - approved as `published`: 45
+  - approved as `closed`: 3
+  - remaining `poster_status = review`: 0
+  - unresolved date/duplicate/quality/classification issue rows on applied records: 0
+  - deadlines corrected during approval: 8
+- Manually resolved the requested duplicate-suspected case:
+  - `을지유니크팩토리 <면접 1day 11기> 참여자 모집` is the 2026-09-09 session with application period `2026-08-24` to `2026-09-08`.
+  - The duplicate candidate was the earlier 2026-08-26 session with application deadline `2026-08-21`, so it was treated as a different recurring-session notice.
+  - Final organizer/application organization: `을지유니크팩토리`.
+- Corrected obvious stale-year or missing-deadline records before approval, including `두쫀쿠 만들기`, `복주머니&한복 모양 비누 만들기`, `광진로펀`, `서초 랜딩패키지 2기`, `마포청년축제 자원봉사자`, and `청년정책 종합상담 - 세무편`.
