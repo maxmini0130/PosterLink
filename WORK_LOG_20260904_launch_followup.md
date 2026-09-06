@@ -330,6 +330,10 @@ Next action:
   - `은평구 심리지원센터 다독임 <청년 진로탐색을 위한 마음치유> 참여자 모집` -> `CAT_HEALTH` (`건강/의료`)
   - `신길종합사회복지관 <일상생활 인테리어 코칭>` -> `CAT_COURSE` (`교육강좌`)
   - `구로구청<추석귀성길 전 확인! 자동차 무상안전점검 실시(9/6)>` -> `CAT_LIFE_INFO` (`생활정보`)
+- Deployed the v2 semantic category crawler/web bundle to Vercel Production:
+  - id: `dpl_CQxUuBBdMKUvLjaoqdV6QrQu9wMx`
+  - alias: `https://www.posterlink.kr`
+  - status: `Ready`
 
 ## 2026-09-06 Home feed tab production deployment
 
