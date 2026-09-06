@@ -383,3 +383,18 @@ Next action:
 - Closed approvals:
   - `서대문구청 <신촌글로벌대학문화축제 참여자 모집(신촌SWYFT운동회, 외국인 유학생 가요제)>`: `2026-08-30`
   - `가락종합사회복지관 <청년이음프로젝트 - 슬기로운 경제생활> 참여자 모집`: `2026-09-03`
+
+## 2026-09-06 Single poster review approval
+
+- Reviewed and approved `서울청년기지개센터 <마포서대문권역센터 9월 테마 관계형성프로그램>`.
+- Official source confirmed:
+  - source: `사랑의전화마포종합사회복지관` participation notice
+  - recruitment period: `2026-08-21` to `2026-09-02`
+  - status on source page: closed
+  - capacity: `0/15`
+- Applied production correction:
+  - `poster_status`: `closed`
+  - `application_start_at`: `2026-08-21`
+  - `application_end_at`: `2026-09-02`
+  - `organizer_name` / `application_organization_name`: `사랑의전화마포종합사회복지관`
+  - cleared date and region review issues after operator confirmation.
