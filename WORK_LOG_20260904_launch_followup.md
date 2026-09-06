@@ -274,6 +274,10 @@ Next action:
   - `pnpm --filter posterlink-crawler exec node --test src/poster-classifier-category-regression.test.js` passed, 4 tests.
   - `pnpm --filter posterlink-crawler test` passed, 310 tests.
   - `pnpm --filter web build` passed.
+- Deployed the updated crawler/web bundle to Vercel Production:
+  - id: `dpl_4hMShgU32BW2zTKZFcqMF1aYnP9H`
+  - alias: `https://www.posterlink.kr`
+  - status: `Ready`
 - Deployed the stationary tab-click correction to Vercel Production:
   - id: `dpl_4HxS7wHqWzdQVhdxX2Et53UUSKq2`
   - alias: `https://www.posterlink.kr`
