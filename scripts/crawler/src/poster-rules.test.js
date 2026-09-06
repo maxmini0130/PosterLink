@@ -799,7 +799,7 @@ test("welfare center lifestyle coaching is classified by program content, not ho
     ].join("\n"),
   });
 
-  assert.equal(result.categoryCodes[0], "CAT_EDUCATION");
+  assert.equal(result.categoryCodes[0], "CAT_COURSE");
   assert.equal(result.categoryCodes.includes("CAT_WELFARE"), false);
 });
 

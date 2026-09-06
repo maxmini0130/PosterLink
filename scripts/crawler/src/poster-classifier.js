@@ -31,7 +31,12 @@ const CATEGORY_RULES = [
   {
     code: "CAT_EDUCATION",
     label: "교육/취업",
-    keywords: ["교육", "취업", "채용", "일자리", "훈련", "강좌", "강의", "수강", "아카데미", "커리어", "직무", "멘토링", "코칭", "실습", "워크숍", "자격증", "인턴", "장학"],
+    keywords: ["취업", "채용", "일자리", "훈련", "커리어", "직무", "자격증", "인턴", "장학"],
+  },
+  {
+    code: "CAT_COURSE",
+    label: "교육강좌",
+    keywords: ["교육", "강좌", "강의", "특강", "수업", "클래스", "워크숍", "세미나", "아카데미", "코칭", "멘토링", "교육생", "수강", "실습"],
   },
   {
     code: "CAT_CULTURE",
@@ -81,7 +86,7 @@ const SOURCE_CATEGORY_CODE_MAP = new Map([
   ["\uACF5\uBAA8\uC804", "CAT_CONTEST"],
   ["채용", "CAT_EDUCATION"],
   ["일자리", "CAT_EDUCATION"],
-  ["교육", "CAT_EDUCATION"],
+  ["교육", "CAT_COURSE"],
   ["장학", "CAT_EDUCATION"],
   ["문화", "CAT_CULTURE"],
   ["행사", "CAT_CULTURE"],
@@ -246,7 +251,7 @@ function inferCategoryMatches(post = {}) {
   } else if (sourceLooksWelfare && directHousingSupportNotice) {
     addScore(scores, "CAT_HOUSING", 16, `direct housing support content overrides welfare source category: ${sourceCategory}`);
   } else if (sourceLooksWelfare && educationalCourseNotice && !directHousingSupportNotice) {
-    addScore(scores, "CAT_EDUCATION", 16, `educational course content overrides welfare source category: ${sourceCategory}`);
+    addScore(scores, "CAT_COURSE", 16, `educational course content overrides welfare source category: ${sourceCategory}`);
   } else if (mappedCode === "CAT_WELFARE" && cultureEventNotice) {
     addScore(scores, "CAT_CULTURE", 12, `culture event content overrides source category: ${sourceCategory}`);
   } else if (mappedCode && mappedCode !== "CAT_OTHER") {

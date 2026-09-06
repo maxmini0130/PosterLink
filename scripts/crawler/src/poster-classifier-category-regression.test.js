@@ -41,7 +41,7 @@ test("welfare-center coaching programs are classified as education", () => {
     source_org_name: "신길종합사회복지관",
   });
 
-  assert.equal(result.categoryCodes[0], "CAT_EDUCATION");
+  assert.equal(result.categoryCodes[0], "CAT_COURSE");
   assert.equal(result.categoryCodes.includes("CAT_WELFARE"), false);
 });
 

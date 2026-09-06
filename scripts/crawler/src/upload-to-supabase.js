@@ -16,6 +16,7 @@ import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import WebSocket from "ws";
 import { inferPosterClassification } from "./poster-classifier.js";
+import { CATEGORY_CODE_BY_LABEL, classifyPosterCategories } from "./poster-category-classifier.js";
 import { getPostExclusionReason } from "./post-candidate-filter.js";
 import { evaluatePosterQuality, summarizeQualityIssues } from "./poster-quality-gate.js";
 import { verifyPosterFields, applyFieldVerification } from "./poster-field-verifier.js";
@@ -252,6 +253,41 @@ const AUDIENCE_DEFINITIONS = {
 };
 
 const CATEGORY_DEFINITIONS = {
+  CAT_SUPPORT_PROGRAM: {
+    name: "지원사업",
+    sort_order: 9,
+    keywords: ["지원사업", "지원", "지원금", "보조금", "수당", "급여", "바우처", "대여", "사업화", "컨설팅 지원", "자격취득비"],
+  },
+  CAT_RECRUITMENT: {
+    name: "채용",
+    sort_order: 10,
+    keywords: ["채용", "직원", "강사", "기간제", "공무직", "일자리", "근로자", "인턴"],
+  },
+  CAT_COURSE: {
+    name: "교육강좌",
+    sort_order: 12,
+    keywords: ["교육", "강좌", "강의", "특강", "수업", "클래스", "워크숍", "세미나", "아카데미", "코칭", "멘토링", "교육생", "수강"],
+  },
+  CAT_EVENT_RECRUIT: {
+    name: "행사모집",
+    sort_order: 13,
+    keywords: ["행사모집", "참여자 모집", "체험", "캠페인", "봉사단", "서포터즈", "이벤트", "축제", "투어", "탐방"],
+  },
+  CAT_BID: {
+    name: "입찰",
+    sort_order: 14,
+    keywords: ["입찰", "용역", "구매", "계약", "제안서", "조달"],
+  },
+  CAT_POLICY_INFO: {
+    name: "정책안내",
+    sort_order: 15,
+    keywords: ["정책안내", "제도", "운영 안내", "행정", "고시", "공고", "절차"],
+  },
+  CAT_PRESS_RELEASE: {
+    name: "보도자료",
+    sort_order: 16,
+    keywords: ["보도자료", "성과", "소식", "결과", "수상", "협약", "개최"],
+  },
   CAT_WELFARE: {
     name: "지원금/복지",
     sort_order: 1,
@@ -348,6 +384,42 @@ function inferCategoryCodes(post, classification = null) {
   const categories = classification?.categories ?? inferPosterClassification(post).categories;
   const codes = categories.map((category) => category.code).filter(Boolean);
   return codes.length > 0 ? [...new Set(codes)].slice(0, 2) : ["CAT_OTHER"];
+}
+
+function semanticCategoryEntries(semantic) {
+  return [...new Set((semantic.categories ?? []).map((label) => CATEGORY_CODE_BY_LABEL[label]).filter(Boolean))]
+    .slice(0, 2)
+    .map((code) => ({
+      code,
+      label: CATEGORY_DEFINITIONS[code]?.name ?? code,
+      confidence: semantic.confidence,
+      evidence: semantic.reason,
+      source: "semantic-category-classifier",
+      model: semantic.model,
+    }));
+}
+
+async function inferUploadClassification(post) {
+  const fallback = inferPosterClassification(post);
+  const semantic = await classifyPosterCategories({
+    title: post.title,
+    sourceOrgName: post.source_org_name ?? post.site,
+    summaryShort: post.summary_short,
+    summaryLong: post.content,
+    currentCategories: fallback.categories?.map((category) => category.label ?? category.code) ?? [],
+  });
+  const semanticCategories = semantic.confidence >= 0.7 ? semanticCategoryEntries(semantic) : [];
+  if (semanticCategories.length === 0) {
+    return fallback;
+  }
+
+  return {
+    ...fallback,
+    categories: semanticCategories,
+    categoryCodes: semanticCategories.map((category) => category.code),
+    confidence: Math.max(fallback.confidence ?? 0, semantic.confidence),
+    semanticCategory: semantic,
+  };
 }
 
 async function assignPosterCategories(posterId, post, categoryMap, classification = null) {
@@ -1957,7 +2029,7 @@ async function uploadToSupabase(filePath) {
       sourceUrl,
       source_key: sourceKey,
     };
-    const classification = inferPosterClassification(aiPost);
+    const classification = await inferUploadClassification(aiPost);
     const quality = evaluatePosterQuality({ ...post, images: sourceImages }, {
       sourceKey,
       images: sourceImages,

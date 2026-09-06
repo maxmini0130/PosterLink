@@ -278,6 +278,31 @@ Next action:
   - id: `dpl_4hMShgU32BW2zTKZFcqMF1aYnP9H`
   - alias: `https://www.posterlink.kr`
   - status: `Ready`
+
+## 2026-09-06 Semantic category reclassification
+
+- Upgraded the crawler category path from keyword-first classification to semantic category classification for the 10-category system:
+  - `지원사업`, `채용`, `공모전`, `교육강좌`, `행사모집`, `입찰`, `정책안내`, `보도자료`, `생활정보`, `기타`.
+- Updated the OpenAI category classifier prompt to judge the whole title, summary, body, source organization, and current categories by the notice's primary user outcome/action rather than single keyword hits.
+- Added confidence output and retry-safe caching; failed/time-out classifications are no longer stored as durable cache hits.
+- Added batched full reclassification script:
+  - `pnpm --filter posterlink-crawler apply:semantic-category-reclassification`
+  - actual apply requires `--apply --confirm=RECLASSIFY_ALL_CATEGORIES`.
+- Connected new crawler uploads to semantic category classification when OpenAI classification is available with confidence >= `0.7`; otherwise the existing rule classifier remains the fallback.
+- Corrected education-course fallback rules so course/coaching notices map to `CAT_COURSE` (`교육강좌`) rather than old `CAT_EDUCATION`.
+- Full production dry-run result:
+  - checked: 2,415 posters (`published`, `closed`, `review`)
+  - applicable: 2,402
+  - changed: 2,153
+  - unchanged: 249
+  - skipped low confidence: 13
+  - report: `scripts/crawler/data/results/poster-category-reclassification-dryrun-20260906.json`
+- Verification:
+  - `node --check scripts/crawler/src/poster-category-classifier.js` passed.
+  - `node --check scripts/crawler/src/reclassify-poster-categories.js` passed.
+  - `pnpm --filter posterlink-crawler exec node --test src/poster-category-classifier.test.js src/poster-classifier-category-regression.test.js` passed, 5 tests.
+  - `pnpm --filter posterlink-crawler test` passed, 311 tests.
+  - `pnpm --filter web build` passed.
 - Deployed the stationary tab-click correction to Vercel Production:
   - id: `dpl_4HxS7wHqWzdQVhdxX2Et53UUSKq2`
   - alias: `https://www.posterlink.kr`
