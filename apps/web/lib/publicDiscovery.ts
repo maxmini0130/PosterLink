@@ -12,7 +12,7 @@ import { isPosterAcceptingApplications } from "./posterApplication";
 import { PUBLIC_POSTER_EXPOSURE_FILTER } from "./publicPosterVisibility";
 
 const PUBLIC_POSTER_SELECT =
-  "id,title,source_org_name,organizer_name,organizer_id,source_institution_id,application_institution_id,application_start_at,application_end_at,deadline_type,verification_status,verified_at,thumbnail_url,source_key,summary_short,created_at,updated_at,exposure_tier";
+  "id,title,source_org_name,organizer_name,organizer_id,source_institution_id,application_institution_id,application_start_at,application_end_at,deadline_type,verification_status,verified_at,thumbnail_url,source_key,summary_short,created_at,updated_at,exposure_tier,field_verification";
 
 export type PublicDiscoveryFilters = {
   query?: string | null;
@@ -232,7 +232,7 @@ async function enrichPublicPosters(client: SupabaseClient, posterRows: Record<st
   const regionIds = [...new Set((regionLinksRes.data ?? []).map((row: any) => row.region_id).filter(Boolean))];
   const [categoriesRes, regionsRes] = await Promise.all([
     categoryIds.length
-      ? client.from("categories").select("id,name").in("id", categoryIds)
+      ? client.from("categories").select("id,name,code").in("id", categoryIds)
       : Promise.resolve({ data: [] }),
     regionIds.length
       ? client.from("regions").select("id,name,full_name,level").in("id", regionIds)
@@ -240,6 +240,7 @@ async function enrichPublicPosters(client: SupabaseClient, posterRows: Record<st
   ]);
 
   const categoryNames = new Map((categoriesRes.data ?? []).map((row: any) => [row.id, row.name]));
+  const categoryCodes = new Map((categoriesRes.data ?? []).map((row: any) => [row.id, row.code]));
   const regionNames = new Map(
     (regionsRes.data ?? []).map((row: any) => [row.id, row.level === "sigungu" ? row.full_name || row.name : row.name]),
   );
@@ -255,7 +256,8 @@ async function enrichPublicPosters(client: SupabaseClient, posterRows: Record<st
     const id = String(poster.id);
     const categoryIdsForPoster = categoriesByPoster.get(id) ?? [];
     const regionIdsForPoster = regionsByPoster.get(id) ?? [];
-    const categoryId = categoryIdsForPoster[0] ?? null;
+    const primaryCategoryCode = readPrimaryCategoryCode((poster as any).field_verification);
+    const categoryId = pickPrimaryCategoryId(categoryIdsForPoster, categoryCodes, primaryCategoryCode);
     const regionId = regionIdsForPoster[0] ?? null;
     return {
       ...poster,
@@ -269,6 +271,22 @@ async function enrichPublicPosters(client: SupabaseClient, posterRows: Record<st
       images: imagesByPoster.get(id) ?? [],
     } as DiscoveryPoster;
   });
+}
+
+function readPrimaryCategoryCode(fieldVerification: unknown) {
+  const classification = fieldVerification && typeof fieldVerification === "object"
+    ? (fieldVerification as Record<string, any>).classification
+    : null;
+  const code = String(classification?.primaryCategory ?? "").trim();
+  return /^CAT_[A-Z_]+$/.test(code) ? code : null;
+}
+
+function pickPrimaryCategoryId(ids: string[], codes: Map<string, string>, primaryCode: string | null) {
+  if (primaryCode) {
+    const matched = ids.find((id) => codes.get(id) === primaryCode);
+    if (matched) return matched;
+  }
+  return ids[0] ?? null;
 }
 
 function groupValues(rows: any[], valueKey: string) {

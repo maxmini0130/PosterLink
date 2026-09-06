@@ -13,7 +13,7 @@ export async function fetchCategoryRegionNames(posterIds: string[]): Promise<Rec
   const ids = [...new Set(posterIds.filter(Boolean))];
   if (ids.length === 0) return {};
 
-  const [categoryLinksRes, regionLinksRes] = await Promise.all([
+  const [categoryLinksRes, regionLinksRes, postersRes] = await Promise.all([
     supabase
       .from("poster_categories")
       .select("poster_id, category_id")
@@ -22,6 +22,10 @@ export async function fetchCategoryRegionNames(posterIds: string[]): Promise<Rec
       .from("poster_regions")
       .select("poster_id, region_id")
       .in("poster_id", ids),
+    supabase
+      .from("posters")
+      .select("id, field_verification")
+      .in("id", ids),
   ]);
 
   const categoryLinks = categoryLinksRes.data ?? [];
@@ -36,11 +40,13 @@ export async function fetchCategoryRegionNames(posterIds: string[]): Promise<Rec
   ]);
 
   const catMap = Object.fromEntries((cats.data ?? []).map((c: any) => [c.id, c.name]));
+  const catCodeMap = Object.fromEntries((cats.data ?? []).map((c: any) => [c.id, c.code]));
   const categoryRank = Object.fromEntries((cats.data ?? []).map((c: any) => [c.id, rankCategory(c)]));
   const regMap = Object.fromEntries((regs.data ?? []).map((r: any) => [r.id, r.level === "sigungu" ? r.full_name || r.name : r.name]));
   const regionRank = Object.fromEntries((regs.data ?? []).map((r: any) => [r.id, rankRegion(r)]));
   const categoryIdsByPoster = new Map<string, string[]>();
   const regionIdsByPoster = new Map<string, string[]>();
+  const primaryCategoryCodeByPoster = new Map<string, string | null>();
 
   for (const link of categoryLinks as any[]) {
     categoryIdsByPoster.set(link.poster_id, [
@@ -56,11 +62,20 @@ export async function fetchCategoryRegionNames(posterIds: string[]): Promise<Rec
     ]);
   }
 
+  for (const poster of postersRes.data ?? []) {
+    primaryCategoryCodeByPoster.set(poster.id, readPrimaryCategoryCode(poster.field_verification));
+  }
+
   const result: Record<string, PosterWithMeta> = {};
   for (const posterId of ids) {
     const categoryList = categoryIdsByPoster.get(posterId) ?? [];
     const regionList = regionIdsByPoster.get(posterId) ?? [];
-    const categoryId = pickPrimaryId(categoryList, categoryRank);
+    const categoryId = pickPrimaryCategoryId(
+      categoryList,
+      categoryRank,
+      catCodeMap,
+      primaryCategoryCodeByPoster.get(posterId),
+    );
     const regionId = pickPrimaryId(regionList, regionRank);
     result[posterId] = {
       categoryId,
@@ -72,6 +87,24 @@ export async function fetchCategoryRegionNames(posterIds: string[]): Promise<Rec
     };
   }
   return result;
+}
+
+function readPrimaryCategoryCode(fieldVerification: any) {
+  const code = String(fieldVerification?.classification?.primaryCategory ?? "").trim();
+  return /^CAT_[A-Z_]+$/.test(code) ? code : null;
+}
+
+function pickPrimaryCategoryId(
+  ids: string[],
+  ranks: Record<string, number>,
+  codes: Record<string, string>,
+  primaryCode?: string | null,
+) {
+  if (primaryCode) {
+    const matched = ids.find((id) => codes[id] === primaryCode);
+    if (matched) return matched;
+  }
+  return pickPrimaryId(ids, ranks);
 }
 
 function pickPrimaryId(ids: string[], ranks: Record<string, number>) {

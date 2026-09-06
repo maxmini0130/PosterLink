@@ -383,12 +383,12 @@ async function ensureCategory(categoryMap, code) {
 function inferCategoryCodes(post, classification = null) {
   const categories = classification?.categories ?? inferPosterClassification(post).categories;
   const codes = categories.map((category) => category.code).filter(Boolean);
-  return codes.length > 0 ? [...new Set(codes)].slice(0, 1) : ["CAT_OTHER"];
+  return codes.length > 0 ? [...new Set(codes)].slice(0, 2) : ["CAT_OTHER"];
 }
 
 function semanticCategoryEntries(semantic) {
   return [...new Set((semantic.categories ?? []).map((label) => CATEGORY_CODE_BY_LABEL[label]).filter(Boolean))]
-    .slice(0, 1)
+    .slice(0, 2)
     .map((code) => ({
       code,
       label: CATEGORY_DEFINITIONS[code]?.name ?? code,

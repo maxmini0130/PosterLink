@@ -315,15 +315,19 @@ Next action:
 - Expanded semantic category classification beyond the initial 10-category set to include active specific categories that should not be collapsed into generic participation buckets:
   - `주거/금융`, `소상공인`, `육아/가족`, `건강/의료`.
 - Added explicit semantic guidance that mental-health/counseling notices such as `심리상담`, `마음건강`, `정신건강`, `TCI/기질검사`, and `마음치유` should prefer `건강/의료` even when the title uses `참여자 모집`.
-- Changed full reclassification and future crawler uploads to keep one representative category link per poster, preventing unordered `poster_categories` joins from showing a secondary category as the visible field.
+- Changed full reclassification and future crawler uploads to keep up to two semantic category links per poster, while storing the first result as `primaryCategory`.
+- Updated public/home/detail poster enrichment to use `field_verification.classification.primaryCategory` as the visible representative category when it matches one of the linked categories, preventing unordered `poster_categories` joins from showing a secondary category as the visible field.
 - Bumped the semantic category cache key version so v2 does not reuse v1 10-category-only cached classifications.
 - Applied production reclassification:
   - v2 dry-run checked 2,415 posters (`published`, `closed`, `review`).
   - 2,412 records were high-confidence/applicable; 3 low-confidence records already matched their current representative category.
   - v2 apply replaced category links/evidence for 2,412 records; 209 records changed from the already-applied v1 result.
+- Reapplied v2 with multi-category storage enabled:
+  - 2,292 target posters now have one category link.
+  - 123 target posters now have two category links.
+  - v2 multi apply replaced category links/evidence for 2,412 records; 260 records changed from the previous state.
 - Manually reviewed and normalized the 13 v1 low-confidence leftovers before v2:
-  - all 2,415 production target posters now have exactly one category link.
-  - multi-category target posters: 0.
+  - all 2,415 production target posters now have at least one category link.
   - zero-category target posters: 0.
 - Verified representative samples:
   - `서울청년센터 은평 <9월 은평 바로(BARO) 심리상담데이> 참여자 모집` -> `CAT_HEALTH` (`건강/의료`)

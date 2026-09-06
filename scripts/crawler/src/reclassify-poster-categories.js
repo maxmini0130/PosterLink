@@ -46,7 +46,7 @@ function unique(values) {
 }
 
 function normalizeCodes(labels) {
-  return unique((labels ?? []).map((label) => CATEGORY_CODE_BY_LABEL[label]).filter(Boolean)).slice(0, 1);
+  return unique((labels ?? []).map((label) => CATEGORY_CODE_BY_LABEL[label]).filter(Boolean)).slice(0, 2);
 }
 
 function sameCodes(left, right) {

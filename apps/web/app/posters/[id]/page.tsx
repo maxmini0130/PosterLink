@@ -79,6 +79,7 @@ type ImageRow = {
 type CategoryRow = {
   id: string;
   name: string | null;
+  code?: string | null;
 };
 
 type RegionRow = {
@@ -168,7 +169,7 @@ async function fetchPosterDetail(id: string) {
 
   const [categoryRes, regionRes] = await Promise.all([
     categoryIds.length
-      ? supabase.from("categories").select("id, name").in("id", categoryIds)
+      ? supabase.from("categories").select("id, name, code").in("id", categoryIds)
       : Promise.resolve({ data: [] as CategoryRow[] }),
     regionIds.length
       ? supabase.from("regions").select("id, name, full_name, level").in("id", regionIds)
@@ -178,6 +179,7 @@ async function fetchPosterDetail(id: string) {
   const categories = (categoryRes.data ?? []) as CategoryRow[];
   const regions = (regionRes.data ?? []) as RegionRow[];
   const categoryMap = Object.fromEntries(categories.map((category) => [category.id, category.name]));
+  const categoryCodeMap = Object.fromEntries(categories.map((category) => [category.id, category.code]));
   const regionMap = Object.fromEntries(
     regions.map((region) => [region.id, region.level === "sigungu" ? region.full_name || region.name : region.name])
   );
@@ -188,7 +190,7 @@ async function fetchPosterDetail(id: string) {
   });
 
   const poster = posterRes.data as PosterRow;
-  const categoryId = first(categoryIds);
+  const categoryId = pickPrimaryCategoryId(categoryIds, categoryCodeMap, readPrimaryCategoryCode(poster.field_verification));
   const regionId = first(regionIds);
   const enrichedPoster: PosterDetailPoster = {
     ...poster,
@@ -205,6 +207,19 @@ async function fetchPosterDetail(id: string) {
     poster: enrichedPoster,
     links: ((linkRes.data ?? []) as PosterDetailLink[]).filter((link) => Boolean(link.url))
   };
+}
+
+function readPrimaryCategoryCode(fieldVerification: Record<string, any> | null) {
+  const code = String(fieldVerification?.classification?.primaryCategory ?? "").trim();
+  return /^CAT_[A-Z_]+$/.test(code) ? code : null;
+}
+
+function pickPrimaryCategoryId(categoryIds: string[], categoryCodeMap: Record<string, string>, primaryCode: string | null) {
+  if (primaryCode) {
+    const matched = categoryIds.find((id) => categoryCodeMap[id] === primaryCode);
+    if (matched) return matched;
+  }
+  return first(categoryIds);
 }
 
 function buildPosterStructuredData(poster: PosterDetailPoster, links: PosterDetailLink[]) {
