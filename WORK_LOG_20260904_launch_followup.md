@@ -361,3 +361,25 @@ Next action:
   - `pnpm --filter web lint` passed.
   - `pnpm --dir apps/web test:e2e e2e/home.spec.ts -g "home feed tabs"` passed.
   - `pnpm --filter web build` passed.
+
+## 2026-09-06 Date-only review approval
+
+- Reviewed the poster moderation queue for records whose only blocking issue was date verification.
+- Added a guarded bulk approval script:
+  - `pnpm --filter posterlink-crawler exec node src/approve-date-only-review-posters.js`
+  - production writes require `--apply --confirm=APPROVE_DATE_ONLY_REVIEW_POSTERS`.
+- Applied the production approval after a dry run:
+  - candidates: 59 review posters
+  - approved as `published`: 57
+  - approved as `closed`: 2, so past notices remain available in search/history flows
+  - date issues remaining on applied records: 0
+  - deadlines corrected during approval: 19
+- Manually checked deadline-mismatch examples where event dates had been mistaken for application deadlines:
+  - `서초2동 <2026 서초2동 가왕전 참가자 모집> 안내`: `2026-10-17` -> `2026-09-27`
+  - `서울시립대학교 <서울시립대학교 청년취업사관학교 대학+ (도시문제해결사) AI에이전트 과정>`: `2027-02-12` -> `2026-09-13`
+  - `광진구1인가구지원센터 <교육 및 여가문화 - 생활체육 프로그램(~9/20)`: `2026-10-28` -> `2026-09-20`
+  - `서울청년센터영등포 <2026 추석맞이 상경청년 전 만들기>`: `2026-09-16` -> `2026-09-15`
+  - `서울청년센터 양천<2026 청년의 날 행사 - 청년정책패키지, CHECK IN : 양천>` stayed at `2026-09-16`.
+- Closed approvals:
+  - `서대문구청 <신촌글로벌대학문화축제 참여자 모집(신촌SWYFT운동회, 외국인 유학생 가요제)>`: `2026-08-30`
+  - `가락종합사회복지관 <청년이음프로젝트 - 슬기로운 경제생활> 참여자 모집`: `2026-09-03`
