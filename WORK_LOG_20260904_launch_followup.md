@@ -253,3 +253,13 @@ Next action:
   - `38f97ba1-3eac-43c0-a918-9ba5c798f21a` -> `CAT_HEALTH` (`건강/의료`)
 - Verification:
   - `pnpm --filter posterlink-crawler test` passed, 308 tests.
+
+## 2026-09-06 Home feed tab visibility follow-up
+
+- Reproduced that switching the home feed tabs such as `새로 등록` and `많이 본 공고` could look blank even though poster links were present in the page.
+- Added a dedicated home feed results anchor and scroll behavior after feed tab clicks so the rendered cards or empty state are brought into view immediately.
+- Added stable feed tab/result test IDs and strengthened the home feed Playwright regression test to click `마감 임박`, `새로 등록`, and `많이 본 공고` via those IDs.
+- Verification:
+  - `pnpm --filter web lint` passed.
+  - `pnpm --dir apps/web test:e2e e2e/home.spec.ts -g "home feed tabs"` passed.
+  - `pnpm --filter web build` passed.

@@ -29,12 +29,14 @@ test.describe("home feed tabs", () => {
     await page.goto("/");
     await page.waitForLoadState("networkidle");
 
+    const feedResults = page.getByTestId("home-feed-results");
     const feedGrid = page.getByTestId("home-feed-grid");
     const categoryFilters = page.getByTestId("home-feed-category-filters");
-    const tabNames = ["마감 임박", "새로 등록", "많이 본 공고"];
+    const tabIds = ["home-feed-tab-urgent", "home-feed-tab-new", "home-feed-tab-popular"];
 
-    for (const tabName of tabNames) {
-      await page.getByRole("button", { name: tabName }).click();
+    for (const tabId of tabIds) {
+      await page.getByTestId(tabId).click();
+      await expect(feedResults).toBeInViewport();
       await expect(feedGrid).toBeVisible();
 
       const filtersBox = await categoryFilters.boundingBox();

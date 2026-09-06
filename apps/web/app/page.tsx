@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
@@ -34,6 +34,7 @@ const feedTabs = [
   { key: "new", label: "새로 등록" },
   { key: "popular", label: "많이 본 공고" },
 ] as const;
+type FeedTabKey = (typeof feedTabs)[number]["key"];
 
 const regionShortcuts = [
   { name: "마포구", slug: "seoul-mapo" },
@@ -72,8 +73,9 @@ export default function Home() {
   const [urgentPosters, setUrgentPosters] = useState<any[]>([]);
   const [homeSummary, setHomeSummary] = useState<HomeSummary>(emptyHomeSummary);
   const [hideClosedPosters, setHideClosedPosters] = useState(true);
-  const [activeFeed, setActiveFeed] = useState<(typeof feedTabs)[number]["key"]>("urgent");
+  const [activeFeed, setActiveFeed] = useState<FeedTabKey>("urgent");
   const [loadError, setLoadError] = useState<string | null>(null);
+  const feedResultsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const fetchHomeData = async () => {
@@ -269,6 +271,13 @@ export default function Home() {
       ? userProfile?.regions?.full_name || userProfile?.regions?.name
       : userProfile?.regions?.name || "전국";
 
+  const handleFeedTabClick = (nextFeed: FeedTabKey) => {
+    setActiveFeed(nextFeed);
+    window.requestAnimationFrame(() => {
+      feedResultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
   return (
     <div className="min-h-screen bg-[#f6f8fb] pb-24 text-slate-950">
       <Header />
@@ -355,7 +364,9 @@ export default function Home() {
                 <button
                   key={tab.key}
                   type="button"
-                  onClick={() => setActiveFeed(tab.key)}
+                  data-testid={`home-feed-tab-${tab.key}`}
+                  aria-pressed={activeFeed === tab.key}
+                  onClick={() => handleFeedTabClick(tab.key)}
                   className={`shrink-0 border px-3 py-2 text-xs font-black transition-colors ${
                     activeFeed === tab.key
                       ? "border-slate-950 bg-slate-950 text-white"
@@ -392,45 +403,47 @@ export default function Home() {
             ))}
           </div>
 
-          {loading && feedPosters.length === 0 ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {[1, 2, 3, 4].map((item) => (
-                <div key={item} className="h-80 animate-pulse border border-slate-200 bg-white" />
-              ))}
-            </div>
-          ) : feedPosters.length > 0 ? (
-            <div
-              data-testid="home-feed-grid"
-              className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
-            >
-              {feedPosters.map((poster) => (
-                <div key={poster.id}>
-                  <PosterCard
-                    poster={{
-                      id: poster.id,
-                      title: poster.title,
-                      org: poster.source_org_name,
-                      applicationStartAt: poster.application_start_at,
-                      deadline: poster.application_end_at,
-                      deadlineType: poster.deadline_type,
-                      image: poster.thumbnail_url,
-                      images: poster.images,
-                      sourceUrl: poster.source_key,
-                      viewCount: poster.viewCount,
-                      linkClickCount: poster.linkClickCount,
-                      favoriteCount: poster.favoriteCount,
-                      similarityScore: poster.similarityScore,
-                      tags: [poster.categoryName, poster.regionName].filter((tag): tag is string => Boolean(tag)),
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="border border-dashed border-slate-300 bg-white py-16 text-center text-sm font-bold text-slate-500">
-              조건에 맞는 진행 중 공고가 없습니다.
-            </div>
-          )}
+          <div ref={feedResultsRef} data-testid="home-feed-results" className="scroll-mt-24">
+            {loading && feedPosters.length === 0 ? (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {[1, 2, 3, 4].map((item) => (
+                  <div key={item} className="h-80 animate-pulse border border-slate-200 bg-white" />
+                ))}
+              </div>
+            ) : feedPosters.length > 0 ? (
+              <div
+                data-testid="home-feed-grid"
+                className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+              >
+                {feedPosters.map((poster) => (
+                  <div key={poster.id}>
+                    <PosterCard
+                      poster={{
+                        id: poster.id,
+                        title: poster.title,
+                        org: poster.source_org_name,
+                        applicationStartAt: poster.application_start_at,
+                        deadline: poster.application_end_at,
+                        deadlineType: poster.deadline_type,
+                        image: poster.thumbnail_url,
+                        images: poster.images,
+                        sourceUrl: poster.source_key,
+                        viewCount: poster.viewCount,
+                        linkClickCount: poster.linkClickCount,
+                        favoriteCount: poster.favoriteCount,
+                        similarityScore: poster.similarityScore,
+                        tags: [poster.categoryName, poster.regionName].filter((tag): tag is string => Boolean(tag)),
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="border border-dashed border-slate-300 bg-white py-16 text-center text-sm font-bold text-slate-500">
+                조건에 맞는 진행 중 공고가 없습니다.
+              </div>
+            )}
+          </div>
         </section>
 
         <AnimatePresence>
