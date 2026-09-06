@@ -263,6 +263,12 @@ Next action:
   - `pnpm --filter web lint` passed.
   - `pnpm --dir apps/web test:e2e e2e/home.spec.ts -g "home feed tabs"` passed.
   - `pnpm --filter web build` passed.
+- Deployed the stationary tab-click correction to Vercel Production:
+  - id: `dpl_4HxS7wHqWzdQVhdxX2Et53UUSKq2`
+  - alias: `https://www.posterlink.kr`
+  - status: `Ready`
+- Production verification:
+  - `E2E_BASE_URL=https://www.posterlink.kr pnpm --dir apps/web test:e2e e2e/home.spec.ts -g "home feed tabs"` passed.
 
 ## 2026-09-06 Home feed tab production deployment
 
