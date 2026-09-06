@@ -239,3 +239,17 @@ Next action:
   - Add tester Google account emails to that list.
   - Submit the pending Play Console changes for review after the operator confirms the tester list.
   - Collect 12 or more opted-in closed testers and run the test for at least 14 consecutive days before requesting production access.
+
+## 2026-09-06 Category correction follow-up
+
+- Strengthened crawler category rules so safety/traffic 생활정보 notices do not fall back to `CAT_OTHER` or `CAT_WELFARE`.
+- Added `CAT_LIFE_INFO` scoring for source category `안전` and keywords such as `자동차`, `차량`, `안전점검`, `무상점검`, `귀성길`, and `추석 귀성`.
+- Added a mental-health counseling override so psychology/counseling notices from welfare-flavored sources are categorized as `CAT_HEALTH` instead of `CAT_WELFARE`.
+- Added regression tests for:
+  - `구로구청<추석귀성길 전 확인! 자동차 무상안전점검 실시(9/6)>` -> `CAT_LIFE_INFO`
+  - `서울청년센터 은평 <9월 은평 바로(BARO) 심리상담데이> 참여자 모집` -> `CAT_HEALTH`
+- Applied operator-confirmed production category corrections:
+  - `c4dc36d8-ab7f-4abf-8870-33cda131c53e` -> `CAT_LIFE_INFO` (`생활정보`)
+  - `38f97ba1-3eac-43c0-a918-9ba5c798f21a` -> `CAT_HEALTH` (`건강/의료`)
+- Verification:
+  - `pnpm --filter posterlink-crawler test` passed, 308 tests.

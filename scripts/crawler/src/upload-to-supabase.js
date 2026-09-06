@@ -287,6 +287,11 @@ const CATEGORY_DEFINITIONS = {
     sort_order: 7,
     keywords: ["건강", "의료", "병원", "검진", "치료", "재활", "운동", "체육", "보건", "심리", "마음", "상담", "고혈압", "장애인돌봄"],
   },
+  CAT_LIFE_INFO: {
+    name: "생활정보",
+    sort_order: 17,
+    keywords: ["생활정보", "안전", "교통", "자동차", "차량", "안전점검", "무상점검", "무상 안전점검", "귀성길", "추석 귀성", "점검 실시"],
+  },
   CAT_OTHER: {
     name: "기타",
     sort_order: 99,
@@ -307,7 +312,7 @@ const CATEGORY_CODE_MAP = {
   "복지": "CAT_WELFARE",
   "노인복지": "CAT_WELFARE",
   "체육": "CAT_HEALTH",
-  "안전": "CAT_OTHER",
+  "안전": "CAT_LIFE_INFO",
   "급식": "CAT_FAMILY",
   "동주민센터": "CAT_OTHER",
   "입법": "CAT_OTHER",

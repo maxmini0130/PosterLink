@@ -58,6 +58,23 @@ const CATEGORY_RULES = [
     label: "건강/의료",
     keywords: ["건강", "의료", "병원", "검진", "치료", "재활", "운동", "체육", "보건", "심리", "마음", "힐링"],
   },
+  {
+    code: "CAT_LIFE_INFO",
+    label: "생활정보",
+    keywords: [
+      "생활정보",
+      "안전",
+      "교통",
+      "자동차",
+      "차량",
+      "안전점검",
+      "무상점검",
+      "무상 안전점검",
+      "귀성길",
+      "추석 귀성",
+      "점검 실시",
+    ],
+  },
 ];
 
 const SOURCE_CATEGORY_CODE_MAP = new Map([
@@ -73,7 +90,7 @@ const SOURCE_CATEGORY_CODE_MAP = new Map([
   ["노동", "CAT_WELFARE"],
   ["급식", "CAT_FAMILY"],
   ["청소년", "CAT_FAMILY"],
-  ["안전", "CAT_OTHER"],
+  ["안전", "CAT_LIFE_INFO"],
   ["입법", "CAT_OTHER"],
 ]);
 
@@ -186,6 +203,11 @@ function isCultureEventNotice(fields) {
   return /(?:문화\/예술|도서관|영화관|영화|상영|애니메이션|공연|전시|축제|체험|행사|콘서트)/.test(source);
 }
 
+function isMentalHealthCounselingNotice(fields) {
+  const source = fields.map((field) => field.raw).filter(Boolean).join(" ");
+  return /(?:심리|마음건강|정신건강|TCI|기질검사|심리상담|상담데이|해석상담|개인 심리상담)/i.test(source);
+}
+
 function addScore(scores, code, amount, evidence) {
   const current = scores.get(code) ?? { code, score: 0, evidence: [] };
   current.score += amount;
@@ -205,7 +227,11 @@ function inferCategoryMatches(post = {}) {
   const sourceCategory = compact(post.category);
   const mappedCode = SOURCE_CATEGORY_CODE_MAP.get(sourceCategory);
   const cultureEventNotice = isCultureEventNotice(fields);
-  if (mappedCode === "CAT_WELFARE" && cultureEventNotice) {
+  const mentalHealthCounselingNotice = isMentalHealthCounselingNotice(fields);
+  const sourceLooksWelfare = mappedCode === "CAT_WELFARE" || /(?:복지|지원금)/.test(sourceCategory);
+  if (sourceLooksWelfare && mentalHealthCounselingNotice) {
+    addScore(scores, "CAT_HEALTH", 16, `mental health counseling content overrides source category: ${sourceCategory}`);
+  } else if (mappedCode === "CAT_WELFARE" && cultureEventNotice) {
     addScore(scores, "CAT_CULTURE", 12, `culture event content overrides source category: ${sourceCategory}`);
   } else if (mappedCode && mappedCode !== "CAT_OTHER") {
     addScore(scores, mappedCode, 9, `source category: ${sourceCategory}`);
