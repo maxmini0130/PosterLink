@@ -32,6 +32,8 @@
     "repair:search-log-mojibake": "node src/repair-search-log-mojibake.js",
     "apply:review-safe-release-corrections": "node src/apply-review-safe-release-corrections.js",
     "apply:review-final-release-corrections": "node src/apply-review-final-release-corrections.js",
+    "review:current-queue-ai": "node src/review-current-queue-with-ai.js",
+    "apply:ai-reviewed-queue-corrections": "node src/apply-ai-reviewed-queue-corrections.js",
     "apply:other-category-corrections": "node src/apply-other-category-corrections.js",
     "audit:public-counts": "node src/audit-public-counts.js",
     "cleanup:review-nonposters": "node src/cleanup-review-nonposters.js",
