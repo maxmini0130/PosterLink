@@ -85,3 +85,27 @@
   - apply 전 이전 tier snapshot 저장
   - 승인 대상 ID만 좁게 tier 재계산
   - 공개 수 급변 감지 시 자동 중단
+
+## Same-day Follow-up
+
+운영자가 상위 행사와 별도로 세부 신청 이벤트도 공개하라고 결정했다.
+
+- `d4d1a1eb-fa4f-4a57-96d4-a108dc3d26bd`
+  - `서울청년센터 도봉 <청년의 날 행사 '청년log: 담다, 닮다' 햇반 용기 교환 이벤트> 참여자 모집`
+  - `published`로 전환
+  - 카테고리: `행사모집`, `생활정보`
+- `67878f7c-7b6f-4363-bfbd-3117b3749892`
+  - `서울청년센터 양천<청년정책패키지 CHECK IN : 양천 릴레이 강연 토크쇼 사전 모집>`
+  - `published`로 전환
+  - 카테고리: `행사모집`, `정책안내`
+
+검증:
+
+- 최종 상태:
+  - `published`: 541
+  - `review`: 0
+  - `closed`: 1925
+- `pnpm --filter posterlink-crawler audit:public-counts`
+  - `count_public_posters`: 256
+  - `search_public_posters_returned`: 256
+  - `search_matches_count`: true
