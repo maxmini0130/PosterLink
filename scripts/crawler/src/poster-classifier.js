@@ -252,6 +252,8 @@ function inferCategoryMatches(post = {}) {
     addScore(scores, "CAT_HOUSING", 16, `direct housing support content overrides welfare source category: ${sourceCategory}`);
   } else if (sourceLooksWelfare && educationalCourseNotice && !directHousingSupportNotice) {
     addScore(scores, "CAT_COURSE", 16, `educational course content overrides welfare source category: ${sourceCategory}`);
+  } else if (mappedCode === "CAT_FAMILY" && educationalCourseNotice) {
+    addScore(scores, "CAT_COURSE", 16, `educational course content overrides family/youth source category: ${sourceCategory}`);
   } else if (mappedCode === "CAT_WELFARE" && cultureEventNotice) {
     addScore(scores, "CAT_CULTURE", 12, `culture event content overrides source category: ${sourceCategory}`);
   } else if (mappedCode && mappedCode !== "CAT_OTHER") {

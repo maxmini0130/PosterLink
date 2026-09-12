@@ -803,6 +803,27 @@ test("welfare center lifestyle coaching is classified by program content, not ho
   assert.equal(result.categoryCodes.includes("CAT_WELFARE"), false);
 });
 
+test("youth-center tea blending class stays education instead of family", () => {
+  const result = inferPosterClassification({
+    title: "[모집] [2026 마포구 동네배움터] 맛4시즌즈: 가을 다실 참가자 모집",
+    source_org_name: "구립마포청소년문화의집",
+    site: "구립마포청소년문화의집",
+    category: "청소년",
+    summary_short: "차를 배우고 블렌딩하며 즐기는 가을 티 블렌딩 클래스. 모집 대상 마포구 지역주민 8명.",
+    content: [
+      "운영 내용 차를 배우고 블렌딩하며 즐기는 가을 티 블렌딩 클래스",
+      "모집 대상 마포구 지역주민 8명",
+      "모집 기간 2026. 9. 11.(금) 오후 4시 ~ 9. 21.(월) 오후 6시",
+      "운영 일시 2026. 10. 6.(화) / 10. 13.(화) / 10. 20.(화) / 10. 24.(토) / 10. 27.(화)",
+      "오전 10시 ~ 12시 총 5회기",
+      "운영 장소 마포청소년문화의집 5층 밀터",
+    ].join("\n"),
+  });
+
+  assert.equal(result.categoryCodes[0], "CAT_COURSE");
+  assert.equal(result.categoryCodes.includes("CAT_FAMILY"), false);
+});
+
 test("library movie screening is classified as culture even when source category says welfare", () => {
   const result = inferPosterClassification({
     title: "강서구립가양도서관<9월 퇴근길 영화관 <죽은 시인의 사회>>",
