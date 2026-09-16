@@ -6,7 +6,20 @@ import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { CATEGORY_CODE_BY_LABEL } from "./poster-category-classifier.js";
 
-const TODAY_KST = process.env.REVIEW_TODAY_KST || "2026-09-09";
+function todayInKst() {
+  const parts = new Intl.DateTimeFormat("en", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(
+    parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]),
+  );
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+const TODAY_KST = process.env.REVIEW_TODAY_KST?.trim() || todayInKst();
 const MODEL = process.env.OPENAI_REVIEW_QUEUE_MODEL?.trim() || process.env.OPENAI_POSTER_CATEGORY_MODEL?.trim() || "gpt-5-mini";
 const OUTPUT_DEFAULT = `data/results/review-queue-ai-review-${TODAY_KST.replaceAll("-", "")}.json`;
 const CONFIRM_TOKEN = "AI_REVIEW_APPROVE_QUEUE";

@@ -33,6 +33,7 @@
     "apply:review-safe-release-corrections": "node src/apply-review-safe-release-corrections.js",
     "apply:review-final-release-corrections": "node src/apply-review-final-release-corrections.js",
     "review:current-queue-ai": "node src/review-current-queue-with-ai.js",
+    "review:current-queue-ai:apply": "node src/review-current-queue-with-ai.js --apply --confirm=AI_REVIEW_APPROVE_QUEUE",
     "apply:ai-reviewed-queue-corrections": "node src/apply-ai-reviewed-queue-corrections.js",
     "apply:other-category-corrections": "node src/apply-other-category-corrections.js",
     "audit:public-counts": "node src/audit-public-counts.js",
