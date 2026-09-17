@@ -155,6 +155,17 @@ function promptFor(items) {
     "Be strict about dates: separate application/recruitment deadline from event/class/program dates. If there is only an event date for an open public event, use that date as the user-facing deadline and keep the event date too.",
     "Use closed status when the final deadline or event has already passed. Use published when it is still active. Do not invent always-open deadlines.",
     "Use at most two categories. Representative category must be first.",
+    "Classify by the user's main benefit and required action, not by a keyword or the institution name.",
+    "Category definitions:",
+    "- 지원사업: money, goods, space, vouchers, services, consulting, or another concrete benefit is provided through an application.",
+    "- 채용: recruitment for employees, instructors, temporary staff, or jobs.",
+    "- 공모전: ideas, works, proposals, photos, videos, or pitches are submitted for judging or awards. An IR competition belongs here.",
+    "- 교육강좌: classes, lectures, coaching, workshops, academies, mentoring, or structured learning.",
+    "- 행사모집: festivals, performances, experiences, campaigns, volunteering, supporters, or activity participation. Do not use it merely because a business attends an expo or competition.",
+    "- 생활정보: practical public notices without a meaningful application or participation action.",
+    "- 소상공인: business-operation or startup opportunities specifically aimed at founders, small businesses, merchants, or companies.",
+    "- 육아/가족 and 건강/의료 take priority when family/childcare or health/counseling is the main benefit.",
+    "Only add concerns for unresolved evidence that should block automatic approval. Do not add routine cautions when dates and category are otherwise verified.",
     "",
     "Allowed deadline_type values: fixed, ongoing, until_exhausted, unknown.",
     `Allowed categories: ${VALID_CATEGORY_LABELS.join(", ")}.`,
@@ -169,7 +180,7 @@ async function reviewBatch(items) {
   if (!apiKey) throw new Error("OPENAI_API_KEY is required for AI queue review");
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
-    signal: AbortSignal.timeout(90000),
+    signal: AbortSignal.timeout(180000),
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
@@ -291,7 +302,11 @@ async function buildPlan(rows) {
         || row.deadline_type !== normalizedDecision.deadline_type
         || currentCodes.slice().sort().join(",") !== nextCodes.slice().sort().join(",")
       ),
-      applyable: Boolean(row) && normalizedDecision.approve && normalizedDecision.confidence >= 0.7 && nextCodes.length > 0,
+      applyable: Boolean(row)
+        && normalizedDecision.approve
+        && normalizedDecision.confidence >= 0.85
+        && normalizedDecision.concerns.length === 0
+        && nextCodes.length > 0,
     };
   });
 }
@@ -303,7 +318,7 @@ function mergeFieldVerification(row, plan) {
   verification.classificationIssues = [];
   verification.deadlineMatches = true;
   verification.decision = "approved";
-  verification.reason = compact(`AI 재검수 승인: ${plan.decision.reason}`, 700);
+  verification.reason = compact(`AI queue review approved: ${plan.decision.reason}`, 700);
   verification.dateQuality = {
     ...asObject(verification.dateQuality),
     decision: "pass",
@@ -311,7 +326,7 @@ function mergeFieldVerification(row, plan) {
     normalizedDeadline: plan.decision.application_end_at,
     suggestedDeadline: plan.decision.application_end_at,
     reviewedAt: now,
-    reviewedBy: "ai-review-current-queue-20260909",
+    reviewedBy: "ai-review-current-queue",
   };
   verification.classification = {
     ...asObject(verification.classification),
@@ -422,7 +437,12 @@ async function main() {
     fetchReviewRows(supabase, limit),
     fetchCategories(supabase),
   ]);
-  const plan = await buildPlan(rows);
+  const excludedIds = new Set(String(args.exclude ?? "").split(",").map((value) => value.trim()).filter(Boolean));
+  const inputReport = args.input
+    ? JSON.parse(await fs.readFile(path.resolve(args.input), "utf8"))
+    : null;
+  const rawPlan = inputReport ? asArray(inputReport.items) : await buildPlan(rows);
+  const plan = rawPlan.map((item) => excludedIds.has(item.id) ? { ...item, applyable: false } : item);
   const applied = apply ? await applyPlan(supabase, rows, categoryByCode, plan) : [];
   const report = {
     generated_at: new Date().toISOString(),
