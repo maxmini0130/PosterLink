@@ -35,3 +35,20 @@ git diff --check
 - Public poster count: 252.
 - Public search count: 252.
 - Status counts after restoration: `published 548`, `review 17`, `closed 2085`, `rejected 58`.
+
+## Final Queue Resolution
+
+- Re-read and resolved all 17 remaining review rows using source text, poster OCR, weekday/year consistency, official page metadata, and category definitions.
+- Final actions:
+  - 15 rows published.
+  - 1 past 2025 household-waste notice moved to `closed`.
+  - 1 secondary copy of the Mapo education-month notice rejected as a duplicate of the canonical Mapo-gu notice.
+- Corrected two false 2023 dates to 2026 after verifying every stated weekday against the 2026 calendar:
+  - Dongjak single-household employment course.
+  - Yeongdeungpo youth dance community.
+- Corrected the Gangdong pregnancy/childcare class to the 2026 notice year using the official page publication date (`2026-09-14`) and poster OCR.
+- Kept unknown or first-come deadlines as `unknown` or `until_exhausted` rather than inventing fixed dates.
+- Final verification:
+  - Public posters: 264.
+  - Public search results: 264.
+  - Status counts: `published 563`, `review 0`, `closed 2086`, `rejected 59`.
