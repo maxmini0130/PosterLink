@@ -1,0 +1,84 @@
+name: AI Review Queue
+
+on:
+  workflow_run:
+    workflows:
+      - Daily Crawler
+    types:
+      - completed
+  schedule:
+    - cron: "0 6 * * *" # Daily fallback at 15:00 KST
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Apply safe AI approvals. Choose false for report-only mode."
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      limit:
+        description: "Maximum review rows to inspect."
+        required: false
+        default: "200"
+        type: string
+
+concurrency:
+  group: ai-review-queue
+  cancel-in-progress: false
+
+jobs:
+  review-and-approve:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: scripts/crawler
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_REVIEW_QUEUE_MODEL: ${{ vars.OPENAI_REVIEW_QUEUE_MODEL || 'gpt-5-mini' }}
+      REVIEW_LIMIT: ${{ github.event.inputs.limit || '200' }}
+      SHOULD_APPLY: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.apply || 'true' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: scripts/crawler/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate review secrets
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ] || [ -z "$OPENAI_API_KEY" ]; then
+            echo "::error::SUPABASE_URL, SUPABASE_KEY, and OPENAI_API_KEY secrets are required."
+            exit 1
+          fi
+
+      - name: Review queue and apply safe decisions
+        run: |
+          ARGS=(--limit="$REVIEW_LIMIT" --output="data/results/ai-review-queue-${GITHUB_RUN_ID}.json")
+          if [ "$SHOULD_APPLY" = "true" ]; then
+            ARGS+=(--apply --confirm=AI_REVIEW_APPROVE_QUEUE)
+          fi
+          node src/review-current-queue-with-ai.js "${ARGS[@]}"
+
+      - name: Audit public counts
+        if: ${{ env.SHOULD_APPLY == 'true' }}
+        run: node src/audit-public-counts.js --output="data/results/public-counts-after-ai-review-${GITHUB_RUN_ID}.json"
+
+      - name: Upload review reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ai-review-queue-${{ github.run_id }}
+          path: scripts/crawler/data/results/
+          retention-days: 30

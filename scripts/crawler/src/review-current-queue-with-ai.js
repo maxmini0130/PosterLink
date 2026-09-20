@@ -26,6 +26,14 @@ const CONFIRM_TOKEN = "AI_REVIEW_APPROVE_QUEUE";
 const REVIEW_BATCH_SIZE = 15;
 const VALID_DEADLINE_TYPES = ["fixed", "ongoing", "until_exhausted", "unknown"];
 const VALID_CATEGORY_LABELS = Object.keys(CATEGORY_CODE_BY_LABEL);
+const AUTO_APPROVAL_BLOCKING_DATE_ISSUES = new Set([
+  "ambiguous-multiple-dates",
+  "date-end-before-start",
+  "date-without-year",
+  "deadline-mismatch",
+  "open-ended-application-period",
+  "weekday-mismatch",
+]);
 
 function parseArgs() {
   return Object.fromEntries(
@@ -278,6 +286,10 @@ async function buildPlan(rows) {
       category_codes: nextCodes,
     };
     const currentCodes = (row?.poster_categories ?? []).map((entry) => entry.categories?.code).filter(Boolean);
+    const verification = asObject(row?.field_verification);
+    const blockingDateIssues = issueCodes(verification, "dateIssues")
+      .filter((code) => AUTO_APPROVAL_BLOCKING_DATE_ISSUES.has(code));
+    const blockingDuplicateIssues = issueCodes(verification, "duplicateIssues");
     return {
       id: decision.id,
       title: row?.title ?? "",
@@ -306,7 +318,10 @@ async function buildPlan(rows) {
         && normalizedDecision.approve
         && normalizedDecision.confidence >= 0.85
         && normalizedDecision.concerns.length === 0
+        && blockingDateIssues.length === 0
+        && blockingDuplicateIssues.length === 0
         && nextCodes.length > 0,
+      auto_approval_blockers: [...blockingDateIssues, ...blockingDuplicateIssues],
     };
   });
 }

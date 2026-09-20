@@ -145,6 +145,18 @@ npm run audit:current
 0 9 * * * cd /path/to/posterlink-crawler && node src/index.js >> data/cron.log 2>&1
 ```
 
+### AI review queue automation
+
+`.github/workflows/ai-review-queue.yml` runs after the daily crawler and once more at
+15:00 KST as a fallback. It reads current review rows and automatically applies only
+high-confidence decisions with no concerns, no duplicate signal, and no risky date
+issue such as a missing year, weekday mismatch, conflicting dates, or an open-ended
+period. Uncertain rows remain in `review`.
+
+The workflow requires the `SUPABASE_URL`, `SUPABASE_KEY`, and `OPENAI_API_KEY`
+repository secrets. A manual run defaults to report-only mode; set `apply` to `true`
+to apply safe decisions. Reports are retained as GitHub Actions artifacts for 30 days.
+
 ## 주의사항
 
 - robots.txt를 확인하고 준수하세요
