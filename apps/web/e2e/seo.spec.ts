@@ -6,6 +6,15 @@ test.describe("SEO / 공개 페이지", () => {
     expect(res?.status()).toBeLessThan(400);
   });
 
+  test("홈 초기 HTML에 상위 지역·분야 링크 20개 포함", async ({ request }) => {
+    const res = await request.get("/");
+    expect(res.status()).toBeLessThan(400);
+    const html = await res.text();
+    const combinationLinks = html.match(/href="\/regions\/[^"/]+\/[^"/]+"/g);
+    expect(combinationLinks).toHaveLength(20);
+    expect(html).toContain("지역별 공고 모아보기");
+  });
+
   test("포스터 목록 200 응답", async ({ page }) => {
     const res = await page.goto("/posters");
     expect(res?.status()).toBeLessThan(400);

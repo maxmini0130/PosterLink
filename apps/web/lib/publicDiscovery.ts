@@ -4,6 +4,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   readDiscoverySort,
   resolveTaxonomyByRouteValue,
+  taxonomySlug,
   type DiscoveryPoster,
   type DiscoverySort,
   type DiscoveryTaxonomy,
@@ -32,6 +33,14 @@ export type PublicDiscoveryResult = {
   selectedCategory: DiscoveryTaxonomy | null;
   selectedRegion: DiscoveryTaxonomy | null;
   sort: DiscoverySort;
+};
+
+export type TopDiscoveryCombination = {
+  regionName: string;
+  regionSlug: string;
+  categoryName: string;
+  categorySlug: string;
+  count: number;
 };
 
 export type PublicInstitution = {
@@ -141,6 +150,101 @@ export async function fetchPublicDiscovery(
     selectedRegion,
     sort,
   };
+}
+
+export async function fetchTopRegionCategoryCombinations(
+  limit = 20,
+): Promise<TopDiscoveryCombination[]> {
+  const client = createPublicSupabaseClient();
+  const { data: posterRows, error: posterError } = await client
+    .rpc("search_public_posters", {
+      p_query: null,
+      p_category_id: null,
+      p_region_ids: null,
+      p_include_closed: false,
+      p_sort: "latest",
+      p_limit: 500,
+    })
+    .select("id,application_start_at,application_end_at,deadline_type");
+
+  if (posterError) return [];
+
+  const posterIds = (
+    (posterRows ?? []) as Array<{
+      id: string;
+      application_start_at: string | null;
+      application_end_at: string | null;
+      deadline_type: string | null;
+    }>
+  )
+    .filter(isAcceptingPoster)
+    .map((poster) => poster.id);
+
+  if (posterIds.length === 0) return [];
+
+  const [categoryLinksRes, regionLinksRes, taxonomies] = await Promise.all([
+    client
+      .from("poster_categories")
+      .select("poster_id,category_id")
+      .in("poster_id", posterIds),
+    client
+      .from("poster_regions")
+      .select("poster_id,region_id")
+      .in("poster_id", posterIds),
+    fetchPublicTaxonomies(client),
+  ]);
+
+  if (categoryLinksRes.error || regionLinksRes.error) return [];
+
+  const categoriesByPoster = groupValues(
+    categoryLinksRes.data ?? [],
+    "category_id",
+  );
+  const regionsByPoster = groupValues(regionLinksRes.data ?? [], "region_id");
+  const counts = new Map<string, Set<string>>();
+
+  for (const posterId of posterIds) {
+    for (const regionId of regionsByPoster.get(posterId) ?? []) {
+      for (const categoryId of categoriesByPoster.get(posterId) ?? []) {
+        const key = `${regionId}:${categoryId}`;
+        const countedPosters = counts.get(key) ?? new Set<string>();
+        countedPosters.add(posterId);
+        counts.set(key, countedPosters);
+      }
+    }
+  }
+
+  const regionsById = new Map(
+    taxonomies.regions.map((region) => [region.id, region]),
+  );
+  const categoriesById = new Map(
+    taxonomies.categories.map((category) => [category.id, category]),
+  );
+
+  return [...counts.entries()]
+    .flatMap(([key, countedPosters]) => {
+      const [regionId, categoryId] = key.split(":");
+      const region = regionsById.get(regionId);
+      const category = categoriesById.get(categoryId);
+      if (!region || !category) return [];
+
+      return [
+        {
+          regionName: region.name,
+          regionSlug: taxonomySlug(region, "REG"),
+          categoryName: category.name,
+          categorySlug: taxonomySlug(category, "CAT"),
+          count: countedPosters.size,
+        },
+      ];
+    })
+    .sort(
+      (a, b) =>
+        b.count - a.count ||
+        a.regionName.localeCompare(b.regionName, "ko") ||
+        a.categoryName.localeCompare(b.categoryName, "ko"),
+    )
+    .slice(0, Math.max(0, limit));
 }
 
 export async function fetchPublicInstitutions(
