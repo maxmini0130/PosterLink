@@ -20,7 +20,11 @@ test.describe("SEO / 공개 페이지", () => {
   });
 
   test("지역·분야 랜딩 초기 HTML에 공고 포함", async ({ request }) => {
-    for (const path of ["/regions/seoul-mapo", "/categories/course", "/regions/seoul-mapo/course"]) {
+    for (const path of [
+      "/regions/seoul-mapo",
+      "/categories/course",
+      "/regions/seoul-mapo/course",
+    ]) {
       const res = await request.get(path);
       expect(res.status()).toBeLessThan(400);
       const html = await res.text();
@@ -28,11 +32,27 @@ test.describe("SEO / 공개 페이지", () => {
     }
   });
 
-  test("public institution list and details are crawlable", async ({ request }) => {
+  test("강서구 행사모집 실험 랜딩에 고유 SEO 본문과 공고 포함", async ({
+    request,
+  }) => {
+    const res = await request.get("/regions/seoul-gangseo/event-recruit");
+    expect(res.status()).toBeLessThan(400);
+    const html = await res.text();
+    expect(html).toContain("강서구 행사모집 모음");
+    expect(html).toContain("지역 주민이 참여할 수 있는 문화행사");
+    expect(html).toContain("함께 살펴볼 공고");
+    expect(html).toMatch(/href="\/posters\/[0-9a-f-]{36}"/);
+  });
+
+  test("public institution list and details are crawlable", async ({
+    request,
+  }) => {
     const listRes = await request.get("/institutions");
     expect(listRes.status()).toBeLessThan(400);
     const listHtml = await listRes.text();
-    const institutionPaths = [...listHtml.matchAll(/href="(\/institutions\/[^"#?]+)"/g)]
+    const institutionPaths = [
+      ...listHtml.matchAll(/href="(\/institutions\/[^"#?]+)"/g),
+    ]
       .map((match) => match[1])
       .filter((path) => path !== "/institutions");
     expect(institutionPaths.length).toBeGreaterThan(0);

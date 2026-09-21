@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { ArrowRight, Search } from "lucide-react";
 import { buildPosterSearchPath, taxonomySlug } from "../../lib/discoveryRoutes";
-import { fetchPublicDiscovery, type PublicDiscoveryFilters } from "../../lib/publicDiscovery";
+import {
+  fetchPublicDiscovery,
+  type PublicDiscoveryFilters,
+  type PublicDiscoveryResult,
+} from "../../lib/publicDiscovery";
 import { getAppOrigin } from "../../lib/siteUrl";
 import { BottomNav } from "./BottomNav";
 import { Footer } from "./Footer";
@@ -14,10 +18,23 @@ type DiscoveryLandingProps = {
   filters: PublicDiscoveryFilters;
   eyebrow: string;
   canonicalPath: string;
+  initialDiscovery?: PublicDiscoveryResult;
+  introParagraphs?: string[];
+  relatedLinks?: Array<{ href: string; label: string }>;
 };
 
-export async function DiscoveryLanding({ title, description, filters, eyebrow, canonicalPath }: DiscoveryLandingProps) {
-  const discovery = await fetchPublicDiscovery({ ...filters, limit: 48 });
+export async function DiscoveryLanding({
+  title,
+  description,
+  filters,
+  eyebrow,
+  canonicalPath,
+  initialDiscovery,
+  introParagraphs = [],
+  relatedLinks = [],
+}: DiscoveryLandingProps) {
+  const discovery =
+    initialDiscovery ?? (await fetchPublicDiscovery({ ...filters, limit: 48 }));
   const appOrigin = getAppOrigin();
   const searchPath = buildPosterSearchPath({
     category: discovery.selectedCategory,
@@ -46,14 +63,30 @@ export async function DiscoveryLanding({ title, description, filters, eyebrow, c
     <div className="min-h-screen bg-white pb-24">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }}
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(structuredData).replace(/</g, "\\u003c"),
+        }}
       />
       <Header />
       <main className="container mx-auto max-w-6xl px-4 py-8">
         <header className="border-b border-slate-200 pb-7">
-          <p className="text-xs font-black uppercase text-blue-700">{eyebrow}</p>
-          <h1 className="mt-2 text-3xl font-black leading-tight text-slate-950">{title}</h1>
-          <p className="mt-3 max-w-3xl text-sm font-bold leading-7 text-slate-600">{description}</p>
+          <p className="text-xs font-black uppercase text-blue-700">
+            {eyebrow}
+          </p>
+          <h1 className="mt-2 text-3xl font-black leading-tight text-slate-950">
+            {title}
+          </h1>
+          <p className="mt-3 max-w-3xl text-sm font-bold leading-7 text-slate-600">
+            {description}
+          </p>
+          {introParagraphs.map((paragraph) => (
+            <p
+              key={paragraph}
+              className="mt-3 max-w-3xl text-sm leading-7 text-slate-600"
+            >
+              {paragraph}
+            </p>
+          ))}
           <Link
             href={searchPath}
             className="mt-5 inline-flex items-center gap-2 bg-slate-950 px-4 py-3 text-sm font-black text-white transition-colors hover:bg-blue-800"
@@ -64,40 +97,54 @@ export async function DiscoveryLanding({ title, description, filters, eyebrow, c
         </header>
 
         {(discovery.selectedRegion || discovery.selectedCategory) && (
-          <nav aria-label="관련 공고 탐색" className="flex flex-wrap gap-2 border-b border-slate-100 py-5">
-            {discovery.selectedRegion && discovery.categories.slice(0, 10).map((category) => (
-              <Link
-                key={category.id}
-                href={`/regions/${taxonomySlug(discovery.selectedRegion!, "REG")}/${taxonomySlug(category, "CAT")}`}
-                className="border border-slate-200 px-3 py-2 text-xs font-black text-slate-600 hover:border-blue-500 hover:text-blue-700"
-              >
-                {category.name}
-              </Link>
-            ))}
-            {!discovery.selectedRegion && discovery.selectedCategory && discovery.regions
-              .filter((region) => region.level === "sido")
-              .slice(0, 10)
-              .map((region) => (
+          <nav
+            aria-label="관련 공고 탐색"
+            className="flex flex-wrap gap-2 border-b border-slate-100 py-5"
+          >
+            {discovery.selectedRegion &&
+              discovery.categories.slice(0, 10).map((category) => (
                 <Link
-                  key={region.id}
-                  href={`/regions/${taxonomySlug(region, "REG")}/${taxonomySlug(discovery.selectedCategory!, "CAT")}`}
+                  key={category.id}
+                  href={`/regions/${taxonomySlug(discovery.selectedRegion!, "REG")}/${taxonomySlug(category, "CAT")}`}
                   className="border border-slate-200 px-3 py-2 text-xs font-black text-slate-600 hover:border-blue-500 hover:text-blue-700"
                 >
-                  {region.name}
+                  {category.name}
                 </Link>
               ))}
+            {!discovery.selectedRegion &&
+              discovery.selectedCategory &&
+              discovery.regions
+                .filter((region) => region.level === "sido")
+                .slice(0, 10)
+                .map((region) => (
+                  <Link
+                    key={region.id}
+                    href={`/regions/${taxonomySlug(region, "REG")}/${taxonomySlug(discovery.selectedCategory!, "CAT")}`}
+                    className="border border-slate-200 px-3 py-2 text-xs font-black text-slate-600 hover:border-blue-500 hover:text-blue-700"
+                  >
+                    {region.name}
+                  </Link>
+                ))}
           </nav>
         )}
 
         <section className="py-8" aria-labelledby="landing-results-title">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="text-xs font-black text-slate-500">현재 확인 가능한 공고</p>
-              <h2 id="landing-results-title" className="mt-1 text-xl font-black text-slate-950">
+              <p className="text-xs font-black text-slate-500">
+                현재 확인 가능한 공고
+              </p>
+              <h2
+                id="landing-results-title"
+                className="mt-1 text-xl font-black text-slate-950"
+              >
                 {discovery.posters.length.toLocaleString()}건
               </h2>
             </div>
-            <Link href="/institutions" className="text-xs font-black text-blue-700 hover:text-blue-900">
+            <Link
+              href="/institutions"
+              className="text-xs font-black text-blue-700 hover:text-blue-900"
+            >
               기관별로 보기
             </Link>
           </div>
@@ -110,13 +157,19 @@ export async function DiscoveryLanding({ title, description, filters, eyebrow, c
                   poster={{
                     id: poster.id,
                     title: poster.title,
-                    org: poster.verification_status === "verified" && poster.verified_at
-                      ? poster.organizer_name || poster.source_org_name || undefined
-                      : poster.source_org_name || undefined,
+                    org:
+                      poster.verification_status === "verified" &&
+                      poster.verified_at
+                        ? poster.organizer_name ||
+                          poster.source_org_name ||
+                          undefined
+                        : poster.source_org_name || undefined,
                     applicationStartAt: poster.application_start_at,
                     deadline: poster.application_end_at || undefined,
                     deadlineType: poster.deadline_type,
-                    tags: [poster.categoryName, poster.regionName].filter((value): value is string => Boolean(value)),
+                    tags: [poster.categoryName, poster.regionName].filter(
+                      (value): value is string => Boolean(value),
+                    ),
                     image: poster.thumbnail_url || undefined,
                     images: poster.images,
                     sourceUrl: poster.source_key || undefined,
@@ -127,13 +180,40 @@ export async function DiscoveryLanding({ title, description, filters, eyebrow, c
           ) : (
             <div className="mt-6 border border-dashed border-slate-300 py-20 text-center">
               <Search className="mx-auto text-slate-300" size={36} />
-              <p className="mt-4 text-sm font-black text-slate-600">현재 조건에 맞는 공개 공고가 없습니다.</p>
-              <Link href="/posters" className="mt-4 inline-flex text-sm font-black text-blue-700">
+              <p className="mt-4 text-sm font-black text-slate-600">
+                현재 조건에 맞는 공개 공고가 없습니다.
+              </p>
+              <Link
+                href="/posters"
+                className="mt-4 inline-flex text-sm font-black text-blue-700"
+              >
                 전체 공고 보기
               </Link>
             </div>
           )}
         </section>
+
+        {relatedLinks.length > 0 && (
+          <nav
+            aria-label="함께 살펴볼 공고"
+            className="border-t border-slate-200 py-7"
+          >
+            <h2 className="text-base font-black text-slate-950">
+              함께 살펴볼 공고
+            </h2>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {relatedLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 hover:border-blue-500 hover:text-blue-700"
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </div>
+          </nav>
+        )}
       </main>
       <Footer />
       <BottomNav />

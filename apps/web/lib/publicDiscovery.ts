@@ -21,6 +21,7 @@ export type PublicDiscoveryFilters = {
   sort?: string | null;
   includeClosed?: boolean;
   limit?: number;
+  regionScope?: "hierarchy" | "exact";
 };
 
 export type PublicDiscoveryResult = {
@@ -51,12 +52,15 @@ export type PublicInstitution = {
 export function createPublicSupabaseClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)!,
+    (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)!,
     { auth: { persistSession: false, autoRefreshToken: false } },
   );
 }
 
-export async function fetchPublicTaxonomies(client = createPublicSupabaseClient()) {
+export async function fetchPublicTaxonomies(
+  client = createPublicSupabaseClient(),
+) {
   const [categoriesRes, regionsRes] = await Promise.all([
     client
       .from("categories")
@@ -73,20 +77,33 @@ export async function fetchPublicTaxonomies(client = createPublicSupabaseClient(
   ]);
 
   return {
-    categories: ((categoriesRes.data ?? []) as DiscoveryTaxonomy[]).filter((item) => Boolean(item.id && item.name)),
-    regions: ((regionsRes.data ?? []) as DiscoveryTaxonomy[]).filter((item) => Boolean(item.id && item.name)),
+    categories: ((categoriesRes.data ?? []) as DiscoveryTaxonomy[]).filter(
+      (item) => Boolean(item.id && item.name),
+    ),
+    regions: ((regionsRes.data ?? []) as DiscoveryTaxonomy[]).filter((item) =>
+      Boolean(item.id && item.name),
+    ),
   };
 }
 
-export async function fetchPublicDiscovery(filters: PublicDiscoveryFilters = {}): Promise<PublicDiscoveryResult> {
+export async function fetchPublicDiscovery(
+  filters: PublicDiscoveryFilters = {},
+): Promise<PublicDiscoveryResult> {
   const client = createPublicSupabaseClient();
   const { categories, regions } = await fetchPublicTaxonomies(client);
-  const selectedCategory = resolveTaxonomyByRouteValue(categories, filters.category);
+  const selectedCategory = resolveTaxonomyByRouteValue(
+    categories,
+    filters.category,
+  );
   const selectedRegion = resolveTaxonomyByRouteValue(regions, filters.region);
   const sort = readDiscoverySort(filters.sort);
   const search = sanitizeSearchTerm(filters.query);
   const includeClosed = Boolean(filters.includeClosed || search);
-  const regionIds = selectedRegion ? getRegionScopeIds(selectedRegion.id, regions) : null;
+  const regionIds = selectedRegion
+    ? filters.regionScope === "exact"
+      ? [selectedRegion.id]
+      : getRegionScopeIds(selectedRegion.id, regions)
+    : null;
   const searchArgs = {
     p_query: search || null,
     p_category_id: selectedCategory?.id ?? null,
@@ -106,17 +123,35 @@ export async function fetchPublicDiscovery(filters: PublicDiscoveryFilters = {})
       p_include_closed: includeClosed,
     }),
   ]);
-  const posters = await enrichPublicPosters(client, (postersRes.data ?? []) as Record<string, unknown>[]);
-  const filteredPosters = includeClosed ? posters : posters.filter(isAcceptingPoster);
-  const totalCount = typeof countRes.data === "number" ? countRes.data : filteredPosters.length;
-  return { posters: filteredPosters, totalCount, categories, regions, selectedCategory, selectedRegion, sort };
+  const posters = await enrichPublicPosters(
+    client,
+    (postersRes.data ?? []) as Record<string, unknown>[],
+  );
+  const filteredPosters = includeClosed
+    ? posters
+    : posters.filter(isAcceptingPoster);
+  const totalCount =
+    typeof countRes.data === "number" ? countRes.data : filteredPosters.length;
+  return {
+    posters: filteredPosters,
+    totalCount,
+    categories,
+    regions,
+    selectedCategory,
+    selectedRegion,
+    sort,
+  };
 }
 
-export async function fetchPublicInstitutions(search?: string | null): Promise<PublicInstitution[]> {
+export async function fetchPublicInstitutions(
+  search?: string | null,
+): Promise<PublicInstitution[]> {
   const client = createPublicSupabaseClient();
   let query = client
     .from("institutions")
-    .select("id,slug,name,institution_type,region_name,homepage_url,verification_status,trust_score,last_collected_at")
+    .select(
+      "id,slug,name,institution_type,region_name,homepage_url,verification_status,trust_score,last_collected_at",
+    )
     .eq("is_public", true)
     .not("slug", "is", null)
     .neq("slug", "")
@@ -124,46 +159,64 @@ export async function fetchPublicInstitutions(search?: string | null): Promise<P
     .limit(500);
 
   const cleanedSearch = sanitizeSearchTerm(search);
-  if (cleanedSearch) query = query.or(`name.ilike.%${cleanedSearch}%,region_name.ilike.%${cleanedSearch}%`);
+  if (cleanedSearch)
+    query = query.or(
+      `name.ilike.%${cleanedSearch}%,region_name.ilike.%${cleanedSearch}%`,
+    );
 
-  const [{ data: institutions, error }, { data: posterLinks }] = await Promise.all([
-    query,
-    client
-      .from("posters")
-      .select("organizer_id,source_institution_id,application_start_at,application_end_at,deadline_type")
-      .eq("poster_status", "published")
-      .or(PUBLIC_POSTER_EXPOSURE_FILTER)
-      .limit(2000),
-  ]);
+  const [{ data: institutions, error }, { data: posterLinks }] =
+    await Promise.all([
+      query,
+      client
+        .from("posters")
+        .select(
+          "organizer_id,source_institution_id,application_start_at,application_end_at,deadline_type",
+        )
+        .eq("poster_status", "published")
+        .or(PUBLIC_POSTER_EXPOSURE_FILTER)
+        .limit(2000),
+    ]);
 
   if (error) return [];
 
-  return (institutions ?? []).map((institution: any) => {
-    let organizedPosterCount = 0;
-    let sourcedPosterCount = 0;
-    let activePosterCount = 0;
-    for (const poster of posterLinks ?? []) {
-      const organized = poster.organizer_id === institution.id;
-      const sourced = poster.source_institution_id === institution.id;
-      if (organized) organizedPosterCount += 1;
-      if (sourced) sourcedPosterCount += 1;
-      if ((organized || sourced) && isAcceptingPoster(poster)) {
-        activePosterCount += 1;
+  return (institutions ?? [])
+    .map((institution: any) => {
+      let organizedPosterCount = 0;
+      let sourcedPosterCount = 0;
+      let activePosterCount = 0;
+      for (const poster of posterLinks ?? []) {
+        const organized = poster.organizer_id === institution.id;
+        const sourced = poster.source_institution_id === institution.id;
+        if (organized) organizedPosterCount += 1;
+        if (sourced) sourcedPosterCount += 1;
+        if ((organized || sourced) && isAcceptingPoster(poster)) {
+          activePosterCount += 1;
+        }
       }
-    }
-    return { ...institution, organizedPosterCount, sourcedPosterCount, activePosterCount } as PublicInstitution;
-  }).sort((a, b) => (
-    b.activePosterCount - a.activePosterCount
-    || (b.organizedPosterCount + b.sourcedPosterCount) - (a.organizedPosterCount + a.sourcedPosterCount)
-    || a.name.localeCompare(b.name, "ko")
-  ));
+      return {
+        ...institution,
+        organizedPosterCount,
+        sourcedPosterCount,
+        activePosterCount,
+      } as PublicInstitution;
+    })
+    .sort(
+      (a, b) =>
+        b.activePosterCount - a.activePosterCount ||
+        b.organizedPosterCount +
+          b.sourcedPosterCount -
+          (a.organizedPosterCount + a.sourcedPosterCount) ||
+        a.name.localeCompare(b.name, "ko"),
+    );
 }
 
 export async function fetchPublicInstitution(slug: string) {
   const client = createPublicSupabaseClient();
   const { data, error } = await client
     .from("institutions")
-    .select("id,slug,name,institution_type,region_name,homepage_url,verification_status,trust_score,last_collected_at")
+    .select(
+      "id,slug,name,institution_type,region_name,homepage_url,verification_status,trust_score,last_collected_at",
+    )
     .eq("slug", slug)
     .eq("is_public", true)
     .maybeSingle();
@@ -178,15 +231,19 @@ export async function fetchPublicInstitution(slug: string) {
     .order("created_at", { ascending: false })
     .limit(60);
 
-  const visiblePosters = ((posters ?? []) as Record<string, unknown>[]).filter((poster) =>
-    isAcceptingPoster(poster),
+  const visiblePosters = ((posters ?? []) as Record<string, unknown>[]).filter(
+    (poster) => isAcceptingPoster(poster),
   );
   const enriched = await enrichPublicPosters(client, visiblePosters);
   return {
     institution: {
       ...data,
-      organizedPosterCount: visiblePosters.filter((poster: any) => poster.organizer_id === data.id).length,
-      sourcedPosterCount: visiblePosters.filter((poster: any) => poster.source_institution_id === data.id).length,
+      organizedPosterCount: visiblePosters.filter(
+        (poster: any) => poster.organizer_id === data.id,
+      ).length,
+      sourcedPosterCount: visiblePosters.filter(
+        (poster: any) => poster.source_institution_id === data.id,
+      ).length,
       activePosterCount: visiblePosters.length,
     } as PublicInstitution,
     posters: enriched,
@@ -207,20 +264,37 @@ function isAcceptingPoster(poster: {
 
 function getRegionScopeIds(regionId: string, regions: DiscoveryTaxonomy[]) {
   const selected = regions.find((region) => region.id === regionId);
-  if (!selected || selected.level === "nation") return regions.map((region) => region.id);
+  if (!selected || selected.level === "nation")
+    return regions.map((region) => region.id);
   if (selected.level === "sido") {
-    return [regionId, ...regions.filter((region) => region.parent_id === regionId).map((region) => region.id)];
+    return [
+      regionId,
+      ...regions
+        .filter((region) => region.parent_id === regionId)
+        .map((region) => region.id),
+    ];
   }
   return [regionId, ...(selected.parent_id ? [selected.parent_id] : [])];
 }
 
-async function enrichPublicPosters(client: SupabaseClient, posterRows: Record<string, unknown>[]) {
-  const posterIds = posterRows.map((poster) => String(poster.id)).filter(Boolean);
+async function enrichPublicPosters(
+  client: SupabaseClient,
+  posterRows: Record<string, unknown>[],
+) {
+  const posterIds = posterRows
+    .map((poster) => String(poster.id))
+    .filter(Boolean);
   if (posterIds.length === 0) return [];
 
   const [categoryLinksRes, regionLinksRes, imagesRes] = await Promise.all([
-    client.from("poster_categories").select("poster_id,category_id").in("poster_id", posterIds),
-    client.from("poster_regions").select("poster_id,region_id").in("poster_id", posterIds),
+    client
+      .from("poster_categories")
+      .select("poster_id,category_id")
+      .in("poster_id", posterIds),
+    client
+      .from("poster_regions")
+      .select("poster_id,region_id")
+      .in("poster_id", posterIds),
     client
       .from("poster_images")
       .select("poster_id,storage_path,image_type,created_at")
@@ -228,36 +302,70 @@ async function enrichPublicPosters(client: SupabaseClient, posterRows: Record<st
       .order("created_at", { ascending: true }),
   ]);
 
-  const categoryIds = [...new Set((categoryLinksRes.data ?? []).map((row: any) => row.category_id).filter(Boolean))];
-  const regionIds = [...new Set((regionLinksRes.data ?? []).map((row: any) => row.region_id).filter(Boolean))];
+  const categoryIds = [
+    ...new Set(
+      (categoryLinksRes.data ?? [])
+        .map((row: any) => row.category_id)
+        .filter(Boolean),
+    ),
+  ];
+  const regionIds = [
+    ...new Set(
+      (regionLinksRes.data ?? [])
+        .map((row: any) => row.region_id)
+        .filter(Boolean),
+    ),
+  ];
   const [categoriesRes, regionsRes] = await Promise.all([
     categoryIds.length
       ? client.from("categories").select("id,name,code").in("id", categoryIds)
       : Promise.resolve({ data: [] }),
     regionIds.length
-      ? client.from("regions").select("id,name,full_name,level").in("id", regionIds)
+      ? client
+          .from("regions")
+          .select("id,name,full_name,level")
+          .in("id", regionIds)
       : Promise.resolve({ data: [] }),
   ]);
 
-  const categoryNames = new Map((categoriesRes.data ?? []).map((row: any) => [row.id, row.name]));
-  const categoryCodes = new Map((categoriesRes.data ?? []).map((row: any) => [row.id, row.code]));
-  const regionNames = new Map(
-    (regionsRes.data ?? []).map((row: any) => [row.id, row.level === "sigungu" ? row.full_name || row.name : row.name]),
+  const categoryNames = new Map(
+    (categoriesRes.data ?? []).map((row: any) => [row.id, row.name]),
   );
-  const categoriesByPoster = groupValues(categoryLinksRes.data ?? [], "category_id");
+  const categoryCodes = new Map(
+    (categoriesRes.data ?? []).map((row: any) => [row.id, row.code]),
+  );
+  const regionNames = new Map(
+    (regionsRes.data ?? []).map((row: any) => [
+      row.id,
+      row.level === "sigungu" ? row.full_name || row.name : row.name,
+    ]),
+  );
+  const categoriesByPoster = groupValues(
+    categoryLinksRes.data ?? [],
+    "category_id",
+  );
   const regionsByPoster = groupValues(regionLinksRes.data ?? [], "region_id");
   const imagesByPoster = new Map<string, string[]>();
   for (const image of imagesRes.data ?? []) {
     if (!image.poster_id || !image.storage_path) continue;
-    imagesByPoster.set(image.poster_id, [...(imagesByPoster.get(image.poster_id) ?? []), image.storage_path]);
+    imagesByPoster.set(image.poster_id, [
+      ...(imagesByPoster.get(image.poster_id) ?? []),
+      image.storage_path,
+    ]);
   }
 
   return posterRows.map((poster) => {
     const id = String(poster.id);
     const categoryIdsForPoster = categoriesByPoster.get(id) ?? [];
     const regionIdsForPoster = regionsByPoster.get(id) ?? [];
-    const primaryCategoryCode = readPrimaryCategoryCode((poster as any).field_verification);
-    const categoryId = pickPrimaryCategoryId(categoryIdsForPoster, categoryCodes, primaryCategoryCode);
+    const primaryCategoryCode = readPrimaryCategoryCode(
+      (poster as any).field_verification,
+    );
+    const categoryId = pickPrimaryCategoryId(
+      categoryIdsForPoster,
+      categoryCodes,
+      primaryCategoryCode,
+    );
     const regionId = regionIdsForPoster[0] ?? null;
     return {
       ...poster,
@@ -266,22 +374,31 @@ async function enrichPublicPosters(client: SupabaseClient, posterRows: Record<st
       regionId,
       categoryIds: categoryIdsForPoster,
       regionIds: regionIdsForPoster,
-      categoryName: categoryId ? String(categoryNames.get(categoryId) ?? "") || null : null,
-      regionName: regionId ? String(regionNames.get(regionId) ?? "") || null : null,
+      categoryName: categoryId
+        ? String(categoryNames.get(categoryId) ?? "") || null
+        : null,
+      regionName: regionId
+        ? String(regionNames.get(regionId) ?? "") || null
+        : null,
       images: imagesByPoster.get(id) ?? [],
     } as DiscoveryPoster;
   });
 }
 
 function readPrimaryCategoryCode(fieldVerification: unknown) {
-  const classification = fieldVerification && typeof fieldVerification === "object"
-    ? (fieldVerification as Record<string, any>).classification
-    : null;
+  const classification =
+    fieldVerification && typeof fieldVerification === "object"
+      ? (fieldVerification as Record<string, any>).classification
+      : null;
   const code = String(classification?.primaryCategory ?? "").trim();
   return /^CAT_[A-Z_]+$/.test(code) ? code : null;
 }
 
-function pickPrimaryCategoryId(ids: string[], codes: Map<string, string>, primaryCode: string | null) {
+function pickPrimaryCategoryId(
+  ids: string[],
+  codes: Map<string, string>,
+  primaryCode: string | null,
+) {
   if (primaryCode) {
     const matched = ids.find((id) => codes.get(id) === primaryCode);
     if (matched) return matched;
@@ -293,7 +410,10 @@ function groupValues(rows: any[], valueKey: string) {
   const grouped = new Map<string, string[]>();
   for (const row of rows) {
     if (!row.poster_id || !row[valueKey]) continue;
-    grouped.set(row.poster_id, [...(grouped.get(row.poster_id) ?? []), row[valueKey]]);
+    grouped.set(row.poster_id, [
+      ...(grouped.get(row.poster_id) ?? []),
+      row[valueKey],
+    ]);
   }
   return grouped;
 }
