@@ -7,6 +7,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import SiteVisitTracker from "./components/SiteVisitTracker";
 import { SeoStructuredData } from "./components/SeoStructuredData";
 import { getAppOrigin } from "../lib/siteUrl";
+import { Analytics } from "@vercel/analytics/next";
 
 const appOrigin = getAppOrigin();
 const siteDescription =
@@ -79,6 +80,7 @@ export default function RootLayout({
           </Suspense>
           {children}
           <ToastProvider />
+          <Analytics />
         </ErrorBoundary>
       </body>
     </html>

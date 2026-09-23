@@ -9,6 +9,10 @@ import {
   getKstDayBounds,
   parseExpoResult,
 } from "../_shared/notification-logic.mjs";
+import {
+  buildNotificationLink,
+  recordNotificationSent,
+} from "../_shared/notification-events.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -182,7 +186,11 @@ serve(async (req) => {
                   to: profile.expo_push_token,
                   title: copy.title,
                   body: copy.body,
-                  data: { posterId: poster.id, deadlineOffsetDays },
+                  data: {
+                    posterId: poster.id,
+                    deadlineOffsetDays,
+                    link_url: buildNotificationLink(poster.id, "favorite_deadline"),
+                  },
                 }),
               },
             );
@@ -217,6 +225,16 @@ serve(async (req) => {
 
           if (deliveryResult.status === "sent") {
             pushSentCount += 1;
+            await recordNotificationSent(supabase, {
+              posterId: poster.id,
+              posterStatus: "published",
+              ctaVariant: "favorite_deadline_v1",
+              metadata: {
+                channel: "expo_push",
+                notification_type: "favorite_deadline",
+                deadline_offset_days: deadlineOffsetDays,
+              },
+            });
             const { error: sentAtError } = await supabase
               .from("notifications")
               .update({ push_sent_at: new Date().toISOString() })

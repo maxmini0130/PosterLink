@@ -92,7 +92,11 @@ export default function OnboardingPage() {
         throw new Error(data.error ?? "프로필 저장 실패");
       }
 
-      router.push("/");
+      const requestedNext = new URLSearchParams(window.location.search).get("next");
+      const nextPath = requestedNext?.startsWith("/") && !requestedNext.startsWith("//") && !requestedNext.includes("\\")
+        ? requestedNext
+        : "/";
+      router.push(nextPath);
     } catch (error: any) {
       toast.error("프로필 저장 실패: " + error.message);
     } finally {

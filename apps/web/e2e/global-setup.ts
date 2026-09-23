@@ -41,6 +41,9 @@ async function loginAs(email: string, password: string, storageStatePath: string
   const context = await browser.newContext();
   const page = await context.newPage();
 
+  await page.route("**/api/site-visits", (route) => route.fulfill({ status: 204 }));
+  await page.route("**/api/poster-views", (route) => route.fulfill({ status: 204 }));
+
   await page.goto(`${BASE_URL}/login`);
   await page.waitForLoadState("domcontentloaded");
 

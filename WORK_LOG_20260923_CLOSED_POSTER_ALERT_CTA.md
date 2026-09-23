@@ -19,10 +19,10 @@
 - [x] 마감 알림 D-7 / D-1 지원 및 회차별 중복 방지 추가
 - [x] Expo 전송 성공·실패·제외 로그 저장 추가
 - [ ] 운영 migration 적용 및 Edge Function 배포 승인
-- [ ] 2단계: 마감 공고 상세 CTA, 로그인 안내, 조건 확인·수정, 저장 완료 흐름 구현
-- [ ] 3단계: `notification_sent`를 포함한 7개 분석 이벤트와 공통 비식별 속성 구현
-- [ ] 4단계: lint, typecheck, production build, E2E, 모바일 화면 검증
-- [ ] 관련 문서와 작업 로그 갱신 및 검증된 변경 커밋
+- [x] 2단계: 마감 공고 상세 CTA, 로그인 안내, 조건 확인·수정, 저장 완료 흐름 구현
+- [x] 3단계: `notification_sent`를 포함한 7개 분석 이벤트와 공통 비식별 속성 구현
+- [x] 4단계: lint, typecheck, production build, E2E, 모바일 화면 검증
+- [x] 관련 문서와 작업 로그 갱신 및 검증된 변경 커밋
 
 ## 0단계 결과
 
@@ -124,6 +124,39 @@
 
 적용이 승인될 경우 순서는 migration 적용, `check-deadlines` 배포, `notify-new-match` 배포, 읽기 전용 상태 확인 순이다. 문제가 생기면 기존 Edge Function 버전을 재배포하고 신규 trigger를 비활성화한 뒤 원인을 확인한다. 신규 테이블이나 로그 데이터 삭제는 별도 승인 없이 수행하지 않는다.
 
-## 다음 승인 지점
+## 2단계 구현 결과
 
-1단계 수정 코드는 준비됐지만 운영에는 적용하지 않았다. 다음 단계에서는 마감 상세 CTA와 구독 저장 흐름을 구현하고, 3단계 이벤트 측정까지 연결해야 한다. 단계 규칙에 따라 2단계 승인 전에는 진행하지 않는다.
+- `poster_status = closed`인 상세에만 공고 제목 아래 알림 CTA를 표시한다. 진행 중 공고는 조건문에서 컴포넌트 자체를 렌더링하지 않는다.
+- 비회원은 알림 종류 네 가지가 명시된 로그인 모달을 먼저 본다. Kakao OAuth 후 원래 상세로 돌아오며, 신규 사용자는 온보딩 완료 후 같은 상세로 복귀한다.
+- 로그인 사용자는 저장 전에 지역·분야 조건 확인 화면을 보고 조건을 수정할 수 있다. 확인 버튼을 눌러야 `save_alert_subscription` RPC가 실행된다.
+- 최근 90일 월 3건 기준으로 시군구+분야가 부족하면 시도+분야, 그래도 부족하면 전국+분야로 넓힌다.
+- 저장 RPC는 인증 사용자, 마감 공고, 허용된 CTA variant를 검증하고 같은 조건을 중복 생성하지 않는다.
+
+## 3단계 구현 결과
+
+- Vercel Analytics를 웹 루트에 연결했다.
+- `alert_cta_view`, `alert_cta_click`, `auth_modal_view`, `login_complete`, `alert_saved`, `notification_open`은 Vercel custom event와 `product_events`에 함께 기록한다.
+- `notification_sent`는 Expo가 성공 ticket을 반환한 경우 Edge Function이 `product_events`에 기록한다.
+- 모든 이벤트는 `poster_id`, `poster_status`, `region`, `category`, `cta_variant`를 포함하며 사용자 ID, 이메일, push token을 포함하지 않는다.
+- Expo payload에 추적용 `link_url`을 추가해 모바일 알림 탭이 상세의 `notification_open` 이벤트로 이어진다.
+
+## 4단계 검증 결과
+
+검증일: 2026-09-24 (Asia/Seoul)
+
+- `pnpm test`: 웹 단위 테스트 61개 통과
+- `pnpm --filter posterlink-crawler test`: crawler 단위·회귀 테스트 318개 통과
+- `pnpm --filter web lint`: 통과
+- `pnpm --filter web exec tsc --noEmit`: 통과
+- `pnpm --filter web build`: production build 통과
+- `deno check`: `notify-new-match`, `check-deadlines` 통과
+- 읽기 전용 E2E 3개 통과: 마감 CTA와 비회원 안내, 진행 중 공고 CTA 미노출, 모바일 CTA·공식 링크 비중첩, 알림 링크 재방문 이벤트
+- 로그인 E2E 1개 통과: 조건 확인 후 저장 완료. 알림 저장 RPC와 방문·조회·분석 로그 요청은 모킹해 운영 DB 쓰기를 차단했다.
+- Supabase linked dry-run 통과: 적용 예정 migration 2개만 확인했으며 실제 적용은 하지 않았다.
+- 상세 본문의 손상 surrogate 문자가 서버와 브라우저에서 다르게 변환되어 발생하던 hydration 오류를 같은 상세 페이지 범위에서 방지했다.
+
+## 남은 운영 작업
+
+- 운영 migration 적용과 Edge Function 배포는 수행하지 않았다.
+- 실제 Expo token을 사용한 D-7/D-1 및 신규 매칭 발송 통합 검증은 분리된 스테이징 또는 로컬 Supabase 환경이 생긴 뒤 수행해야 한다.
+- 적용 순서는 두 migration 적용, `check-deadlines` 배포, `notify-new-match` 배포, 웹 배포, 읽기 전용 상태 확인 순이다.

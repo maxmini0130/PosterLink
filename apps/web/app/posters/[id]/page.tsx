@@ -7,6 +7,7 @@ import { resolvePosterImageGallery } from "../../../lib/posterImage";
 import { hasVerifiedPosterStructuredData } from "../../../lib/posterStructuredTrust";
 import { buildPosterStructuredSeoData } from "../../../lib/posterStructuredSeo";
 import { PosterDetailClient, type PosterDetailLink, type PosterDetailPoster } from "./PosterDetailClient";
+import type { AlertDefaults } from "./ClosedPosterAlertCta";
 
 export const dynamic = "force-dynamic";
 
@@ -87,6 +88,13 @@ type RegionRow = {
   name: string | null;
   full_name: string | null;
   level: string | null;
+};
+
+type AlertDefaultRow = {
+  out_region_id: string | null;
+  out_region_name: string | null;
+  out_category_id: string | null;
+  out_category_name: string | null;
 };
 
 function createPosterServerClient() {
@@ -192,6 +200,30 @@ async function fetchPosterDetail(id: string) {
   const poster = posterRes.data as PosterRow;
   const categoryId = pickPrimaryCategoryId(categoryIds, categoryCodeMap, readPrimaryCategoryCode(poster.field_verification));
   const regionId = first(regionIds);
+  const fallbackAlertDefaults: AlertDefaults = {
+    regionId,
+    regionName: regionId ? (regionMap[regionId] ?? "지역 전체") : "지역 전체",
+    categoryId,
+    categoryName: categoryId ? (categoryMap[categoryId] ?? "분야 전체") : "분야 전체"
+  };
+  let alertDefaults = fallbackAlertDefaults;
+  if (poster.poster_status === "closed" && (regionId || categoryId)) {
+    const { data: alertDefaultData } = await supabase
+      .rpc("resolve_closed_poster_alert_default", {
+        p_region_id: regionId,
+        p_category_id: categoryId
+      })
+      .maybeSingle();
+    const resolved = alertDefaultData as AlertDefaultRow | null;
+    if (resolved && (resolved.out_region_id || resolved.out_category_id)) {
+      alertDefaults = {
+        regionId: resolved.out_region_id,
+        regionName: resolved.out_region_name || "지역 전체",
+        categoryId: resolved.out_category_id,
+        categoryName: resolved.out_category_name || "분야 전체"
+      };
+    }
+  }
   const enrichedPoster: PosterDetailPoster = {
     ...poster,
     categoryId,
@@ -205,6 +237,7 @@ async function fetchPosterDetail(id: string) {
 
   return {
     poster: enrichedPoster,
+    alertDefaults,
     links: ((linkRes.data ?? []) as PosterDetailLink[]).filter((link) => Boolean(link.url))
   };
 }
@@ -286,7 +319,7 @@ export default async function PosterDetailPage({ params }: { params: { id: strin
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
-      <PosterDetailClient poster={detail.poster} links={detail.links} />
+      <PosterDetailClient poster={detail.poster} links={detail.links} alertDefaults={detail.alertDefaults} />
     </>
   );
 }

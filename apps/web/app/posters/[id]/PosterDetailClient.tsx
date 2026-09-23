@@ -23,6 +23,8 @@ import {
 import { Footer } from "../../components/Footer";
 import { CalendarPlus, ChevronLeft, ChevronRight, Eye, Heart, Share2, X } from "lucide-react";
 import { FieldReportButton } from "./FieldReportButton";
+import { ClosedPosterAlertCta, type AlertDefaults } from "./ClosedPosterAlertCta";
+import { trackAlertEvent } from "../../../lib/alertAnalytics";
 
 export type PosterDetailPoster = {
   id: string;
@@ -404,7 +406,7 @@ function formatSummaryLines(value: string | null | undefined): SummaryLine[] {
     return removeDanglingDuplicateLines(parsed);
   }
 
-  return text
+  return normalizeSummaryText(text)
     .split(/(?<=[.!?。]|[다요함됨음임])\s+/)
     .map((line) => line.trim())
     .filter(Boolean)
@@ -423,8 +425,8 @@ function renderSummaryContent(line: SummaryLine) {
               {item.number}
             </span>
             <div className="min-w-0 space-y-1 break-keep [overflow-wrap:anywhere]">
-              <p>{item.body}</p>
-              {item.instructor && <p className="text-xs font-bold text-gray-500">강사: {item.instructor}</p>}
+              <p suppressHydrationWarning>{item.body}</p>
+              {item.instructor && <p suppressHydrationWarning className="text-xs font-bold text-gray-500">강사: {item.instructor}</p>}
             </div>
           </div>
         ))}
@@ -439,7 +441,7 @@ function renderSummaryContent(line: SummaryLine) {
         {dashItems.map((item, index) => (
           <div key={`${item}-${index}`} className="grid grid-cols-[0.75rem_minmax(0,1fr)] gap-2">
             <span className="mt-2 h-1.5 w-1.5 rounded-full bg-gray-400" />
-            <p className="min-w-0 break-keep [overflow-wrap:anywhere]">{item}</p>
+            <p suppressHydrationWarning className="min-w-0 break-keep [overflow-wrap:anywhere]">{item}</p>
           </div>
         ))}
       </div>
@@ -450,7 +452,7 @@ function renderSummaryContent(line: SummaryLine) {
   return (
     <div className="min-w-0 space-y-1.5 break-keep [overflow-wrap:anywhere]">
       {paragraphs.map((paragraph, index) => (
-        <p key={`${paragraph}-${index}`}>{paragraph}</p>
+        <p key={`${paragraph}-${index}`} suppressHydrationWarning>{paragraph}</p>
       ))}
     </div>
   );
@@ -459,11 +461,13 @@ function renderSummaryContent(line: SummaryLine) {
 export function PosterDetailClient({
   poster,
   links,
+  alertDefaults,
   initialViewCount = 0,
   initialFavoriteCount = 0
 }: {
   poster: PosterDetailPoster;
   links: PosterDetailLink[];
+  alertDefaults: AlertDefaults;
   initialViewCount?: number;
   initialFavoriteCount?: number;
 }) {
@@ -505,6 +509,23 @@ export function PosterDetailClient({
       cancelled = true;
     };
   }, [initialFavoriteCount, initialViewCount, poster.id]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("notification_open") !== "1") return;
+    const notificationType = params.get("notification_type");
+    trackAlertEvent("notification_open", {
+      poster_id: poster.id,
+      poster_status: poster.poster_status || "published",
+      region: poster.regionName || "지역 전체",
+      category: poster.categoryName || "분야 전체",
+      cta_variant: notificationType === "favorite_deadline" ? "favorite_deadline_v1" : "closed_poster_v1"
+    });
+    params.delete("notification_open");
+    params.delete("notification_type");
+    const query = params.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+  }, [poster.categoryName, poster.id, poster.poster_status, poster.regionName]);
 
   const toggleFavorite = async () => {
     const {
@@ -697,6 +718,14 @@ export function PosterDetailClient({
                 </span>
               )}
             </div>
+          )}
+
+          {poster.poster_status === "closed" && (
+            <ClosedPosterAlertCta
+              posterId={poster.id}
+              posterStatus={poster.poster_status}
+              defaults={alertDefaults}
+            />
           )}
 
           <a

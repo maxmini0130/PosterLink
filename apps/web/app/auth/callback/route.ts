@@ -3,6 +3,16 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+function safeNextPath(value: string | null, origin: string) {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) return "/";
+  try {
+    const parsed = new URL(value, origin);
+    return parsed.origin === origin ? `${parsed.pathname}${parsed.search}${parsed.hash}` : "/";
+  } catch {
+    return "/";
+  }
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
@@ -10,6 +20,7 @@ export async function GET(request: NextRequest) {
   const naverRt = searchParams.get("naver_rt");
   const at = searchParams.get("access_token");
   const rt = searchParams.get("refresh_token");
+  const nextPath = safeNextPath(searchParams.get("next"), origin);
 
   const cookieStore = cookies();
   // pending: exchangeCodeForSession이 세팅한 쿠키를 이후 쿼리에서도 읽을 수 있도록 병합
@@ -103,8 +114,8 @@ export async function GET(request: NextRequest) {
         `${origin}/login?error=auth_callback_failed&msg=${encodeURIComponent(upsertError.message)}`
       );
     }
-    return redirect(`${origin}/onboarding`);
+    return redirect(`${origin}/onboarding?next=${encodeURIComponent(nextPath)}`);
   }
 
-  return redirect(`${origin}/`);
+  return redirect(`${origin}${nextPath}`);
 }

@@ -4,6 +4,10 @@ import {
   type SupabaseClient,
 } from "https://esm.sh/@supabase/supabase-js@2.103.2";
 import { parseExpoResult } from "../_shared/notification-logic.mjs";
+import {
+  buildNotificationLink,
+  recordNotificationSent,
+} from "../_shared/notification-events.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -262,7 +266,10 @@ serve(async (req) => {
               to: profile.expo_push_token,
               title: message.title,
               body: message.body,
-              data: { posterId: poster_id },
+              data: {
+                posterId: poster_id,
+                link_url: buildNotificationLink(poster_id, "new_match"),
+              },
             }),
           },
         );
@@ -283,6 +290,12 @@ serve(async (req) => {
       if (deliveryResult.invalidToken) invalidTokenUserIds.push(profile.id);
       if (deliveryResult.status === "sent") {
         sentCount += 1;
+        await recordNotificationSent(serviceClient, {
+          posterId: poster_id,
+          posterStatus: "published",
+          ctaVariant: "closed_poster_v1",
+          metadata: { channel: "expo_push", notification_type: "new_match" },
+        });
         for (const notificationId of notificationIds)
           sentNotificationIds.add(notificationId);
       } else {
