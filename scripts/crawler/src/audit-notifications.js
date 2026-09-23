@@ -10,13 +10,21 @@ const NOTIFICATION_TYPES = ["new_match", "favorite_deadline"];
 const PAGE_SIZE = 1000;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "../../..");
-const DEFAULT_OUTPUT = path.join(REPO_ROOT, "data", "eval", "reports", "notification-push-audit.json");
+const DEFAULT_OUTPUT = path.join(
+  REPO_ROOT,
+  "data",
+  "eval",
+  "reports",
+  "notification-push-audit.json",
+);
 
 function createSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_KEY;
   if (!url || !key) {
-    throw new Error("NEXT_PUBLIC_SUPABASE_URL/SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY/SUPABASE_KEY are required");
+    throw new Error(
+      "NEXT_PUBLIC_SUPABASE_URL/SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY/SUPABASE_KEY are required",
+    );
   }
   return createClient(url, key, {
     global: { headers: { "X-Client-Info": "posterlink-notification-audit" } },
@@ -41,6 +49,7 @@ async function fetchAllPendingNotifications(supabase, type) {
       .select("id,user_id,target_id,created_at")
       .eq("type", type)
       .is("push_sent_at", null)
+      .is("push_discarded_at", null)
       .order("created_at", { ascending: false })
       .range(from, from + PAGE_SIZE - 1);
 
@@ -73,7 +82,9 @@ async function fetchPosters(supabase, posterIds) {
     const ids = posterIds.slice(i, i + PAGE_SIZE);
     const { data, error } = await supabase
       .from("posters")
-      .select("id,title,poster_status,application_end_at,deadline_type,exposure_tier")
+      .select(
+        "id,title,poster_status,application_end_at,deadline_type,exposure_tier",
+      )
       .in("id", ids);
     if (error) throw error;
     posters.push(...(data ?? []));
@@ -127,7 +138,7 @@ function summarize(rows, profileById, posterById) {
 
   for (const row of rows) {
     const target = row.target_id
-      ? byTarget.get(row.target_id) ?? emptyTargetSummary(row.target_id)
+      ? (byTarget.get(row.target_id) ?? emptyTargetSummary(row.target_id))
       : null;
     const profile = profileById.get(row.user_id);
     if (!profile) {
@@ -155,13 +166,18 @@ function summarize(rows, profileById, posterById) {
       byTarget.set(row.target_id, target);
     }
     if (row.user_id) {
-      const current = byUser.get(row.user_id) ?? { userId: row.user_id, count: 0 };
+      const current = byUser.get(row.user_id) ?? {
+        userId: row.user_id,
+        count: 0,
+      };
       current.count += 1;
       byUser.set(row.user_id, current);
     }
   }
 
-  const targets = [...byTarget.values()].map((target) => decorateTarget(target, posterById));
+  const targets = [...byTarget.values()].map((target) =>
+    decorateTarget(target, posterById),
+  );
   summary.topTargets = targets.sort((a, b) => b.count - a.count).slice(0, 10);
   summary.sendableTargets = targets
     .filter((target) => target.sendableRows > 0)
@@ -170,7 +186,9 @@ function summarize(rows, profileById, posterById) {
     .filter((target) => target.noTokenRows > 0)
     .sort((a, b) => b.noTokenRows - a.noTokenRows || b.count - a.count)
     .slice(0, 20);
-  summary.topUsers = [...byUser.values()].sort((a, b) => b.count - a.count).slice(0, 10);
+  summary.topUsers = [...byUser.values()]
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
   return summary;
 }
 
@@ -203,7 +221,9 @@ function printHuman(report) {
 async function main() {
   const args = parseArgs();
   const supabase = createSupabase();
-  const typeFilter = args.type ? String(args.type).split(",") : NOTIFICATION_TYPES;
+  const typeFilter = args.type
+    ? String(args.type).split(",")
+    : NOTIFICATION_TYPES;
   const rowsByType = {};
   const allUserIds = new Set();
 
@@ -216,18 +236,23 @@ async function main() {
   }
 
   const profileById = await fetchProfiles(supabase, [...allUserIds]);
-  const allPosterIds = [...new Set(
-    Object.values(rowsByType)
-      .flat()
-      .map((row) => row.target_id)
-      .filter(Boolean),
-  )];
+  const allPosterIds = [
+    ...new Set(
+      Object.values(rowsByType)
+        .flat()
+        .map((row) => row.target_id)
+        .filter(Boolean),
+    ),
+  ];
   const posterById = await fetchPosters(supabase, allPosterIds);
   const report = {
     generatedAt: new Date().toISOString(),
     readOnly: true,
     types: Object.fromEntries(
-      Object.entries(rowsByType).map(([type, rows]) => [type, summarize(rows, profileById, posterById)]),
+      Object.entries(rowsByType).map(([type, rows]) => [
+        type,
+        summarize(rows, profileById, posterById),
+      ]),
     ),
   };
 

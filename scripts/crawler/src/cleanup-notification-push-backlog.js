@@ -21,10 +21,16 @@ function createSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_KEY;
   if (!url || !key) {
-    throw new Error("NEXT_PUBLIC_SUPABASE_URL/SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY/SUPABASE_KEY are required");
+    throw new Error(
+      "NEXT_PUBLIC_SUPABASE_URL/SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY/SUPABASE_KEY are required",
+    );
   }
   return createClient(url, key, {
-    global: { headers: { "X-Client-Info": "posterlink-notification-push-backlog-cleanup" } },
+    global: {
+      headers: {
+        "X-Client-Info": "posterlink-notification-push-backlog-cleanup",
+      },
+    },
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }
@@ -46,6 +52,7 @@ async function fetchPendingRows(supabase, types, cutoffIso) {
         .select("id,user_id,type,target_id,created_at")
         .eq("type", type)
         .is("push_sent_at", null)
+        .is("push_discarded_at", null)
         .lt("created_at", cutoffIso)
         .order("created_at", { ascending: true })
         .range(from, from + PAGE_SIZE - 1);
@@ -143,13 +150,22 @@ function printReport(report) {
 async function main() {
   const args = parseArgs();
   const supabase = createSupabase();
-  const types = args.type ? String(args.type).split(",").map((value) => value.trim()).filter(Boolean) : DEFAULT_TYPES;
-  const olderThanHours = Number(args["older-than-hours"] ?? DEFAULT_OLDER_THAN_HOURS);
+  const types = args.type
+    ? String(args.type)
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean)
+    : DEFAULT_TYPES;
+  const olderThanHours = Number(
+    args["older-than-hours"] ?? DEFAULT_OLDER_THAN_HOURS,
+  );
   if (!Number.isFinite(olderThanHours) || olderThanHours <= 0) {
     throw new Error("--older-than-hours must be a positive number");
   }
 
-  const cutoffIso = new Date(Date.now() - olderThanHours * 60 * 60 * 1000).toISOString();
+  const cutoffIso = new Date(
+    Date.now() - olderThanHours * 60 * 60 * 1000,
+  ).toISOString();
   const rows = await fetchPendingRows(supabase, types, cutoffIso);
   const userIds = [...new Set(rows.map((row) => row.user_id).filter(Boolean))];
   const profileById = await fetchProfiles(supabase, userIds);
