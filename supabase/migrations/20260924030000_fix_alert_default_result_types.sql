@@ -1,34 +1,5 @@
--- Closed-poster CTA save API, low-frequency fallback resolver, and anonymous
--- product event sink for server-side notification delivery events.
-
-CREATE TABLE product_events (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  event_name TEXT NOT NULL CHECK (event_name IN (
-    'alert_cta_view',
-    'alert_cta_click',
-    'auth_modal_view',
-    'login_complete',
-    'alert_saved',
-    'notification_sent',
-    'notification_open'
-  )),
-  poster_id UUID REFERENCES posters(id) ON DELETE SET NULL,
-  poster_status TEXT NOT NULL,
-  region TEXT NOT NULL,
-  category TEXT NOT NULL,
-  cta_variant TEXT NOT NULL,
-  metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX product_events_name_created_at
-  ON product_events (event_name, created_at DESC);
-
-CREATE INDEX product_events_poster_created_at
-  ON product_events (poster_id, created_at DESC);
-
-ALTER TABLE product_events ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON TABLE product_events FROM anon, authenticated;
+-- Keep the public resolver's declared TEXT columns stable when taxonomy names
+-- are stored as VARCHAR columns.
 
 CREATE OR REPLACE FUNCTION resolve_closed_poster_alert_default(
   p_region_id UUID,
@@ -113,67 +84,5 @@ $$;
 
 REVOKE ALL ON FUNCTION resolve_closed_poster_alert_default(UUID, UUID) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION resolve_closed_poster_alert_default(UUID, UUID) TO anon, authenticated;
-
-CREATE OR REPLACE FUNCTION save_alert_subscription(
-  p_region_id UUID,
-  p_category_id UUID,
-  p_source_poster_id UUID,
-  p_cta_variant TEXT DEFAULT 'closed_poster_v1'
-)
-RETURNS UUID
-LANGUAGE plpgsql
-SECURITY INVOKER
-SET search_path = public
-AS $$
-DECLARE
-  v_user_id UUID := auth.uid();
-  v_subscription_id UUID;
-BEGIN
-  IF v_user_id IS NULL THEN
-    RAISE EXCEPTION 'authentication required' USING ERRCODE = '42501';
-  END IF;
-  IF p_region_id IS NULL AND p_category_id IS NULL THEN
-    RAISE EXCEPTION 'region or category is required' USING ERRCODE = '22023';
-  END IF;
-  IF p_cta_variant <> 'closed_poster_v1' THEN
-    RAISE EXCEPTION 'unsupported CTA variant' USING ERRCODE = '22023';
-  END IF;
-  IF NOT EXISTS (
-    SELECT 1 FROM posters
-    WHERE id = p_source_poster_id AND poster_status = 'closed'
-  ) THEN
-    RAISE EXCEPTION 'source poster must be closed' USING ERRCODE = '22023';
-  END IF;
-
-  INSERT INTO alert_subscriptions (
-    user_id,
-    region_id,
-    category_id,
-    source_poster_id,
-    cta_variant,
-    is_active
-  ) VALUES (
-    v_user_id,
-    p_region_id,
-    p_category_id,
-    p_source_poster_id,
-    p_cta_variant,
-    true
-  )
-  ON CONFLICT (user_id, region_id, category_id, institution_id)
-  DO UPDATE SET
-    source_poster_id = EXCLUDED.source_poster_id,
-    cta_variant = EXCLUDED.cta_variant,
-    is_active = true,
-    updated_at = now()
-  RETURNING id INTO v_subscription_id;
-
-  UPDATE profiles SET is_notified = true WHERE id = v_user_id;
-  RETURN v_subscription_id;
-END;
-$$;
-
-REVOKE ALL ON FUNCTION save_alert_subscription(UUID, UUID, UUID, TEXT) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION save_alert_subscription(UUID, UUID, UUID, TEXT) TO authenticated;
 
 NOTIFY pgrst, 'reload schema';

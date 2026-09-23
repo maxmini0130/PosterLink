@@ -7,7 +7,7 @@ CREATE TABLE alert_subscriptions (
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   region_id UUID REFERENCES regions(id) ON DELETE RESTRICT,
   category_id UUID REFERENCES categories(id) ON DELETE RESTRICT,
-  institution_id UUID REFERENCES public_institutions(id) ON DELETE CASCADE,
+  institution_id UUID REFERENCES institutions(id) ON DELETE CASCADE,
   source_poster_id UUID REFERENCES posters(id) ON DELETE SET NULL,
   cta_variant TEXT NOT NULL DEFAULT 'closed_poster_v1',
   is_active BOOLEAN NOT NULL DEFAULT true,
