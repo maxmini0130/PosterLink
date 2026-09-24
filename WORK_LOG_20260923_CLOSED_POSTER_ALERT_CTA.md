@@ -169,4 +169,5 @@
 - 운영 별칭 `https://www.posterlink.kr`, `https://posterlink.kr`, `https://poster-link-web.vercel.app` 연결 확인
 - 운영 마감 공고 상세 HTTP 200, CTA 문구와 버튼 노출 확인
 - 운영 진행 중 공고 상세 HTTP 200, CTA 미노출 확인
+- 운영 도메인 읽기 전용 E2E 3개 통과: 비회원 안내, 진행 중 미노출, 모바일 비중첩, 알림 재방문 이벤트
 - 실제 사용자 대상 Expo 알림은 검증 과정에서 발송하지 않았다.
