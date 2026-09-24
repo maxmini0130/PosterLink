@@ -157,6 +157,16 @@
 
 ## 남은 운영 작업
 
-- 운영 migration 적용과 Edge Function 배포는 수행하지 않았다.
 - 실제 Expo token을 사용한 D-7/D-1 및 신규 매칭 발송 통합 검증은 분리된 스테이징 또는 로컬 Supabase 환경이 생긴 뒤 수행해야 한다.
-- 적용 순서는 두 migration 적용, `check-deadlines` 배포, `notify-new-match` 배포, 웹 배포, 읽기 전용 상태 확인 순이다.
+
+## 2026-09-24 운영 반영
+
+- 운영 DB migration `20260924010000`, `20260924020000`, `20260924030000` 적용 완료
+- 최초 적용 시 기관 FK 테이블명을 실제 스키마의 `institutions`로 교정했다.
+- 기본 조건 resolver의 `varchar`/`text` 반환 불일치를 보정 migration으로 수정하고 운영 RPC 호출 성공을 확인했다.
+- `check-deadlines` v8, `notify-new-match` v6 배포 후 ACTIVE 상태 확인
+- Vercel production deployment `dpl_5jcsVG1XmG43vgmNHnCiuD3kNaeX` Ready
+- 운영 별칭 `https://www.posterlink.kr`, `https://posterlink.kr`, `https://poster-link-web.vercel.app` 연결 확인
+- 운영 마감 공고 상세 HTTP 200, CTA 문구와 버튼 노출 확인
+- 운영 진행 중 공고 상세 HTTP 200, CTA 미노출 확인
+- 실제 사용자 대상 Expo 알림은 검증 과정에서 발송하지 않았다.
