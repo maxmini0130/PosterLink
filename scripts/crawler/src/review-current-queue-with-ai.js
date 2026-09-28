@@ -326,14 +326,72 @@ async function buildPlan(rows) {
   });
 }
 
+function buildManualPlan(rows, manualItems) {
+  const rowById = new Map(rows.map((row) => [row.id, row]));
+  return manualItems.map((item) => {
+    if (item.manual_verified !== true) {
+      throw new Error(`Manual review item ${item.id ?? "(missing id)"} is not marked manual_verified`);
+    }
+    const row = rowById.get(item.id);
+    if (!row) throw new Error(`Manual review item ${item.id} is not in the current review queue`);
+    const labels = normalizeLabels(item.decision?.category_labels);
+    const categoryCodes = labels.map((label) => CATEGORY_CODE_BY_LABEL[label]).filter(Boolean);
+    const decision = {
+      ...item.decision,
+      id: item.id,
+      status: item.decision?.status === "closed" ? "closed" : "published",
+      application_start_at: normalizeDateOnly(item.decision?.application_start_at),
+      application_end_at: normalizeDateOnly(item.decision?.application_end_at),
+      event_start_at: normalizeDateOnly(item.decision?.event_start_at),
+      event_end_at: normalizeDateOnly(item.decision?.event_end_at),
+      deadline_type: VALID_DEADLINE_TYPES.includes(item.decision?.deadline_type)
+        ? item.decision.deadline_type
+        : "unknown",
+      category_labels: labels,
+      category_codes: categoryCodes,
+      confidence: Number(item.decision?.confidence ?? 0),
+      concerns: asArray(item.decision?.concerns),
+    };
+    if (item.decision?.approve !== true || decision.confidence < 0.85 || decision.concerns.length > 0) {
+      throw new Error(`Manual review item ${item.id} does not meet approval requirements`);
+    }
+    if (categoryCodes.length === 0) {
+      throw new Error(`Manual review item ${item.id} has no valid categories`);
+    }
+    const currentCodes = (row.poster_categories ?? []).map((entry) => entry.categories?.code).filter(Boolean);
+    return {
+      id: item.id,
+      title: row.title,
+      source_key: row.source_key,
+      current: {
+        status: row.poster_status,
+        application_start_at: normalizeDateOnly(row.application_start_at),
+        application_end_at: normalizeDateOnly(row.application_end_at),
+        event_start_at: normalizeDateOnly(row.event_start_at),
+        event_end_at: normalizeDateOnly(row.event_end_at),
+        deadline_type: row.deadline_type,
+        category_codes: currentCodes,
+        category_labels: (row.poster_categories ?? []).map((entry) => entry.categories?.name).filter(Boolean),
+      },
+      decision,
+      changed: true,
+      applyable: true,
+      manual_verified: true,
+      auto_approval_blockers: [],
+    };
+  });
+}
+
 function mergeFieldVerification(row, plan) {
   const verification = { ...asObject(row.field_verification) };
   const now = new Date().toISOString();
+  const reviewSource = plan.manual_verified ? "codex-manual-source-review" : "ai-review-current-queue";
+  const reviewModel = plan.manual_verified ? "codex" : MODEL;
   verification.dateIssues = [];
   verification.classificationIssues = [];
   verification.deadlineMatches = true;
   verification.decision = "approved";
-  verification.reason = compact(`AI queue review approved: ${plan.decision.reason}`, 700);
+  verification.reason = compact(`${plan.manual_verified ? "Manual source review" : "AI queue review"} approved: ${plan.decision.reason}`, 700);
   verification.dateQuality = {
     ...asObject(verification.dateQuality),
     decision: "pass",
@@ -341,7 +399,7 @@ function mergeFieldVerification(row, plan) {
     normalizedDeadline: plan.decision.application_end_at,
     suggestedDeadline: plan.decision.application_end_at,
     reviewedAt: now,
-    reviewedBy: "ai-review-current-queue",
+    reviewedBy: reviewSource,
   };
   verification.classification = {
     ...asObject(verification.classification),
@@ -352,13 +410,13 @@ function mergeFieldVerification(row, plan) {
       label: plan.decision.category_labels[index],
       confidence: plan.decision.confidence,
       evidence: plan.decision.reason,
-      source: "ai-review-current-queue",
-      model: MODEL,
+      source: reviewSource,
+      model: reviewModel,
     })),
     confidence: plan.decision.confidence,
     reason: plan.decision.reason,
-    model: MODEL,
-    updatedBy: "ai-review-current-queue",
+    model: reviewModel,
+    updatedBy: reviewSource,
     updatedAt: now,
   };
   verification.aiQueueReview = {
@@ -452,18 +510,41 @@ async function main() {
     fetchReviewRows(supabase, limit),
     fetchCategories(supabase),
   ]);
+  if (args["evidence-only"] === "1" || args["evidence-only"] === "true") {
+    const output = path.resolve(
+      args.output ?? `data/results/review-queue-evidence-${TODAY_KST.replaceAll("-", "")}.json`,
+    );
+    await fs.mkdir(path.dirname(output), { recursive: true });
+    await fs.writeFile(output, JSON.stringify({
+      generated_at: new Date().toISOString(),
+      today_kst: TODAY_KST,
+      review_count: rows.length,
+      items: rows.map(buildReviewInput),
+    }, null, 2), "utf8");
+    console.log(JSON.stringify({
+      output: path.relative(process.cwd(), output),
+      mode: "evidence-only",
+      review_count: rows.length,
+    }, null, 2));
+    return;
+  }
   const excludedIds = new Set(String(args.exclude ?? "").split(",").map((value) => value.trim()).filter(Boolean));
   const inputReport = args.input
     ? JSON.parse(await fs.readFile(path.resolve(args.input), "utf8"))
     : null;
-  const rawPlan = inputReport ? asArray(inputReport.items) : await buildPlan(rows);
+  const rawPlan = inputReport
+    ? inputReport.review_type === "manual-verified"
+      ? buildManualPlan(rows, asArray(inputReport.items))
+      : asArray(inputReport.items)
+    : await buildPlan(rows);
   const plan = rawPlan.map((item) => excludedIds.has(item.id) ? { ...item, applyable: false } : item);
   const applied = apply ? await applyPlan(supabase, rows, categoryByCode, plan) : [];
   const report = {
     generated_at: new Date().toISOString(),
     mode: apply ? "apply" : "dry-run",
     today_kst: TODAY_KST,
-    model: MODEL,
+    model: reviewModel,
+    method: plan.manual_verified ? "manual-source-verification" : "ai-batch-review",
     review_count: rows.length,
     approve_count: plan.filter((item) => item.decision.approve).length,
     applyable_count: plan.filter((item) => item.applyable).length,
