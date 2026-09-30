@@ -261,10 +261,10 @@ async function reviewBatch(items) {
   return JSON.parse(outputText).decisions ?? [];
 }
 
-async function buildPlan(rows) {
+async function buildPlan(rows, batchSize = REVIEW_BATCH_SIZE) {
   const decisions = [];
-  for (let index = 0; index < rows.length; index += REVIEW_BATCH_SIZE) {
-    const batch = rows.slice(index, index + REVIEW_BATCH_SIZE);
+  for (let index = 0; index < rows.length; index += batchSize) {
+    const batch = rows.slice(index, index + batchSize);
     console.error(`[ai-review] reviewing ${index + 1}-${index + batch.length}/${rows.length}`);
     decisions.push(...await reviewBatch(batch.map(buildReviewInput)));
   }
@@ -500,6 +500,7 @@ async function applyPlan(supabase, rows, categoryByCode, plan) {
 async function main() {
   const args = parseArgs();
   const limit = Math.max(1, Number(args.limit ?? 200));
+  const batchSize = Math.max(1, Math.min(REVIEW_BATCH_SIZE, Number(args["batch-size"] ?? REVIEW_BATCH_SIZE)));
   const apply = args.apply === "1" || args.apply === "true";
   if (apply && args.confirm !== CONFIRM_TOKEN) {
     throw new Error(`Applying requires --confirm=${CONFIRM_TOKEN}`);
@@ -532,11 +533,13 @@ async function main() {
   const inputReport = args.input
     ? JSON.parse(await fs.readFile(path.resolve(args.input), "utf8"))
     : null;
+  const manualVerified = inputReport?.review_type === "manual-verified";
+  const reviewModel = manualVerified ? "codex" : MODEL;
   const rawPlan = inputReport
-    ? inputReport.review_type === "manual-verified"
+    ? manualVerified
       ? buildManualPlan(rows, asArray(inputReport.items))
       : asArray(inputReport.items)
-    : await buildPlan(rows);
+    : await buildPlan(rows, batchSize);
   const plan = rawPlan.map((item) => excludedIds.has(item.id) ? { ...item, applyable: false } : item);
   const applied = apply ? await applyPlan(supabase, rows, categoryByCode, plan) : [];
   const report = {
@@ -544,7 +547,7 @@ async function main() {
     mode: apply ? "apply" : "dry-run",
     today_kst: TODAY_KST,
     model: reviewModel,
-    method: plan.manual_verified ? "manual-source-verification" : "ai-batch-review",
+    method: manualVerified ? "manual-source-verification" : "ai-batch-review",
     review_count: rows.length,
     approve_count: plan.filter((item) => item.decision.approve).length,
     applyable_count: plan.filter((item) => item.applyable).length,

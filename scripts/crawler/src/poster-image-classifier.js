@@ -70,7 +70,12 @@ async function imageUrlToDataUrl(imageUrl) {
     return `data:${contentType};base64,${imageBytes.toString("base64")}`;
   }
 
-  const response = await axios.get(imageUrl, {
+  const classificationUrl = String(imageUrl).includes("/storage/v1/object/public/")
+    ? String(imageUrl).replace("/storage/v1/object/public/", "/storage/v1/render/image/public/")
+      + (String(imageUrl).includes("?") ? "&" : "?")
+      + "width=1600&quality=85"
+    : imageUrl;
+  const response = await axios.get(classificationUrl, {
     responseType: "arraybuffer",
     timeout: 15000,
     headers: {
@@ -188,7 +193,7 @@ function isUsableCachedResult(result) {
   return !/^Classifier failed; allowed by default:/i.test(String(result.reason ?? ""));
 }
 
-export async function classifyPosterImage(imageUrl, context = {}) {
+export async function classifyPosterImage(imageUrl, context = {}, options = {}) {
   if (!imageUrl) {
     return {
       isPoster: false,
@@ -215,7 +220,7 @@ export async function classifyPosterImage(imageUrl, context = {}) {
 
   const cache = await loadCache();
   const key = cacheKey(imageUrl);
-  if (isUsableCachedResult(cache[key])) return cache[key];
+  if (!options.skipCache && isUsableCachedResult(cache[key])) return cache[key];
 
   try {
     if (isLocalModeEnabled()) {

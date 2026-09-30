@@ -25,14 +25,16 @@ const args = Object.fromEntries(
 
 if (args.help || args.h) {
   console.log(`Usage:
-  node src/backfill-image-classification.js [--limit=25] [--concurrency=1] [--statuses=published,review] [--needs-vlm-only] [--output=data/results/image-classification-backfill.json] [--apply]
+  node src/backfill-image-classification.js [--limit=25] [--concurrency=1] [--statuses=published,review] [--ids=id1,id2] [--needs-vlm-only] [--force] [--output=data/results/image-classification-backfill.json] [--apply]
 
 Backfills field_verification.posterImageOcr.imageClassification for posters that
 have a thumbnail but no stored image classification. Without --apply, only writes
 a dry-run candidate report.
 
 Use --needs-vlm-only to restrict candidates to rows that the cheap poster
-detection signal layer routes to VLM.`);
+detection signal layer routes to VLM. Use --force to reclassify rows that
+already have stored image classification and bypass the classifier cache.
+Use --ids to restrict processing to specific poster IDs.`);
   process.exit(0);
 }
 
@@ -110,18 +112,20 @@ function buildDetectionDecision(row, selectedImage) {
   };
 }
 
-async function fetchCandidates(supabase, limit, statuses, { needsVlmOnly = false } = {}) {
+async function fetchCandidates(supabase, limit, statuses, { needsVlmOnly = false, force = false, ids = [] } = {}) {
   const rows = [];
   const pageSize = 1000;
 
   for (let offset = 0; rows.length < limit; offset += pageSize) {
-    const { data, error } = await supabase
+    let query = supabase
       .from("posters")
       .select("id,title,source_org_name,poster_status,thumbnail_url,source_key,summary_short,summary_long,field_verification,created_at")
       .in("poster_status", statuses)
       .not("thumbnail_url", "is", null)
       .order("created_at", { ascending: false })
       .range(offset, offset + pageSize - 1);
+    if (ids.length > 0) query = query.in("id", ids);
+    const { data, error } = await query;
     if (error) throw error;
     if (!data || data.length === 0) break;
 
@@ -130,7 +134,7 @@ async function fetchCandidates(supabase, limit, statuses, { needsVlmOnly = false
       : new Map();
 
     for (const row of data) {
-      if (hasImageClassification(row.field_verification)) continue;
+      if (!force && hasImageClassification(row.field_verification)) continue;
       const selectedImage = needsVlmOnly ? selectImage(row, imagesByPoster.get(row.id) ?? []) : null;
       const detection = needsVlmOnly ? buildDetectionDecision(row, selectedImage) : null;
       if (needsVlmOnly && !detection.decision.needsVlm) continue;
@@ -182,11 +186,16 @@ async function main() {
   const concurrency = Math.max(1, Math.min(5, Number(args.concurrency || 1)));
   const apply = Boolean(args.apply);
   const needsVlmOnly = Boolean(args["needs-vlm-only"]);
+  const force = Boolean(args.force);
+  const ids = String(args.ids || "")
+    .split(/[,\s]+/)
+    .map((id) => id.trim())
+    .filter(Boolean);
   const statuses = String(args.statuses || "published,review")
     .split(/[,\s]+/)
     .map((status) => status.trim())
     .filter(Boolean);
-  const rows = await fetchCandidates(supabase, limit, statuses, { needsVlmOnly });
+  const rows = await fetchCandidates(supabase, limit, statuses, { needsVlmOnly, force, ids });
   const results = [];
   const startedAt = new Date().toISOString();
   let writeChain = Promise.resolve();
@@ -197,9 +206,11 @@ async function main() {
       started_at: startedAt,
       mode: apply ? "apply" : "dry-run",
       statuses,
+      ids,
       requested_limit: limit,
       concurrency,
       needs_vlm_only: needsVlmOnly,
+      force,
       candidate_count: rows.length,
       processed_count: results.length,
       applied_count: apply ? results.filter((row) => row.status === "applied").length : 0,
@@ -238,7 +249,7 @@ async function main() {
 
     try {
       if (apply) {
-        const classification = await classifyPosterImage(row.thumbnail_url, buildContext(row));
+        const classification = await classifyPosterImage(row.thumbnail_url, buildContext(row), { skipCache: force });
         const { error } = await supabase
           .from("posters")
           .update({ field_verification: mergeImageClassification(row.field_verification ?? {}, classification) })
