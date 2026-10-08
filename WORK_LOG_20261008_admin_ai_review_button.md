@@ -34,3 +34,13 @@
   - 데스크톱: 1440×1000
   - 모바일: 390×844
 - `git diff --check`
+
+## 운영 반영
+
+- 커밋 `341f386`을 `origin/main`과 `origin/feat/ai-verification-phase-1`에 반영했다.
+- Vercel production 배포 `dpl_EY8P9fN6xEh9yxZFEakSX8jtdFkV`가 `Ready` 상태이며 `https://www.posterlink.kr`에 연결됐다.
+- 운영 관리자 화면에서 `AI 검토 승인` 버튼과 GitHub Actions 실행 기록 링크가 표시되는 것을 확인했다.
+- 운영 비인증 API 조회는 HTTP 403으로 차단됐다.
+- GitHub Actions의 `AI Review Queue` 워크플로와 필요한 `SUPABASE_URL`, `SUPABASE_KEY`, `OPENAI_API_KEY` Secrets가 존재한다.
+- 운영 DB 확인 시 검수대기 항목은 0건이므로 버튼이 비활성인 상태가 정상이다.
+- 배포 확인 과정에서는 실제 AI 검토 승인 작업을 실행하지 않았다.
