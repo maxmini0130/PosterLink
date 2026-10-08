@@ -23,6 +23,14 @@ on:
         required: false
         default: "200"
         type: string
+      thorough:
+        description: "Re-read poster images and use the stronger review model before applying safe approvals."
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 concurrency:
   group: ai-review-queue
@@ -43,6 +51,7 @@ jobs:
       OPENAI_REVIEW_QUEUE_MODEL: ${{ vars.OPENAI_REVIEW_QUEUE_MODEL || 'gpt-5-mini' }}
       REVIEW_LIMIT: ${{ github.event.inputs.limit || '200' }}
       SHOULD_APPLY: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.apply || 'true' }}
+      THOROUGH_REVIEW: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.thorough || 'false' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -63,9 +72,33 @@ jobs:
             exit 1
           fi
 
+      - name: Re-read review queue poster images
+        if: ${{ env.THOROUGH_REVIEW == 'true' }}
+        run: |
+          node src/backfill-image-classification.js \
+            --limit="$REVIEW_LIMIT" \
+            --concurrency=5 \
+            --statuses=review \
+            --force \
+            --apply \
+            --output="scripts/crawler/data/results/ai-review-images-${GITHUB_RUN_ID}.json"
+
+      - name: Exclude confirmed non-poster images
+        if: ${{ env.THOROUGH_REVIEW == 'true' }}
+        run: |
+          node src/cleanup-review-nonposters.js \
+            --limit="$REVIEW_LIMIT" \
+            --statuses=review \
+            --apply \
+            --output="scripts/crawler/data/results/ai-review-nonposters-${GITHUB_RUN_ID}.json"
+
       - name: Review queue and apply safe decisions
         run: |
           ARGS=(--limit="$REVIEW_LIMIT" --output="data/results/ai-review-queue-${GITHUB_RUN_ID}.json")
+          if [ "$THOROUGH_REVIEW" = "true" ]; then
+            ARGS+=(--batch-size=5)
+            export OPENAI_REVIEW_QUEUE_MODEL="${{ vars.OPENAI_REVIEW_QUEUE_THOROUGH_MODEL || 'gpt-5' }}"
+          fi
           if [ "$SHOULD_APPLY" = "true" ]; then
             ARGS+=(--apply --confirm=AI_REVIEW_APPROVE_QUEUE)
           fi

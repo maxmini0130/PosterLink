@@ -50,6 +50,11 @@ test.describe("관리자 포스터 검수 목록", () => {
     await expect(page.locator("body")).toBeVisible();
   });
 
+  test("검수대기 화면에 AI 검토 승인 버튼 표시", async ({ page }) => {
+    await gotoAdminPosters(page);
+    await expect(page.getByTestId("admin-ai-review-button")).toBeVisible();
+  });
+
   test("상태 필터 탭 표시 (검수 대기/게시 중/반려됨)", async ({ page }) => {
     await gotoAdminPosters(page);
     const reviewTab = page.locator("text=/검수 대기|review/i").first();

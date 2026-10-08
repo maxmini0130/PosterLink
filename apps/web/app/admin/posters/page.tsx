@@ -1,16 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import {
   AlertTriangle,
+  Bot,
   Check,
   CheckSquare,
   ExternalLink,
   Eye,
   FileCheck,
   FileText,
+  Loader2,
   PencilLine,
   Search,
   Square,
@@ -50,6 +52,23 @@ type PosterSearchFilters = {
   deadlineType: AdminPosterDeadlineFilter;
   verificationStatus: AdminPosterVerificationFilter;
   sort: AdminPosterSort;
+};
+
+type AiReviewRun = {
+  id: number;
+  status: string;
+  conclusion: string | null;
+  url: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type AiReviewStatus = {
+  configured: boolean;
+  queueCount: number;
+  running: boolean;
+  latestRun: AiReviewRun | null;
+  workflowUrl: string;
 };
 
 const EMPTY_FILTERS: PosterSearchFilters = {
@@ -785,6 +804,11 @@ export default function AdminPostersPage() {
   const [draftFilters, setDraftFilters] = useState<PosterSearchFilters>(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<PosterSearchFilters>(EMPTY_FILTERS);
   const [focusedPosterId, setFocusedPosterId] = useState<string | null>(null);
+  const [aiReviewStatus, setAiReviewStatus] = useState<AiReviewStatus | null>(null);
+  const [aiReviewStatusLoading, setAiReviewStatusLoading] = useState(false);
+  const [aiReviewStarting, setAiReviewStarting] = useState(false);
+  const [aiReviewRequested, setAiReviewRequested] = useState(false);
+  const aiReviewDispatchStartedAtRef = useRef<number | null>(null);
 
   const fetchPosters = useCallback(async (status: PosterStatus, pageIndex: number, filters: PosterSearchFilters) => {
     setLoading(true);
@@ -896,10 +920,49 @@ export default function AdminPostersPage() {
     setLoading(false);
   }, [regions]);
 
+  const fetchAiReviewStatus = useCallback(async (showError = false) => {
+    setAiReviewStatusLoading(true);
+    try {
+      const response = await fetch("/api/admin/posters/ai-review", { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "AI 검토 상태를 확인하지 못했습니다.");
+
+      const nextStatus = payload as AiReviewStatus;
+      setAiReviewStatus(nextStatus);
+
+      const dispatchedAt = aiReviewDispatchStartedAtRef.current;
+      const runCreatedAt = nextStatus.latestRun?.createdAt ? Date.parse(nextStatus.latestRun.createdAt) : 0;
+      const isDispatchedRun = Boolean(dispatchedAt && runCreatedAt >= dispatchedAt - 5000);
+      if (aiReviewRequested && isDispatchedRun && nextStatus.latestRun?.status === "completed") {
+        setAiReviewRequested(false);
+        aiReviewDispatchStartedAtRef.current = null;
+        if (nextStatus.latestRun.conclusion === "success") {
+          toast.success(`AI 검토가 완료됐습니다. 검수대기 ${nextStatus.queueCount}건이 남았습니다.`);
+        } else {
+          toast.error("AI 검토 실행이 완료되지 못했습니다. 실행 기록을 확인해 주세요.");
+        }
+        void fetchPosters(currentFilter, page, appliedFilters);
+      }
+    } catch (error) {
+      if (showError) {
+        toast.error(error instanceof Error ? error.message : "AI 검토 상태를 확인하지 못했습니다.");
+      }
+    } finally {
+      setAiReviewStatusLoading(false);
+    }
+  }, [aiReviewRequested, appliedFilters, currentFilter, fetchPosters, page]);
+
   useEffect(() => {
     if (!urlParamsReady) return;
     void fetchPosters(currentFilter, page, appliedFilters);
   }, [appliedFilters, currentFilter, fetchPosters, page, urlParamsReady]);
+
+  useEffect(() => {
+    if (!urlParamsReady || currentFilter !== "review") return;
+    void fetchAiReviewStatus();
+    const interval = window.setInterval(() => void fetchAiReviewStatus(), 15000);
+    return () => window.clearInterval(interval);
+  }, [currentFilter, fetchAiReviewStatus, urlParamsReady]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1016,6 +1079,55 @@ export default function AdminPostersPage() {
       void fetchPosters(currentFilter, page, appliedFilters);
     }
     setRejecting(false);
+  };
+
+  const handleAiReview = async () => {
+    const queueCount = aiReviewStatus?.queueCount ?? totalCount;
+    if (queueCount === 0) {
+      toast("현재 검수대기 항목이 없습니다.");
+      return;
+    }
+
+    const confirmed = confirm([
+      `검수대기 ${queueCount}건을 AI가 다시 읽고 검토합니다.`,
+      "",
+      "- 대표 이미지와 원문 내용을 다시 확인합니다.",
+      "- 날짜·카테고리·중복 여부를 정밀 검토합니다.",
+      "- 확실한 항목만 승인하고 애매한 항목은 검수대기에 남깁니다.",
+      "",
+      "백그라운드 검토를 시작할까요?",
+    ].join("\n"));
+    if (!confirmed) return;
+
+    setAiReviewStarting(true);
+    try {
+      const response = await fetch("/api/admin/posters/ai-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          confirm: "AI_REVIEW_APPROVE_QUEUE",
+          limit: Math.min(queueCount, 500),
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "AI 검토를 시작하지 못했습니다.");
+
+      if (payload.noop) {
+        toast(payload.message || "현재 검수대기 항목이 없습니다.");
+        await fetchAiReviewStatus();
+        return;
+      }
+
+      aiReviewDispatchStartedAtRef.current = Date.now();
+      setAiReviewRequested(true);
+      setAiReviewStatus((current) => current ? { ...current, running: true } : current);
+      toast.success(payload.message || "정밀 AI 검토를 시작했습니다.");
+      window.setTimeout(() => void fetchAiReviewStatus(), 4000);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "AI 검토를 시작하지 못했습니다.");
+    } finally {
+      setAiReviewStarting(false);
+    }
   };
 
   const handleStatusChange = async (id: string, newStatus: "published" | "rejected", posterTitle?: string) => {
@@ -1144,6 +1256,7 @@ export default function AdminPostersPage() {
   const pageStart = totalCount === 0 ? 0 : page * PAGE_SIZE + 1;
   const pageEnd = Math.min(totalCount, (page + 1) * PAGE_SIZE);
   const activeFilterCount = countAdminPosterConditions(appliedFilters);
+  const aiReviewBusy = aiReviewStarting || aiReviewRequested || Boolean(aiReviewStatus?.running);
   const previewImageSrc = previewPoster ? getPosterImageSrc(previewPoster) : null;
   const previewIsTextNotice = previewPoster ? isTextNoticePoster(previewPoster) : false;
   const previewGeneratedPosterInfo = previewPoster ? getGeneratedPosterInfo(previewPoster) : null;
@@ -1385,6 +1498,50 @@ export default function AdminPostersPage() {
             운영자가 등록된 포스터 정보를 확인하고 최종 게시 여부를 결정합니다.
           </p>
         </div>
+        {currentFilter === "review" && (
+          <div className="flex flex-col items-start gap-2 md:items-end">
+            <button
+              type="button"
+              data-testid="admin-ai-review-button"
+              onClick={handleAiReview}
+              disabled={
+                aiReviewBusy ||
+                aiReviewStatusLoading ||
+                aiReviewStatus?.configured === false ||
+                (aiReviewStatus?.queueCount ?? totalCount) === 0
+              }
+              className="flex min-h-11 items-center gap-2 rounded-lg bg-indigo-600 px-5 py-3 text-sm font-black text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {aiReviewBusy ? <Loader2 size={17} className="animate-spin" /> : <Bot size={17} />}
+              {aiReviewBusy ? "AI 검토 진행 중" : "AI 검토 승인"}
+            </button>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-bold text-gray-400 dark:text-slate-500">
+              {aiReviewStatus?.configured === false ? (
+                <span className="text-rose-500">GitHub Actions 연결 설정이 필요합니다.</span>
+              ) : aiReviewBusy ? (
+                <span>포스터·날짜·카테고리를 백그라운드에서 확인하고 있습니다.</span>
+              ) : aiReviewStatus?.latestRun?.status === "completed" ? (
+                <span>
+                  최근 실행 {aiReviewStatus.latestRun.conclusion === "success" ? "완료" : "실패"}
+                  {` · ${formatAdminDateTime(aiReviewStatus.latestRun.updatedAt)}`}
+                </span>
+              ) : (
+                <span>확실한 항목만 승인하고 나머지는 대기에 남깁니다.</span>
+              )}
+              {(aiReviewStatus?.latestRun?.url || aiReviewStatus?.workflowUrl) && (
+                <a
+                  href={aiReviewStatus.latestRun?.url || aiReviewStatus.workflowUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-indigo-500 hover:text-indigo-700"
+                >
+                  실행 기록
+                  <ExternalLink size={11} />
+                </a>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="mb-8 flex w-fit flex-wrap gap-2 rounded-[1.5rem] bg-gray-100 p-1.5 dark:bg-slate-900">
