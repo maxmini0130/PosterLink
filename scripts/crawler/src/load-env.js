@@ -1,6 +1,11 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import dotenv from "dotenv";
+import WebSocket from "ws";
+
+if (typeof globalThis.WebSocket === "undefined") {
+  globalThis.WebSocket = WebSocket;
+}
 
 const cwd = process.cwd();
 const candidates = [
