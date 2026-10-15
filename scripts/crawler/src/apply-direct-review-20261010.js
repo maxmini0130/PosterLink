@@ -6,14 +6,19 @@ import { CATEGORY_CODE_BY_LABEL } from "./poster-category-classifier.js";
 
 // Source decisions and original snapshots are local, ignored operational artifacts.
 const root = "../../data/results/";
+const date =
+  process.argv.find((arg) => arg.startsWith("--date="))?.slice(7) ?? "20261010";
+assert(/^2026\d{4}$/.test(date), "Expected --date=YYYYMMDD in 2026");
 const plan = JSON.parse(
-  await fs.readFile(`${root}review-queue-direct-plan-20261010.json`, "utf8"),
+  await fs.readFile(`${root}review-queue-direct-plan-${date}.json`, "utf8"),
 );
 const backup = JSON.parse(
-  await fs.readFile(`${root}review-queue-backup-20261010-direct.json`, "utf8"),
+  await fs.readFile(`${root}review-queue-backup-${date}-direct.json`, "utf8"),
 );
 const apply = process.argv.includes("--apply");
-if (apply) assert(process.argv.includes("--confirm=SOURCE_REVIEW_20261010"));
+if (apply) assert(process.argv.includes(`--confirm=SOURCE_REVIEW_${date}`));
+assert.equal(plan.today_kst.replaceAll("-", ""), date);
+const reviewedItems = [...plan.items, ...plan.held];
 const db = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_KEY,
@@ -32,10 +37,30 @@ const current = await checked(
     .select("id,poster_status,updated_at")
     .in(
       "id",
-      plan.items.map((x) => x.id),
+      reviewedItems.map((x) => x.id),
     ),
 );
 assert.equal(new Set(plan.items.map((x) => x.id)).size, plan.items.length);
+assert.equal(
+  new Set(reviewedItems.map((x) => x.id)).size,
+  reviewedItems.length,
+);
+assert.equal(
+  reviewedItems.length,
+  backup.length,
+  "Every snapshot row needs a decision",
+);
+for (const item of reviewedItems) {
+  const row = current.find((x) => x.id === item.id);
+  const before = backup.find((x) => x.id === item.id);
+  assert(before, `Missing backup: ${item.id}`);
+  assert.equal(row?.poster_status, "review", `Status changed: ${item.id}`);
+  assert.equal(
+    row.updated_at,
+    before.updated_at,
+    `Snapshot changed: ${item.id}`,
+  );
+}
 for (const item of plan.items) {
   const row = current.find((x) => x.id === item.id);
   assert.equal(row?.poster_status, "review", `Status changed: ${item.id}`);
@@ -120,6 +145,9 @@ for (const item of plan.items) {
       reviewedAt: now,
       todayKst: plan.today_kst,
       decision: d,
+      previousTitle: before.title,
+      previousCorrectedDeadline:
+        before.field_verification?.correctedDeadline ?? null,
       previousDateIssues: before.field_verification?.dateIssues ?? [],
       previousDuplicateIssues: before.field_verification?.duplicateIssues ?? [],
       previousClassificationIssues:
@@ -127,7 +155,17 @@ for (const item of plan.items) {
     },
   };
   // Only these three signals were disproved by comparing the referenced records.
-  if ([2, 5, 18].includes(item.n)) verification.duplicateIssues = [];
+  if (
+    item.resolved_duplicate ||
+    (date === "20261010" && [2, 5, 18].includes(item.n))
+  )
+    verification.duplicateIssues = [];
+  assert.equal(
+    (verification.duplicateIssues ?? []).length,
+    0,
+    `Unresolved duplicate: ${item.id}`,
+  );
+  verification.correctedDeadline = d.application_end_at;
   verification.classificationIssues = (
     before.field_verification?.classificationIssues ?? []
   ).filter((x) => x.code !== "ambiguous-category");
@@ -141,6 +179,7 @@ for (const item of plan.items) {
     published_at: now,
     rejection_reason: null,
     field_verification: verification,
+    ...(d.title ? { title: d.title } : {}),
   };
   if (apply) {
     const links = codes.map((code) => ({
@@ -190,12 +229,13 @@ for (const item of plan.items) {
       db
         .from("posters")
         .select(
-          "poster_status,application_start_at,application_end_at,event_start_at,event_end_at,deadline_type,poster_categories(category_id)",
+          "title,poster_status,application_start_at,application_end_at,event_start_at,event_end_at,deadline_type,poster_categories(category_id)",
         )
         .eq("id", item.id)
         .single(),
     );
     assert.equal(actual.poster_status, patch.poster_status);
+    assert.equal(actual.title, d.title ?? before.title);
     assert.equal(actual.deadline_type, patch.deadline_type);
     for (const key of [
       "application_start_at",
@@ -220,9 +260,40 @@ for (const item of plan.items) {
     verified: apply,
   });
   await fs.writeFile(
-    `${root}review-queue-direct-${apply ? "applied" : "dry-run"}-20261010.json`,
+    `${root}review-queue-direct-${apply ? "applied" : "dry-run"}-${date}.json`,
     JSON.stringify({ results, held: plan.held }, null, 2),
   );
+}
+// Keep unresolved source conflicts visible without changing their status or fields.
+if (apply && date !== "20261010") {
+  for (const item of plan.held) {
+    const before = backup.find((x) => x.id === item.id);
+    const verification = {
+      ...before.field_verification,
+      directSourceReviewHold: {
+        reviewer: plan.reviewer,
+        todayKst: plan.today_kst,
+        reviewedAt: new Date().toISOString(),
+        reason: item.reason,
+      },
+    };
+    const updated = await checked(
+      db
+        .from("posters")
+        .update({ field_verification: verification })
+        .eq("id", item.id)
+        .eq("poster_status", "review")
+        .eq("updated_at", before.updated_at)
+        .select("id,poster_status,field_verification")
+        .maybeSingle(),
+    );
+    assert(updated, `Concurrent held-row change: ${item.id}`);
+    assert.equal(updated.poster_status, "review");
+    assert.equal(
+      updated.field_verification.directSourceReviewHold.reason,
+      item.reason,
+    );
+  }
 }
 if (apply)
   await checked(
@@ -231,14 +302,14 @@ if (apply)
       target_type: "poster",
       target_id: null,
       action_type: "approve",
-      action_reason: "codex_direct_source_review_20261010",
+      action_reason: `codex_direct_source_review_${date}`,
       metadata_json: {
         reviewer: plan.reviewer,
         today_kst: plan.today_kst,
         applied_ids: results.map((x) => x.id),
         held_ids: plan.held.map((x) => x.id),
-        published: 20,
-        closed: 1,
+        published: results.filter((x) => x.status === "published").length,
+        closed: results.filter((x) => x.status === "closed").length,
       },
     }),
   );
