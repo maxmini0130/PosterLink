@@ -3,7 +3,7 @@ import path from "path";
 
 let envLoaded = false;
 
-function loadLocalEnv() {
+export function loadLocalEnv() {
   if (envLoaded) return;
   envLoaded = true;
   const envPath = path.join(__dirname, "../../.env.local");

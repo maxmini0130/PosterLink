@@ -2,6 +2,100 @@ import assert from "node:assert/strict";
 import { sitemapXml } from "./sitemapXml";
 import { isPosterEligibleForPromotion } from "./promotionEligibility";
 import test from "node:test";
+import {
+  categoryPageCopy,
+  isInformationalPoster,
+  isClosedCategoryPoster,
+} from "./categoryContent";
+import { assertPublicDiscoveryQuery } from "./publicDiscoveryErrors";
+
+test("information needs an information primary category, not just a missing deadline", () => {
+  const base = {
+    poster_status: "published",
+    primary_category_code: "CAT_PRESS_RELEASE",
+    deadline_type: "unknown",
+  };
+  assert.equal(isInformationalPoster(base), true);
+  for (const primary_category_code of ["CAT_POLICY_INFO", "CAT_LIFE_INFO"]) {
+    assert.equal(
+      isInformationalPoster({ ...base, primary_category_code }),
+      true,
+    );
+  }
+  for (const patch of [
+    { primary_category_code: "CAT_COURSE" },
+    { primary_category_code: undefined },
+    { application_start_at: "2026-10-01T00:00:00Z" },
+    { application_end_at: "2026-10-31T00:00:00Z" },
+    { deadline_type: "ongoing" },
+    { deadline_type: "until_exhausted" },
+    { poster_status: "review" },
+    { poster_status: "closed" },
+  ])
+    assert.equal(isInformationalPoster({ ...base, ...patch }), false);
+  assert.equal(base.deadline_type, "unknown");
+});
+
+test("closed category results respect status and exact deadline without treating unknown as closed", () => {
+  const now = Date.parse("2026-10-22T14:00:00Z");
+  assert.equal(isClosedCategoryPoster({ poster_status: "closed" }, now), true);
+  assert.equal(
+    isClosedCategoryPoster(
+      { poster_status: "closed", application_end_at: "2027-01-01T00:00:00Z" },
+      now,
+    ),
+    true,
+  );
+  assert.equal(
+    isClosedCategoryPoster(
+      {
+        poster_status: "published",
+        application_end_at: "2026-10-22T13:59:59Z",
+      },
+      now,
+    ),
+    true,
+  );
+  assert.equal(
+    isClosedCategoryPoster(
+      {
+        poster_status: "published",
+        application_end_at: "2026-10-22T14:00:00Z",
+      },
+      now,
+    ),
+    false,
+  );
+  assert.equal(
+    isClosedCategoryPoster({ poster_status: "published" }, now),
+    false,
+  );
+});
+
+test("category copy describes bids and information without generic education claims", () => {
+  const bid = categoryPageCopy({ id: "bid", code: "CAT_BID", name: "입찰" });
+  const press = categoryPageCopy({
+    id: "press",
+    code: "CAT_PRESS_RELEASE",
+    name: "보도자료",
+  });
+  assert.match(bid.description, /입찰·위탁기관/);
+  assert.doesNotMatch(bid.description, /교육|상시/);
+  assert.match(press.description, /보도자료|소식/);
+  assert.notEqual(bid.title, press.title);
+});
+
+test("query failures throw instead of turning unavailable data into a zero count", (t) => {
+  const log = t.mock.method(console, "error", () => {});
+  assert.doesNotThrow(() =>
+    assertPublicDiscoveryQuery({ error: null }, "count"),
+  );
+  assert.throws(
+    () => assertPublicDiscoveryQuery({ error: { code: "XX001" } }, "count"),
+    /불러오지 못했습니다/,
+  );
+  assert.equal(log.mock.callCount(), 1);
+});
 
 test("promotional landings exclude unresolved dates without hiding public archives", () => {
   const poster = { deadline_type: "ongoing", application_end_at: null };
