@@ -1,4 +1,5 @@
 import "server-only";
+import { getRegionScopeIds } from "./regionHelpers";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -13,7 +14,7 @@ import { isPosterAcceptingApplications } from "./posterApplication";
 import { PUBLIC_POSTER_EXPOSURE_FILTER } from "./publicPosterVisibility";
 
 const PUBLIC_POSTER_SELECT =
-  "id,title,source_org_name,organizer_name,organizer_id,source_institution_id,application_institution_id,application_start_at,application_end_at,deadline_type,verification_status,verified_at,thumbnail_url,source_key,summary_short,created_at,updated_at,exposure_tier,field_verification";
+  "id,title,source_org_name,organizer_name,organizer_id,source_institution_id,application_institution_id,application_start_at,application_end_at,deadline_type,verification_status,verified_at,thumbnail_url,source_key,summary_short,created_at,updated_at,exposure_tier,primary_category_code:field_verification->classification->>primaryCategory";
 
 export type PublicDiscoveryFilters = {
   query?: string | null;
@@ -63,7 +64,12 @@ export function createPublicSupabaseClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
       process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)!,
-    { auth: { persistSession: false, autoRefreshToken: false } },
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: {
+        fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }),
+      },
+    },
   );
 }
 
@@ -111,7 +117,7 @@ export async function fetchPublicDiscovery(
   const regionIds = selectedRegion
     ? filters.regionScope === "exact"
       ? [selectedRegion.id]
-      : getRegionScopeIds(selectedRegion.id, regions)
+      : Array.from(getRegionScopeIds(selectedRegion.id, regions) ?? [])
     : null;
   const searchArgs = {
     p_query: search || null,
@@ -366,21 +372,6 @@ function isAcceptingPoster(poster: {
   });
 }
 
-function getRegionScopeIds(regionId: string, regions: DiscoveryTaxonomy[]) {
-  const selected = regions.find((region) => region.id === regionId);
-  if (!selected || selected.level === "nation")
-    return regions.map((region) => region.id);
-  if (selected.level === "sido") {
-    return [
-      regionId,
-      ...regions
-        .filter((region) => region.parent_id === regionId)
-        .map((region) => region.id),
-    ];
-  }
-  return [regionId, ...(selected.parent_id ? [selected.parent_id] : [])];
-}
-
 async function enrichPublicPosters(
   client: SupabaseClient,
   posterRows: Record<string, unknown>[],
@@ -463,7 +454,7 @@ async function enrichPublicPosters(
     const categoryIdsForPoster = categoriesByPoster.get(id) ?? [];
     const regionIdsForPoster = regionsByPoster.get(id) ?? [];
     const primaryCategoryCode = readPrimaryCategoryCode(
-      (poster as any).field_verification,
+      poster.primary_category_code,
     );
     const categoryId = pickPrimaryCategoryId(
       categoryIdsForPoster,
@@ -489,12 +480,8 @@ async function enrichPublicPosters(
   });
 }
 
-function readPrimaryCategoryCode(fieldVerification: unknown) {
-  const classification =
-    fieldVerification && typeof fieldVerification === "object"
-      ? (fieldVerification as Record<string, any>).classification
-      : null;
-  const code = String(classification?.primaryCategory ?? "").trim();
+function readPrimaryCategoryCode(value: unknown) {
+  const code = String(value ?? "").trim();
   return /^CAT_[A-Z_]+$/.test(code) ? code : null;
 }
 

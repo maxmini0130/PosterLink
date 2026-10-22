@@ -49,7 +49,7 @@ export async function DiscoveryLanding({
     url: `${appOrigin}${canonicalPath}`,
     mainEntity: {
       "@type": "ItemList",
-      numberOfItems: discovery.posters.length,
+      numberOfItems: discovery.totalCount,
       itemListElement: discovery.posters.slice(0, 24).map((poster, index) => ({
         "@type": "ListItem",
         position: index + 1,
@@ -138,7 +138,7 @@ export async function DiscoveryLanding({
                 id="landing-results-title"
                 className="mt-1 text-xl font-black text-slate-950"
               >
-                {discovery.posters.length.toLocaleString()}건
+                {discovery.totalCount.toLocaleString()}건
               </h2>
             </div>
             <Link

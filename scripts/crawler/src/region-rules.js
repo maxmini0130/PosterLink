@@ -78,6 +78,13 @@ const SEOUL_ELIGIBILITY_SCOPE_PATTERN =
 
 export function inferRegionMatches(post) {
   const source = buildRegionSource(post);
+  // Eligibility is stronger evidence than the collecting institution or venue.
+  const eligibilityText = [post.title, post.content, post.summary_short, post.eligibility_summary].filter(Boolean).join(" ");
+  const districtEligibility = SEOUL_SIGUNGU_REGIONS.flatMap(([code, name]) => {
+    const evidence = eligibilityText.match(new RegExp(`${name}\\s*(?:에\\s*)?(?:거주|주민(?!센터)|구민(?!회관|센터)|재학|재직)`))?.[0];
+    return evidence ? [{ code, confidence: 0.9, evidence: compactEvidence(evidence), source: "eligibility_scope" }] : [];
+  });
+  if (districtEligibility.length) return districtEligibility;
   const seoulEligibilityScope = source.match(SEOUL_ELIGIBILITY_SCOPE_PATTERN)?.[0];
   if (seoulEligibilityScope) {
     return [{

@@ -1,5 +1,6 @@
 "use client";
 import toast from "react-hot-toast";
+import Link from "next/link";
 
 import { useState, useEffect } from "react";
 import { Header } from "../../components/Header";
@@ -589,11 +590,13 @@ export function PosterDetailClient({
 
   const imageUrls = resolvePosterImageGallery(poster.images ?? [], poster.thumbnail_url, poster.source_key);
   const primaryLink = getPrimaryActionLink(links);
-  const sourceLink = links.find((link) => link.link_type === "official_notice") || primaryLink;
+  const sourceLink = links.find((link) => link.link_type === "official_notice") || null;
   const primaryActionLabel = primaryLink ? getLinkActionLabel(primaryLink) : "공식 공고 확인";
   const referenceLinks = links.filter((link) => link.id !== primaryLink?.id);
   const canSaveCalendar = getVerifiedPosterCalendarSource(poster) !== null;
-  const summaryLines = formatSummaryLines(poster.summary_long || poster.summary_short);
+  const summaryLines = formatSummaryLines(poster.summary_long || poster.summary_short).filter(
+    (line, index, lines) => lines.findIndex((item) => item.label === line.label && item.text === line.text) === index
+  );
   const summaryFallbackFacts = derivePosterSummaryFallbackFacts(summaryLines);
   const structuredEligibilityAgeRange = extractTargetAgeRange(
     poster.eligibility_summary,
@@ -612,6 +615,7 @@ export function PosterDetailClient({
   const lastCheckedLabel = publicInformationCheckLabel(poster);
   const sourceHostLabel = sourceLink ? formatHostName(sourceLink.url) : null;
   const organizationInfo = getOrganizationVerification(poster);
+  const organizerName = poster.organizer_name || organizationInfo?.organizerName || null;
   const displayOrgName = getPosterOrgDisplayName(poster);
   const sourceOrgName = organizationInfo?.sourceOrgName || poster.source_org_name || null;
   const sourceDiffersFromOrganizer = Boolean(
@@ -807,10 +811,10 @@ export function PosterDetailClient({
 
         <section className="mb-10 rounded-2xl border border-gray-100 bg-white p-5">
           <dl className="grid gap-4 text-xs sm:grid-cols-4">
-            {displayOrgName && (
+            {organizerName && (
               <div>
                 <dt className="mb-1 font-black text-gray-400">주최/주관</dt>
-                <dd className="font-bold text-gray-900">{displayOrgName}</dd>
+                <dd className="font-bold text-gray-900">{organizerName}</dd>
               </div>
             )}
             {poster.application_organization_name && (
@@ -869,6 +873,11 @@ export function PosterDetailClient({
           </section>
         )}
 
+        <nav aria-label="관련 공고 탐색" className="mb-8 flex flex-wrap gap-3 text-sm font-bold text-blue-600">
+          {poster.regionId && <Link href={`/posters?region=${poster.regionId}`}>같은 신청 지역 공고</Link>}
+          {poster.categoryId && <Link href={`/posters?category=${poster.categoryId}`}>같은 분야 공고</Link>}
+          <Link href="/posters">전체 공고</Link>
+        </nav>
         <CommentSection posterId={poster.id} />
 
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-xl border-t md:relative md:bg-transparent md:border-none md:p-0">

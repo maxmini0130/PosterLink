@@ -54,29 +54,24 @@ function categorySearchTerm(category: string) {
 }
 
 type HomeSummary = {
-  todayNew: number;
-  activePosters: number;
-  dueThisWeek: number;
-  collectionSources: number;
-};
-
-const emptyHomeSummary: HomeSummary = {
-  todayNew: 0,
-  activePosters: 0,
-  dueThisWeek: 0,
-  collectionSources: 0,
+  todayNew: number | null;
+  activePosters: number | null;
+  dueThisWeek: number | null;
+  collectionSources: number | null;
 };
 
 export default function Home({
   topCombinations,
+  initialSummary,
 }: {
   topCombinations: TopDiscoveryCombination[];
+  initialSummary: HomeSummary;
 }) {
   const [loading, setLoading] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [posters, setPosters] = useState<any[]>([]);
   const [urgentPosters, setUrgentPosters] = useState<any[]>([]);
-  const [homeSummary, setHomeSummary] = useState<HomeSummary>(emptyHomeSummary);
+  const [homeSummary, setHomeSummary] = useState<HomeSummary>(initialSummary);
   const [hideClosedPosters, setHideClosedPosters] = useState(true);
   const [activeFeed, setActiveFeed] = useState<FeedTabKey>("urgent");
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -217,12 +212,7 @@ export default function Home({
         }
         setPosters(mainResult.posters);
         setUrgentPosters(urgentResult.urgentPosters);
-        setHomeSummary(
-          summaryResult ?? {
-            ...emptyHomeSummary,
-            dueThisWeek: urgentResult.urgentData.length,
-          },
-        );
+        if (summaryResult) setHomeSummary(summaryResult);
       } catch (error) {
         console.error("Failed to load home data", error);
         setLoadError("공고 데이터를 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.");
@@ -339,10 +329,10 @@ export default function Home({
           </div>
 
           <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-300 pt-4 text-xs font-black text-slate-600">
-            <span>오늘 새 공고 {homeSummary.todayNew.toLocaleString()}건</span>
-            <span>신청 가능한 공고 {homeSummary.activePosters.toLocaleString()}건</span>
-            <span>이번 주 마감 {homeSummary.dueThisWeek.toLocaleString()}건</span>
-            {homeSummary.collectionSources > 0 && <span>공개 기관 {homeSummary.collectionSources.toLocaleString()}개</span>}
+            <span>오늘 새 공고 {homeSummary.todayNew == null ? "확인 중" : `${homeSummary.todayNew.toLocaleString()}건`}</span>
+            <span>신청 가능한 공고 {homeSummary.activePosters == null ? "확인 중" : `${homeSummary.activePosters.toLocaleString()}건`}</span>
+            <span>이번 주 마감 {homeSummary.dueThisWeek == null ? "확인 중" : `${homeSummary.dueThisWeek.toLocaleString()}건`}</span>
+            {(homeSummary.collectionSources ?? 0) > 0 && <span>공개 기관 {homeSummary.collectionSources?.toLocaleString()}개</span>}
           </div>
         </motion.section>
 
