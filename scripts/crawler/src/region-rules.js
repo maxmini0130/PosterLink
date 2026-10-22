@@ -1,3 +1,5 @@
+import { analyzeRegionContext, PROVINCES } from "./region-context.js";
+
 export const SEOUL_SIGUNGU_REGIONS = [
   ["REG_SEOUL_JONGNO", "종로구", "서울특별시 종로구"],
   ["REG_SEOUL_JUNG", "중구", "서울특별시 중구"],
@@ -73,77 +75,49 @@ function compactEvidence(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
 }
 
-const SEOUL_ELIGIBILITY_SCOPE_PATTERN =
-  /(?:\uC11C\uC6B8\uC2DC|\uC11C\uC6B8\uD2B9\uBCC4\uC2DC|\uC11C\uC6B8)\s*(?:\uAC70\uC8FC|\uC2DC\uBBFC|\uC8FC\uBBFC)|\uC11C\uC6B8\uC2DC\uBBFC/;
+export function inferRegionContext(post, catalog) {
+  const definitions = catalog ?? [
+    ...PROVINCES.map(([code, name]) => ({
+      code,
+      name,
+      full_name: name,
+      level: "sido",
+    })),
+    ...SEOUL_SIGUNGU_REGIONS.map(([code, name, full_name]) => ({
+      code,
+      name,
+      full_name,
+      level: "sigungu",
+    })),
+  ];
+  return analyzeRegionContext(post, definitions);
+}
 
-export function inferRegionMatches(post) {
+export function inferRegionMatches(post, catalog) {
+  const context = inferRegionContext(post, catalog);
+  if (context.eligibility.length) return context.eligibility;
+  if (context.unresolved.length || context.preference.length) return [];
+  // Legacy keywords are context candidates only. Neither an institution nor an
+  // event venue proves that its residents are the only eligible applicants.
   const source = buildRegionSource(post);
-  // Eligibility is stronger evidence than the collecting institution or venue.
-  const eligibilityText = [post.title, post.content, post.summary_short, post.eligibility_summary].filter(Boolean).join(" ");
-  const districtEligibility = SEOUL_SIGUNGU_REGIONS.flatMap(([code, name]) => {
-    const evidence = eligibilityText.match(new RegExp(`${name}\\s*(?:에\\s*)?(?:거주|주민(?!센터)|구민(?!회관|센터)|재학|재직)`))?.[0];
-    return evidence ? [{ code, confidence: 0.9, evidence: compactEvidence(evidence), source: "eligibility_scope" }] : [];
-  });
-  if (districtEligibility.length) return districtEligibility;
-  const seoulEligibilityScope = source.match(SEOUL_ELIGIBILITY_SCOPE_PATTERN)?.[0];
-  if (seoulEligibilityScope) {
-    return [{
-      code: "REG_SEOUL",
-      confidence: 0.9,
-      evidence: compactEvidence(seoulEligibilityScope),
-      source: "eligibility_scope",
-    }];
-  }
-
-  const codes = [];
-  for (const [code, keywords] of Object.entries(SEOUL_REGION_KEYWORDS)) {
-    const evidence = keywords.filter((keyword) => source.includes(keyword)).slice(0, 4);
-    if (evidence.length > 0) {
-      codes.push({
-        code,
-        confidence: Number(Math.min(0.95, 0.68 + evidence.length * 0.07).toFixed(2)),
-        evidence: compactEvidence(evidence.join(", ")),
-        source: "keyword",
-      });
-    }
-  }
-
-  if (codes.length > 0) {
-    const unique = new Map();
-    for (const match of codes) {
-      const previous = unique.get(match.code);
-      if (!previous || previous.confidence < match.confidence) unique.set(match.code, match);
-    }
-    const ranked = [...unique.values()].sort((a, b) => b.confidence - a.confidence).slice(0, 2);
-    if (ranked.length > 1) {
-      return ranked.map((match) => ({
-        ...match,
-        confidence: Math.min(match.confidence, 0.72),
-        ambiguous: true,
-      }));
-    }
-    return ranked;
-  }
-
-  if (/전국|온라인|비대면/.test(source)) {
-    return [{
-      code: "REG_NATION",
-      confidence: 0.72,
-      evidence: compactEvidence(source.match(/전국|온라인|비대면/)?.[0] ?? "national/online signal"),
-      source: "scope",
-    }];
-  }
-  if (/서울|서울시|서울특별시|youth\.seoul\.go\.kr/.test(source)) {
-    return [{
-      code: "REG_SEOUL",
-      confidence: 0.64,
-      evidence: compactEvidence(source.match(/서울|서울시|서울특별시|youth\.seoul\.go\.kr/)?.[0] ?? "seoul signal"),
-      source: "scope",
-    }];
-  }
-  return [];
+  return Object.entries(SEOUL_REGION_KEYWORDS)
+    .flatMap(([code, keywords]) => {
+      const evidence = keywords.filter((keyword) => source.includes(keyword));
+      return evidence.length
+        ? [
+            {
+              code,
+              confidence: 0.45,
+              ambiguous: true,
+              evidence: compactEvidence(evidence.join(", ")),
+              source: "context_only",
+            },
+          ]
+        : [];
+    })
+    .slice(0, 2);
 }
 
 export function inferRegionCodes(post) {
-  return inferRegionMatches(post).map((match) => match.code);
+  return inferRegionMatches(post).filter((match) => !match.ambiguous).map((match) => match.code);
 }

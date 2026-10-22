@@ -70,6 +70,10 @@
 
 ## 근거 문서
 
+2026-10-22 추가 수정에서는 지역 자격/우대/기관/행사 근거를 분리하고 모호한 지역의 자동 연결을 차단했다. 모바일 상세 액션을 Safe Area가 반영된 하단 내비게이션 위에 배치했으며, 강서구 홍보 랜딩에는 날짜 검수와 홍보 제외 게이트를 추가했다. 일반 검색·과거 공고·sitemap의 공개 정책은 유지한다.
+
+마감 교정 후보 18건은 공식 출처와 포스터를 대조해 7건만 종료일을 채우고 11건은 null을 유지했다. 직접 접근 불가 원문과 공식 재게시 근거의 구분, 운영 반영·테스트·복구 절차는 [배포 차단 수정 로그](../WORK_LOG_20261022_predeploy_fixes.md)에 기록한다.
+
 - [Google sitemap 작성 및 크기 제한](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap)
 - [Google sitemap index](https://developers.google.com/search/docs/crawling-indexing/sitemaps/large-sitemaps)
 - [Google noindex 규칙](https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag)

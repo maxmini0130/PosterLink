@@ -1,5 +1,6 @@
 import "server-only";
 import { getRegionScopeIds } from "./regionHelpers";
+import { isPosterEligibleForPromotion } from "./promotionEligibility";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -15,6 +16,7 @@ import { PUBLIC_POSTER_EXPOSURE_FILTER } from "./publicPosterVisibility";
 
 const PUBLIC_POSTER_SELECT =
   "id,title,source_org_name,organizer_name,organizer_id,source_institution_id,application_institution_id,application_start_at,application_end_at,deadline_type,verification_status,verified_at,thumbnail_url,source_key,summary_short,created_at,updated_at,exposure_tier,primary_category_code:field_verification->classification->>primaryCategory";
+const PROMOTION_POSTER_SELECT = `${PUBLIC_POSTER_SELECT},deadline_review:field_verification->deadlineReview,date_quality_decision:field_verification->dateQuality->>decision,date_issues:field_verification->dateIssues`;
 
 export type PublicDiscoveryFilters = {
   query?: string | null;
@@ -24,6 +26,7 @@ export type PublicDiscoveryFilters = {
   includeClosed?: boolean;
   limit?: number;
   regionScope?: "hierarchy" | "exact";
+  promotionOnly?: boolean;
 };
 
 export type PublicDiscoveryResult = {
@@ -130,23 +133,31 @@ export async function fetchPublicDiscovery(
   const [postersRes, countRes] = await Promise.all([
     client
       .rpc("search_public_posters", searchArgs)
-      .select(PUBLIC_POSTER_SELECT),
-    client.rpc("count_public_posters", {
-      p_query: search || null,
-      p_category_id: selectedCategory?.id ?? null,
-      p_region_ids: regionIds,
-      p_include_closed: includeClosed,
-    }),
+      .select(
+        filters.promotionOnly ? PROMOTION_POSTER_SELECT : PUBLIC_POSTER_SELECT,
+      )
+      .returns<Record<string, unknown>[]>(),
+    filters.promotionOnly
+      ? Promise.resolve({ data: null })
+      : client.rpc("count_public_posters", {
+          p_query: search || null,
+          p_category_id: selectedCategory?.id ?? null,
+          p_region_ids: regionIds,
+          p_include_closed: includeClosed,
+        }),
   ]);
+  const rows = postersRes.data ?? [];
   const posters = await enrichPublicPosters(
     client,
-    (postersRes.data ?? []) as Record<string, unknown>[],
+    filters.promotionOnly ? rows.filter(isPosterEligibleForPromotion) : rows,
   );
   const filteredPosters = includeClosed
     ? posters
     : posters.filter(isAcceptingPoster);
   const totalCount =
-    typeof countRes.data === "number" ? countRes.data : filteredPosters.length;
+    !filters.promotionOnly && typeof countRes.data === "number"
+      ? countRes.data
+      : filteredPosters.length;
   return {
     posters: filteredPosters,
     totalCount,

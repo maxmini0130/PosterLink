@@ -3,6 +3,15 @@ import test from "node:test";
 
 import { getCorrection } from "./apply-field-verification-corrections.js";
 
+test("high AI confidence cannot promote an open-ended start date to a deadline", () => {
+  const result = getCorrection({application_end_at:null,field_verification:{confidence:0.99,
+    correctedDeadline:"2026-08-31",deadlineMatches:false,
+    dateQuality:{decision:"review",normalizedDeadline:"2026-08-31"},
+    dateIssues:[{code:"open-ended-application-period"}]}},0.85);
+  assert.deepEqual(result.updates,{});
+  assert.equal(result.suppressed[0].reason,"unconfirmed_deadline_requires_source_review");
+});
+
 test("deadline corrections remain actionable", () => {
   const correction = getCorrection(
     {

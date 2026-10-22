@@ -674,7 +674,7 @@ export function PosterDetailClient({
   };
 
   return (
-    <div className="min-h-screen bg-white pb-24 md:pb-10">
+    <div className="poster-detail-page min-h-screen bg-white pb-24 md:pb-10">
       <Header />
       <main className="container mx-auto max-w-2xl px-4 py-6">
         <div className="mb-8">
@@ -880,10 +880,11 @@ export function PosterDetailClient({
         </nav>
         <CommentSection posterId={poster.id} />
 
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-xl border-t md:relative md:bg-transparent md:border-none md:p-0">
+        <div role="group" aria-label="공고 상세 동작" className="poster-detail-actions fixed bottom-0 left-0 right-0 z-40 p-4 bg-white/90 backdrop-blur-xl border-t md:relative md:bg-transparent md:border-none md:p-0">
           <div className="max-w-2xl mx-auto flex gap-3">
             <button
               onClick={toggleFavorite}
+              aria-label={isFavorited ? "찜 취소" : "찜하기"}
               className={`w-14 h-14 flex items-center justify-center border rounded-2xl transition-all shadow-sm ${
                 isFavorited ? "bg-rose-50 border-rose-200" : "bg-white border-gray-100"
               }`}
@@ -924,6 +925,7 @@ export function PosterDetailClient({
               }}
               className="w-14 h-14 flex items-center justify-center border border-gray-100 bg-white rounded-2xl transition-all shadow-sm hover:bg-gray-50"
               title="공유"
+              aria-label="공유하기"
             >
               <Share2 size={20} className="text-gray-500" />
             </button>

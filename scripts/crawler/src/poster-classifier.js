@@ -1,4 +1,4 @@
-import { inferRegionMatches } from "./region-rules.js";
+import { inferRegionMatches, inferRegionContext } from "./region-rules.js";
 
 const CATEGORY_RULES = [
   {
@@ -372,9 +372,10 @@ function createClassificationIssues({ categories, regions }) {
   return issues;
 }
 
-export function inferPosterClassification(post = {}) {
+export function inferPosterClassification(post = {}, { regionCatalog } = {}) {
   const categories = inferCategoryMatches(post);
-  const regions = inferRegionMatches(post);
+  const regions = inferRegionMatches(post, regionCatalog);
+  const regionContext = inferRegionContext(post, regionCatalog);
   const audiences = inferAudienceMatches(post);
   const issues = createClassificationIssues({ categories, regions });
 
@@ -382,7 +383,8 @@ export function inferPosterClassification(post = {}) {
     categories,
     categoryCodes: categories.map((category) => category.code),
     regions,
-    regionCodes: regions.map((region) => region.code),
+    regionCodes: regions.filter(region => !region.ambiguous).map((region) => region.code),
+    regionContext,
     audiences,
     audienceCodes: audiences.map((audience) => audience.code),
     issues,

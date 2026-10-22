@@ -1,6 +1,44 @@
 import assert from "node:assert/strict";
 import { sitemapXml } from "./sitemapXml";
+import { isPosterEligibleForPromotion } from "./promotionEligibility";
 import test from "node:test";
+
+test("promotional landings exclude unresolved dates without hiding public archives", () => {
+  const poster = { deadline_type: "ongoing", application_end_at: null };
+  assert.equal(isPosterEligibleForPromotion(poster), true);
+  assert.equal(
+    isPosterEligibleForPromotion({
+      ...poster,
+      date_quality_decision: "review",
+    }),
+    false,
+  );
+  assert.equal(
+    isPosterEligibleForPromotion({
+      ...poster,
+      deadline_review: { promotionEligible: false },
+    }),
+    false,
+  );
+  const end = "2099-10-22T14:59:59Z";
+  assert.equal(
+    isPosterEligibleForPromotion({
+      deadline_type: "fixed",
+      application_end_at: end,
+      date_quality_decision: "review",
+      deadline_review: { decision: "confirmed", endAt: end },
+    }),
+    true,
+  );
+  assert.equal(
+    isPosterEligibleForPromotion({
+      deadline_type: "fixed",
+      application_end_at: "2020-10-22T14:59:59Z",
+      deadline_review: { decision: "confirmed", endAt: "2020-10-22T14:59:59Z" },
+    }),
+    false,
+  );
+});
 
 test("sitemap XML escapes source strings and omits invalid modification dates", () => {
   const xml = sitemapXml([
