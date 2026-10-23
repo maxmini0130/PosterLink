@@ -72,3 +72,5 @@ pnpm --filter web exec tsc --noEmit
 ```
 
 원격 Preview는 `E2E_BASE_URL`, 필요한 경우 보호된 임시 `RELEASE_STORAGE_STATE`를 사용한다. 원격에서는 합성 세션 양성 테스트를 skip한다. 실제 운영 프로젝트에 회원을 생성하거나 역할을 쓰지 않는다. 로컬 Next dev와 build/tsc는 `.next/types`를 공유하므로 동시에 실행하지 않는다.
+
+검증된 보안 코드 SHA는 `09852271a20ed334656dddbec5e697467038fd28`이며, [Preview](https://poster-link-3z19cdgbw-maxmini0130s-projects.vercel.app)는 Ready다. 로컬 루트 96/96·보안 26/26·브라우저 7/7 통과, 원격 3통과/5skip이다. 원격 가입 payload 검사는 Auth/프로필 요청을 가로챈 결과이며 실제 회원 저장 성공이 아니다. 이후 기록 커밋은 앱/SQL을 바꾸지 않는다. [전체 검증 기록과 미완료 항목](../WORK_LOG_20261023_profile_role_security_release.md)을 확인한 뒤 운영 적용을 별도 승인한다.

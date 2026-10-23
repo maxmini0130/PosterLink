@@ -270,3 +270,73 @@ test("local common OAuth callback preserves role-free profile upsert", async ({
   expect(c.profileWrites).toBe(1);
   expect(c.lastProfileHasRole).toBe(false);
 });
+
+test("Preview compiled signup omits role with mocked Auth and profile requests", async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  test.skip(
+    local(baseURL),
+    "Remote compiled-client check; all signup writes are mocked",
+  );
+  const appOrigin = new URL(baseURL!).origin;
+  const encoded = sessionCookie("user").split("base64-")[1];
+  const session = JSON.parse(Buffer.from(encoded, "base64url").toString());
+  let signupIntercepted = false;
+  const profileRequest = page.waitForRequest(
+    (request) =>
+      new URL(request.url()).pathname === "/rest/v1/profiles" &&
+      request.method() === "POST",
+  );
+  await context.route("**/*", async (route) => {
+    const u = new URL(route.request().url());
+    if (u.origin === appOrigin) {
+      if (
+        u.pathname.startsWith("/onboarding") ||
+        u.pathname.startsWith("/api/")
+      )
+        return route.abort();
+      if (!["GET", "HEAD"].includes(route.request().method()))
+        return route.abort();
+      return route.continue();
+    }
+    if (
+      u.hostname.endsWith(".supabase.co") &&
+      u.pathname === "/auth/v1/signup"
+    ) {
+      signupIntercepted = true;
+      return route.fulfill({
+        json: {
+          ...session,
+          expires_in: 3600,
+          user: {
+            id: ids.user,
+            email: "fixture@example.invalid",
+            app_metadata: {},
+            user_metadata: {},
+          },
+        },
+      });
+    }
+    if (
+      u.hostname.endsWith(".supabase.co") &&
+      u.pathname === "/rest/v1/profiles" &&
+      route.request().method() === "POST"
+    ) {
+      return route.fulfill({ status: 201, json: {} });
+    }
+    return route.abort();
+  });
+  await page.goto("/signup");
+  await page.locator("input[type=email]").fill("fixture@example.invalid");
+  await page.locator("input[type=password]").fill("fixture-password");
+  await page.locator("input[type=checkbox]").check();
+  await page
+    .getByRole("button", { name: "이메일로 가입하기", exact: true })
+    .click();
+  const payload = (await profileRequest).postDataJSON();
+  expect(signupIntercepted).toBe(true);
+  expect(payload).toHaveProperty("id", ids.user);
+  expect(payload).not.toHaveProperty("role");
+});
