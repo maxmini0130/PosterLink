@@ -142,6 +142,40 @@ test("local server rejects member/admin and forged role claims", async ({
   ).toBe(400);
 });
 
+test("local revoked superadmin session is denied using current database role", async ({
+  request,
+  baseURL,
+}) => {
+  test.skip(
+    !local(baseURL),
+    "Never replay synthetic sessions against production",
+  );
+  await request.post("http://127.0.0.1:4010/control?scenario=revoked-role");
+  try {
+    const headers = { Cookie: sessionCookie("super_admin") };
+    expect((await request.get("/api/admin/users", { headers })).status()).toBe(
+      403,
+    );
+    expect(
+      (
+        await request.patch(`/api/admin/users/${ids.user}`, {
+          headers,
+          data: { role: "admin" },
+        })
+      ).status(),
+    ).toBe(403);
+    const page = await request.get("/admin", { headers, maxRedirects: 0 });
+    expect([302, 307]).toContain(page.status());
+    expect(new URL(page.headers().location, baseURL).pathname).toBe("/");
+    const state = await (
+      await request.get("http://127.0.0.1:4010/control")
+    ).json();
+    expect(state.profileWrites).toBe(0);
+  } finally {
+    await request.post("http://127.0.0.1:4010/control?scenario=normal");
+  }
+});
+
 test("local onboarding ignores role and foreign identity", async ({
   request,
   baseURL,

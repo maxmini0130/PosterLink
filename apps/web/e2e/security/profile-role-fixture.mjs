@@ -126,7 +126,10 @@ const server = createServer((req, res) => {
   if (url.pathname === "/rest/v1/profiles") {
     const id = (url.searchParams.get("id") || "").replace("eq.", "");
     return json({
-      role: Object.keys(ids).find((role) => ids[role] === id) || "user",
+      role:
+        scenario === "revoked-role"
+          ? "user"
+          : Object.keys(ids).find((role) => ids[role] === id) || "user",
       onboarding_completed: true,
     });
   }
