@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 import { createServer } from "node:http";
 import { createHmac } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
@@ -20,7 +20,99 @@ const ADMIN = "33333333-3333-4333-8333-333333333333";
 const SUPER = "44444444-4444-4444-8444-444444444444";
 const NEW = "55555555-5555-4555-8555-555555555555";
 
-test("isolated PostgreSQL reproduces profile role escalation and validates the migration", async (t) => {
+test("schema guards reject unknown types, enum labels and unsafe defaults atomically", async (t) => {
+  const cases = [
+    {
+      name: "enum privileged default",
+      ddl: "CREATE TYPE public.user_role AS ENUM ('user','operator','admin','super_admin');",
+      column: "public.user_role DEFAULT 'admin'",
+      error: /constant user role default/,
+    },
+    {
+      name: "enum missing default",
+      ddl: "CREATE TYPE public.user_role AS ENUM ('user','operator','admin','super_admin');",
+      column: "public.user_role",
+      error: /constant user role default/,
+    },
+    {
+      name: "enum extra privileged label",
+      ddl: "CREATE TYPE public.user_role AS ENUM ('user','operator','admin','super_admin','owner');",
+      column: "public.user_role DEFAULT 'user'",
+      error: /Unexpected public.user_role labels/,
+    },
+    {
+      name: "enum missing label",
+      ddl: "CREATE TYPE public.user_role AS ENUM ('user','admin','super_admin');",
+      column: "public.user_role DEFAULT 'user'",
+      error: /Unexpected public.user_role labels/,
+    },
+    {
+      name: "different enum type",
+      ddl: "CREATE TYPE public.other_role AS ENUM ('user','operator','admin','super_admin');",
+      column: "public.other_role DEFAULT 'user'",
+      error: /review role type/,
+    },
+    {
+      name: "numeric type",
+      ddl: "",
+      column: "integer DEFAULT 0",
+      error: /review role type/,
+    },
+    {
+      name: "text privileged default",
+      ddl: "",
+      column: "text DEFAULT 'admin'",
+      error: /constant user role default/,
+    },
+    {
+      name: "function default is not evaluated",
+      ddl: "CREATE TYPE public.user_role AS ENUM ('user','operator','admin','super_admin'); CREATE SEQUENCE public.default_call_count; CREATE FUNCTION public.test_default() RETURNS public.user_role LANGUAGE plpgsql AS $$ BEGIN PERFORM nextval('public.default_call_count'); RETURN 'user'::public.user_role; END $$;",
+      column: "public.user_role DEFAULT public.test_default()",
+      error: /constant user role default/,
+    },
+  ];
+  for (const c of cases)
+    await t.test(c.name, async () => {
+      const db = new PGlite();
+      try {
+        await db.exec(
+          `CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE ROLE service_role NOLOGIN BYPASSRLS; ${c.ddl} CREATE TABLE public.profiles(id uuid PRIMARY KEY,role ${c.column}); ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY; GRANT SELECT,INSERT,UPDATE ON public.profiles TO anon,authenticated,service_role;`,
+        );
+        const shape = () =>
+          db.query(
+            "SELECT a.atttypid,pg_get_expr(d.adbin,d.adrelid) default_expr FROM pg_attribute a LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum WHERE a.attrelid='public.profiles'::regclass AND a.attname='role'",
+          );
+        const before = (await shape()).rows;
+        await assert.rejects(db.exec(migration), c.error);
+        await db.exec("ROLLBACK");
+        assert.deepEqual((await shape()).rows, before);
+        assert.deepEqual(
+          (
+            await db.query(
+              "SELECT to_regprocedure('public.guard_profile_role_writes()') IS NULL AS no_guard,has_column_privilege('authenticated','public.profiles','role','UPDATE') AS prior_grant_preserved",
+            )
+          ).rows,
+          [{ no_guard: true, prior_grant_preserved: true }],
+        );
+        if (c.name.startsWith("function"))
+          assert.equal(
+            (
+              await db.query<{ is_called: boolean }>(
+                "SELECT is_called FROM public.default_call_count",
+              )
+            ).rows[0].is_called,
+            false,
+          );
+      } finally {
+        await db.close();
+      }
+    });
+});
+
+async function verifyRoleStorage(
+  t: TestContext,
+  roleStorage: "text" | "varchar" | "enum",
+) {
   const db = new PGlite();
   try {
     await db.exec(`
@@ -33,7 +125,8 @@ test("isolated PostgreSQL reproduces profile role escalation and validates the m
       CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS
         $$ SELECT (NULLIF(current_setting('request.jwt.claims',true),'')::jsonb->>'sub')::uuid $$;
       GRANT USAGE ON SCHEMA public,auth TO anon,authenticated,service_role;
-      ${schema.match(/CREATE TABLE profiles \([\s\S]*?\n\);/)![0]}
+      ${roleStorage === "enum" ? "CREATE TYPE public.user_role AS ENUM ('user','operator','admin','super_admin');" : ""}
+      ${schema.match(/CREATE TABLE profiles \([\s\S]*?\n\);/)![0].replace("role TEXT DEFAULT", `role ${roleStorage === "enum" ? "public.user_role" : roleStorage} DEFAULT`)}
       ALTER TABLE public.profiles ADD COLUMN onboarding_completed boolean NOT NULL DEFAULT false;
       ALTER TABLE public.profiles ADD COLUMN points integer NOT NULL DEFAULT 0;
       ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -88,7 +181,47 @@ test("isolated PostgreSQL reproduces profile role escalation and validates the m
         );
       },
     );
+    const stateBefore = (
+      await db.query("SELECT id,role::text FROM public.profiles ORDER BY id")
+    ).rows;
+    const roleShape = () =>
+      db.query(
+        "SELECT a.atttypid,pg_get_expr(d.adbin,d.adrelid) role_default FROM pg_attribute a JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum WHERE a.attrelid='public.profiles'::regclass AND a.attname='role'",
+      );
+    const shapeBefore = (await roleShape()).rows;
     await db.exec(migration);
+    await t.test(
+      "migration preserves every existing role, column type and default",
+      async () => {
+        assert.deepEqual(
+          (
+            await db.query(
+              "SELECT id,role::text FROM public.profiles ORDER BY id",
+            )
+          ).rows,
+          stateBefore,
+        );
+        assert.deepEqual((await roleShape()).rows, shapeBefore);
+      },
+    );
+    await t.test(
+      "read-only postflight validates installed guard and denied client grants",
+      async () => {
+        await db.exec(
+          readFileSync("scripts/security/profile-role-postflight.sql", "utf8"),
+        );
+        const guard = await db.query<{
+          prosecdef: boolean;
+          tgenabled: string;
+          tgtype: number;
+        }>(
+          "SELECT p.prosecdef,t.tgenabled,t.tgtype FROM pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid WHERE t.tgrelid='public.profiles'::regclass AND t.tgname='guard_profile_role_writes'",
+        );
+        assert.deepEqual(guard.rows, [
+          { prosecdef: false, tgenabled: "O", tgtype: 21 },
+        ]);
+      },
+    );
     await t.test(
       "column rights: member cannot INSERT/UPDATE role; service writer retains access",
       async () => {
@@ -144,7 +277,16 @@ test("isolated PostgreSQL reproduces profile role escalation and validates the m
           ADMIN,
           `INSERT INTO public.profiles(id,nickname) VALUES ('${ADMIN}','edited') ON CONFLICT(id) DO UPDATE SET id=EXCLUDED.id,nickname=EXCLUDED.nickname RETURNING role,nickname`,
         );
-        assert.deepEqual(staff.rows[0], { role: "admin", nickname: "edited" });
+        assert.deepEqual(staff.rows[0], {
+          role: "admin",
+          nickname: "edited",
+        });
+        const highest = await as(
+          "authenticated",
+          SUPER,
+          `INSERT INTO public.profiles(id,nickname) VALUES ('${SUPER}','edited-super') ON CONFLICT(id) DO UPDATE SET nickname=EXCLUDED.nickname RETURNING role`,
+        );
+        assert.equal(highest.rows[0].role, "super_admin");
       },
     );
     await t.test(
@@ -244,6 +386,38 @@ test("isolated PostgreSQL reproduces profile role escalation and validates the m
         await assert.rejects(
           as("authenticated", A, "SELECT public.test_definer_role_write()"),
           (e: { code: string }) => e.code === "42501",
+        );
+      },
+    );
+    await t.test(
+      "role mutation by a DEFINER BEFORE trigger on ordinary edits is rolled back",
+      async () => {
+        await db.exec(
+          `CREATE FUNCTION public.test_before_role_write() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$ BEGIN NEW.role := 'admin'; RETURN NEW; END $$; CREATE TRIGGER z_test_before_role_write BEFORE UPDATE OF nickname ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.test_before_role_write();`,
+        );
+        const before = (
+          await db.query(
+            `SELECT role,nickname FROM public.profiles WHERE id='${A}'`,
+          )
+        ).rows;
+        await assert.rejects(
+          as(
+            "authenticated",
+            A,
+            `UPDATE public.profiles SET nickname='trigger-escalation' WHERE id='${A}'`,
+          ),
+          (e: { code: string }) => e.code === "42501",
+        );
+        assert.deepEqual(
+          (
+            await db.query(
+              `SELECT role,nickname FROM public.profiles WHERE id='${A}'`,
+            )
+          ).rows,
+          before,
+        );
+        await db.exec(
+          "DROP TRIGGER z_test_before_role_write ON public.profiles; DROP FUNCTION public.test_before_role_write()",
         );
       },
     );
@@ -522,4 +696,9 @@ test("isolated PostgreSQL reproduces profile role escalation and validates the m
   } finally {
     await db.close();
   }
-});
+}
+
+for (const roleStorage of ["text", "varchar", "enum"] as const) {
+  test(`isolated PostgreSQL ${roleStorage} reproduces profile role escalation and validates the migration`, (t) =>
+    verifyRoleStorage(t, roleStorage));
+}

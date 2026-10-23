@@ -2,7 +2,7 @@
 
 2026-10-23. 기준 운영 코드 `b3519d2fa5bec73be9f9f13d56c44c4bf1cba9f2`, 패치 출처 `0e964e8`, 계획 출처 `c478c74`.
 
-**후속 준비 완료 점검에서 차단 조건 발견:** 운영 Data API가 role을 `public.user_role` enum으로 제공하며, 같은 구조를 격리 재현하면 현재 SQL의 text/varchar 기본값 사전 검사에서 중단된다. 현재 SQL을 그대로 운영 적용하지 않는다. 실제 카탈로그 확인·enum 호환 최소 보정·재검증 및 실제 백업 확인이 필요하다. [최신 준비 완료 점검](../WORK_LOG_20261023_security_readiness_gate.md)을 먼저 확인한다.
+**후속 enum 호환 수정:** [이전 준비 점검](../WORK_LOG_20261023_security_readiness_gate.md)에서 발견한 기본값 검사 불일치를 로컬에서 수정하고 text/varchar/enum으로 검증했다. 운영 카탈로그·백업 및 실제 Supabase 검증은 남아 있어 운영 적용 보류는 유지한다. [수정 SQL·점검·안전 복구 안내](profile_role_enum_patch.md)를 먼저 확인한다.
 
 ## 범위
 
@@ -18,8 +18,9 @@
 
 지원 파일:
 
-- [보호 migration](../supabase/migrations/20261023010000_protect_profile_role_writes.sql): `0e964e8`와 같은 SQL. 운영 미적용.
+- [보호 migration](../supabase/migrations/20261023010000_protect_profile_role_writes.sql): enum 타입/기본값 검사와 최종 행 AFTER guard를 보완한 로컬 수정본. 운영 미적용이며 과거 Preview의 SQL과 구분한다.
 - [사전 확인](../scripts/security/profile-role-preflight.sql), [ACL 백업](../scripts/security/profile-role-acl-backup.sql): 기존 읽기 전용 SQL. 회원 행을 출력하지 않는다.
+- [적용 후 확인](../scripts/security/profile-role-postflight.sql): guard·ACL·타입/기본값·기존 정책을 읽기 전용으로 대조한다.
 - [격리 SQL 검증](../scripts/security/profile-role.test.ts): 기존 보안 테스트와 서비스 역할의 관리자 부여/해제·기존 관리자 보존 검사.
 - [릴리스 범위 검사](../scripts/security/profile-role-release.test.ts).
 - `apps/web/playwright.profile-role.config.ts`, `apps/web/e2e/security/profile-role-fixture.mjs`, `apps/web/e2e/security/profile-role.spec.ts`: 가입 통계 대역 없이 합성 Auth/프로필만 사용하는 전용 검증.
@@ -75,4 +76,4 @@ pnpm --filter web exec tsc --noEmit
 
 원격 Preview는 `E2E_BASE_URL`, 필요한 경우 보호된 임시 `RELEASE_STORAGE_STATE`를 사용한다. 원격에서는 합성 세션 양성 테스트를 skip한다. 실제 운영 프로젝트에 회원을 생성하거나 역할을 쓰지 않는다. 로컬 Next dev와 build/tsc는 `.next/types`를 공유하므로 동시에 실행하지 않는다.
 
-검증된 보안 코드 SHA는 `09852271a20ed334656dddbec5e697467038fd28`이며, [Preview](https://poster-link-3z19cdgbw-maxmini0130s-projects.vercel.app)는 Ready다. 로컬 루트 96/96·보안 26/26·브라우저 7/7 통과, 원격 3통과/5skip이다. 원격 가입 payload 검사는 Auth/프로필 요청을 가로챈 결과이며 실제 회원 저장 성공이 아니다. 이후 기록 커밋은 앱/SQL을 바꾸지 않는다. [전체 검증 기록과 미완료 항목](../WORK_LOG_20261023_profile_role_security_release.md)을 확인한 뒤 운영 적용을 별도 승인한다.
+검증된 웹 보안 코드 SHA는 `09852271a20ed334656dddbec5e697467038fd28`이며, [Preview](https://poster-link-3z19cdgbw-maxmini0130s-projects.vercel.app)는 이전 검증 기록의 배포다. 당시 로컬 루트 96/96·보안 26/26·브라우저 7/7, 원격 3통과/5skip이었다. 현재 enum 호환 SQL 수정본의 루트 테스트는 162/162 통과했지만 운영 적용이나 새 Preview 배포는 하지 않았다. 원격 가입 payload 검사는 요청을 가로챈 결과이며 실제 회원 저장 성공이 아니다. [기존 웹 검증 기록](../WORK_LOG_20261023_profile_role_security_release.md)과 [최신 SQL 검증·미완료 항목](profile_role_enum_patch.md)을 구분하여 승인한다.

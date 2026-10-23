@@ -1,19 +1,43 @@
 -- LOCAL/STAGING VALIDATED ONLY. Production application requires separate approval.
 -- Existing row policies and profile data are preserved. First deploy clients that
 -- omit role from ordinary profile writes; cached older clients may need a reload.
+-- Unapplied migration revised for the observed public.user_role enum. No ALTER
+-- TYPE/COLUMN or member-data rewrite is performed. Verify live catalogs first.
 BEGIN;
+SET LOCAL search_path = pg_catalog, public;
 
 DO $$
 DECLARE
   role_default text;
+  role_type oid;
+  role_kind "char";
+  enum_labels text[];
+  valid_default boolean := false;
 BEGIN
   IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid = 'public.profiles'::regclass) THEN
     RAISE EXCEPTION 'profiles RLS must already be enabled; review existing policies first';
   END IF;
-  SELECT pg_get_expr(d.adbin, d.adrelid) INTO role_default
+  SELECT a.atttypid, t.typtype, pg_get_expr(d.adbin, d.adrelid)
+  INTO role_type, role_kind, role_default
   FROM pg_attribute a LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+  JOIN pg_type t ON t.oid = a.atttypid
   WHERE a.attrelid = 'public.profiles'::regclass AND a.attname = 'role' AND NOT a.attisdropped;
-  IF role_default IS NULL OR role_default NOT IN ('''user''::text', '''user''::character varying', '''user''') THEN
+
+  -- Check the actual type OID and exact constant default, never evaluate a
+  -- potentially executable default expression to decide whether it is safe.
+  IF role_type IN ('pg_catalog.text'::regtype, 'pg_catalog.varchar'::regtype) THEN
+    valid_default := role_default IN ('''user''::text', '''user''::character varying', '''user''');
+  ELSIF role_type = to_regtype('public.user_role') AND role_kind = 'e' THEN
+    SELECT array_agg(e.enumlabel::text ORDER BY e.enumlabel::text COLLATE "C") INTO enum_labels
+    FROM pg_enum e WHERE e.enumtypid = role_type;
+    IF enum_labels IS DISTINCT FROM ARRAY['admin','operator','super_admin','user']::text[] THEN
+      RAISE EXCEPTION 'Unexpected public.user_role labels; review enum before applying';
+    END IF;
+    valid_default := role_default IN ('''user''::user_role', '''user''::public.user_role');
+  ELSE
+    RAISE EXCEPTION 'Expected text, varchar or public.user_role enum; review role type before applying';
+  END IF;
+  IF NOT COALESCE(valid_default, false) THEN
     RAISE EXCEPTION 'Expected the existing constant user role default; review schema before applying';
   END IF;
 END;
@@ -48,7 +72,9 @@ $$;
 REVOKE ALL ON FUNCTION public.guard_profile_role_writes() FROM PUBLIC, anon, authenticated;
 DROP TRIGGER IF EXISTS guard_profile_role_writes ON public.profiles;
 CREATE TRIGGER guard_profile_role_writes
-BEFORE INSERT OR UPDATE OF role ON public.profiles
+-- Inspect the final row, including changes made by other BEFORE triggers.
+-- UPDATE OF role alone misses a trigger changing NEW.role during nickname edits.
+AFTER INSERT OR UPDATE ON public.profiles
 FOR EACH ROW EXECUTE FUNCTION public.guard_profile_role_writes();
 
 -- Table-level grants override a column REVOKE. Snapshot effective access, remove
