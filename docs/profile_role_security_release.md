@@ -2,6 +2,8 @@
 
 2026-10-23. 기준 운영 코드 `b3519d2fa5bec73be9f9f13d56c44c4bf1cba9f2`, 패치 출처 `0e964e8`, 계획 출처 `c478c74`.
 
+최종 적용 대상은 [웹 SHA·SQL 커밋/해시·운영 정책 반영·실행 순서](profile_role_final_application.md)에 확정했다. 운영자의 읽기 전용 확인 결과를 반영하며, 과거 문서의 미확인 상태와 구분한다. 운영 실행 승인은 아직 없다.
+
 **후속 enum 호환 수정:** [이전 준비 점검](../WORK_LOG_20261023_security_readiness_gate.md)에서 발견한 기본값 검사 불일치를 로컬에서 수정하고 text/varchar/enum으로 검증했다. 운영 카탈로그·백업 및 실제 Supabase 검증은 남아 있어 운영 적용 보류는 유지한다. [수정 SQL·점검·안전 복구 안내](profile_role_enum_patch.md)를 먼저 확인한다.
 
 ## 범위

@@ -135,6 +135,24 @@ async function verifyRoleStorage(
       INSERT INTO auth.users VALUES ('${A}'),('${B}'),('${ADMIN}'),('${SUPER}'),('${NEW}');
       INSERT INTO public.profiles(id,role) VALUES ('${A}','user'),('${B}','user'),('${ADMIN}','admin'),('${SUPER}','super_admin');
     `);
+    if (roleStorage === "enum") {
+      // Mirror the two same-owner UPDATE policies reported by the operator.
+      // Extra permissive own-row policies do not restrict role values.
+      await db.exec(
+        'CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id)',
+      );
+      const reportedState = await db.query(
+        "SELECT has_column_privilege('anon','public.profiles','role','UPDATE') anon_role_update,has_column_privilege('authenticated','public.profiles','role','UPDATE') member_role_update,(SELECT count(*)::integer FROM pg_policies WHERE schemaname='public' AND tablename='profiles' AND cmd='UPDATE') update_policies,(SELECT count(*)::integer FROM pg_trigger WHERE tgrelid='public.profiles'::regclass AND NOT tgisinternal) role_guard_count",
+      );
+      assert.deepEqual(reportedState.rows, [
+        {
+          anon_role_update: true,
+          member_role_update: true,
+          update_policies: 2,
+          role_guard_count: 0,
+        },
+      ]);
+    }
     const as = (
       role: "authenticated" | "anon" | "service_role",
       id: string,
