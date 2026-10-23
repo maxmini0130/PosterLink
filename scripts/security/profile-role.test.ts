@@ -136,19 +136,26 @@ async function verifyRoleStorage(
       INSERT INTO public.profiles(id,role) VALUES ('${A}','user'),('${B}','user'),('${ADMIN}','admin'),('${SUPER}','super_admin');
     `);
     if (roleStorage === "enum") {
-      // Mirror the two same-owner UPDATE policies reported by the operator.
-      // Extra permissive own-row policies do not restrict role values.
-      await db.exec(
-        'CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id)',
-      );
+      // Mirror all six policies and the existing timestamp trigger observed in
+      // the production catalog. No production users or identifiers are used.
+      await db.exec(`
+        ALTER POLICY profiles_update ON public.profiles WITH CHECK (auth.uid() = id);
+        CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+        CREATE POLICY "Public profiles are viewable by everyone" ON public.profiles FOR SELECT USING (true);
+        CREATE POLICY admin_can_update_profiles ON public.profiles FOR UPDATE
+          USING (EXISTS (SELECT 1 FROM public.profiles profiles_1 WHERE profiles_1.id=auth.uid() AND profiles_1.role=ANY(ARRAY['admin'::public.user_role,'super_admin'::public.user_role])))
+          WITH CHECK (EXISTS (SELECT 1 FROM public.profiles profiles_1 WHERE profiles_1.id=auth.uid() AND profiles_1.role=ANY(ARRAY['admin'::public.user_role,'super_admin'::public.user_role])));
+        CREATE FUNCTION public.update_updated_at_column() RETURNS trigger LANGUAGE plpgsql SET search_path=public AS $$ BEGIN NEW.updated_at=now(); RETURN NEW; END $$;
+        CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+      `);
       const reportedState = await db.query(
-        "SELECT has_column_privilege('anon','public.profiles','role','UPDATE') anon_role_update,has_column_privilege('authenticated','public.profiles','role','UPDATE') member_role_update,(SELECT count(*)::integer FROM pg_policies WHERE schemaname='public' AND tablename='profiles' AND cmd='UPDATE') update_policies,(SELECT count(*)::integer FROM pg_trigger WHERE tgrelid='public.profiles'::regclass AND NOT tgisinternal) role_guard_count",
+        "SELECT has_column_privilege('anon','public.profiles','role','UPDATE') anon_role_update,has_column_privilege('authenticated','public.profiles','role','UPDATE') member_role_update,(SELECT count(*)::integer FROM pg_policies WHERE schemaname='public' AND tablename='profiles' AND cmd='UPDATE') update_policies,(SELECT count(*)::integer FROM pg_trigger WHERE tgrelid='public.profiles'::regclass AND tgname='guard_profile_role_writes') role_guard_count",
       );
       assert.deepEqual(reportedState.rows, [
         {
           anon_role_update: true,
           member_role_update: true,
-          update_policies: 2,
+          update_policies: 3,
           role_guard_count: 0,
         },
       ]);
@@ -207,7 +214,52 @@ async function verifyRoleStorage(
         "SELECT a.atttypid,pg_get_expr(d.adbin,d.adrelid) role_default FROM pg_attribute a JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum WHERE a.attrelid='public.profiles'::regclass AND a.attname='role'",
       );
     const shapeBefore = (await roleShape()).rows;
+    const policiesBefore = (
+      await db.query(
+        "SELECT policyname,roles,cmd,qual,with_check FROM pg_policies WHERE schemaname='public' AND tablename='profiles' ORDER BY policyname",
+      )
+    ).rows;
     await db.exec(migration);
+    if (roleStorage === "enum") {
+      await t.test(
+        "all six live policies and timestamp trigger survive; admin non-role updates remain allowed",
+        async () => {
+          assert.equal(policiesBefore.length, 6);
+          assert.deepEqual(
+            (
+              await db.query(
+                "SELECT policyname,roles,cmd,qual,with_check FROM pg_policies WHERE schemaname='public' AND tablename='profiles' ORDER BY policyname",
+              )
+            ).rows,
+            policiesBefore,
+          );
+          for (const id of [ADMIN, SUPER]) {
+            const r = await as(
+              "authenticated",
+              id,
+              `UPDATE public.profiles SET nickname='staff-edit' WHERE id='${B}' RETURNING role,updated_at IS NOT NULL AS timestamp_set`,
+            );
+            assert.deepEqual(r.rows, [{ role: "user", timestamp_set: true }]);
+            await assert.rejects(
+              as(
+                "authenticated",
+                id,
+                `UPDATE public.profiles SET role='admin' WHERE id='${B}'`,
+              ),
+              (e: { code: string }) => e.code === "42501",
+            );
+          }
+          assert.equal(
+            (
+              await db.query(
+                "SELECT count(*)::integer AS n FROM pg_trigger WHERE tgrelid='public.profiles'::regclass AND tgname='update_profiles_updated_at' AND tgenabled='O'",
+              )
+            ).rows[0].n,
+            1,
+          );
+        },
+      );
+    }
     await t.test(
       "migration preserves every existing role, column type and default",
       async () => {
