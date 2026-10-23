@@ -50,7 +50,7 @@ export default function SignupPage() {
 
     // 세션 확보 후 프로필 생성 (이미 있으면 무시)
     await supabase.from("profiles").upsert(
-      { id: data.user.id, nickname: email.split("@")[0], role: 'user' },
+      { id: data.user.id, nickname: email.split("@")[0] },
       { onConflict: "id", ignoreDuplicates: true }
     );
     localStorage.setItem("onboarding_uid", data.user.id);

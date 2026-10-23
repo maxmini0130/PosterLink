@@ -105,7 +105,6 @@ export async function GET(request: NextRequest) {
       {
         id: userId!,
         nickname: userEmail?.split("@")[0] ?? "user",
-        role: "user",
       },
       { onConflict: "id" }
     );

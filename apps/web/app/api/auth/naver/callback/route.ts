@@ -211,7 +211,6 @@ export async function GET(request: NextRequest) {
       {
         id: userId,
         nickname: naverUser.email.split('@')[0] ?? 'user',
-        role: 'user',
       },
       { onConflict: 'id' }
     );
