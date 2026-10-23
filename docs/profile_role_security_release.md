@@ -2,6 +2,8 @@
 
 2026-10-23. 기준 운영 코드 `b3519d2fa5bec73be9f9f13d56c44c4bf1cba9f2`, 패치 출처 `0e964e8`, 계획 출처 `c478c74`.
 
+**후속 준비 완료 점검에서 차단 조건 발견:** 운영 Data API가 role을 `public.user_role` enum으로 제공하며, 같은 구조를 격리 재현하면 현재 SQL의 text/varchar 기본값 사전 검사에서 중단된다. 현재 SQL을 그대로 운영 적용하지 않는다. 실제 카탈로그 확인·enum 호환 최소 보정·재검증 및 실제 백업 확인이 필요하다. [최신 준비 완료 점검](../WORK_LOG_20261023_security_readiness_gate.md)을 먼저 확인한다.
+
 ## 범위
 
 브랜치 `release/security-profile-role-20261023`는 운영 SHA에서 생성했다. 미배포 기능 브랜치를 merge/cherry-pick하지 않고 역할 쓰기 제거만 이식했다. 아래 5개 파일 외의 애플리케이션 런타임은 기준 운영 코드와 같다.
