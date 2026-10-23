@@ -10,8 +10,14 @@ const paths = [
   "apps/web/app/mypage/edit/page.tsx",
   "apps/web/app/api/onboarding/complete/route.ts",
 ];
+const signupStatsPaths = [
+  "apps/web/app/api/admin/signup-stats/route.ts",
+  "apps/web/lib/authSignupStats.ts",
+  "apps/web/app/components/AdminSignupStats.tsx",
+  "apps/web/app/admin/page.tsx",
+];
 
-test("release changes only ordinary role writes in the five production handlers", () => {
+test("release preserves the five role-free handlers and adds only approved signup statistics", () => {
   const runtimeDiff = execFileSync(
     "git",
     [
@@ -30,7 +36,13 @@ test("release changes only ordinary role writes in the five production handlers"
     .trim()
     .split(/\r?\n/)
     .filter(Boolean);
-  assert.deepEqual(runtimeDiff.sort(), [...paths].sort());
+  assert.deepEqual(runtimeDiff.sort(), [...paths, ...signupStatsPaths, "apps/web/lib/authSignupStats.test.ts"].sort());
+  for (const file of signupStatsPaths) {
+    const approved = execFileSync("git", ["show", `74fe413:${file}`], {
+      encoding: "utf8",
+    });
+    assert.equal(readFileSync(file, "utf8").replace(/\r\n/g, "\n"), approved.replace(/\r\n/g, "\n"), file);
+  }
   for (const file of paths) {
     let expected = execFileSync("git", ["show", `b3519d2:${file}`], {
       encoding: "utf8",
@@ -58,11 +70,9 @@ test("release changes only ordinary role writes in the five production handlers"
   }
 });
 
-test("unapproved analytics and signup-statistics implementations are absent", () => {
+test("unapproved analytics is absent and existing authorization paths are unchanged", () => {
   for (const file of [
     "apps/web/lib/analytics.ts",
-    "apps/web/lib/authSignupStats.ts",
-    "apps/web/app/api/admin/signup-stats/route.ts",
     "apps/web/app/components/GaAnalytics.tsx",
     "apps/web/app/components/AnalyticsConsentSettings.tsx",
   ])
@@ -70,7 +80,6 @@ test("unapproved analytics and signup-statistics implementations are absent", ()
   for (const file of [
     "apps/web/app/layout.tsx",
     "apps/web/app/privacy/page.tsx",
-    "apps/web/app/admin/page.tsx",
     "apps/web/app/api/site-visits/route.ts",
     "apps/web/middleware.ts",
     "apps/web/app/api/admin/users/[id]/route.ts",

@@ -33,6 +33,8 @@ pnpm --filter posterlink-crawler crawl:dry
 
 ## 환경변수
 
+현재 보안 릴리스 기반 Auth 가입 통계는 [집계 기준·권한·한계](docs/auth_signup_stats.md)를 참고하세요. GA4/UTM은 포함하지 않으며 새 DB migration이나 환경변수는 필요하지 않습니다.
+
 관리자 역할 보안 전용 릴리스의 범위·검증·DB 승인·복구 절차는 [보안 릴리스 안내](docs/profile_role_security_release.md)를 참고하세요. `pnpm test:security:roles`는 운영 DB에 연결하지 않는 격리 검증입니다. 포함된 보호 SQL은 별도 승인 전 운영에 적용하지 않습니다.
 
 루트 `.env.example`과 `scripts/crawler/.env.example`을 기준으로 로컬 환경 파일을 구성합니다. 실제 키나 서비스 역할 키는 문서, 로그, 커밋에 남기지 않습니다.

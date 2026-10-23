@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import Link from "next/link";
+import { AdminSignupStats } from "../components/AdminSignupStats";
 import { AlertTriangle, Clock, FileCheck, MousePointerClick, Search, Settings, TrendingUp, Users } from "lucide-react";
 
 export default function AdminDashboardPage() {
@@ -98,7 +99,7 @@ export default function AdminDashboardPage() {
       urgent: stats.reportsPending > 0,
     },
     {
-      label: "전체 사용자",
+      label: "현재 프로필 수",
       value: stats.totalUsers,
       icon: <Users size={24} />,
       color: "bg-blue-50 text-blue-600",
@@ -145,6 +146,7 @@ export default function AdminDashboardPage() {
           </Link>
         ))}
       </div>
+      <AdminSignupStats />
       <section className="rounded-[2rem] border border-gray-100 bg-white p-7 shadow-sm mb-12">
         <h2 className="text-sm font-black text-gray-900 mb-4">AI 노출 티어 · 게이트 현황</h2>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
