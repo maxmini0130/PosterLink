@@ -128,6 +128,8 @@ export default function PrivacyPage() {
             </h2>
             <p>개인정보 관련 문의·요청 경로는 아래 안내를 확인해 주세요.</p>
             <div className="mt-3 p-4 bg-gray-50 rounded-2xl">
+              <p>개인정보처리자: 주식회사 맥스미니</p>
+              <p>개인정보 보호책임자: 김정민 대표이사</p>
               {contact ? (
                 <p>
                   <strong>문의:</strong>{" "}

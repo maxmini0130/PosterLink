@@ -21,7 +21,10 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { withdrawalContact } from "../../lib/withdrawalContact";
+import {
+  withdrawalContact,
+  withdrawalRequestHref,
+} from "../../lib/withdrawalContact";
 
 export default function MyPage() {
   const [profile, setProfile] = useState<any>(null);
@@ -30,6 +33,7 @@ export default function MyPage() {
   const [togglingNotif, setTogglingNotif] = useState(false);
   const router = useRouter();
   const requestContact = withdrawalContact();
+  const requestHref = withdrawalRequestHref(requestContact);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -275,14 +279,14 @@ export default function MyPage() {
                   탈퇴·개인정보 삭제 요청은{" "}
                   <a
                     className="text-red-500 underline break-all"
-                    href={requestContact.href}
+                    href={requestHref!}
                   >
                     {requestContact.label}
                   </a>
                   로 직접 보내 주세요. 링크를 열기만 해서는 요청이 접수되지
                   않습니다. 담당자가 최소한의 본인 확인과 처리 범위를 확인한 후
-                  결과를 안내합니다. 비밀번호·인증 토큰·신분증 사본을 보내지
-                  마세요.
+                  결과를 안내합니다. 비밀번호·인증 토큰·주민등록번호·신분증
+                  사본을 보내지 마세요.
                 </>
               ) : (
                 <>
@@ -300,10 +304,12 @@ export default function MyPage() {
               </button>
               {requestContact && (
                 <a
-                  href={requestContact.href}
+                  href={requestHref!}
                   className="flex-1 py-4 bg-red-500 text-white text-center font-black rounded-2xl hover:bg-red-600 transition-all"
                 >
-                  탈퇴·삭제 요청하기
+                  {requestContact.href.startsWith("mailto:")
+                    ? "탈퇴 요청 이메일 작성"
+                    : "탈퇴·삭제 요청하기"}
                 </a>
               )}
             </div>

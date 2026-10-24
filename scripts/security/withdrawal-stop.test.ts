@@ -45,7 +45,7 @@ test("withdrawal safety stop authenticates and never invokes deletion or unlink"
   assert.equal(response.headers.get("cache-control"), "no-store");
   const body = await response.json();
   assert.match(body.error, /요청이 접수되지 않습니다/);
-  assert.equal(body.requestContact, null);
+  assert.equal(body.requestContact, "mailto:maxmini@maxmini.co.kr");
   assert.doesNotMatch(
     JSON.stringify(body),
     /posterlink@maxmini.co.kr|contact@posterlink.kr|privacy@posterlink.kr/,

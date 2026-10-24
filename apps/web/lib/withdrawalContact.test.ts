@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { withdrawalContact } from "./withdrawalContact";
+import {
+  withdrawalContact,
+  withdrawalRequestHref,
+  WITHDRAWAL_EMAIL_SUBJECT,
+} from "./withdrawalContact";
 
 test("unverified and invalid channels never become request links", () => {
   for (const value of [
@@ -34,4 +38,21 @@ test("only explicitly confirmed supported contacts are returned", () => {
       label: "https://example.invalid/request",
     },
   );
+});
+
+test("approved temporary mailbox has the exact subject and no sensitive body", () => {
+  const contact = withdrawalContact();
+  assert.deepEqual(contact, {
+    href: "mailto:maxmini@maxmini.co.kr",
+    label: "maxmini@maxmini.co.kr",
+  });
+  const url = new URL(withdrawalRequestHref(contact)!);
+  assert.equal(url.pathname, "maxmini@maxmini.co.kr");
+  assert.equal(
+    url.searchParams.get("subject"),
+    "PosterLink 회원 탈퇴 및 개인정보 삭제 요청",
+  );
+  assert.equal(WITHDRAWAL_EMAIL_SUBJECT, url.searchParams.get("subject"));
+  assert.deepEqual([...url.searchParams.keys()], ["subject"]);
+  assert.equal(withdrawalRequestHref(null), null);
 });
