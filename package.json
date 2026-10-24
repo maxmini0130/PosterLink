@@ -33,7 +33,8 @@
     "collect:central": "tsx scripts/collect-posters.ts central",
     "collect:local": "tsx scripts/collect-posters.ts local",
     "collect:subsidy": "tsx scripts/collect-posters.ts subsidy",
-    "test:security:roles": "tsx --test scripts/security/profile-role.test.ts scripts/security/profile-role-release.test.ts"
+    "test:security:roles": "tsx --test scripts/security/profile-role.test.ts scripts/security/profile-role-release.test.ts",
+    "test:privacy:sentry": "tsx --test apps/web/lib/sentryPrivacy.test.ts"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.11",
