@@ -278,7 +278,7 @@ export default function MyPage() {
                 <>
                   탈퇴·개인정보 삭제 요청은{" "}
                   <a
-                    className="text-red-500 underline break-all"
+                    className="text-red-500 underline whitespace-nowrap"
                     href={requestHref!}
                   >
                     {requestContact.label}
@@ -305,7 +305,7 @@ export default function MyPage() {
               {requestContact && (
                 <a
                   href={requestHref!}
-                  className="flex-1 py-4 bg-red-500 text-white text-center font-black rounded-2xl hover:bg-red-600 transition-all"
+                  className="flex-1 px-3 py-4 bg-red-500 text-white text-center text-sm break-keep font-black rounded-2xl hover:bg-red-600 transition-all"
                 >
                   {requestContact.href.startsWith("mailto:")
                     ? "탈퇴 요청 이메일 작성"
