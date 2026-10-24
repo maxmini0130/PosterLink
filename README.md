@@ -1,5 +1,7 @@
 # PosterLink
 
+회원 탈퇴 안전 전용 릴리스는 [적용·검증 기록](WORK_LOG_20261024_withdrawal_safety_release.md)을 참고하세요. 확인된 접수처가 없으면 자동 삭제와 접수 링크를 비활성으로 유지합니다. `NEXT_PUBLIC_WITHDRAWAL_REQUEST_URL`과 `NEXT_PUBLIC_WITHDRAWAL_CONTACT_VERIFIED=true`는 실제 수신·담당자 확인 후에만 설정하고 재빌드합니다.
+
 공공 기회를 발견하고, 내용을 판단하고, 실제 신청까지 이어 주는 **포스터링크** 모노레포입니다. 공공기관 공고와 포스터를 수집해 원문 근거와 함께 구조화하며, AI 검증과 사람 검수를 통해 데이터 품질을 관리합니다.
 
 ## 구조
