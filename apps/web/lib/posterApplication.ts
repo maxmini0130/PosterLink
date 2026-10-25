@@ -27,6 +27,7 @@ export type PosterApplicationInput = {
   applicationEndAt?: string | null;
   deadlineType?: string | null;
   now?: Date;
+  posterStatus?: string | null;
 };
 
 const datePartsFormatter = new Intl.DateTimeFormat("en-CA", {
@@ -36,9 +37,13 @@ const datePartsFormatter = new Intl.DateTimeFormat("en-CA", {
   day: "2-digit",
 });
 
-function parseTime(value?: string | null) {
+function parseTime(value?: string | null, endOfDay = false) {
   if (!value) return null;
-  const time = Date.parse(value);
+  const time = Date.parse(
+    /^\d{4}-\d{2}-\d{2}$/.test(value)
+      ? `${value}T${endOfDay ? "23:59:59.999" : "00:00:00"}+09:00`
+      : value,
+  );
   return Number.isNaN(time) ? null : time;
 }
 
@@ -86,7 +91,7 @@ export function getPosterApplicationState(
 ): PosterApplicationState {
   const nowTime = (input.now ?? new Date()).getTime();
   const startTime = parseTime(input.applicationStartAt);
-  const endTime = parseTime(input.applicationEndAt);
+  const endTime = parseTime(input.applicationEndAt, true);
   const invalidStart = Boolean(input.applicationStartAt && startTime === null);
   const invalidEnd = Boolean(input.applicationEndAt && endTime === null);
   const hasExplicitDeadlineType =
@@ -100,6 +105,14 @@ export function getPosterApplicationState(
       daysLeft: null,
     };
   }
+
+  if (input.posterStatus === "closed")
+    return {
+      status: "closed",
+      label: "마감됨",
+      daysLeft:
+        endTime === null ? null : dateOrdinal(endTime) - dateOrdinal(nowTime),
+    };
 
   const today = dateOrdinal(nowTime);
   const endDay = endTime === null ? null : dateOrdinal(endTime);

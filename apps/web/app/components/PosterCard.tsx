@@ -1,4 +1,6 @@
+"use client";
 import Link from "next/link";
+import { usePosterClock } from "../../lib/usePosterClock";
 import {
   Building2,
   CalendarClock,
@@ -35,7 +37,9 @@ interface PosterCardProps {
 }
 
 export function PosterCard({ poster }: PosterCardProps) {
+  const now = usePosterClock();
   const applicationState = getPosterApplicationState({
+    now,
     applicationStartAt: poster.applicationStartAt,
     applicationEndAt: poster.deadline,
     deadlineType: poster.deadlineType,

@@ -23,13 +23,29 @@ import { BottomNav } from "./components/BottomNav";
 import { Footer } from "./components/Footer";
 import { Header } from "./components/Header";
 import { PosterCard } from "./components/PosterCard";
-import { fetchCategoryRegionNames, fetchPosterImages } from "./lib/posterHelpers";
+import {
+  fetchCategoryRegionNames,
+  fetchPosterImages,
+} from "./lib/posterHelpers";
 import { fetchPosterMetricCounts } from "./lib/posterMetrics";
-import { getPosterApplicationState, isPosterAcceptingApplications } from "../lib/posterApplication";
-import { PUBLIC_POSTER_EXPOSURE_FILTER } from "../lib/publicPosterVisibility";
+import {
+  getPosterApplicationState,
+  isPosterAcceptingApplications,
+} from "../lib/posterApplication";
+import type { DiscoveryPoster } from "../lib/discoveryRoutes";
 import type { TopDiscoveryCombination } from "../lib/publicDiscovery";
 
-const categories = ["전체", "청년", "소상공인", "창업", "교육", "문화·행사", "복지", "채용", "주거"] as const;
+const categories = [
+  "전체",
+  "청년",
+  "소상공인",
+  "창업",
+  "교육",
+  "문화·행사",
+  "복지",
+  "채용",
+  "주거",
+] as const;
 const feedTabs = [
   { key: "urgent", label: "마감 임박" },
   { key: "new", label: "새로 등록" },
@@ -44,8 +60,23 @@ const regionShortcuts = [
   { name: "영등포구", slug: "seoul-yeongdeungpo" },
   { name: "강서구", slug: "seoul-gangseo" },
 ];
-const organizationHighlights = ["마포구청", "마포문화재단", "서울청년센터", "서울경제진흥원", "소상공인시장진흥공단"];
-const serviceCategories = ["청년", "소상공인", "창업", "교육", "문화·행사", "복지", "채용", "주거"];
+const organizationHighlights = [
+  "마포구청",
+  "마포문화재단",
+  "서울청년센터",
+  "서울경제진흥원",
+  "소상공인시장진흥공단",
+];
+const serviceCategories = [
+  "청년",
+  "소상공인",
+  "창업",
+  "교육",
+  "문화·행사",
+  "복지",
+  "채용",
+  "주거",
+];
 
 // "문화·행사"의 가운데점(·)은 실제 공고 텍스트에 그대로 나타나지 않아 검색어로 보내면 0건이 나온다.
 // 라벨은 그대로 두고 실제 검색에 보내는 값만 "행사"로 대체한다.
@@ -63,17 +94,25 @@ type HomeSummary = {
 export default function Home({
   topCombinations,
   initialSummary,
+  initialPosters,
+  initialClosedFallback = false,
 }: {
   topCombinations: TopDiscoveryCombination[];
   initialSummary: HomeSummary;
+  initialPosters: DiscoveryPoster[];
+  initialClosedFallback?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
-  const [posters, setPosters] = useState<any[]>([]);
-  const [urgentPosters, setUrgentPosters] = useState<any[]>([]);
+  const [posters, setPosters] = useState<any[]>(initialPosters);
+  const [urgentPosters, setUrgentPosters] = useState<any[]>(initialPosters);
   const [homeSummary, setHomeSummary] = useState<HomeSummary>(initialSummary);
-  const [hideClosedPosters, setHideClosedPosters] = useState(true);
-  const [activeFeed, setActiveFeed] = useState<FeedTabKey>("urgent");
+  const [hideClosedPosters, setHideClosedPosters] = useState(
+    !initialClosedFallback,
+  );
+  const [activeFeed, setActiveFeed] = useState<FeedTabKey>(
+    initialClosedFallback ? "new" : "urgent",
+  );
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -107,7 +146,6 @@ export default function Home({
           data: { session },
         } = await supabase.auth.getSession();
         const user = session?.user ?? null;
-        const nowIso = new Date().toISOString();
 
         // 메인 공고 목록 / 마감임박 목록 / 홈 요약 통계는 서로 의존관계가 없으므로
         // 순차 await 대신 Promise.all로 동시에 실행한다(순차 실행 시 각 단계가
@@ -120,78 +158,52 @@ export default function Home({
               .eq("id", user.id)
               .single();
 
-            const { data: recommendedData, error: rpcError } = await supabase.rpc("get_recommended_posters_v2", {
-              p_user_id: user.id,
-              p_limit: 12,
-            });
+            const { data: recommendedData, error: rpcError } =
+              await supabase.rpc("get_recommended_posters_v2", {
+                p_user_id: user.id,
+                p_limit: 12,
+              });
 
             if (!rpcError && recommendedData && recommendedData.length > 0) {
-              return { profileFetched: true as const, profile, posters: await attachPosterMeta(recommendedData) };
+              return {
+                profileFetched: true as const,
+                profile,
+                posters: await attachPosterMeta(recommendedData),
+              };
             }
             // 추천 결과가 없으면 아래 공개 목록으로 폴백(profile은 이미 조회함)
             const publicDataForUser = await fetchPublicPosters();
-            return { profileFetched: true as const, profile, posters: await attachPosterMeta(publicDataForUser) };
+            return {
+              profileFetched: true as const,
+              profile,
+              posters: await attachPosterMeta(publicDataForUser),
+            };
           }
 
           // 원본 로직: user가 없거나 hideClosedPosters가 꺼져 있으면 profile을 조회하지
           // 않았고 userProfile 기존 값도 건드리지 않았다 — profileFetched=false로 표시해
           // 아래에서 setUserProfile을 스킵한다(null로 덮어써서 지역 표시가 "전국"으로
           // 바뀌는 걸 방지).
-          return { profileFetched: false as const, profile: null, posters: await attachPosterMeta(await fetchPublicPosters()) };
+          return {
+            profileFetched: false as const,
+            profile: null,
+            posters: await attachPosterMeta(await fetchPublicPosters()),
+          };
         };
 
-        const fetchPublicPosters = async () => {
-          let publicQuery = supabase
-            .from("posters")
-            .select("id, title, source_org_name, application_start_at, application_end_at, deadline_type, created_at, poster_status, thumbnail_url, source_key, summary_short")
-            .eq("poster_status", "published")
-            .or(PUBLIC_POSTER_EXPOSURE_FILTER);
-
-          if (hideClosedPosters) {
-            publicQuery = publicQuery
-              .or(`application_start_at.is.null,application_start_at.lte.${nowIso}`)
-              .or(`application_end_at.gte.${nowIso},and(application_end_at.is.null,deadline_type.in.(ongoing,until_exhausted))`);
-          }
-
-          const { data: publicData, error: publicError } = await publicQuery
-            .order("created_at", { ascending: false })
-            .limit(36);
-
-          if (publicError) throw publicError;
-          const posters = publicData ?? [];
-          return hideClosedPosters
-            ? posters.filter((poster) => isPosterAcceptingApplications({
-                applicationStartAt: poster.application_start_at,
-                applicationEndAt: poster.application_end_at,
-                deadlineType: poster.deadline_type,
-              })).slice(0, 36)
-            : posters;
+        const fetchPublicFeed = async (sort: "latest" | "deadline") => {
+          const params = new URLSearchParams({ sort });
+          if (!hideClosedPosters) params.set("closed", "include");
+          const response = await fetch(`/api/posters/discovery?${params}`, {
+            cache: "no-store",
+          });
+          if (!response.ok) throw new Error("Public feed unavailable");
+          return (await response.json()).posters as DiscoveryPoster[];
         };
-
+        const fetchPublicPosters = () => fetchPublicFeed("latest");
         const fetchUrgentPosters = async () => {
-          const sevenDaysLater = new Date();
-          sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
-
-          const { data: urgentData } = await supabase
-            .from("posters")
-            .select("id, title, source_org_name, application_start_at, application_end_at, deadline_type, created_at, poster_status, thumbnail_url, source_key, summary_short")
-            .eq("poster_status", "published")
-            .or(PUBLIC_POSTER_EXPOSURE_FILTER)
-            .gte("application_end_at", nowIso)
-            .lte("application_end_at", sevenDaysLater.toISOString())
-            .order("application_end_at", { ascending: true })
-            .limit(8);
-
-          const acceptingUrgentData = (urgentData ?? []).filter((poster) => isPosterAcceptingApplications({
-            applicationStartAt: poster.application_start_at,
-            applicationEndAt: poster.application_end_at,
-            deadlineType: poster.deadline_type,
-          }));
-
-          if (acceptingUrgentData.length > 0) {
-            return { urgentData: acceptingUrgentData, urgentPosters: await attachPosterMeta(acceptingUrgentData) };
-          }
-          return { urgentData: [] as any[], urgentPosters: [] as any[] };
+          const urgentData = await fetchPublicFeed("deadline");
+          return { urgentData, urgentPosters: urgentData };
         };
 
         const fetchSummary = fetch("/api/home/summary", { cache: "no-store" })
@@ -215,7 +227,9 @@ export default function Home({
         if (summaryResult) setHomeSummary(summaryResult);
       } catch (error) {
         console.error("Failed to load home data", error);
-        setLoadError("공고 데이터를 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.");
+        setLoadError(
+          "공고 데이터를 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.",
+        );
       } finally {
         setLoading(false);
       }
@@ -238,26 +252,35 @@ export default function Home({
 
   const feedPosters = useMemo(() => {
     if (activeFeed === "urgent") {
-      const urgent = urgentPosters.length > 0 ? urgentPosters : availablePosters;
+      const urgent =
+        urgentPosters.length > 0 ? urgentPosters : availablePosters;
       return urgent
-        .filter((poster) => isPosterAcceptingApplications({
-          applicationStartAt: poster.application_start_at,
-          applicationEndAt: poster.application_end_at,
-          deadlineType: poster.deadline_type,
-        }))
+        .filter((poster) =>
+          isPosterAcceptingApplications({
+            applicationStartAt: poster.application_start_at,
+            applicationEndAt: poster.application_end_at,
+            deadlineType: poster.deadline_type,
+          }),
+        )
         .sort((a, b) => {
-          const aTime = a.application_end_at ? new Date(a.application_end_at).getTime() : Number.MAX_SAFE_INTEGER;
-          const bTime = b.application_end_at ? new Date(b.application_end_at).getTime() : Number.MAX_SAFE_INTEGER;
+          const aTime = a.application_end_at
+            ? new Date(a.application_end_at).getTime()
+            : Number.MAX_SAFE_INTEGER;
+          const bTime = b.application_end_at
+            ? new Date(b.application_end_at).getTime()
+            : Number.MAX_SAFE_INTEGER;
           return aTime - bTime;
         })
-        .slice(0, 8);
+        .slice(0, 12);
     }
 
     if (activeFeed === "popular") {
-      return [...availablePosters].sort((a, b) => (b.viewCount ?? 0) - (a.viewCount ?? 0)).slice(0, 8);
+      return [...availablePosters]
+        .sort((a, b) => (b.viewCount ?? 0) - (a.viewCount ?? 0))
+        .slice(0, 12);
     }
 
-    return availablePosters.slice(0, 8);
+    return availablePosters.slice(0, 12);
   }, [activeFeed, availablePosters, urgentPosters]);
 
   const regionLabel =
@@ -288,16 +311,25 @@ export default function Home({
             </div>
             <h1 className="max-w-none text-[clamp(1.55rem,7vw,3rem)] font-black leading-tight tracking-normal text-slate-950 sm:whitespace-nowrap sm:text-[clamp(1rem,4.2vw,3rem)]">
               <span className="block sm:inline">나에게 맞는 공공 공고,</span>
-              <span className="block sm:inline sm:pl-2">흩어져 찾지 마세요</span>
+              <span className="block sm:inline sm:pl-2">
+                흩어져 찾지 마세요
+              </span>
             </h1>
             <p className="mt-4 max-w-none text-[0.98rem] font-medium leading-relaxed text-slate-600 sm:whitespace-nowrap sm:text-[clamp(0.42rem,1.72vw,1rem)] sm:leading-normal">
               <span className="block sm:inline">정부·지자체·공공기관의</span>
-              <span className="block sm:inline sm:pl-1">지원사업, 교육, 행사, 채용·모집 정보를</span>
-              <span className="block sm:inline sm:pl-1">지역과 관심분야에 맞춰 한곳에서 찾아보세요.</span>
+              <span className="block sm:inline sm:pl-1">
+                지원사업, 교육, 행사, 채용·모집 정보를
+              </span>
+              <span className="block sm:inline sm:pl-1">
+                지역과 관심분야에 맞춰 한곳에서 찾아보세요.
+              </span>
             </p>
           </div>
 
-          <form action="/posters" className="mt-7 flex flex-col gap-3 border border-slate-300 bg-white p-3 sm:flex-row">
+          <form
+            action="/posters"
+            className="mt-7 flex flex-col gap-3 border border-slate-300 bg-white p-3 sm:flex-row"
+          >
             <label className="flex min-h-12 flex-1 items-center gap-3 px-2">
               <Search size={20} className="shrink-0 text-slate-500" />
               <input
@@ -329,10 +361,29 @@ export default function Home({
           </div>
 
           <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-300 pt-4 text-xs font-black text-slate-600">
-            <span>오늘 새 공고 {homeSummary.todayNew == null ? "확인 중" : `${homeSummary.todayNew.toLocaleString()}건`}</span>
-            <span>신청 가능한 공고 {homeSummary.activePosters == null ? "확인 중" : `${homeSummary.activePosters.toLocaleString()}건`}</span>
-            <span>이번 주 마감 {homeSummary.dueThisWeek == null ? "확인 중" : `${homeSummary.dueThisWeek.toLocaleString()}건`}</span>
-            {(homeSummary.collectionSources ?? 0) > 0 && <span>공개 기관 {homeSummary.collectionSources?.toLocaleString()}개</span>}
+            <span>
+              오늘 새 공고{" "}
+              {homeSummary.todayNew == null
+                ? "확인 중"
+                : `${homeSummary.todayNew.toLocaleString()}건`}
+            </span>
+            <span>
+              신청 가능한 공고{" "}
+              {homeSummary.activePosters == null
+                ? "확인 중"
+                : `${homeSummary.activePosters.toLocaleString()}건`}
+            </span>
+            <span>
+              이번 주 마감{" "}
+              {homeSummary.dueThisWeek == null
+                ? "확인 중"
+                : `${homeSummary.dueThisWeek.toLocaleString()}건`}
+            </span>
+            {(homeSummary.collectionSources ?? 0) > 0 && (
+              <span>
+                공개 기관 {homeSummary.collectionSources?.toLocaleString()}개
+              </span>
+            )}
           </div>
         </motion.section>
 
@@ -343,7 +394,17 @@ export default function Home({
         )}
 
         <section className="mt-10">
-          <SectionTitle eyebrow="Notice Feed" title="지금 확인해야 할 공고" actionHref="/posters" actionLabel="전체 보기" />
+          <SectionTitle
+            eyebrow="Notice Feed"
+            title="지금 확인해야 할 공고"
+            actionHref="/posters"
+            actionLabel="전체 보기"
+          />
+          {initialClosedFallback && !hideClosedPosters && (
+            <p className="mb-4 text-sm text-slate-600">
+              진행 중 공고가 없어 최신 공개 공고를 마감 포함으로 표시합니다.
+            </p>
+          )}
 
           <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex gap-2 overflow-x-auto pb-1">
@@ -374,15 +435,24 @@ export default function Home({
             >
               <Filter size={15} />
               접수 중인 공고만 보기
-              <span className={`h-2.5 w-2.5 rounded-full ${hideClosedPosters ? "bg-blue-700" : "bg-slate-300"}`} />
+              <span
+                className={`h-2.5 w-2.5 rounded-full ${hideClosedPosters ? "bg-blue-700" : "bg-slate-300"}`}
+              />
             </button>
           </div>
 
-          <div data-testid="home-feed-category-filters" className="mb-5 flex gap-2 overflow-x-auto pb-1">
+          <div
+            data-testid="home-feed-category-filters"
+            className="mb-5 flex gap-2 overflow-x-auto pb-1"
+          >
             {categories.map((category) => (
               <Link
                 key={category}
-                href={category === "전체" ? "/posters" : `/posters?q=${encodeURIComponent(categorySearchTerm(category))}`}
+                href={
+                  category === "전체"
+                    ? "/posters"
+                    : `/posters?q=${encodeURIComponent(categorySearchTerm(category))}`
+                }
                 className="shrink-0 border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-600 transition-colors hover:border-blue-500 hover:text-blue-700"
               >
                 {category}
@@ -394,7 +464,10 @@ export default function Home({
             {loading && feedPosters.length === 0 ? (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {[1, 2, 3, 4].map((item) => (
-                  <div key={item} className="h-80 animate-pulse border border-slate-200 bg-white" />
+                  <div
+                    key={item}
+                    className="h-80 animate-pulse border border-slate-200 bg-white"
+                  />
                 ))}
               </div>
             ) : feedPosters.length > 0 ? (
@@ -419,7 +492,9 @@ export default function Home({
                         linkClickCount: poster.linkClickCount,
                         favoriteCount: poster.favoriteCount,
                         similarityScore: poster.similarityScore,
-                        tags: [poster.categoryName, poster.regionName].filter((tag): tag is string => Boolean(tag)),
+                        tags: [poster.categoryName, poster.regionName].filter(
+                          (tag): tag is string => Boolean(tag),
+                        ),
                       }}
                     />
                   </div>
@@ -446,7 +521,10 @@ export default function Home({
                   <CalendarClock size={18} />
                   이번 주 마감 공고
                 </h2>
-                <Link href="/posters" className="text-xs font-black text-rose-700 hover:text-rose-900">
+                <Link
+                  href="/posters"
+                  className="text-xs font-black text-rose-700 hover:text-rose-900"
+                >
                   더 보기
                 </Link>
               </div>
@@ -469,8 +547,12 @@ export default function Home({
                           <Bell size={13} />
                           {daysLeft <= 0 ? "오늘 마감" : `D-${daysLeft}`}
                         </span>
-                        <h3 className="mt-2 line-clamp-2 text-sm font-black leading-6 text-slate-950">{poster.title}</h3>
-                        <p className="mt-1 truncate text-xs font-bold text-slate-500">{poster.source_org_name}</p>
+                        <h3 className="mt-2 line-clamp-2 text-sm font-black leading-6 text-slate-950">
+                          {poster.title}
+                        </h3>
+                        <p className="mt-1 truncate text-xs font-bold text-slate-500">
+                          {poster.source_org_name}
+                        </p>
                       </div>
                     </Link>
                   );
@@ -481,9 +563,15 @@ export default function Home({
         </AnimatePresence>
 
         <section className="mt-12">
-          <SectionTitle eyebrow="Local Search" title="내 지역 공고를 찾아보세요" />
+          <SectionTitle
+            eyebrow="Local Search"
+            title="내 지역 공고를 찾아보세요"
+          />
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-            <Link href="/regions/seoul" className="flex items-center justify-between border border-slate-300 bg-white px-4 py-4 text-sm font-black text-slate-900 transition-colors hover:border-blue-500 hover:text-blue-700 lg:col-span-2">
+            <Link
+              href="/regions/seoul"
+              className="flex items-center justify-between border border-slate-300 bg-white px-4 py-4 text-sm font-black text-slate-900 transition-colors hover:border-blue-500 hover:text-blue-700 lg:col-span-2"
+            >
               <span className="inline-flex items-center gap-2">
                 <MapPin size={17} />
                 서울특별시
@@ -504,17 +592,19 @@ export default function Home({
 
         {topCombinations.length > 0 && (
           <section className="mt-12" aria-label="지역별 공고 모아보기">
-            <SectionTitle eyebrow="Popular Local Topics" title="지역별 공고 모아보기" />
-            <div
-              className="grid gap-x-6 gap-y-3 border-y border-slate-300 bg-white px-5 py-6 sm:grid-cols-2 lg:grid-cols-4"
-            >
+            <SectionTitle
+              eyebrow="Popular Local Topics"
+              title="지역별 공고 모아보기"
+            />
+            <div className="grid gap-x-6 gap-y-3 border-y border-slate-300 bg-white px-5 py-6 sm:grid-cols-2 lg:grid-cols-4">
               {topCombinations.map((combination) => (
                 <a
                   key={`${combination.regionSlug}:${combination.categorySlug}`}
                   href={`/regions/${combination.regionSlug}/${combination.categorySlug}`}
                   className="text-sm font-bold leading-6 text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-blue-700 hover:decoration-blue-500"
                 >
-                  {combination.regionName} {combination.categoryName} 공고 {combination.count.toLocaleString()}건
+                  {combination.regionName} {combination.categoryName} 공고{" "}
+                  {combination.count.toLocaleString()}건
                 </a>
               ))}
             </div>
@@ -525,13 +615,21 @@ export default function Home({
           <SectionTitle eyebrow="Categories" title="관심분야별 공고" />
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {serviceCategories.map((category) => (
-              <ServiceLink key={category} href={`/posters?q=${encodeURIComponent(categorySearchTerm(category))}`} icon={<Sparkles size={17} />} title={category} />
+              <ServiceLink
+                key={category}
+                href={`/posters?q=${encodeURIComponent(categorySearchTerm(category))}`}
+                icon={<Sparkles size={17} />}
+                title={category}
+              />
             ))}
           </div>
         </section>
 
         <section id="organizations" className="mt-12 scroll-mt-20">
-          <SectionTitle eyebrow="Organizations" title="관심 기관의 새 공고를 놓치지 마세요" />
+          <SectionTitle
+            eyebrow="Organizations"
+            title="관심 기관의 새 공고를 놓치지 마세요"
+          />
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {organizationHighlights.map((org) => (
               <Link
@@ -540,24 +638,35 @@ export default function Home({
                 className="border border-slate-300 bg-white p-4 transition-colors hover:border-blue-500"
               >
                 <p className="text-sm font-black text-slate-950">{org}</p>
-                <p className="mt-2 text-xs font-bold text-slate-500">진행 중 공고 보기</p>
+                <p className="mt-2 text-xs font-bold text-slate-500">
+                  진행 중 공고 보기
+                </p>
               </Link>
             ))}
           </div>
         </section>
 
-        <section id="about" className="mt-12 scroll-mt-20 border-y border-slate-300 py-8">
+        <section
+          id="about"
+          className="mt-12 scroll-mt-20 border-y border-slate-300 py-8"
+        >
           <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
             <div>
-              <p className="text-xs font-black uppercase text-blue-700">About PosterLink</p>
-              <h2 className="mt-2 text-2xl font-black leading-tight text-slate-950">당신에게 필요한 공공의 기회를 연결합니다</h2>
+              <p className="text-xs font-black uppercase text-blue-700">
+                About PosterLink
+              </p>
+              <h2 className="mt-2 text-2xl font-black leading-tight text-slate-950">
+                당신에게 필요한 공공의 기회를 연결합니다
+              </h2>
             </div>
             <div className="space-y-4 text-sm font-medium leading-7 text-slate-600">
               <p>
-                PosterLink는 정부, 지자체, 공공기관과 공익기관에 흩어진 지원사업·교육·행사·채용·모집 정보를 한곳에 모읍니다.
+                PosterLink는 정부, 지자체, 공공기관과 공익기관에 흩어진
+                지원사업·교육·행사·채용·모집 정보를 한곳에 모읍니다.
               </p>
               <p>
-                복잡한 공고문에서 신청기간, 지원대상, 주요내용과 신청방법을 정리해 필요한 정보를 더 빠르게 확인할 수 있도록 돕습니다.
+                복잡한 공고문에서 신청기간, 지원대상, 주요내용과 신청방법을
+                정리해 필요한 정보를 더 빠르게 확인할 수 있도록 돕습니다.
               </p>
             </div>
           </div>
@@ -566,17 +675,26 @@ export default function Home({
         <section className="mt-12 border border-blue-200 bg-blue-50 p-5 text-blue-950">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="text-lg font-black">빠진 공고나 기관을 알고 계신가요?</h2>
+              <h2 className="text-lg font-black">
+                빠진 공고나 기관을 알고 계신가요?
+              </h2>
               <p className="mt-2 text-sm font-bold leading-6 text-blue-900">
-                PosterLink에 아직 등록되지 않은 공고와 기관을 알려주세요. 확인 후 더 많은 사람이 볼 수 있도록 등록하겠습니다.
+                PosterLink에 아직 등록되지 않은 공고와 기관을 알려주세요. 확인
+                후 더 많은 사람이 볼 수 있도록 등록하겠습니다.
               </p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Link href="/posters/request" className="inline-flex items-center justify-center gap-2 bg-blue-700 px-4 py-3 text-sm font-black text-white transition-colors hover:bg-blue-800">
+              <Link
+                href="/posters/request"
+                className="inline-flex items-center justify-center gap-2 bg-blue-700 px-4 py-3 text-sm font-black text-white transition-colors hover:bg-blue-800"
+              >
                 <PlusCircle size={17} />
                 공고 제보하기
               </Link>
-              <Link href="/posters/request?type=organization" className="inline-flex items-center justify-center gap-2 border border-blue-300 bg-white px-4 py-3 text-sm font-black text-blue-900 transition-colors hover:border-blue-600">
+              <Link
+                href="/posters/request?type=organization"
+                className="inline-flex items-center justify-center gap-2 border border-blue-300 bg-white px-4 py-3 text-sm font-black text-blue-900 transition-colors hover:border-blue-600"
+              >
                 기관 등록 요청
               </Link>
             </div>
@@ -608,7 +726,10 @@ function SectionTitle({
         <h2 className="mt-1 text-2xl font-black text-slate-950">{title}</h2>
       </div>
       {actionHref && actionLabel && (
-        <Link href={actionHref} className="hidden items-center gap-1 text-xs font-black text-slate-500 hover:text-blue-700 sm:inline-flex">
+        <Link
+          href={actionHref}
+          className="hidden items-center gap-1 text-xs font-black text-slate-500 hover:text-blue-700 sm:inline-flex"
+        >
           {actionLabel}
           <ArrowRight size={14} />
         </Link>
@@ -617,7 +738,15 @@ function SectionTitle({
   );
 }
 
-function ServiceLink({ href, icon, title }: { href: string; icon: ReactNode; title: string }) {
+function ServiceLink({
+  href,
+  icon,
+  title,
+}: {
+  href: string;
+  icon: ReactNode;
+  title: string;
+}) {
   return (
     <Link
       href={href}

@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { PUBLIC_POSTER_EXPOSURE_FILTER } from "./publicPosterVisibility";
+import { countOpenPosters } from "./publicPosterRepository";
 
 function getPublicClient() {
   return createClient(
@@ -24,16 +25,6 @@ async function safeCount(
   const { count, error } = await query;
   if (error) return null;
   return count;
-}
-
-async function safeRpcNumber(
-  query: PromiseLike<{ data: unknown; error: unknown }>,
-) {
-  const { data, error } = await query;
-  if (error) return null;
-  const value =
-    typeof data === "number" ? data : data == null ? NaN : Number(data);
-  return Number.isFinite(value) ? value : null;
 }
 
 function getKoreaDayStartIso(now = new Date()) {
@@ -69,14 +60,7 @@ export async function fetchPublicHomeSummary() {
             `published_at.gte.${todayStartIso},and(published_at.is.null,created_at.gte.${todayStartIso})`,
           ),
       ),
-      safeRpcNumber(
-        supabase.rpc("count_public_posters", {
-          p_query: null,
-          p_category_id: null,
-          p_region_ids: null,
-          p_include_closed: false,
-        }),
-      ),
+      countOpenPosters(supabase).catch(() => null),
       safeCount(
         supabase
           .from("posters")

@@ -1,4 +1,7 @@
 "use client";
+import { resolvePosterActionLinks } from "../../../lib/posterActionLinks";
+import { usePosterClock } from "../../../lib/usePosterClock";
+import { posterRegionDisplay } from "../../../lib/posterRegionDisplay";
 import toast from "react-hot-toast";
 import Link from "next/link";
 
@@ -8,11 +11,14 @@ import { BottomNav } from "../../components/BottomNav";
 import { CommentSection } from "../../components/CommentSection";
 import { PosterImageCarousel } from "../../components/PosterImageCarousel";
 import { supabase } from "../../lib/supabase";
-import { fetchPosterMetricCounts, logPosterView } from "../../lib/posterMetrics";
+import {
+  fetchPosterMetricCounts,
+  logPosterView,
+} from "../../lib/posterMetrics";
 import {
   formatApplicationPeriod,
   formatPosterDateTime,
-  getPosterApplicationState
+  getPosterApplicationState,
 } from "../../../lib/posterApplication";
 import { buildVerifiedPosterCalendar } from "../../../lib/posterCalendar";
 import { getVerifiedPosterCalendarSource } from "../../../lib/posterStructuredTrust";
@@ -22,12 +28,26 @@ import {
   extractTargetAgeRange,
 } from "../../../lib/posterSummaryFacts";
 import { Footer } from "../../components/Footer";
-import { CalendarPlus, ChevronLeft, ChevronRight, Eye, Heart, Share2, X } from "lucide-react";
+import {
+  CalendarPlus,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  Heart,
+  Share2,
+  X,
+} from "lucide-react";
 import { FieldReportButton } from "./FieldReportButton";
-import { ClosedPosterAlertCta, type AlertDefaults } from "./ClosedPosterAlertCta";
+import {
+  ClosedPosterAlertCta,
+  type AlertDefaults,
+} from "./ClosedPosterAlertCta";
 import { trackAlertEvent } from "../../../lib/alertAnalytics";
 
-import { trackAnalytics, setAnalyticsLoginStatus } from "../../../lib/analytics";
+import {
+  trackAnalytics,
+  setAnalyticsLoginStatus,
+} from "../../../lib/analytics";
 
 export type PosterDetailPoster = {
   id: string;
@@ -84,7 +104,10 @@ function isKakaoLink(link: PosterDetailLink) {
   return /kakao|카카오/i.test(`${link.title ?? ""} ${link.url}`);
 }
 
-function getLinkActionLabel(link: PosterDetailLink, context: "primary" | "reference" = "primary") {
+function getLinkActionLabel(
+  link: PosterDetailLink,
+  context: "primary" | "reference" = "primary",
+) {
   if (/^mailto:/i.test(link.url)) return "이메일 신청방법 확인";
   if (/^tel:/i.test(link.url)) return "전화로 신청";
   if (isKakaoLink(link)) return "카카오톡으로 문의";
@@ -105,17 +128,6 @@ function getLinkActionLabel(link: PosterDetailLink, context: "primary" | "refere
     default:
       return link.title || "관련 링크 보기";
   }
-}
-
-function getPrimaryActionLink(links: PosterDetailLink[]) {
-  return (
-    links.find((link) => link.link_type === "official_apply" && link.is_primary) ||
-    links.find((link) => link.link_type === "official_apply") ||
-    links.find((link) => link.is_primary) ||
-    links.find((link) => link.link_type === "official_notice") ||
-    links[0] ||
-    null
-  );
 }
 
 function formatHostName(url: string) {
@@ -142,7 +154,14 @@ function getOrganizationVerification(poster: PosterDetailPoster) {
   const operatorName = normalizeOrgDisplayValue(organization.operatorName);
   const boardName = normalizeOrgDisplayValue(organization.boardName);
 
-  if (!sourceOrgName && !displayOrgName && !organizerName && !operatorName && !boardName) return null;
+  if (
+    !sourceOrgName &&
+    !displayOrgName &&
+    !organizerName &&
+    !operatorName &&
+    !boardName
+  )
+    return null;
 
   return {
     sourceOrgName,
@@ -150,12 +169,19 @@ function getOrganizationVerification(poster: PosterDetailPoster) {
     organizerName,
     operatorName,
     boardName,
-    sourceDiffersFromOrganizer: Boolean(organization.sourceDiffersFromOrganizer)
+    sourceDiffersFromOrganizer: Boolean(
+      organization.sourceDiffersFromOrganizer,
+    ),
   };
 }
 
 function getPosterOrgDisplayName(poster: PosterDetailPoster) {
-  return poster.organizer_name || getOrganizationVerification(poster)?.displayOrgName || poster.source_org_name || null;
+  return (
+    poster.organizer_name ||
+    getOrganizationVerification(poster)?.displayOrgName ||
+    poster.source_org_name ||
+    null
+  );
 }
 
 function formatTargetAge(min?: number | null, max?: number | null) {
@@ -171,11 +197,16 @@ function publicInformationCheckLabel(poster: PosterDetailPoster) {
   return "공식 공고 확인 권장";
 }
 
-function downloadPosterCalendar(poster: PosterDetailPoster, link?: string | null) {
+function downloadPosterCalendar(
+  poster: PosterDetailPoster,
+  link?: string | null,
+) {
   const calendar = buildVerifiedPosterCalendar(poster, link);
   if (!calendar) return false;
 
-  const url = URL.createObjectURL(new Blob([calendar.content], { type: "text/calendar;charset=utf-8" }));
+  const url = URL.createObjectURL(
+    new Blob([calendar.content], { type: "text/calendar;charset=utf-8" }),
+  );
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = calendar.filename;
@@ -199,7 +230,7 @@ const CIRCLED_SECTION_LABELS: Record<string, string> = {
   "⑦": "참여혜택",
   "⑧": "문의",
   "⑨": "기타",
-  "⑩": "기타"
+  "⑩": "기타",
 };
 
 const SUMMARY_LABELS = [
@@ -243,7 +274,7 @@ const SUMMARY_LABELS = [
   "참가비",
   "신청문의",
   "주의",
-  "참고"
+  "참고",
 ];
 
 const SUMMARY_LABEL_PATTERN = SUMMARY_LABELS.sort((a, b) => b.length - a.length)
@@ -280,12 +311,16 @@ function normalizeSummaryText(value: string): string {
 function splitDisplayParagraphs(value: string): string[] {
   return value
     .split(/\n+/)
-    .flatMap((paragraph) => paragraph.split(/(?<=[.!?。]|[다요함됨음임])\s+(?=[가-힣A-Za-z0-9])/))
+    .flatMap((paragraph) =>
+      paragraph.split(/(?<=[.!?。]|[다요함됨음임])\s+(?=[가-힣A-Za-z0-9])/),
+    )
     .map((paragraph) => paragraph.trim())
     .filter(Boolean);
 }
 
-function splitNumberedItems(value: string): Array<{ number: string; body: string; instructor?: string }> {
+function splitNumberedItems(
+  value: string,
+): Array<{ number: string; body: string; instructor?: string }> {
   const matches = [...value.matchAll(/(?:^|\s)(\d{1,2})[.)]\s+/g)];
   if (matches.length < 2) return [];
 
@@ -299,7 +334,7 @@ function splitNumberedItems(value: string): Array<{ number: string; body: string
       return {
         number: match[1],
         body: body.trim(),
-        instructor: instructor?.trim()
+        instructor: instructor?.trim(),
       };
     })
     .filter((item) => item.body);
@@ -321,12 +356,20 @@ function removeDanglingDuplicateLines(lines: SummaryLine[]): SummaryLine[] {
     if (!next) return true;
 
     const dangling = current.replace(/[(:（]\s*$/, "").trim();
-    const danglingWithoutHeading = dangling.replace(/^교육\s*내용\s+/, "").trim();
-    return !(current !== dangling && (next.startsWith(dangling) || next.startsWith(danglingWithoutHeading)));
+    const danglingWithoutHeading = dangling
+      .replace(/^교육\s*내용\s+/, "")
+      .trim();
+    return !(
+      current !== dangling &&
+      (next.startsWith(dangling) || next.startsWith(danglingWithoutHeading))
+    );
   });
 }
 
-function splitNumberedSections(value: string, fallbackLabel?: string): SummaryLine[] {
+function splitNumberedSections(
+  value: string,
+  fallbackLabel?: string,
+): SummaryLine[] {
   const sectionPattern = /([①②③④⑤⑥⑦⑧⑨⑩])\s*([^①②③④⑤⑥⑦⑧⑨⑩]+)/g;
   const firstSectionIndex = value.search(/[①②③④⑤⑥⑦⑧⑨⑩]/);
   if (firstSectionIndex < 0) return [{ label: fallbackLabel, text: value }];
@@ -341,15 +384,19 @@ function splitNumberedSections(value: string, fallbackLabel?: string): SummaryLi
     if (!section) continue;
 
     const titleMatch = section.match(
-      /^(목적(?:\([^)]*\))?|신청대상|신청기간|진행일정|진행내용|진행장소|참여혜택|문의\s*연락처|문의처|문의|대상|내용|기간|일시|장소)\s*(.*)$/
+      /^(목적(?:\([^)]*\))?|신청대상|신청기간|진행일정|진행내용|진행장소|참여혜택|문의\s*연락처|문의처|문의|대상|내용|기간|일시|장소)\s*(.*)$/,
     );
-    const rawLabel = titleMatch?.[1]?.trim() ?? CIRCLED_SECTION_LABELS[marker] ?? marker;
-    const label = normalizeNumberedLabel(rawLabel) || CIRCLED_SECTION_LABELS[marker] || marker;
+    const rawLabel =
+      titleMatch?.[1]?.trim() ?? CIRCLED_SECTION_LABELS[marker] ?? marker;
+    const label =
+      normalizeNumberedLabel(rawLabel) ||
+      CIRCLED_SECTION_LABELS[marker] ||
+      marker;
     const text = normalizeSummaryText(titleMatch?.[2] || section);
 
     lines.push({
       label,
-      text: text || section
+      text: text || section,
     });
   }
 
@@ -360,24 +407,33 @@ function formatSummaryLines(value: string | null | undefined): SummaryLine[] {
   const text = String(value ?? "")
     .replace(
       /<\/?(?:a|b|blockquote|div|em|h[1-6]|i|img|li|ol|p|span|strong|table|tbody|td|th|thead|tr|ul)\b[^>]*>/gi,
-      " "
+      " ",
     )
     .replace(/&nbsp;|&#160;/gi, " ")
     .replace(/^상세정보\s+/, "")
     .replace(/\s+(교육\s*개요|신청\s*안내)\s+/g, "\n")
     .replace(/\s*[🎵]\s*/g, "\n")
     .replace(/\s*[·•]\s*/g, "\n")
-    .replace(/\s+(?=교육\s*내용\s*(?:[①②③④⑤⑥⑦⑧⑨⑩]|\d\uFE0F?\u20E3|\d[.)]))/g, "\n")
+    .replace(
+      /\s+(?=교육\s*내용\s*(?:[①②③④⑤⑥⑦⑧⑨⑩]|\d\uFE0F?\u20E3|\d[.)]))/g,
+      "\n",
+    )
     .replace(/[ \t]+/g, " ")
     .trim();
 
   if (!text) return [];
-  if (/[①②③④⑤⑥⑦⑧⑨⑩]/.test(text) && !new RegExp(`^(${SUMMARY_LABEL_PATTERN})\\s*:`).test(text)) {
+  if (
+    /[①②③④⑤⑥⑦⑧⑨⑩]/.test(text) &&
+    !new RegExp(`^(${SUMMARY_LABEL_PATTERN})\\s*:`).test(text)
+  ) {
     return removeDanglingDuplicateLines(splitNumberedSections(text));
   }
 
   const normalized = text
-    .replace(new RegExp(`\\s+(?=(${SUMMARY_LABEL_PATTERN})\\s*[:：-])`, "g"), "\n")
+    .replace(
+      new RegExp(`\\s+(?=(${SUMMARY_LABEL_PATTERN})\\s*[:：-])`, "g"),
+      "\n",
+    )
     .replace(new RegExp(`^(${SUMMARY_LABEL_PATTERN})\\s*[:：-]`, "g"), "$1:");
 
   const lines = normalized
@@ -387,20 +443,22 @@ function formatSummaryLines(value: string | null | undefined): SummaryLine[] {
 
   const parsed = lines
     .map((line) => {
-      const match = line.match(new RegExp(`^(${SUMMARY_LABEL_PATTERN})\\s*[:：-]\\s*(.+)$`));
+      const match = line.match(
+        new RegExp(`^(${SUMMARY_LABEL_PATTERN})\\s*[:：-]\\s*(.+)$`),
+      );
       if (!match) {
         const looseMatch = line.match(/^(교육\s*내용)\s+(.+)$/);
         if (looseMatch) {
           return {
             label: normalizeSummaryLabel(looseMatch[1]),
-            text: normalizeSummaryText(looseMatch[2])
+            text: normalizeSummaryText(looseMatch[2]),
           };
         }
         return { text: normalizeSummaryText(line) };
       }
       return {
         label: normalizeSummaryLabel(match[1]),
-        text: normalizeSummaryText(match[2])
+        text: normalizeSummaryText(match[2]),
       };
     })
     .flatMap((line) => splitNumberedSections(line.text, line.label));
@@ -423,13 +481,23 @@ function renderSummaryContent(line: SummaryLine) {
     return (
       <div className="min-w-0 space-y-3">
         {numberedItems.map((item) => (
-          <div key={`${item.number}-${item.body}`} className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-2">
+          <div
+            key={`${item.number}-${item.body}`}
+            className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-2"
+          >
             <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-900 text-[10px] font-black text-white">
               {item.number}
             </span>
             <div className="min-w-0 space-y-1 break-keep [overflow-wrap:anywhere]">
               <p suppressHydrationWarning>{item.body}</p>
-              {item.instructor && <p suppressHydrationWarning className="text-xs font-bold text-gray-500">강사: {item.instructor}</p>}
+              {item.instructor && (
+                <p
+                  suppressHydrationWarning
+                  className="text-xs font-bold text-gray-500"
+                >
+                  강사: {item.instructor}
+                </p>
+              )}
             </div>
           </div>
         ))}
@@ -442,9 +510,17 @@ function renderSummaryContent(line: SummaryLine) {
     return (
       <div className="min-w-0 space-y-2">
         {dashItems.map((item, index) => (
-          <div key={`${item}-${index}`} className="grid grid-cols-[0.75rem_minmax(0,1fr)] gap-2">
+          <div
+            key={`${item}-${index}`}
+            className="grid grid-cols-[0.75rem_minmax(0,1fr)] gap-2"
+          >
             <span className="mt-2 h-1.5 w-1.5 rounded-full bg-gray-400" />
-            <p suppressHydrationWarning className="min-w-0 break-keep [overflow-wrap:anywhere]">{item}</p>
+            <p
+              suppressHydrationWarning
+              className="min-w-0 break-keep [overflow-wrap:anywhere]"
+            >
+              {item}
+            </p>
           </div>
         ))}
       </div>
@@ -455,7 +531,9 @@ function renderSummaryContent(line: SummaryLine) {
   return (
     <div className="min-w-0 space-y-1.5 break-keep [overflow-wrap:anywhere]">
       {paragraphs.map((paragraph, index) => (
-        <p key={`${paragraph}-${index}`} suppressHydrationWarning>{paragraph}</p>
+        <p key={`${paragraph}-${index}`} suppressHydrationWarning>
+          {paragraph}
+        </p>
       ))}
     </div>
   );
@@ -466,7 +544,7 @@ export function PosterDetailClient({
   links,
   alertDefaults,
   initialViewCount = 0,
-  initialFavoriteCount = 0
+  initialFavoriteCount = 0,
 }: {
   poster: PosterDetailPoster;
   links: PosterDetailLink[];
@@ -487,7 +565,9 @@ export function PosterDetailClient({
       .then((metricCounts) => {
         if (cancelled) return;
         setViewCount(metricCounts.viewCounts[poster.id] ?? initialViewCount);
-        setFavoriteCount(metricCounts.favoriteCounts[poster.id] ?? initialFavoriteCount);
+        setFavoriteCount(
+          metricCounts.favoriteCounts[poster.id] ?? initialFavoriteCount,
+        );
       })
       .finally(() => {
         void logPosterView(poster.id).then((logged) => {
@@ -522,12 +602,19 @@ export function PosterDetailClient({
       poster_status: poster.poster_status || "published",
       region: poster.regionName || "지역 전체",
       category: poster.categoryName || "분야 전체",
-      cta_variant: notificationType === "favorite_deadline" ? "favorite_deadline_v1" : "closed_poster_v1"
+      cta_variant:
+        notificationType === "favorite_deadline"
+          ? "favorite_deadline_v1"
+          : "closed_poster_v1",
     });
     params.delete("notification_open");
     params.delete("notification_type");
     const query = params.toString();
-    window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+    window.history.replaceState(
+      {},
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}`,
+    );
   }, [poster.categoryName, poster.id, poster.poster_status, poster.regionName]);
 
   const toggleFavorite = async () => {
@@ -590,21 +677,38 @@ export function PosterDetailClient({
     }
   };
 
+  const now = usePosterClock();
   const applicationState = getPosterApplicationState({
+    now,
+    posterStatus: poster.poster_status,
     applicationStartAt: poster.application_start_at,
     applicationEndAt: poster.application_end_at,
-    deadlineType: poster.deadline_type
+    deadlineType: poster.deadline_type,
   });
+  const isClosed =
+    poster.poster_status === "closed" || applicationState.status === "closed";
   const daysLeft = applicationState.daysLeft;
 
-  const imageUrls = resolvePosterImageGallery(poster.images ?? [], poster.thumbnail_url, poster.source_key);
-  const primaryLink = getPrimaryActionLink(links);
-  const sourceLink = links.find((link) => link.link_type === "official_notice") || null;
-  const primaryActionLabel = primaryLink ? getLinkActionLabel(primaryLink) : "공식 공고 확인";
-  const referenceLinks = links.filter((link) => link.id !== primaryLink?.id);
+  const imageUrls = resolvePosterImageGallery(
+    poster.images ?? [],
+    poster.thumbnail_url,
+    poster.source_key,
+  );
+  const actions = resolvePosterActionLinks(links, poster.source_key, isClosed);
+  const primaryLink = actions.primary;
+  const sourceLink = actions.official;
+  const primaryActionLabel = actions.label;
+  const referenceLinks = actions.references;
   const canSaveCalendar = getVerifiedPosterCalendarSource(poster) !== null;
-  const summaryLines = formatSummaryLines(poster.summary_long || poster.summary_short).filter(
-    (line, index, lines) => lines.findIndex((item) => item.label === line.label && item.text === line.text) === index
+  const regionDisplay = posterRegionDisplay(
+    poster.regionName,
+    poster.summary_long || poster.summary_short,
+  );
+  const summaryLines = formatSummaryLines(regionDisplay.summary).filter(
+    (line, index, lines) =>
+      lines.findIndex(
+        (item) => item.label === line.label && item.text === line.text,
+      ) === index,
   );
   const summaryFallbackFacts = derivePosterSummaryFallbackFacts(summaryLines);
   const structuredEligibilityAgeRange = extractTargetAgeRange(
@@ -619,67 +723,94 @@ export function PosterDetailClient({
   const applicationPeriodLabel = formatApplicationPeriod({
     applicationStartAt: poster.application_start_at,
     applicationEndAt: poster.application_end_at,
-    deadlineType: poster.deadline_type
+    deadlineType: poster.deadline_type,
   });
   const lastCheckedLabel = publicInformationCheckLabel(poster);
   const sourceHostLabel = sourceLink ? formatHostName(sourceLink.url) : null;
   const organizationInfo = getOrganizationVerification(poster);
-  const organizerName = poster.organizer_name || organizationInfo?.organizerName || null;
+  const organizerName =
+    poster.organizer_name || organizationInfo?.organizerName || null;
   const displayOrgName = getPosterOrgDisplayName(poster);
-  const sourceOrgName = organizationInfo?.sourceOrgName || poster.source_org_name || null;
+  const sourceOrgName =
+    organizationInfo?.sourceOrgName || poster.source_org_name || null;
   const sourceDiffersFromOrganizer = Boolean(
     sourceOrgName &&
     displayOrgName &&
-    normalizeOrgDisplayValue(sourceOrgName) !== normalizeOrgDisplayValue(displayOrgName)
+    normalizeOrgDisplayValue(sourceOrgName) !==
+      normalizeOrgDisplayValue(displayOrgName),
   );
   const showViewCount = viewCount >= 100;
   const showFavoriteCount = favoriteCount >= 10;
-  const statusLabel = applicationState.label;
+  const statusLabel = isClosed ? "마감됨" : applicationState.label;
   const statusClass =
     applicationState.status === "needs_confirmation"
       ? "bg-amber-50 text-amber-700 border-amber-100"
-      : applicationState.status === "ongoing" || applicationState.status === "until_exhausted"
+      : applicationState.status === "ongoing" ||
+          applicationState.status === "until_exhausted"
         ? "bg-emerald-50 text-emerald-700 border-emerald-100"
         : applicationState.status === "closed"
           ? "bg-slate-100 text-slate-500 border-slate-200"
-          : applicationState.status === "due_today" || applicationState.status === "closing_soon"
+          : applicationState.status === "due_today" ||
+              applicationState.status === "closing_soon"
             ? "bg-rose-50 text-rose-600 border-rose-100"
             : "bg-emerald-50 text-emerald-700 border-emerald-100";
   const coreFacts = [
     {
       fieldKey: "target_desc",
       label: "신청 대상",
-      value: poster.eligibility_summary || summaryFallbackFacts.eligibilitySummary || "공식 공고 확인 필요"
+      value:
+        poster.eligibility_summary ||
+        summaryFallbackFacts.eligibilitySummary ||
+        "공식 공고 확인 필요",
     },
-    { fieldKey: "deadline_date", label: "신청 기간", value: applicationPeriodLabel },
-    { fieldKey: "region", label: "대상 지역", value: poster.regionName || "지역 확인 필요" },
+    {
+      fieldKey: "deadline_date",
+      label: "신청 기간",
+      value: applicationPeriodLabel,
+    },
+    { fieldKey: "region", label: "대상 지역", value: regionDisplay.label },
     {
       fieldKey: "age_min",
       label: "연령",
       value: formatTargetAge(
         poster.target_age_min ?? fallbackTargetAgeMin,
-        poster.target_age_max ?? fallbackTargetAgeMax
-      )
+        poster.target_age_max ?? fallbackTargetAgeMax,
+      ),
     },
-    { fieldKey: "cost", label: "비용", value: poster.participation_fee || summaryFallbackFacts.participationFee || "기관 문의 필요" },
+    {
+      fieldKey: "cost",
+      label: "비용",
+      value:
+        poster.participation_fee ||
+        summaryFallbackFacts.participationFee ||
+        "기관 문의 필요",
+    },
     {
       fieldKey: "benefit",
       label: "혜택",
-      value: poster.benefits_summary || summaryFallbackFacts.benefitsSummary || "정보 확인 중"
+      value:
+        poster.benefits_summary ||
+        summaryFallbackFacts.benefitsSummary ||
+        "정보 확인 중",
     },
     {
       fieldKey: "apply_method",
       label: "신청 방법",
-      value: poster.application_method || summaryFallbackFacts.applicationMethod || "공식 공고 확인 필요"
+      value:
+        poster.application_method ||
+        summaryFallbackFacts.applicationMethod ||
+        "공식 공고 확인 필요",
     },
     {
       fieldKey: "required_documents",
       label: "준비 서류",
-      value: poster.required_documents || "공식 공고 확인 필요"
-    }
+      value: poster.required_documents || "공식 공고 확인 필요",
+    },
   ];
   const moveExpandedImage = (offset: number) => {
-    setExpandedImageIndex((index) => (index + offset + imageUrls.length) % imageUrls.length);
+    setExpandedImageIndex(
+      (index) => (index + offset + imageUrls.length) % imageUrls.length,
+    );
   };
 
   return (
@@ -688,7 +819,11 @@ export function PosterDetailClient({
       <main className="container mx-auto max-w-2xl px-4 py-6">
         <div className="mb-8">
           <div className="flex flex-wrap items-center gap-2 mb-2">
-            <span className={`rounded-full border px-3 py-1 text-xs font-black ${statusClass}`}>{statusLabel}</span>
+            <span
+              className={`rounded-full border px-3 py-1 text-xs font-black ${statusClass}`}
+            >
+              {statusLabel}
+            </span>
             {daysLeft !== null && daysLeft >= 0 && (
               <span
                 className={`rounded-full px-3 py-1 text-xs font-black text-white ${daysLeft <= 3 ? "bg-rose-500" : "bg-blue-600"}`}
@@ -696,9 +831,18 @@ export function PosterDetailClient({
                 {daysLeft === 0 ? "D-Day" : `D-${daysLeft}`}
               </span>
             )}
-            <span className="text-sm text-gray-500 font-bold">{displayOrgName}</span>
+            <span className="text-sm text-gray-500 font-bold">
+              {displayOrgName}
+            </span>
           </div>
-          <h1 data-analytics-poster-id={poster.id} data-analytics-category={poster.categoryId || undefined} data-analytics-region={poster.regionId || undefined} className="text-2xl font-bold text-gray-900 leading-tight mb-4">{poster.title}</h1>
+          <h1
+            data-analytics-poster-id={poster.id}
+            data-analytics-category={poster.categoryId || undefined}
+            data-analytics-region={poster.regionId || undefined}
+            className="text-2xl font-bold text-gray-900 leading-tight mb-4"
+          >
+            {poster.title}
+          </h1>
           <div className="flex flex-wrap gap-2">
             {poster.categoryName && (
               <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-black rounded-full">
@@ -707,14 +851,13 @@ export function PosterDetailClient({
             )}
             {poster.regionName && (
               <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs font-black rounded-full">
-                #{poster.regionName}
+                #{regionDisplay.label}
               </span>
             )}
           </div>
           {sourceDiffersFromOrganizer && sourceOrgName && (
             <p className="mt-3 text-xs font-bold text-gray-400">
               수집 출처: {sourceOrgName}
-              {organizationInfo?.boardName ? ` · ${organizationInfo.boardName}` : ""}
             </p>
           )}
           {(showViewCount || showFavoriteCount) && (
@@ -727,20 +870,30 @@ export function PosterDetailClient({
               )}
               {showFavoriteCount && (
                 <span className="inline-flex items-center gap-2 rounded-2xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-600">
-                  <Heart size={14} fill="currentColor" />찜 {favoriteCount.toLocaleString()}
+                  <Heart size={14} fill="currentColor" />찜{" "}
+                  {favoriteCount.toLocaleString()}
                 </span>
               )}
             </div>
           )}
 
-          {poster.poster_status === "closed" && (
+          {isClosed && (
             <ClosedPosterAlertCta
               posterId={poster.id}
-              posterStatus={poster.poster_status}
+              posterStatus="closed"
               defaults={alertDefaults}
             />
           )}
 
+          {isClosed && (
+            <button
+              type="button"
+              disabled
+              className="mt-4 w-full rounded-2xl bg-slate-100 p-3 text-sm text-slate-500"
+            >
+              신청 마감
+            </button>
+          )}
           <a
             href={primaryLink?.url || "#"}
             target="_blank"
@@ -751,7 +904,7 @@ export function PosterDetailClient({
                 toast.error("등록된 공식 링크가 없습니다.");
                 return;
               }
-              void logOfficialLinkClick(primaryLink);
+              void logOfficialLinkClick(primaryLink as PosterDetailLink);
             }}
             className="mt-5 flex h-14 w-full items-center justify-center rounded-2xl bg-blue-600 text-sm font-black text-white shadow-lg shadow-blue-100 transition-colors hover:bg-blue-700"
           >
@@ -779,17 +932,27 @@ export function PosterDetailClient({
         </div>
 
         <section className="mb-8 border-y border-gray-200 py-6">
-          <h2 className="mb-5 text-base font-black text-gray-950">핵심 신청 조건</h2>
+          <h2 className="mb-5 text-base font-black text-gray-950">
+            핵심 신청 조건
+          </h2>
           <dl className="grid gap-x-8 sm:grid-cols-2">
             {coreFacts.map((fact) => (
               <div
                 key={fact.label}
                 className="grid grid-cols-[5rem_minmax(0,1fr)] gap-3 border-t border-gray-100 py-3 first:border-t-0 sm:first:border-t"
               >
-                <dt className="text-xs font-bold text-gray-400">{fact.label}</dt>
+                <dt className="text-xs font-bold text-gray-400">
+                  {fact.label}
+                </dt>
                 <dd className="flex min-w-0 items-start justify-between gap-2 break-words text-sm font-bold leading-relaxed text-gray-900">
-                  <span className="min-w-0 flex-1 break-words">{fact.value}</span>
-                  <FieldReportButton posterId={poster.id} fieldKey={fact.fieldKey} label={fact.label} />
+                  <span className="min-w-0 flex-1 break-words">
+                    {fact.value}
+                  </span>
+                  <FieldReportButton
+                    posterId={poster.id}
+                    fieldKey={fact.fieldKey}
+                    label={fact.label}
+                  />
                 </dd>
               </div>
             ))}
@@ -798,11 +961,20 @@ export function PosterDetailClient({
 
         {summaryLines.length > 0 && (
           <section className="mb-8">
-            <h2 className="mb-4 text-base font-black text-gray-950">상세 내용</h2>
+            <h2 className="mb-4 text-base font-black text-gray-950">
+              상세 내용
+            </h2>
             <div className="space-y-5 text-sm font-medium leading-relaxed text-gray-800">
               {summaryLines.map((line, index) => (
-                <div key={`${line.label ?? "line"}-${index}`} className="min-w-0">
-                  {line.label && <h3 className="mb-1 text-xs font-black text-blue-600">{line.label}</h3>}
+                <div
+                  key={`${line.label ?? "line"}-${index}`}
+                  className="min-w-0"
+                >
+                  {line.label && (
+                    <h3 className="mb-1 text-xs font-black text-blue-600">
+                      {line.label}
+                    </h3>
+                  )}
                   {renderSummaryContent(line)}
                 </div>
               ))}
@@ -829,7 +1001,9 @@ export function PosterDetailClient({
             {poster.application_organization_name && (
               <div>
                 <dt className="mb-1 font-black text-gray-400">신청 접수기관</dt>
-                <dd className="font-bold text-gray-900">{poster.application_organization_name}</dd>
+                <dd className="font-bold text-gray-900">
+                  {poster.application_organization_name}
+                </dd>
               </div>
             )}
             <div>
@@ -840,7 +1014,9 @@ export function PosterDetailClient({
                     href={sourceLink.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    onClick={() => void logOfficialLinkClick(sourceLink)}
+                    onClick={() =>
+                      void logOfficialLinkClick(sourceLink as PosterDetailLink)
+                    }
                     className="text-blue-600 underline-offset-4 hover:underline"
                   >
                     {sourceOrgName || sourceHostLabel || "공식 원문"}
@@ -882,20 +1058,37 @@ export function PosterDetailClient({
           </section>
         )}
 
-        <nav aria-label="관련 공고 탐색" className="mb-8 flex flex-wrap gap-3 text-sm font-bold text-blue-600">
-          {poster.regionId && <Link href={`/posters?region=${poster.regionId}`}>같은 신청 지역 공고</Link>}
-          {poster.categoryId && <Link href={`/posters?category=${poster.categoryId}`}>같은 분야 공고</Link>}
+        <nav
+          aria-label="관련 공고 탐색"
+          className="mb-8 flex flex-wrap gap-3 text-sm font-bold text-blue-600"
+        >
+          {poster.regionId && (
+            <Link href={`/posters?region=${poster.regionId}`}>
+              같은 신청 지역 공고
+            </Link>
+          )}
+          {poster.categoryId && (
+            <Link href={`/posters?category=${poster.categoryId}`}>
+              같은 분야 공고
+            </Link>
+          )}
           <Link href="/posters">전체 공고</Link>
         </nav>
         <CommentSection posterId={poster.id} />
 
-        <div role="group" aria-label="공고 상세 동작" className="poster-detail-actions fixed bottom-0 left-0 right-0 z-40 p-4 bg-white/90 backdrop-blur-xl border-t md:relative md:bg-transparent md:border-none md:p-0">
+        <div
+          role="group"
+          aria-label="공고 상세 동작"
+          className="poster-detail-actions fixed bottom-0 left-0 right-0 z-40 p-4 bg-white/90 backdrop-blur-xl border-t md:relative md:bg-transparent md:border-none md:p-0"
+        >
           <div className="max-w-2xl mx-auto flex gap-3">
             <button
               onClick={toggleFavorite}
               aria-label={isFavorited ? "찜 취소" : "찜하기"}
               className={`w-14 h-14 flex items-center justify-center border rounded-2xl transition-all shadow-sm ${
-                isFavorited ? "bg-rose-50 border-rose-200" : "bg-white border-gray-100"
+                isFavorited
+                  ? "bg-rose-50 border-rose-200"
+                  : "bg-white border-gray-100"
               }`}
             >
               <Heart
@@ -908,7 +1101,10 @@ export function PosterDetailClient({
             {canSaveCalendar && (
               <button
                 onClick={() => {
-                  const saved = downloadPosterCalendar(poster, primaryLink?.url);
+                  const saved = downloadPosterCalendar(
+                    poster,
+                    primaryLink?.url,
+                  );
                   if (saved) toast.success("캘린더 파일을 만들었습니다.");
                   else toast.error("검증된 일정 정보를 다시 확인해 주세요.");
                 }}
@@ -925,7 +1121,7 @@ export function PosterDetailClient({
                   await navigator.share({
                     title: poster.title,
                     text: poster.summary_short ?? "",
-                    url: window.location.href
+                    url: window.location.href,
                   });
                 } else {
                   navigator.clipboard.writeText(window.location.href);
@@ -950,7 +1146,7 @@ export function PosterDetailClient({
                   return;
                 }
 
-                void logOfficialLinkClick(primaryLink);
+                void logOfficialLinkClick(primaryLink as PosterDetailLink);
               }}
               className="flex-1 h-14 flex items-center justify-center bg-blue-600 text-white font-black rounded-2xl shadow-lg shadow-blue-200"
             >

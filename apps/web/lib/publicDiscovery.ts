@@ -1,4 +1,5 @@
 import "server-only";
+import { countOpenPosters, publicPosterQuery } from "./publicPosterRepository";
 import { getRegionScopeIds } from "./regionHelpers";
 import { isPosterEligibleForPromotion } from "./promotionEligibility";
 
@@ -127,19 +128,22 @@ export async function fetchPublicDiscovery(
   const selectedRegion = resolveTaxonomyByRouteValue(regions, filters.region);
   const sort = readDiscoverySort(filters.sort);
   const search = sanitizeSearchTerm(filters.query);
-  const includeClosed = Boolean(filters.includeClosed || search);
+  const includeClosed = Boolean(filters.includeClosed);
   const regionIds = selectedRegion
     ? filters.regionScope === "exact"
       ? [selectedRegion.id]
       : Array.from(getRegionScopeIds(selectedRegion.id, regions) ?? [])
     : null;
+  const sharedFilters = {
+    query: search,
+    categoryId: selectedCategory?.id,
+    regionIds,
+    includeClosed,
+  };
   const searchArgs = {
-    p_query: search || null,
-    p_category_id: selectedCategory?.id ?? null,
-    p_region_ids: regionIds,
-    p_include_closed: includeClosed,
+    ...publicPosterQuery(sharedFilters),
     p_sort: sort === "deadline" ? "deadline" : "latest",
-    p_limit: Math.min(Math.max(filters.limit ?? 240, 1), 500),
+    p_limit: Math.min(Math.max(filters.limit ?? 500, 1), 500),
   };
   const [postersRes, countRes] = await Promise.all([
     client
@@ -150,12 +154,10 @@ export async function fetchPublicDiscovery(
       .returns<Record<string, unknown>[]>(),
     filters.promotionOnly
       ? Promise.resolve({ data: null, error: null })
-      : client.rpc("count_public_posters", {
-          p_query: search || null,
-          p_category_id: selectedCategory?.id ?? null,
-          p_region_ids: regionIds,
-          p_include_closed: includeClosed,
-        }),
+      : countOpenPosters(client, sharedFilters).then((data) => ({
+          data,
+          error: null,
+        })),
   ]);
   assertPublicDiscoveryQuery(postersRes, "search_public_posters");
   assertPublicDiscoveryQuery(countRes, "count_public_posters");
