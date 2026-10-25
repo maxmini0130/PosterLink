@@ -9,6 +9,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { supabase } from "../../lib/supabase";
 
+import { trackAnalytics, setAnalyticsLoginStatus } from "../../lib/analytics";
+
 const ERROR_MESSAGES: Record<string, string> = {
   naver_not_configured: "네이버 로그인이 설정되지 않았습니다.",
   invalid_state: "보안 검증에 실패했습니다. 다시 시도해주세요.",
@@ -53,6 +55,8 @@ export default function LoginPage() {
     if (error) {
       toast.error(error.message);
     } else {
+      setAnalyticsLoginStatus(true);
+      trackAnalytics("login", {method:"email"});
       router.push("/");
     }
 

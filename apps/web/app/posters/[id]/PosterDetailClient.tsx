@@ -27,6 +27,8 @@ import { FieldReportButton } from "./FieldReportButton";
 import { ClosedPosterAlertCta, type AlertDefaults } from "./ClosedPosterAlertCta";
 import { trackAlertEvent } from "../../../lib/alertAnalytics";
 
+import { trackAnalytics, setAnalyticsLoginStatus } from "../../../lib/analytics";
+
 export type PosterDetailPoster = {
   id: string;
   title: string;
@@ -541,12 +543,16 @@ export function PosterDetailClient({
       const { error } = await supabase.from("favorites").delete().eq("user_id", user.id).eq("poster_id", poster.id);
       if (!error) {
         setIsFavorited(false);
+        setAnalyticsLoginStatus(true);
+        trackAnalytics("unsave_poster", {poster_id:poster.id,poster_category:poster.categoryId,poster_region:poster.regionId});
         setFavoriteCount((count) => Math.max(0, count - 1));
       }
     } else {
       const { error } = await supabase.from("favorites").insert({ user_id: user.id, poster_id: poster.id });
       if (!error) {
         setIsFavorited(true);
+        setAnalyticsLoginStatus(true);
+        trackAnalytics("save_poster", {poster_id:poster.id,poster_category:poster.categoryId,poster_region:poster.regionId});
         setFavoriteCount((count) => count + 1);
       }
     }
@@ -555,6 +561,9 @@ export function PosterDetailClient({
   const logOfficialLinkClick = (link: any) => {
     if (!link?.url || link.url === "#") return;
 
+    if (link.link_type === "official_apply" && /^https?:\/\//i.test(link.url)) {
+      trackAnalytics("click_application", {poster_id:poster.id,poster_category:poster.categoryId,poster_region:poster.regionId,application_channel:"official_apply"});
+    }
     const body = JSON.stringify({
       poster_id: poster.id,
       link_id: link.id ?? null,
@@ -689,7 +698,7 @@ export function PosterDetailClient({
             )}
             <span className="text-sm text-gray-500 font-bold">{displayOrgName}</span>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 leading-tight mb-4">{poster.title}</h1>
+          <h1 data-analytics-poster-id={poster.id} data-analytics-category={poster.categoryId || undefined} data-analytics-region={poster.regionId || undefined} className="text-2xl font-bold text-gray-900 leading-tight mb-4">{poster.title}</h1>
           <div className="flex flex-wrap gap-2">
             {poster.categoryName && (
               <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-black rounded-full">

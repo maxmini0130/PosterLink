@@ -1,3 +1,4 @@
+import { attachAnalyticsAuthReceipt } from "../../../lib/analyticsAuthReceipt";
 import { NAVER_UNAVAILABLE_MESSAGE } from "../../../lib/naverAvailability";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
@@ -58,6 +59,7 @@ export async function GET(request: NextRequest) {
     return res;
   }
 
+  let analyticsMethod = "";
   let userId: string | undefined;
   let userEmail: string | undefined;
 
@@ -68,6 +70,7 @@ export async function GET(request: NextRequest) {
         `${origin}/login?error=auth_callback_failed&msg=${encodeURIComponent(error?.message ?? "no_user")}`
       );
     }
+    analyticsMethod = data.user.app_metadata?.provider || "email";
     userId = data.user.id;
     userEmail = data.user.email ?? undefined;
   } else if (at && rt) {
@@ -80,6 +83,7 @@ export async function GET(request: NextRequest) {
         `${origin}/login?error=set_session_failed&msg=${encodeURIComponent(error?.message ?? "no_user")}`
       );
     }
+    analyticsMethod = data.user.app_metadata?.provider || "email";
     userId = data.user.id;
     userEmail = data.user.email ?? undefined;
   } else {
@@ -105,8 +109,12 @@ export async function GET(request: NextRequest) {
         `${origin}/login?error=auth_callback_failed&msg=${encodeURIComponent(upsertError.message)}`
       );
     }
-    return redirect(`${origin}/onboarding?next=${encodeURIComponent(nextPath)}`);
+    const response = redirect(`${origin}/onboarding?next=${encodeURIComponent(nextPath)}`);
+    attachAnalyticsAuthReceipt(request, response, analyticsMethod);
+    return response;
   }
 
-  return redirect(`${origin}${nextPath}`);
+  const response = redirect(`${origin}${nextPath}`);
+  attachAnalyticsAuthReceipt(request, response, analyticsMethod);
+  return response;
 }

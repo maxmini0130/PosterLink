@@ -6,6 +6,12 @@ import { execFileSync } from "node:child_process";
 
 const base = "3c71e3a76e01c3b7966217e3e7c17f7433b0a716";
 const origin = "https://synthetic.invalid";
+function newAuthRequest(url: string) {
+  return Object.assign(new Request(url), {
+    cookies: { get: () => undefined },
+    nextUrl: new URL(url),
+  });
+}
 async function route(file: string) {
   const state = {
     clients: 0,
@@ -67,7 +73,7 @@ test("Naver start and callback fail closed for direct, mobile and in-flight OAut
       "?mobile_redirect=com.maxmini.posterlink%3A%2F%2Fauth-callback",
     ]) {
       const response = await api.GET(
-        new Request(origin + "/api/auth/naver/callback" + query),
+        newAuthRequest(origin + "/api/auth/naver/callback" + query),
       );
       assert.equal(response.status, 503);
       assert.equal(response.headers.get("location"), null);
@@ -97,7 +103,7 @@ test("legacy Naver token callback is rejected before any Auth client, including 
     "code=synthetic&naver_at=synthetic&naver_rt=synthetic",
     "naver_at=synthetic&access_token=synthetic&refresh_token=synthetic",
   ]) {
-    const r = await api.GET(new Request(origin + "/auth/callback?" + q));
+    const r = await api.GET(newAuthRequest(origin + "/auth/callback?" + q));
     assert.equal(r.status, 503);
     assert.equal(r.headers.get("set-cookie"), null);
   }
@@ -115,7 +121,7 @@ test("existing Google/Kakao PKCE callback and native session callback remain unc
   for (const provider of ["google", "kakao"]) {
     const { api, state } = await route("apps/web/app/auth/callback/route.ts");
     const r = await api.GET(
-      new Request(
+      newAuthRequest(
         origin + "/auth/callback?code=synthetic-" + provider + "&next=/mypage",
       ),
     );
@@ -128,7 +134,7 @@ test("existing Google/Kakao PKCE callback and native session callback remain unc
   assert.equal(
     (
       await api.GET(
-        new Request(
+        newAuthRequest(
           origin +
             "/auth/callback?access_token=synthetic&refresh_token=synthetic",
         ),
@@ -139,7 +145,7 @@ test("existing Google/Kakao PKCE callback and native session callback remain unc
   assert.equal(state.sessions, 1);
 });
 
-test("release preserves Production security, stats, SEO, privacy and migrations byte-for-byte", () => {
+test("GA integration preserves Production security, stats, SEO and migrations byte-for-byte", () => {
   for (const p of [
     "apps/web/middleware.ts",
     "apps/web/app/api/auth/delete-account/route.ts",
@@ -148,8 +154,6 @@ test("release preserves Production security, stats, SEO, privacy and migrations 
     "apps/web/instrumentation.ts",
     "apps/web/instrumentation-client.ts",
     "apps/web/lib/sentryPrivacy.ts",
-    "apps/web/app/privacy/page.tsx",
-    "apps/web/app/layout.tsx",
     "apps/web/app/robots.ts",
     "apps/web/app/sitemap.ts",
   ]) {
@@ -170,7 +174,6 @@ test("release preserves Production security, stats, SEO, privacy and migrations 
         "--",
         "supabase",
         "apps/web/app/api/admin",
-        "apps/web/lib/analytics",
         "pnpm-lock.yaml",
         "package.json",
       ],

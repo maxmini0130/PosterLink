@@ -9,6 +9,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
 
+import { trackAnalytics, setAnalyticsLoginStatus } from "../../lib/analytics";
+
 export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -55,6 +57,11 @@ export default function SignupPage() {
       { id: data.user.id, nickname: email.split("@")[0] },
       { onConflict: "id", ignoreDuplicates: true }
     );
+    if (session) {
+      setAnalyticsLoginStatus(true);
+      // Supabase may return an obfuscated user for an existing email; require a real session.
+      if (data.user.identities?.length) trackAnalytics("sign_up", {method:"email"});
+    }
     localStorage.setItem("onboarding_uid", data.user.id);
     router.push("/onboarding");
     setLoading(false);
