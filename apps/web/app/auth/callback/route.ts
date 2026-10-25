@@ -1,3 +1,4 @@
+import { NAVER_UNAVAILABLE_MESSAGE } from "../../../lib/naverAvailability";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
@@ -16,8 +17,11 @@ function safeNextPath(value: string | null, origin: string) {
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const naverAt = searchParams.get("naver_at");
-  const naverRt = searchParams.get("naver_rt");
+  if (searchParams.has("naver_at") || searchParams.has("naver_rt"))
+    return NextResponse.json(
+      { error: NAVER_UNAVAILABLE_MESSAGE, code: "naver_temporarily_unavailable" },
+      { status: 503, headers: { "Cache-Control": "private, no-store" } },
+    );
   const at = searchParams.get("access_token");
   const rt = searchParams.get("refresh_token");
   const nextPath = safeNextPath(searchParams.get("next"), origin);
@@ -62,18 +66,6 @@ export async function GET(request: NextRequest) {
     if (error || !data.user) {
       return redirect(
         `${origin}/login?error=auth_callback_failed&msg=${encodeURIComponent(error?.message ?? "no_user")}`
-      );
-    }
-    userId = data.user.id;
-    userEmail = data.user.email ?? undefined;
-  } else if (naverAt && naverRt) {
-    const { data, error } = await supabase.auth.setSession({
-      access_token: naverAt,
-      refresh_token: naverRt,
-    });
-    if (error || !data.user) {
-      return redirect(
-        `${origin}/login?error=set_session_failed&msg=${encodeURIComponent(error?.message ?? "no_user")}`
       );
     }
     userId = data.user.id;
