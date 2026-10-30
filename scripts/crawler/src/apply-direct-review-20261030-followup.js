@@ -230,16 +230,14 @@ for (const d of plan.items) {
       if (!prev) {
         assert.equal(d.index, 4);
         await checked(
-          db
-            .from("poster_links")
-            .insert({
-              id: l.id,
-              poster_id: d.id,
-              url: l.url,
-              title: l.title,
-              link_type: l.link_type,
-              is_primary: l.is_primary,
-            }),
+          db.from("poster_links").insert({
+            id: l.id,
+            poster_id: d.id,
+            url: l.url,
+            title: l.title,
+            link_type: l.link_type,
+            is_primary: l.is_primary,
+          }),
         );
         continue;
       }
