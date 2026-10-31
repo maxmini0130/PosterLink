@@ -79,12 +79,27 @@ BEGIN
      AND v.created_at < s.first_at + interval '30 days'
     GROUP BY s.person, s.first_at, s.first_day
   ),
-  -- A cohort is final once every member has had 30 days to return.
-  finished AS (
-    SELECT cohort_week
+  -- Every week from the first raw visit, including weeks with no new people or
+  -- no visits at all, so a missing row always means "not computed", never zero.
+  -- A week is final once every person starting in it has had 30 days to return.
+  weeks AS (
+    SELECT w::date AS cohort_week
+    FROM bounds,
+      generate_series(
+        date_trunc('week', (data_start AT TIME ZONE 'Asia/Seoul')::date),
+        (now() AT TIME ZONE 'Asia/Seoul')::date,
+        interval '1 week'
+      ) AS w
+    WHERE ((w::date + 7)::timestamp AT TIME ZONE 'Asia/Seoul') + interval '30 days' <= now()
+  ),
+  cohorts AS (
+    SELECT
+      cohort_week,
+      count(*) AS new_people,
+      count(*) FILTER (WHERE r7) AS returned_7d,
+      count(*) FILTER (WHERE r30) AS returned_30d
     FROM flags
     GROUP BY cohort_week
-    HAVING ((cohort_week + 7)::timestamp AT TIME ZONE 'Asia/Seoul') + interval '30 days' <= now()
   ),
   active AS (
     SELECT date_trunc('week', kst_day)::date AS cohort_week, count(DISTINCT person) AS n
@@ -96,16 +111,15 @@ BEGIN
       cohort_week, new_people, returned_7d, returned_30d, active_people, lookback_complete
     )
     SELECT
-      f.cohort_week,
-      count(*)::int,
-      count(*) FILTER (WHERE f.r7)::int,
-      count(*) FILTER (WHERE f.r30)::int,
-      COALESCE(max(a.n), 0)::int,
-      (f.cohort_week::timestamp AT TIME ZONE 'Asia/Seoul') - interval '45 days' >= (SELECT data_start FROM bounds)
-    FROM flags f
-    JOIN finished USING (cohort_week)
+      w.cohort_week,
+      COALESCE(c.new_people, 0)::int,
+      COALESCE(c.returned_7d, 0)::int,
+      COALESCE(c.returned_30d, 0)::int,
+      COALESCE(a.n, 0)::int,
+      (w.cohort_week::timestamp AT TIME ZONE 'Asia/Seoul') - interval '45 days' >= (SELECT data_start FROM bounds)
+    FROM weeks w
+    LEFT JOIN cohorts c USING (cohort_week)
     LEFT JOIN active a USING (cohort_week)
-    GROUP BY f.cohort_week
     ON CONFLICT (cohort_week) DO NOTHING
     RETURNING 1
   )

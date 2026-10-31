@@ -302,7 +302,8 @@ test("a run snapshots before purging, and later runs never rewrite stored weeks"
   assert.equal(
     await count(
       db,
-      "SELECT count(*) AS n FROM usage_weekly_cohorts WHERE cohort_week <= (SELECT week FROM w) - 90",
+      `SELECT new_people AS n FROM usage_weekly_cohorts
+       WHERE cohort_week = date_trunc('week', ((SELECT t0 FROM w) - interval '100 days') AT TIME ZONE 'Asia/Seoul')::date`,
     ),
     1,
   );
@@ -312,4 +313,81 @@ test("a run snapshots before purging, and later runs never rewrite stored weeks"
   );
   await db.query("SELECT * FROM run_usage_log_retention(50000)");
   assert.deepEqual(await cohortRow(db), before);
+});
+
+/**
+ * Codex review (0e191b6): a week visited only by a returning person has no new
+ * people, but its activity must still be stored before the raw rows go.
+ */
+async function returningOnlyFixture(db: PGlite, daysAgo: number) {
+  await db.exec(`
+    CREATE TEMP TABLE r AS SELECT
+      date_trunc('week', (now() AT TIME ZONE 'Asia/Seoul')::date - ${daysAgo})::date AS week,
+      ((date_trunc('week', (now() AT TIME ZONE 'Asia/Seoul')::date - ${daysAgo})::date + time '10:00') AT TIME ZONE 'Asia/Seoul') AS t0;
+    INSERT INTO site_visit_logs (visitor_key, path, created_at)
+      SELECT 'returning', '/', t0 - interval '7 days' FROM r
+      UNION ALL SELECT 'returning', '/', t0 FROM r;
+  `);
+}
+
+const weekRow = async (db: PGlite, sql: string) =>
+  (
+    await db.query<Record<string, unknown>>(`
+      SELECT new_people, returned_7d, returned_30d, active_people
+      FROM usage_weekly_cohorts WHERE cohort_week = (${sql})`)
+  ).rows;
+
+test("a week with only returning visitors is stored with zero new people", async () => {
+  const db = await setup();
+  await returningOnlyFixture(db, 60);
+  await db.query("SELECT * FROM run_usage_log_retention(50000)");
+  assert.deepEqual(await weekRow(db, "SELECT week FROM r"), [
+    { new_people: 0, returned_7d: 0, returned_30d: 0, active_people: 1 },
+  ]);
+});
+
+test("first run backfill stores old weeks before deleting their raw rows", async () => {
+  const db = await setup();
+  await returningOnlyFixture(db, 110);
+  await db.query("SELECT * FROM run_usage_log_retention(50000)");
+  assert.equal(await count(db, "SELECT count(*) AS n FROM site_visit_logs"), 0);
+  assert.deepEqual(await weekRow(db, "SELECT week FROM r"), [
+    { new_people: 0, returned_7d: 0, returned_30d: 0, active_people: 1 },
+  ]);
+  // The week of the first visit holds that person as new.
+  assert.deepEqual(await weekRow(db, "SELECT week - 7 FROM r"), [
+    { new_people: 1, returned_7d: 0, returned_30d: 1, active_people: 1 },
+  ]);
+});
+
+test("weeks without visits are stored as zero, so a missing row means not computed", async () => {
+  const db = await setup();
+  await db.exec(`
+    INSERT INTO site_visit_logs (visitor_key, path, created_at) VALUES
+      ('a', '/', now() - interval '80 days'),
+      ('b', '/', now() - interval '50 days');
+  `);
+  await db.query("SELECT snapshot_usage_weekly_cohorts()");
+  const rows = (
+    await db.query<{ gap: number; n: number; zeros: number }>(`
+      SELECT
+        (max(cohort_week) - min(cohort_week)) / 7 + 1 AS gap,
+        count(*) AS n,
+        count(*) FILTER (WHERE active_people = 0) AS zeros
+      FROM usage_weekly_cohorts`)
+  ).rows[0];
+  assert.equal(Number(rows.n), Number(rows.gap)); // no holes
+  assert(Number(rows.zeros) >= 2);
+  assert.equal(
+    await count(db, "SELECT sum(active_people) AS n FROM usage_weekly_cohorts"),
+    2,
+  );
+  // Unfinished weeks (the last 37 days) are not stored yet.
+  assert.equal(
+    await count(
+      db,
+      "SELECT count(*) AS n FROM usage_weekly_cohorts WHERE cohort_week > (now() AT TIME ZONE 'Asia/Seoul')::date - 37",
+    ),
+    0,
+  );
 });
