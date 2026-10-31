@@ -266,8 +266,10 @@ WHERE created_at > now() - interval '1 day' GROUP BY 1 ORDER BY 1;
    > 서비스 개선을 위한 통계 분석(재방문, 가입 전후 이용 흐름, 기능별 이용 현황 분석)
 3. 쿠키·자동 수집 장치
    > 서비스는 방문 통계와 이용 흐름 분석을 위해 브라우저 저장소(localStorage·sessionStorage)에 무작위 식별자와 직전 화면 정보를 저장합니다. 이 값에는 이름·연락처 등 직접 식별 정보가 들어 있지 않으며, 브라우저 설정에서 사이트 데이터를 삭제하면 지워집니다. 앱과 웹 브라우저는 저장소가 분리되어 각각 생성됩니다.
-4. 보유 기간 — **결정 필요**
+4. 보유 기간 — 10/31 사용자 결정: 방침 초안(`apps/web/app/privacy/policy.ts`)의 기간을 따른다. 원본 3개월, 검색 원문 30일, 장기 비교는 식별자 없는 주별 집계만.
 
-   > 이용 행태 기록과 식별자 연결 기록은 수집일로부터 ○개월 보관 후 파기합니다. 회원 탈퇴 시 계정과의 연결 기록은 삭제되고, 이용 행태 기록의 계정 연결은 해제됩니다.
-
-   현재 `site_visit_logs` 등 기존 로그도 자동 파기 작업이 없다. 기간(예: 13개월)과 파기 배치 구현을 함께 결정해야 한다. 탈퇴 시 `visitor_identity_links`는 `ON DELETE CASCADE`, `product_events.user_id`는 `SET NULL`로 마이그레이션에 반영돼 있다.
+   > 방문·공고 조회·신청 링크 이동·서비스 이용 이벤트 기록과 방문자 식별자·회원 계정 연결 기록은 생성 시각부터 한국시간 기준 3개월이 지나면 매일 자동으로 파기합니다. 검색어 원문과 방문 기록의 URL 쿼리·유입 URL은 30일이 지나면 파기합니다. 서비스 개선 추이를 보기 위해 개인을 식별할 수 없는 주 단위 집계(신규 방문자 수, 7일·30일 재방문 수, 주간 이용자 수)만 별도로 보관합니다. 회원 탈퇴 시 계정과의 연결 기록은 삭제되고, 이용 행태 기록의 계정 연결은 해제됩니다.
+   - 구현: [20261031020000_add_usage_log_retention.sql](../supabase/migrations/20261031020000_add_usage_log_retention.sql)(함수, 적용해도 삭제 없음)과 [20261031030000_schedule_usage_log_retention.sql](../supabase/migrations/20261031030000_schedule_usage_log_retention.sql)(매일 03:30 KST 예약). 절차는 [usage_log_retention_runbook_20261031.md](usage_log_retention_runbook_20261031.md).
+   - **게시 조건**: "매일 자동으로 파기"는 예약 작업이 운영에서 실제로 실행된 뒤에만 게시한다. 그 전에는 방침 초안의 "보존기간 자동 정리는 운영하지 않습니다" 문구를 유지한다. 초안 문구는 `scripts/security/ga4-naver-safe-release.test.ts`가 고정하므로, 게시할 때 그 검사도 함께 갱신·검토한다.
+   - 탈퇴 시 `visitor_identity_links`는 `ON DELETE CASCADE`, `product_events.user_id`는 `SET NULL`로 마이그레이션에 반영돼 있다.
+   - 파기 후 Q1~Q5는 최근 3개월 원본만 대상으로 한다. 그보다 긴 비교는 `usage_weekly_cohorts`를 쓰며, 이 표의 "신규"는 "45일 동안 방문이 없다가 방문한 사람"이다(원본이 3개월만 남아 전체 기간의 첫 방문을 알 수 없기 때문). `lookback_complete = false`인 주는 기존 방문자와 신규를 구분할 수 없어 비교에서 뺀다.
