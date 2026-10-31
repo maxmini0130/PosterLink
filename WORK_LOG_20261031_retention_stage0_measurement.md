@@ -1,6 +1,6 @@
 # 재방문·가입 전환 0단계 측정
 
-상태: 운영 반영 중 (구현 Claude, 검토 Codex) — ①② 적용, ④ 파기 예약 job 7 등록 확인(첫 실행 11/1 03:30 KST). ⑤ 첫 실행 확인 대기. 방침·관리자 화면(`2c93d70`) Codex 검토 대기
+상태: 운영 반영 중 (구현 Claude, 검토 Codex) — ①② 적용, ④ 파기 예약 job 7(첫 실행 11/1 03:30 KST). 다음: ⑤ 첫 실행 확인 → `2c93d70` Codex 검토 → push → PR #16 병합. 인계는 문서 끝 "이어서 할 일"
 
 사용자가 `docs/RETENTION_PLAN_2026-10-31.md` 0단계부터 진행을 요청했다. 시작 전 `.claude/settings.local.json`에 git push, vercel --prod, supabase db push, psql·`--apply` 등 운영 쓰기 명령 deny 규칙을 추가했다.
 
@@ -161,3 +161,24 @@
 - **정정(01:10 KST 무렵)**: 확인 조회에서 `cron.job`에 job 6이 없고 실행 기록도 0건이었다(기존 job 3·4·5만, 모두 `postgres`). `BEGIN`~`COMMIT` 안의 `cron.schedule`이 롤백되고 job id 시퀀스만 소모된 것으로 판단한다. ①·② 같은 방식의 DDL은 정상 반영됐으므로 결과를 반환하는 SELECT가 든 트랜잭션을 SQL Editor가 다르게 처리한 것으로 보이나 원인은 확정하지 못했다. 이 동안 파기는 실행되지 않았다.
 - 재등록: `cron.schedule('usage-log-retention-daily', '30 18 * * *', ...)` 단일 문장을 트랜잭션 없이 실행 → job **7**. 조회 확인 `7 / usage-log-retention-daily / 30 18 * * * / postgres / active=true`. 첫 실행 2026-11-01 03:30 KST.
 - 교훈: SQL Editor에서 `cron.schedule`은 트랜잭션으로 감싸지 않고 실행하고, 반환된 job id만 믿지 말고 `cron.job` 조회로 등록을 확인한다(운영 절차에 반영).
+
+## 이어서 할 일 (2026-11-01 01:15 KST 기준 인계)
+
+운영 상태:
+
+- 운영 웹 = `main` `8f6a164`(Promote 완료). `main` 병합은 곧 운영 배포다.
+- 운영 DB: ① 0단계 마이그레이션, ② 파기 함수 적용 완료. ④ 파기 예약 `usage-log-retention-daily` = **job 7**(job 6은 롤백됨), 첫 실행 2026-11-01 03:30 KST.
+- PR #16(Draft)은 `fe28458`까지 push됨. 이후 로컬 커밋 6개(`df7544e`..`e08a9ff`, 방침·관리자 화면 `2c93d70` 포함)는 **push 전**.
+
+다음 순서:
+
+1. ⑤ 첫 실행 확인: 운영 절차 문서의 확인 쿼리(job 이름으로 조회)를 03:30 이후 실행. 기대: `succeeded`, 삭제 대상 0 근처(실행 직전 미리보기: 방문 833·URL 비우기 988·조회 245·클릭 50·검색 28), 주별 집계 7월 중순부터, 수집 시작 7/19 00:34 KST. `failed`면 `return_message` 확인(한 트랜잭션이라 삭제 없음).
+2. Codex 검토: `2c93d70`(공개 방침·관리자 화면). 요청 문구는 대화 기록 참고: 방침 문구가 실제 수집·파기 구현과 맞는지.
+3. push → PR #16 Ready → **merge commit**으로 병합(=운영 배포, 방침 게시·새 이벤트 수집 시작). 병합일이 11/1이 아니면 `apps/web/app/privacy/page.tsx`의 "최종 업데이트" 날짜를 먼저 맞춘다. ⑤가 성공하기 전에는 병합하지 않는다.
+4. 병합 후: 운영 GET 확인(`/api/auth/naver` 503, `/privacy` 새 문구), `docs/release-markers.md`에 반영 시각 기록(측정 시작일), 이벤트 유입 확인(`product_events` 최근 1일 이벤트별 건수).
+
+남은 결정·후속:
+
+- 1단계(지역 정리): B 지시서 원문, 스테이징 환경 필요. 크롤러 보류 커밋 `8a426db`는 1단계 검증 후 revert.
+- 운영자 리포트 API(`/api/admin/traffic`)는 보안 고정 범위라 `days=365` 직접 호출 시 3개월치만 나온다(화면 선택지는 제거).
+- 감사 기록 90일 파기는 법정 보존 대상 분리 후 별도 작업.
