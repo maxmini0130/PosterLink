@@ -1,6 +1,6 @@
 # 재방문·가입 전환 0단계 측정
 
-상태: 운영 반영 중 (구현 Claude, 검토 Codex) — ① 적용 완료, ② 사용자 실행 대기. 방침·관리자 화면 변경 Codex 검토 요청
+상태: 운영 반영 중 (구현 Claude, 검토 Codex) — ①② 적용 완료, ③ 삭제 예정 건수 확인. ④ 파기 예약은 사용자 명시 승인 대기. 방침·관리자 화면(`2c93d70`) Codex 검토 대기
 
 사용자가 `docs/RETENTION_PLAN_2026-10-31.md` 0단계부터 진행을 요청했다. 시작 전 `.claude/settings.local.json`에 git push, vercel --prod, supabase db push, psql·`--apply` 등 운영 쓰기 명령 deny 규칙을 추가했다.
 
@@ -142,3 +142,12 @@
 - 검증: web lint PASS, build PASS, `pnpm test` 219/221·`scripts/security/*` 104/107(기존 실패만), `git diff --check` PASS. `/privacy`를 로컬 production 빌드로 모바일 375px·데스크톱 1280px 확인(가로 넘침 없음, 목록 구조 유지). Supabase·`/api/*` 요청은 브라우저에서 차단해 운영 DB에 쓰지 않았다. 관리자 화면은 로그인이 필요해 화면 확인을 하지 않았다(상수·라벨 변경만).
 - 관리자 파일 2개는 수정 전부터 Prettier 형식이 아니어서 전체 재포맷하지 않았다.
 - ④ 예약 실행 파일: Codex 통과본과 동일, SHA-256(LF) `bd5055c32e5e529db45142b6fca2f8d8b4aac1c0912e6640e92cb409c7312ffb`.
+
+## 운영 반영 ②·③: 파기 함수 적용과 삭제 예정 건수 (2026-11-01 01:05 KST 무렵)
+
+- ② 사용자가 Codex 통과본(`1e69175`)과 동일한 함수 마이그레이션을 SQL Editor에서 `BEGIN`~`COMMIT`으로 실행, "Success. No rows returned". 실행 파일 SHA-256(LF) `54c0c496c1114e31c31706735ec34164334bedad354f3f56f940976f85b4677d`. 삭제 없음.
+- ③ `usage_log_retention_preview()`(조회): cutoff 원본 2026-08-01 01:04:58 KST, 검색 2026-10-02 01:04:58 KST.
+  - `site_visit_logs` 삭제 833(전체 4,079), URL 쿼리·유입 URL 비우기 988
+  - `poster_view_logs` 삭제 245(919), `poster_link_click_logs` 삭제 50(80), `search_logs` 삭제 28(45)
+  - `product_events`·`visitor_identity_links` 0
+- API 역할 실행 불가 `true`, 예약 없음 `true`. ④ 예약은 사용자 명시 승인 대기.
