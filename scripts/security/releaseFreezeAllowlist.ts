@@ -8,8 +8,8 @@
 /** Stage 0 retention measurement, reviewed by Codex at 3579136. */
 const STAGE0_REVIEWED = "3474a6bbd68384482ad61f132550134ab22a1bfb";
 
-/** Usage log retention purge with the Codex 0e191b6 fix; pending re-review. */
-const RETENTION_PURGE = "c7e7d9c82aaa16ad4c930bab41b8a16a1288c248";
+/** Usage log retention purge with the Codex 0e191b6 and 8092576 fixes; pending re-review. */
+const RETENTION_PURGE = "e5f8494d51b66ea30148960e8efd17ca3d7161fb";
 
 /** New migration path -> commit holding its reviewed content. */
 export const APPROVED_MIGRATIONS: Readonly<Record<string, string>> = {
