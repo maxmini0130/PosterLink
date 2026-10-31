@@ -1,6 +1,6 @@
 # UI 개편 공통 컴포넌트 Codex 검토
 
-상태: 수정 필요 (구현 Claude, 검토 Codex) — `a446ff4` P2 3건. `591b0a4` CRLF 변경은 지적 없음
+상태: 수정 필요 (구현 Claude, 검토 Codex) — `2b7e63e` 재검토: D-day·스크롤 해결. P2-2의 disabled fieldset 포커스 예외 1건 남음
 
 ## 범위
 
@@ -48,3 +48,27 @@
 - 브라우저는 실제 BottomSheet TSX를 esbuild로 번들링하고 빌드된 웹 CSS를 사용한 격리 fixture다. 모든 브라우저 네트워크 요청을 차단했으며 앱 provider나 운영 API를 실행하지 않았다. 전체 앱 E2E·실제 로그인·실제 스크린리더 조작은 수행하지 않았다.
 - 자료는 Git 제외 `data/results/ui-s1-review/`: fixture·브라우저 재현 코드, 결과 JSON, 390·768·1280 스크린샷, 짧은 화면과 확대 글자 스크린샷, 날짜/CRLF 재현과 테스트·lint·build 로그. 실제 웹·테스트 구현은 수정하지 않았다.
 - push·배포·운영 DB 쓰기 없음. 검토 문서만 같은 브랜치에 로컬 커밋한다. 세 지적 수정 후 재검토가 필요하다.
+
+## 2b7e63e 재검토
+
+대상: `2b7e63e36b62d4c717e8c06fc7c27bd2a5c7498a`. 판정: **미통과, 포커스 P2 1건 남음**. 기존 유형 신뢰(P2-1)와 시트 잘림(P2-3)은 해결됐다. P2-2의 숨겨진 첫 요소 사례도 해결됐으나, 실제 탭 이동 가능 여부를 거르는 조건이 아직 불완전하다.
+
+### P2 — disabled fieldset 안의 입력을 포커스 후보로 취급한다
+
+위치: `apps/web/app/components/pl/BottomSheet.tsx:9-18`, `91-92`.
+
+`<fieldset disabled><input /></fieldset>` 안의 input은 자체 disabled 속성이 없어 selector의 `input:not([disabled])`에 걸리고 `tabIndex`도 0이다. 렌더 박스와 표시 상태 조건도 통과하지만 브라우저에서는 `:disabled` 상태라 실제로 포커스할 수 없다. 후보 첫 요소가 이 input이면 초기 포커스는 패널로 대체되지만, Tab 처리와 focusin 복귀에서는 같은 불가능한 요소에 계속 focus()를 호출한다.
+
+실제 컴포넌트 TSX와 빌드 CSS를 쓴 fixture에 disabled fieldset을 첫 children으로 넣고, 뒤에 활성 주 버튼과 기본 닫기 버튼을 뒀다. 브라우저에서 input의 `tabIndex=0`, 자체 disabled 속성 없음, `matches(':disabled')=true`를 확인했다. 열기 직후 패널에 포커스했고 Tab을 누르면 패널에 그대로 갇혔다. Shift+Tab 세 번은 닫기 버튼 → 주 버튼 → **배경 링크**로 이동했으며 복귀하지 않았다. 배경 링크를 스크립트로 focus해도 시트로 돌아오지 않았다. 구현이나 DOM을 사후 변경하지 않고 정상적으로 제공 가능한 children으로 재현했다.
+
+수정 방향: 자체 속성뿐 아니라 네이티브 `:disabled` 상태를 제외해 fieldset 상속 비활성화를 반영한다. focusin에서 후보 focus가 실패했을 때도 패널 등 유효한 위치로 복귀하도록 보강한다. 첫 비활성 fieldset, 열린 중 fieldset 상태 변경, Tab/Shift+Tab 순환과 외부 포커스 회수를 회귀 검사에 포함한다. 현재 E2E의 disabled 검사는 버튼 자체의 속성만 바꿔 이 사례를 놓친다.
+
+### 검증
+
+- 마감 표시·접수 상태 **14/14 PASS**. 이전 독립 재현(비고정 4건, CRLF 1건)을 함께 실행해 **19/19 PASS**. `fixed`/`고정`만 신뢰 날짜가 되며 비고정 유형의 오늘 마감도 차단된다.
+- 격리 브라우저에서 일반 390·768·1280 시트의 포커스 진입·순환·ESC·호출 버튼 복귀와 숨겨진 첫 요소 사례가 통과했다. 390×240 패널 top=12px, clientHeight=228px/scrollHeight=281px, overflow=auto다. 390×600 글자 200%는 top=12px, clientHeight=588px/scrollHeight=682px다. 제목이 화면 안에 있고 잘린 부분을 내부에서 스크롤하는 구조를 확인했다.
+- 제공된 Playwright 설정은 global setup 없이 대상 5건을 수집한다(`--list` 확인). **실제 5건은 실행하지 못했다.** 로컬 `UI_SHOWCASE=1` Next 서버 시작 명령이 자동 승인 검토에서 `blocked by policy`로 거부됐다. 같은 서버 시작을 다른 경로로 재시도하지 않고, 외부 요청을 전부 차단한 기존 격리 브라우저 fixture로 검증했다. 실제 앱 provider/E2E·스크린리더 조작은 미실행이다.
+- web lint·production build PASS. 빌드의 Supabase 공개 주소·키는 로컬 대체값으로 설정해 운영 연결을 피했다. 전체 `pnpm test` **225/227 PASS**, 실패 2건은 기존 `profile-role-release` 검사다.
+- 코드 Prettier는 `lib/deadlineDisplay.ts` 1파일에 형식 경고가 남았다. 다른 검사 대상 파일은 통과했고 코드는 수정하지 않았다. 검토 문서는 Prettier와 `git diff --check`로 확인한다.
+- 자료: Git 제외 `data/results/ui-s1-rereview-2b7e63e/`의 fixture·브라우저 코드·결과 JSON·스크린샷, 마감 검사·전체 검사·lint·build 로그, E2E 수집 목록. 핵심 재현은 `browser-results.json`의 `disabled-fieldset` 항목이다.
+- 코드 수정·push·배포·운영 DB 쓰기 없음. 같은 브랜치의 검토 문서와 작업 상태만 로컬 커밋한다. 포커스 예외 수정 후 재검토가 필요하다.

@@ -1,6 +1,6 @@
 # UI 개편 1단계: 공통 컴포넌트와 접수 상태 공용 함수 연결
 
-상태: 재검토 대기 (구현 Claude, 검토 Codex) — `a279e87` P2 3건 수정. 로컬 커밋만, push·배포·운영 DB 없음
+상태: 수정 필요 (구현 Claude, 검토 Codex) — `2b7e63e` 재검토: D-day·스크롤 해결, disabled fieldset 포커스 P2 1건 남음. 제공 E2E 5건은 서버 시작 정책 차단으로 미실행
 
 기준: [UI 개편 지시서](docs/UI_REDESIGN_PLAN_2026-10-31.md) 1·2장, [재방문 지시서](docs/RETENTION_PLAN_2026-10-31.md) 3-1. 브랜치는 PR #16(`feat/retention-stage0-measurement-20261031`) 위에 있다(상세 화면을 두 작업이 함께 고치기 때문).
 
