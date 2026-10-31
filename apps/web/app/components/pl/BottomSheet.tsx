@@ -12,6 +12,8 @@ function tabbable(panel: HTMLElement | null) {
   ).filter(
     (element) =>
       element.tabIndex >= 0 &&
+      // Also covers controls disabled through a disabled <fieldset>.
+      !element.matches(":disabled") &&
       !element.closest("[hidden], [inert]") &&
       element.getClientRects().length > 0 &&
       getComputedStyle(element).visibility !== "hidden",
@@ -52,9 +54,15 @@ export function BottomSheet({
     const panel = panelRef.current;
     const inside = (node: EventTarget | null) =>
       node instanceof Node && Boolean(panel?.contains(node));
-    // Focus the first reachable control, or the panel itself when there is none.
-    (tabbable(panel)[0] ?? panel)?.focus();
-    if (!inside(document.activeElement)) panel?.focus();
+    // Try candidates in order until one actually takes focus; else the panel.
+    const focusFirstOf = (candidates: HTMLElement[]) => {
+      for (const candidate of candidates) {
+        candidate.focus();
+        if (document.activeElement === candidate) return;
+      }
+      panel?.focus();
+    };
+    focusFirstOf(tabbable(panel));
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -63,33 +71,31 @@ export function BottomSheet({
         return;
       }
       if (event.key !== "Tab") return;
+      // The sheet moves focus itself so the browser never tabs to the page behind.
+      event.preventDefault();
       const items = tabbable(panel);
       if (items.length === 0) {
-        event.preventDefault();
         panel?.focus();
         return;
       }
-      const first = items[0];
-      const last = items[items.length - 1];
-      const active = document.activeElement;
-      // Wrap at the ends, and pull focus back if it is on the panel or outside.
-      if (
-        event.shiftKey &&
-        (active === first || !items.includes(active as HTMLElement))
-      ) {
-        event.preventDefault();
-        last.focus();
-      } else if (
-        !event.shiftKey &&
-        (active === last || !items.includes(active as HTMLElement))
-      ) {
-        event.preventDefault();
-        first.focus();
-      }
+      const current = items.indexOf(document.activeElement as HTMLElement);
+      const step = event.shiftKey ? -1 : 1;
+      // From the panel or outside, Tab goes to the first item, Shift+Tab to the last.
+      const startAt =
+        current === -1
+          ? event.shiftKey
+            ? items.length - 1
+            : 0
+          : (current + step + items.length) % items.length;
+      const ordered = items.map(
+        (_, offset) =>
+          items[(startAt + step * offset + items.length * 2) % items.length],
+      );
+      focusFirstOf(ordered);
     };
     // Focus moved outside by other means (a click on the page behind, script).
     const onFocusIn = (event: FocusEvent) => {
-      if (!inside(event.target)) (tabbable(panel)[0] ?? panel)?.focus();
+      if (!inside(event.target)) focusFirstOf(tabbable(panel));
     };
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";

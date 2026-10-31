@@ -60,10 +60,17 @@ test("hidden, untabbable and later-disabled controls do not let focus escape", a
   await page.getByRole("button", { name: "예외 시트 열기" }).click();
   const dialog = page.getByRole("dialog", { name: "예외 상태 확인용 시트" });
   await expect(dialog).toBeVisible();
-  // The hidden first button and the tabindex=-1 button are skipped.
+  // The disabled-fieldset input, the hidden button and the tabindex=-1 button
+  // are skipped.
   await expect(
     page.getByRole("button", { name: "아래 버튼 비활성화" }),
   ).toBeFocused();
+  // Codex re-review e1fdecb: Shift+Tab first must not leave the sheet.
+  for (let i = 0; i < 6; i++) {
+    await page.keyboard.press("Shift+Tab");
+    expect(await focusInDialog(page)).toBe(true);
+    await expect(page.getByLabel("비활성 묶음 안 입력")).not.toBeFocused();
+  }
   await tabAround(page);
   // Disable the primary button while the sheet is open.
   await page.getByRole("button", { name: "아래 버튼 비활성화" }).click();

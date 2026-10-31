@@ -1,6 +1,6 @@
 # UI 개편 1단계: 공통 컴포넌트와 접수 상태 공용 함수 연결
 
-상태: 수정 필요 (구현 Claude, 검토 Codex) — `2b7e63e` 재검토: D-day·스크롤 해결, disabled fieldset 포커스 P2 1건 남음. 제공 E2E 5건은 서버 시작 정책 차단으로 미실행
+상태: 재검토 대기 (구현 Claude, 검토 Codex) — `e1fdecb` 포커스 P2 수정. 로컬 커밋만, push·배포·운영 DB 없음
 
 기준: [UI 개편 지시서](docs/UI_REDESIGN_PLAN_2026-10-31.md) 1·2장, [재방문 지시서](docs/RETENTION_PLAN_2026-10-31.md) 3-1. 브랜치는 PR #16(`feat/retention-stage0-measurement-20261031`) 위에 있다(상세 화면을 두 작업이 함께 고치기 때문).
 
@@ -62,3 +62,11 @@
 - P2-3 바텀시트 잘림: 패널 최대 높이를 화면 높이(모바일 `100dvh - 12px`, PC `100dvh - 48px`, `vh` 대체값 포함)로 제한하고 내용은 패널 안에서 스크롤한다.
 - 회귀 검사 `apps/web/e2e/ui-components.spec.ts` + 전용 설정 `apps/web/playwright.ui-components.config.ts`(global setup 없음, 계정 로그인 없음, Supabase·`/api/*`·Sentry 요청 차단). `UI_SHOWCASE=1`로 띄운 서버에서 `E2E_UI_SHOWCASE=1 npx playwright test -c playwright.ui-components.config.ts`로 실행하며, 기본 E2E 실행에서는 건너뛴다. 5건: 일반 시트 포커스(390·1280), 숨겨진 첫 버튼·`tabindex=-1`·열린 뒤 비활성화된 버튼·스크립트 포커스 이탈, 390×240 짧은 화면, 390×600 글자 200%. 수정 후 5/5, 수정 전 시트 코드에서는 숨김 컨트롤·짧은 화면 검사가 실패함을 확인했다. 이를 위해 `/dev/ui`에 예외 상태 시트를 추가했다.
 - 검증: 마감 표시·상태 함수 14/14, 컴포넌트 검사 5/5, web lint·build PASS, `pnpm test` 225/227(기존 실패 2건), `scripts/security/*` 104/107(기존 실패 3건), `git diff --check` PASS. 짧은 화면·200% 글자 스크린샷은 스크래치패드 `ui-s1/sheet-short-390x240.png`, `sheet-text200-390x600.png`.
+
+## Codex 재검토 반영 (`e1fdecb`: 비활성 fieldset 안 입력)
+
+- 원인: 포커스 후보를 `disabled` 속성으로만 걸러, 비활성 `<fieldset>` 안의 입력(속성은 없지만 실제로 비활성)이 후보에 남았다. 그 요소에 `focus()`가 실패하면 브라우저 기본 Shift+Tab이 배경으로 이동했다.
+- 수정: 후보에서 `:disabled` 상태를 제외하고, Tab·Shift+Tab을 항상 시트가 직접 처리한다(브라우저 기본 이동 차단). 다음 후보부터 순서대로 포커스를 시도해 실제로 포커스가 옮겨졌는지 확인하고, 모두 실패하면 패널에 둔다. 초기 포커스와 밖으로 나간 포커스 복귀도 같은 함수를 쓴다.
+- 회귀 검사: `/dev/ui` 예외 시트에 비활성 fieldset과 입력을 추가하고, 열자마자 Shift+Tab을 6번 눌러도 시트 안에 머물고 그 입력에 가지 않는지 확인한다. 수정 전 시트(`2b7e63e`)에서는 이 검사가 실패하고, 수정 후 컴포넌트 검사 5/5 통과.
+- `deadlineDisplay.ts` Prettier 경고를 고쳤다(형식만).
+- 참고: Codex 환경에서는 로컬 Next 서버 시작이 정책으로 막혀 E2E 5건을 실행하지 못하고 별도 fixture로 검증했다. 이 검사는 사용자 PC에서 `UI_SHOWCASE=1` 서버로 실행한다.

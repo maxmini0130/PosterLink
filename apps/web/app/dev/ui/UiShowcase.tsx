@@ -294,6 +294,10 @@ export function UiShowcase() {
           </button>
         }
       >
+        <fieldset disabled>
+          <legend className="text-xs">비활성 묶음</legend>
+          <input aria-label="비활성 묶음 안 입력" className="border" />
+        </fieldset>
         <button type="button" hidden>
           숨겨진 첫 버튼
         </button>
