@@ -2,6 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import {
+  APPROVED_SNAPSHOTS,
+  checkSupabaseChanges,
+  normalize,
+} from "./releaseFreezeAllowlist";
 
 test("GA engine and withdrawal transport are reused without replacement", () => {
   for (const file of [
@@ -55,31 +60,36 @@ test("GA integration retains deployed Naver stop and does not include age or DB 
     ).trim(),
     "",
   );
-  // The unreleased minimum-age gate (release/minimum-age-*) must not ride along.
-  // Later stages may add migrations and onboarding instrumentation, nothing else.
-  const minimumAge =
-    /ageConfirmed|age_confirmed|minimum[_ ]?age|만 ?14세|gate_unconfirmed_member/i;
-  const onboarding = readFileSync("apps/web/app/onboarding/page.tsx", "utf8");
-  assert.doesNotMatch(onboarding, minimumAge);
-  assert.match(onboarding, /desc: "13~18세"/);
-  const supabaseChanges = execFileSync(
-    "git",
-    ["diff", "--name-status", "--no-renames", "2faf121", "--", "supabase"],
-    { encoding: "utf8" },
-  )
-    .trim()
-    .split("\n")
-    .filter(Boolean);
-  for (const line of supabaseChanges) {
-    assert.match(
-      line,
-      /^A\tsupabase\/migrations\/\d{14}_[a-z0-9_]+\.sql$/,
-      line,
-    );
-    const path = line.slice(2);
-    assert.doesNotMatch(path, minimumAge, path);
-    assert.doesNotMatch(readFileSync(path, "utf8"), minimumAge, path);
-  }
+  // Onboarding and migrations keep the unreleased minimum-age gate out by pinning
+  // their content: either the base or a reviewed snapshot in releaseFreezeAllowlist.ts.
+  const show = (commit: string, path: string) =>
+    execFileSync("git", ["show", `${commit}:${path}`], { encoding: "utf8" });
+  const onboarding = "apps/web/app/onboarding/page.tsx";
+  const current = normalize(readFileSync(onboarding, "utf8"));
+  assert.ok(
+    [
+      show("2faf121", onboarding),
+      show(APPROVED_SNAPSHOTS[onboarding], onboarding),
+    ]
+      .map(normalize)
+      .includes(current),
+    `${onboarding} differs from its base and reviewed snapshot`,
+  );
+  assert.deepEqual(
+    checkSupabaseChanges(
+      execFileSync(
+        "git",
+        ["diff", "--name-status", "--no-renames", "2faf121", "--", "supabase"],
+        { encoding: "utf8" },
+      )
+        .trim()
+        .split("\n")
+        .filter(Boolean),
+      (path) => readFileSync(path, "utf8"),
+      show,
+    ),
+    [],
+  );
 });
 
 test("production defaults remain disabled; policy does not invent countries or claim completed automatic deletion", () => {

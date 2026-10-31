@@ -1,6 +1,6 @@
 # 재방문·가입 전환 0단계 측정
 
-상태: 검토 대기 (구현 Claude, 검토 Codex) — `4e3f38b` 고정 검사 조정: 수정 필요 2건, 다음 수정본 대기
+상태: 재검토 대기 (구현 Claude, 검토 Codex) — 고정 검사 허용 목록 전환 커밋 재검토 요청. 운영 반영(마이그레이션·병합)은 사용자 승인 필요
 
 사용자가 `docs/RETENTION_PLAN_2026-10-31.md` 0단계부터 진행을 요청했다. 시작 전 `.claude/settings.local.json`에 git push, vercel --prod, supabase db push, psql·`--apply` 등 운영 쓰기 명령 deny 규칙을 추가했다.
 
@@ -73,3 +73,16 @@
 - 현재 두 파일 8/8 PASS, 기존 보안 파일·의존성·기준 migration 수정/삭제 차단은 유지됨을 확인했다. 실제 보호 코드가 이번 커밋에서 바뀐 것은 아니다.
 - 판정: 이번 검사 완화는 재검토 미통과. 기존 검사 유지·새 테스트 추가만 허용하는 제한과 이름에 의존하지 않는 연령 기능 유입 차단을 보강한 뒤 재검토한다. 앞선 측정 기능 코드 통과와 별도로 취급한다.
 - 구현·검사 코드 수정, push·배포·운영 DB 접근 없음. 검토 문서만 같은 브랜치에 로컬 커밋한다.
+
+## Codex 재검토 반영: 블랙리스트 → 허용 목록
+
+- [검토 기록](WORK_LOG_20261031_release_freeze_review.md)(`1a937df`)의 P2 2건: `scripts.test`를 통째로 바꿔도 통과, 금지어 없이 넣은 14세 제한(온보딩 출생연도 확인, `birth_date` CHECK 마이그레이션)이 통과.
+- 원인: 금지 패턴을 나열하는 방식이라 이름만 바꾸면 우회된다. 허용한 것만 통과시키는 방식으로 바꿨다.
+- `scripts/security/releaseFreezeAllowlist.ts`(신규):
+  - `APPROVED_MIGRATIONS`: 신규 마이그레이션 경로 → 검토 완료 커밋. 목록에 없는 파일, 내용이 검토본과 다른 파일, 수정·삭제는 실패. 지금은 0단계 마이그레이션 1개(`3474a6b`, Codex `3579136` 통과본).
+  - `APPROVED_SNAPSHOTS`: 온보딩 화면은 기준 커밋(`2faf121`) 또는 검토본(`3474a6b`)과 바이트 동일해야 한다.
+  - `checkTestScript`: 기존 테스트 명령은 그대로 두고 끝에 실제 존재하는 `*.test.ts` 경로를 따옴표로 추가하는 것만 허용. 명령 교체, 기존 테스트 삭제, `|| true`, 옵션 주입, 중복, 없는 파일은 실패.
+  - 이후 단계에서 마이그레이션이나 온보딩을 바꾸려면 이 파일에 검토 커밋을 추가해야 하므로, 그 변경 자체가 교차 검토 대상이 된다.
+- 회귀 테스트 `scripts/security/release-freeze-allowlist.test.ts`(4건, 루트 `pnpm test` 등록): Codex 재현 사례(no-op 명령, 출생연도 마이그레이션, 검토본 이후 내용 추가, M·D 상태)를 포함한다.
+- 실파일 음성 검사(확인 후 원복): 온보딩 출생연도 prompt 삽입, 신규 `birth_date` 마이그레이션, no-op 테스트 명령 모두 실패.
+- 검증: 고정·허용 검사 12/12, `scripts/security/*.test.ts` 104/107, `pnpm test` 202/204. 남은 실패 3건은 `origin/main`과 같은 기존 실패(`profile-role-release` 2, `withdrawal-release` 1). Prettier·`git diff --check` PASS.
