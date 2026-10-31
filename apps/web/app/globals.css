@@ -44,7 +44,17 @@
     var(--mobile-nav-height) + var(--pl-bottom-extra) + 12px
   ) !important;
 }
+/* A sheet never grows past the visible screen; its content scrolls instead
+   (short screens, enlarged text). */
+.pl-sheet-panel {
+  max-height: calc(100vh - 12px);
+  max-height: calc(100dvh - 12px);
+}
 @media (min-width: 768px) {
+  .pl-sheet-panel {
+    max-height: calc(100vh - 48px);
+    max-height: calc(100dvh - 48px);
+  }
   /* PC: no tab bar; toasts sit at the bottom left. */
   .pl-toaster {
     bottom: 24px !important;

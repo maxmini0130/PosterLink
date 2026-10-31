@@ -1,6 +1,6 @@
 # UI 개편 1단계: 공통 컴포넌트와 접수 상태 공용 함수 연결
 
-상태: 수정 필요 (구현 Claude, 검토 Codex) — Codex 검토 P2 3건: D-day 신뢰 유형, 숨겨진 요소의 포커스, 시트 높이·스크롤. 검토 기록은 WORK_LOG_20261101_ui_redesign_stage1_review.md
+상태: 재검토 대기 (구현 Claude, 검토 Codex) — `a279e87` P2 3건 수정. 로컬 커밋만, push·배포·운영 DB 없음
 
 기준: [UI 개편 지시서](docs/UI_REDESIGN_PLAN_2026-10-31.md) 1·2장, [재방문 지시서](docs/RETENTION_PLAN_2026-10-31.md) 3-1. 브랜치는 PR #16(`feat/retention-stage0-measurement-20261031`) 위에 있다(상세 화면을 두 작업이 함께 고치기 때문).
 
@@ -53,3 +53,12 @@
 ## 다음
 
 - Codex 검토 후 2단계(공고 상세 ①~④ + PC 상세, 재방문 2단계 비회원 찜·가입 연결)를 별도 브랜치에서 시작한다.
+
+## Codex 검토 반영 (`a279e87`의 P2 3건)
+
+- [검토 기록](WORK_LOG_20261101_ui_redesign_stage1_review.md).
+- P2-1 D-day 신뢰 조건: 공용 상태 함수는 마감 유형이 없거나 `scheduled`여도 날짜로 남은 일수를 계산한다. 표시 계층(`getDeadlineDisplay`)에서 정규화한 유형이 `fixed`(별칭 `고정`)일 때만 D-n·오늘 마감·도장·"7일 안에 마감"을 허용하고, 나머지는 "마감일은 원문에서 확인"으로 둔다. 공용 함수와 기존 호출부는 그대로 둔다. 회귀 테스트: 유형 undefined·null·빈 값·`scheduled`·`예정` × 2일 뒤·오늘 마감 10가지와 `고정` 별칭. 수정 전 코드에서 실패 확인.
+- P2-2 바텀시트 포커스 이탈: 포커스 후보를 실제로 탭 이동 가능한 요소(`tabIndex >= 0`, 숨김·`inert` 조상 없음, 렌더 박스 있음, `visibility` 보임)로 좁혔다. 첫 후보가 없거나 포커스가 실패하면 패널에 포커스한다. Tab 처리 시 현재 포커스가 후보 밖(패널 자체 포함)이면 처음/끝으로 보낸다. 스크립트 등으로 포커스가 시트 밖으로 나가면 `focusin`에서 되돌린다.
+- P2-3 바텀시트 잘림: 패널 최대 높이를 화면 높이(모바일 `100dvh - 12px`, PC `100dvh - 48px`, `vh` 대체값 포함)로 제한하고 내용은 패널 안에서 스크롤한다.
+- 회귀 검사 `apps/web/e2e/ui-components.spec.ts` + 전용 설정 `apps/web/playwright.ui-components.config.ts`(global setup 없음, 계정 로그인 없음, Supabase·`/api/*`·Sentry 요청 차단). `UI_SHOWCASE=1`로 띄운 서버에서 `E2E_UI_SHOWCASE=1 npx playwright test -c playwright.ui-components.config.ts`로 실행하며, 기본 E2E 실행에서는 건너뛴다. 5건: 일반 시트 포커스(390·1280), 숨겨진 첫 버튼·`tabindex=-1`·열린 뒤 비활성화된 버튼·스크립트 포커스 이탈, 390×240 짧은 화면, 390×600 글자 200%. 수정 후 5/5, 수정 전 시트 코드에서는 숨김 컨트롤·짧은 화면 검사가 실패함을 확인했다. 이를 위해 `/dev/ui`에 예외 상태 시트를 추가했다.
+- 검증: 마감 표시·상태 함수 14/14, 컴포넌트 검사 5/5, web lint·build PASS, `pnpm test` 225/227(기존 실패 2건), `scripts/security/*` 104/107(기존 실패 3건), `git diff --check` PASS. 짧은 화면·200% 글자 스크린샷은 스크래치패드 `ui-s1/sheet-short-390x240.png`, `sheet-text200-390x600.png`.

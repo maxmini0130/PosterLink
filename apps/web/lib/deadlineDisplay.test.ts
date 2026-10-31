@@ -114,3 +114,32 @@ test("7일 안에 마감 includes today and the next 6 days, trusted dates only"
     false,
   );
 });
+
+// Codex review (a279e87): the shared status function infers a deadline from the
+// date alone; only a fixed type may become a trusted D-day.
+test("missing or non-fixed deadline types never become a trusted D-day", () => {
+  for (const deadlineType of [undefined, null, "", "scheduled", "예정"]) {
+    for (const applicationEndAt of [
+      "2026-11-05T23:59:59+09:00",
+      "2026-11-03T23:59:59+09:00",
+    ]) {
+      const value = getDeadlineDisplay({ applicationEndAt, deadlineType, now });
+      const label = `${String(deadlineType)} ${applicationEndAt}`;
+      assert.equal(value.dateTrusted, false, label);
+      assert.equal(value.daysLeft, null, label);
+      assert.equal(value.endDateLabel, null, label);
+      assert.equal(value.reception, "unconfirmed", label);
+      assert.equal(value.text, "마감일은 원문에서 확인", label);
+      assert.equal(isClosingWithinDays(value), false, label);
+    }
+  }
+  // The Korean alias of fixed stays trusted.
+  assert.equal(
+    getDeadlineDisplay({
+      applicationEndAt: "2026-11-05T23:59:59+09:00",
+      deadlineType: "고정",
+      now,
+    }).text,
+    "D-2",
+  );
+});

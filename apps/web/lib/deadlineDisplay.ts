@@ -6,6 +6,7 @@
 import {
   POSTER_TIME_ZONE,
   getPosterApplicationState,
+  normalizePosterDeadlineType,
   type PosterApplicationInput,
 } from "./posterApplication";
 
@@ -92,6 +93,10 @@ export function getDeadlineDisplay(
 ): DeadlineDisplay {
   const state = getPosterApplicationState(input);
   const endDateLabel = monthDay(input.applicationEndAt);
+  // The shared status function also infers a deadline from the date when the
+  // type is missing or "scheduled"; only a fixed deadline earns a D-day here.
+  const trustedType =
+    normalizePosterDeadlineType(input.deadlineType) === "fixed";
 
   switch (state.status) {
     case "scheduled":
@@ -103,14 +108,14 @@ export function getDeadlineDisplay(
     case "closed":
       return display("closed", "접수 종료", "muted");
     case "due_today":
+      if (!trustedType) break;
       return display("open", "오늘 마감", "accent-strong", {
         daysLeft: 0,
         endDateLabel,
       });
     case "open":
     case "closing_soon":
-      // "open" without daysLeft is a deadline whose type is unknown: no D-day.
-      if (state.daysLeft === null) break;
+      if (!trustedType || state.daysLeft === null) break;
       return display("open", `D-${state.daysLeft}`, "accent", {
         daysLeft: state.daysLeft,
         endDateLabel,

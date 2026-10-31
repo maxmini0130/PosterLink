@@ -111,6 +111,8 @@ const TOKENS = [
 
 export function UiShowcase() {
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [edgeSheetOpen, setEdgeSheetOpen] = useState(false);
+  const [lateDisabled, setLateDisabled] = useState(false);
   const [favorited, setFavorited] = useState(false);
   const [marked, setMarked] = useState(false);
   const open = getDeadlineDisplay(SAMPLE_STATES[0].input);
@@ -263,9 +265,55 @@ export function UiShowcase() {
             >
               바텀시트 열기
             </button>
+            <button
+              type="button"
+              className="min-h-[44px] rounded-lg border border-pl-ink px-4 text-sm font-bold"
+              onClick={() => {
+                setLateDisabled(false);
+                setEdgeSheetOpen(true);
+              }}
+            >
+              예외 시트 열기
+            </button>
           </div>
         </section>
       </main>
+
+      {/* Focus edge cases: hidden first control, removed from tab order, disabled later, long content. */}
+      <BottomSheet
+        open={edgeSheetOpen}
+        onClose={() => setEdgeSheetOpen(false)}
+        title="예외 상태 확인용 시트"
+        primary={
+          <button
+            type="button"
+            disabled={lateDisabled}
+            className="min-h-[48px] rounded-lg bg-pl-ink font-bold text-white disabled:opacity-50"
+          >
+            나중에 비활성화되는 버튼
+          </button>
+        }
+      >
+        <button type="button" hidden>
+          숨겨진 첫 버튼
+        </button>
+        <button type="button" tabIndex={-1} className="sr-only">
+          탭 순서에서 빠진 버튼
+        </button>
+        <button
+          type="button"
+          onClick={() => setLateDisabled(true)}
+          className="min-h-[44px] rounded-lg border border-pl-line px-3 text-sm"
+        >
+          아래 버튼 비활성화
+        </button>
+        {Array.from({ length: 8 }, (_, index) => (
+          <p key={index} className="mt-2">
+            긴 내용 {index + 1}: 짧은 화면과 큰 글자에서도 제목과 버튼까지
+            스크롤로 모두 읽을 수 있어야 합니다.
+          </p>
+        ))}
+      </BottomSheet>
 
       <BottomSheet
         open={sheetOpen}
