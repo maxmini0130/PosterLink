@@ -157,3 +157,43 @@ test("RPC errors back off instead of retrying on every page", async () => {
   assert.equal(await h.linker.sync(A), "linked");
   assert.equal(h.calls.length, 2);
 });
+
+test("a late rejection for the previous account does not stop the new account's retries (Codex re-review)", async () => {
+  let rejectA!: (reason: unknown) => void;
+  const h = harness([
+    () => new Promise((_resolve, reject) => (rejectA = reject)),
+    { data: "pending", error: null },
+    { data: "signup", error: null },
+  ]);
+  const first = h.linker.sync(A);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(await h.linker.sync(B), "pending");
+  assert.equal(h.timers.size, 1, "B's retry is scheduled");
+
+  rejectA(new Error("network lost"));
+  assert.equal(await first, "skipped", "A's stale failure is ignored");
+
+  await h.advance(PENDING_RETRY_DELAYS_MS[0]);
+  assert.equal(h.calls.length, 3, "B retried after A's late failure");
+  assert.equal(h.local.getItem(IDENTITY_LINK_KEY), B);
+});
+
+test("signing out and back in while a request is in flight still links the account", async () => {
+  let releaseOld!: (value: { data: unknown; error: unknown }) => void;
+  const h = harness([
+    () => new Promise((resolve) => (releaseOld = resolve)),
+    { data: "linked", error: null },
+  ]);
+  const old = h.linker.sync(A);
+  await new Promise((resolve) => setImmediate(resolve));
+  h.linker.signOut();
+  assert.equal(
+    await h.linker.sync(A),
+    "linked",
+    "the new session is not blocked by the old request",
+  );
+  releaseOld({ data: "signup", error: null });
+  assert.equal(await old, "skipped");
+  assert.equal(h.local.getItem(IDENTITY_LINK_KEY), A);
+  assert.equal(h.linked(), 1);
+});

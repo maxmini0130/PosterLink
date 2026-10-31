@@ -31,10 +31,13 @@ export const LINK_ERROR_BACKOFF_MS = 10 * 60 * 1000;
 export const PENDING_RETRY_DELAYS_MS = [2_000, 5_000, 15_000, 30_000, 60_000];
 
 export function createIdentityLinker(deps: IdentityLinkerDeps) {
-  let inFlight: string | null = null;
+  // Generation of the request currently in flight; a newer session is never blocked by it.
+  let inFlightGeneration: number | null = null;
   let retryUser: string | null = null;
   let retryAttempt = 0;
   let retryTimer: unknown = null;
+  // Bumped on account change, sign-out and success; answers from an older generation are ignored.
+  let generation = 0;
 
   function cancelRetry() {
     if (retryTimer !== null) deps.clearTimer(retryTimer);
@@ -54,6 +57,7 @@ export function createIdentityLinker(deps: IdentityLinkerDeps) {
 
   function reset(userId: string | null) {
     cancelRetry();
+    generation += 1;
     retryUser = userId;
     retryAttempt = 0;
   }
@@ -66,7 +70,7 @@ export function createIdentityLinker(deps: IdentityLinkerDeps) {
     cancelRetry();
     try {
       if (
-        inFlight === userId ||
+        inFlightGeneration === generation ||
         deps.local.getItem(IDENTITY_LINK_KEY) === userId
       )
         return "skipped";
@@ -75,10 +79,11 @@ export function createIdentityLinker(deps: IdentityLinkerDeps) {
     } catch {
       return "skipped";
     }
-    inFlight = userId;
+    const requestGeneration = generation;
+    inFlightGeneration = requestGeneration;
     try {
       const { data, error } = await deps.link();
-      if (retryUser !== userId) return "skipped"; // account changed while waiting
+      if (requestGeneration !== generation) return "skipped"; // account changed while waiting
       if (error) {
         backoff();
         return "error";
@@ -100,10 +105,12 @@ export function createIdentityLinker(deps: IdentityLinkerDeps) {
       deps.onLinked();
       return data;
     } catch {
+      // A rejection from a previous account must not back off the current one.
+      if (requestGeneration !== generation) return "skipped";
       backoff();
       return "error";
     } finally {
-      if (inFlight === userId) inFlight = null;
+      if (inFlightGeneration === requestGeneration) inFlightGeneration = null;
     }
   }
 
