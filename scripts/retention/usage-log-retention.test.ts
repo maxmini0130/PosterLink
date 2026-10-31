@@ -391,3 +391,110 @@ test("weeks without visits are stored as zero, so a missing row means not comput
     0,
   );
 });
+
+/**
+ * Codex re-review (8092576): once every raw row has expired, weeks must keep
+ * being stored from the last stored week, and stay contiguous after new visits.
+ */
+async function expiredFixture(db: PGlite, lastStoredDaysAgo: number) {
+  await db.exec(`
+    CREATE TEMP TABLE e AS SELECT
+      date_trunc('week', (now() AT TIME ZONE 'Asia/Seoul')::date - ${lastStoredDaysAgo})::date AS last_week;
+    INSERT INTO usage_weekly_cohorts
+      (cohort_week, new_people, returned_7d, returned_30d, active_people, lookback_complete)
+      SELECT last_week, 1, 0, 0, 1, true FROM e;
+  `);
+}
+
+test("weeks keep being stored after every raw row has expired", async () => {
+  const db = await setup();
+  await expiredFixture(db, 60);
+  await db.query("SELECT * FROM run_usage_log_retention(50000)");
+  assert.deepEqual(await weekRow(db, "SELECT last_week + 7 FROM e"), [
+    { new_people: 0, returned_7d: 0, returned_30d: 0, active_people: 0 },
+  ]);
+});
+
+test("a new visit after a long gap does not skip the empty weeks before it", async () => {
+  const db = await setup();
+  await expiredFixture(db, 60);
+  await db.exec(
+    "INSERT INTO site_visit_logs (visitor_key, path, created_at) VALUES ('back', '/', now() - interval '1 day')",
+  );
+  await db.query("SELECT * FROM run_usage_log_retention(50000)");
+  assert.deepEqual(await weekRow(db, "SELECT last_week + 7 FROM e"), [
+    { new_people: 0, returned_7d: 0, returned_30d: 0, active_people: 0 },
+  ]);
+  const { rows } = await db.query<{ gap: number; n: number }>(
+    "SELECT (max(cohort_week) - min(cohort_week)) / 7 + 1 AS gap, count(*) AS n FROM usage_weekly_cohorts",
+  );
+  assert.equal(Number(rows[0].n), Number(rows[0].gap));
+});
+
+test("nothing is stored before collection has any stored week or raw visit", async () => {
+  const db = await setup();
+  assert.equal(
+    Number(
+      (
+        await db.query<{ n: number }>(
+          "SELECT snapshot_usage_weekly_cohorts() AS n",
+        )
+      ).rows[0].n,
+    ),
+    0,
+  );
+});
+
+test("lookback is complete only where raw visits were never purged", async () => {
+  const db = await setup();
+  await expiredFixture(db, 210);
+  await db.exec(`
+    INSERT INTO usage_log_retention_state (raw_purged_before)
+      SELECT raw_cutoff FROM usage_log_retention_cutoffs();
+  `);
+  await db.query("SELECT snapshot_usage_weekly_cohorts()");
+  const rows = (
+    await db.query<{ ok: boolean; expected: boolean }>(`
+      SELECT
+        lookback_complete AS ok,
+        (cohort_week::timestamp AT TIME ZONE 'Asia/Seoul') - interval '45 days'
+          >= (SELECT raw_purged_before FROM usage_log_retention_state) AS expected
+      FROM usage_weekly_cohorts
+      WHERE cohort_week > (SELECT last_week FROM e)
+      ORDER BY cohort_week`)
+  ).rows;
+  assert(rows.length > 20);
+  assert(rows.some((r) => r.ok) && rows.some((r) => !r.ok));
+  for (const row of rows) assert.equal(row.ok, row.expected);
+});
+
+test("each run records the raw cutoff it applied, never moving it back", async () => {
+  const db = await setup();
+  await db.exec(
+    "INSERT INTO usage_log_retention_state (raw_purged_before) VALUES (now() + interval '1 day')",
+  );
+  await db.query("SELECT * FROM run_usage_log_retention(50000)");
+  assert.equal(
+    await count(
+      db,
+      "SELECT count(*) AS n FROM usage_log_retention_state WHERE raw_purged_before > now()",
+    ),
+    1,
+  );
+  await db.exec(
+    "UPDATE usage_log_retention_state SET raw_purged_before = now() - interval '1 year'",
+  );
+  await db.query("SELECT * FROM run_usage_log_retention(50000)");
+  assert.equal(
+    await count(
+      db,
+      `SELECT count(*) AS n FROM usage_log_retention_state, usage_log_retention_cutoffs()
+       WHERE abs(extract(epoch FROM raw_purged_before - raw_cutoff)) < 60`,
+    ),
+    1,
+  );
+  const { rows } = await db.query<{ any_role: boolean }>(`
+    SELECT bool_or(has_table_privilege(r, 'usage_log_retention_state', 'SELECT, INSERT, UPDATE, DELETE')) AS any_role
+    FROM unnest(ARRAY['anon', 'authenticated', 'service_role']) AS r`);
+  assert.equal(rows[0].any_role, false);
+});
