@@ -13,6 +13,8 @@ import { buildPosterSearchPath, type DiscoveryPoster, type DiscoverySort, type D
 import { isPosterAcceptingApplications } from "../../lib/posterApplication";
 import { Search, X, History, TrendingUp, ArrowLeft, ChevronDown } from "lucide-react";
 
+import { trackAnalytics } from "../../lib/analytics";
+
 const PAGE_SIZE = 12;
 const PUBLIC_POSTER_SELECT =
   "id,title,source_org_name,application_start_at,application_end_at,deadline_type,poster_status,thumbnail_url,source_key,summary_short,created_at,exposure_tier";
@@ -74,6 +76,14 @@ function PosterListPageContent({
   const skipInitialFetchRef = useRef(true);
   const skipInitialUrlSyncRef = useRef(true);
   const initialSearchLoggedRef = useRef(false);
+
+  const previousFilters = useRef(JSON.stringify([selectedCategoryId,selectedRegionId,sortBy,hideClosedPosters,myMatchesOnly]));
+  useEffect(()=>{
+    const key=JSON.stringify([selectedCategoryId,selectedRegionId,sortBy,hideClosedPosters,myMatchesOnly]);
+    if (previousFilters.current === key) return;
+    previousFilters.current=key;
+    trackAnalytics("filter_poster", {search_category:selectedCategoryId || "all",search_region:selectedRegionId || "all",sort:sortBy,include_closed:!hideClosedPosters});
+  },[selectedCategoryId,selectedRegionId,sortBy,hideClosedPosters,myMatchesOnly]);
 
   // 1. Initial Data Load
   useEffect(() => {
@@ -306,6 +316,8 @@ function PosterListPageContent({
     e?.preventDefault();
     const finalTerm = term || searchQuery;
     if (!finalTerm.trim()) return;
+
+    trackAnalytics("search_poster", {search_category:selectedCategoryId || "all",search_region:selectedRegionId || "all"});
 
     // Save to recent searches
     const updated = [finalTerm, ...recentSearches.filter(s => s !== finalTerm)].slice(0, 5);

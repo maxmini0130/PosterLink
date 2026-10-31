@@ -6,6 +6,8 @@ import toast from "react-hot-toast";
 import { trackAlertEvent } from "../../../lib/alertAnalytics";
 import { supabase } from "../../lib/supabase";
 
+import { trackAnalytics, setAnalyticsLoginStatus } from "../../../lib/analytics";
+
 const CTA_VARIANT = "closed_poster_v1";
 
 type Option = {
@@ -163,6 +165,8 @@ export function ClosedPosterAlertCta({
       );
       return;
     }
+    setAnalyticsLoginStatus(true);
+    trackAnalytics("enable_notification", {poster_id:posterId,search_category:categoryId || "all",search_region:regionId || "all"});
     trackAlertEvent("alert_saved", {
       ...baseProperties,
       region: regionName,

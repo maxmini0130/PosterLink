@@ -16,7 +16,13 @@ export default defineConfig({
   projects: [
     {
       name: "readonly-chromium",
-      testIgnore: "**/authenticated/**",
+      // OCR's check-deadlines endpoint may change operating data. Mobile action
+      // tests run separately against WebKit/Chromium mobile device projects.
+      testIgnore: [
+        "**/authenticated/**",
+        "**/ocr.spec.ts",
+        "**/mobile-detail-actions.spec.ts",
+      ],
       use: { ...devices["Desktop Chrome"] },
     },
   ],

@@ -32,6 +32,7 @@ async function getFeaturedDiscovery(regionId: string, categoryId: string) {
     region: regionId,
     category: categoryId,
     regionScope: "exact",
+    promotionOnly: true,
     limit: 48,
   });
 }

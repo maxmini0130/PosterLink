@@ -95,7 +95,6 @@ export default function ProfileEditPage() {
           primary_region_id: formData.primaryRegionId || null,
           age_band: formData.ageBand as any,
           gender: formData.gender || null,
-          role: "user",
         }, { onConflict: "id" });
 
       if (profileError) throw profileError;

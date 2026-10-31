@@ -5,12 +5,16 @@ export function getRegionLabel(region: any) {
 }
 
 export function getCityRegions(regions: any[]) {
-  return regions.filter((region) => region.level === "nation" || region.level === "sido");
+  return regions.filter(
+    (region) => region.level === "nation" || region.level === "sido",
+  );
 }
 
 export function getDistrictRegions(regions: any[], cityId: string | null) {
   if (!cityId) return [];
-  return regions.filter((region) => region.level === "sigungu" && region.parent_id === cityId);
+  return regions.filter(
+    (region) => region.level === "sigungu" && region.parent_id === cityId,
+  );
 }
 
 export function getSelectedCityId(regionId: string | null, regions: any[]) {
@@ -31,7 +35,9 @@ export function findRegionByName(regionList: any[], name: string | null) {
   const trimmed = name.trim();
   if (!trimmed) return null;
   return (
-    regionList.find((region) => region.name === trimmed || region.full_name === trimmed) ?? null
+    regionList.find(
+      (region) => region.name === trimmed || region.full_name === trimmed,
+    ) ?? null
   );
 }
 
@@ -47,9 +53,10 @@ export function getRegionScopeIds(regionId: string | null, regionList: any[]) {
   }
 
   let parentId = selected.parent_id;
-  while (parentId) {
+  while (parentId && !ids.has(parentId)) {
     ids.add(parentId);
-    parentId = regionList.find((region) => region.id === parentId)?.parent_id ?? null;
+    parentId =
+      regionList.find((region) => region.id === parentId)?.parent_id ?? null;
   }
 
   return ids;

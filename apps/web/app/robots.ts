@@ -7,11 +7,28 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
       {
-        userAgent: "*",
-        allow: ["/", "/posters/", "/regions/", "/categories/", "/institutions/", "/privacy", "/terms"],
+        userAgent: [
+          "*",
+          "Googlebot",
+          "Bingbot",
+          "Yeti",
+          "OAI-SearchBot",
+          "ChatGPT-User",
+        ],
+        allow: [
+          "/",
+          "/posters/",
+          "/regions/",
+          "/categories/",
+          "/institutions/",
+          "/privacy",
+          "/terms",
+        ],
         disallow: ["/admin/", "/operator/", "/mypage/", "/onboarding", "/api/"],
       },
+      // Training crawling is independent from search/user-requested retrieval.
+      { userAgent: "GPTBot", disallow: ["/"] },
     ],
-    sitemap: `${appOrigin}/sitemap.xml`,
+    sitemap: `${appOrigin}/sitemap-index.xml`,
   };
 }

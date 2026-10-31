@@ -1,5 +1,6 @@
 "use client";
 import toast from "react-hot-toast";
+import Link from "next/link";
 
 import { useState, useEffect } from "react";
 import { Header } from "../../components/Header";
@@ -25,6 +26,8 @@ import { CalendarPlus, ChevronLeft, ChevronRight, Eye, Heart, Share2, X } from "
 import { FieldReportButton } from "./FieldReportButton";
 import { ClosedPosterAlertCta, type AlertDefaults } from "./ClosedPosterAlertCta";
 import { trackAlertEvent } from "../../../lib/alertAnalytics";
+
+import { trackAnalytics, setAnalyticsLoginStatus } from "../../../lib/analytics";
 
 export type PosterDetailPoster = {
   id: string;
@@ -540,12 +543,16 @@ export function PosterDetailClient({
       const { error } = await supabase.from("favorites").delete().eq("user_id", user.id).eq("poster_id", poster.id);
       if (!error) {
         setIsFavorited(false);
+        setAnalyticsLoginStatus(true);
+        trackAnalytics("unsave_poster", {poster_id:poster.id,poster_category:poster.categoryId,poster_region:poster.regionId});
         setFavoriteCount((count) => Math.max(0, count - 1));
       }
     } else {
       const { error } = await supabase.from("favorites").insert({ user_id: user.id, poster_id: poster.id });
       if (!error) {
         setIsFavorited(true);
+        setAnalyticsLoginStatus(true);
+        trackAnalytics("save_poster", {poster_id:poster.id,poster_category:poster.categoryId,poster_region:poster.regionId});
         setFavoriteCount((count) => count + 1);
       }
     }
@@ -554,6 +561,9 @@ export function PosterDetailClient({
   const logOfficialLinkClick = (link: any) => {
     if (!link?.url || link.url === "#") return;
 
+    if (link.link_type === "official_apply" && /^https?:\/\//i.test(link.url)) {
+      trackAnalytics("click_application", {poster_id:poster.id,poster_category:poster.categoryId,poster_region:poster.regionId,application_channel:"official_apply"});
+    }
     const body = JSON.stringify({
       poster_id: poster.id,
       link_id: link.id ?? null,
@@ -589,11 +599,13 @@ export function PosterDetailClient({
 
   const imageUrls = resolvePosterImageGallery(poster.images ?? [], poster.thumbnail_url, poster.source_key);
   const primaryLink = getPrimaryActionLink(links);
-  const sourceLink = links.find((link) => link.link_type === "official_notice") || primaryLink;
+  const sourceLink = links.find((link) => link.link_type === "official_notice") || null;
   const primaryActionLabel = primaryLink ? getLinkActionLabel(primaryLink) : "공식 공고 확인";
   const referenceLinks = links.filter((link) => link.id !== primaryLink?.id);
   const canSaveCalendar = getVerifiedPosterCalendarSource(poster) !== null;
-  const summaryLines = formatSummaryLines(poster.summary_long || poster.summary_short);
+  const summaryLines = formatSummaryLines(poster.summary_long || poster.summary_short).filter(
+    (line, index, lines) => lines.findIndex((item) => item.label === line.label && item.text === line.text) === index
+  );
   const summaryFallbackFacts = derivePosterSummaryFallbackFacts(summaryLines);
   const structuredEligibilityAgeRange = extractTargetAgeRange(
     poster.eligibility_summary,
@@ -612,6 +624,7 @@ export function PosterDetailClient({
   const lastCheckedLabel = publicInformationCheckLabel(poster);
   const sourceHostLabel = sourceLink ? formatHostName(sourceLink.url) : null;
   const organizationInfo = getOrganizationVerification(poster);
+  const organizerName = poster.organizer_name || organizationInfo?.organizerName || null;
   const displayOrgName = getPosterOrgDisplayName(poster);
   const sourceOrgName = organizationInfo?.sourceOrgName || poster.source_org_name || null;
   const sourceDiffersFromOrganizer = Boolean(
@@ -670,7 +683,7 @@ export function PosterDetailClient({
   };
 
   return (
-    <div className="min-h-screen bg-white pb-24 md:pb-10">
+    <div className="poster-detail-page min-h-screen bg-white pb-24 md:pb-10">
       <Header />
       <main className="container mx-auto max-w-2xl px-4 py-6">
         <div className="mb-8">
@@ -685,7 +698,7 @@ export function PosterDetailClient({
             )}
             <span className="text-sm text-gray-500 font-bold">{displayOrgName}</span>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 leading-tight mb-4">{poster.title}</h1>
+          <h1 data-analytics-poster-id={poster.id} data-analytics-category={poster.categoryId || undefined} data-analytics-region={poster.regionId || undefined} className="text-2xl font-bold text-gray-900 leading-tight mb-4">{poster.title}</h1>
           <div className="flex flex-wrap gap-2">
             {poster.categoryName && (
               <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-black rounded-full">
@@ -807,10 +820,10 @@ export function PosterDetailClient({
 
         <section className="mb-10 rounded-2xl border border-gray-100 bg-white p-5">
           <dl className="grid gap-4 text-xs sm:grid-cols-4">
-            {displayOrgName && (
+            {organizerName && (
               <div>
                 <dt className="mb-1 font-black text-gray-400">주최/주관</dt>
-                <dd className="font-bold text-gray-900">{displayOrgName}</dd>
+                <dd className="font-bold text-gray-900">{organizerName}</dd>
               </div>
             )}
             {poster.application_organization_name && (
@@ -869,12 +882,18 @@ export function PosterDetailClient({
           </section>
         )}
 
+        <nav aria-label="관련 공고 탐색" className="mb-8 flex flex-wrap gap-3 text-sm font-bold text-blue-600">
+          {poster.regionId && <Link href={`/posters?region=${poster.regionId}`}>같은 신청 지역 공고</Link>}
+          {poster.categoryId && <Link href={`/posters?category=${poster.categoryId}`}>같은 분야 공고</Link>}
+          <Link href="/posters">전체 공고</Link>
+        </nav>
         <CommentSection posterId={poster.id} />
 
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-xl border-t md:relative md:bg-transparent md:border-none md:p-0">
+        <div role="group" aria-label="공고 상세 동작" className="poster-detail-actions fixed bottom-0 left-0 right-0 z-40 p-4 bg-white/90 backdrop-blur-xl border-t md:relative md:bg-transparent md:border-none md:p-0">
           <div className="max-w-2xl mx-auto flex gap-3">
             <button
               onClick={toggleFavorite}
+              aria-label={isFavorited ? "찜 취소" : "찜하기"}
               className={`w-14 h-14 flex items-center justify-center border rounded-2xl transition-all shadow-sm ${
                 isFavorited ? "bg-rose-50 border-rose-200" : "bg-white border-gray-100"
               }`}
@@ -915,6 +934,7 @@ export function PosterDetailClient({
               }}
               className="w-14 h-14 flex items-center justify-center border border-gray-100 bg-white rounded-2xl transition-all shadow-sm hover:bg-gray-50"
               title="공유"
+              aria-label="공유하기"
             >
               <Share2 size={20} className="text-gray-500" />
             </button>

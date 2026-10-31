@@ -5,6 +5,25 @@
 :root {
   --background: #ffffff;
   --foreground: #0f172a;
+  --mobile-nav-height: calc(52px + max(24px, env(safe-area-inset-bottom, 0px)));
+}
+
+.mobile-bottom-nav {
+  height: var(--mobile-nav-height);
+  padding-bottom: max(24px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(24px, env(safe-area-inset-left, 0px));
+  padding-right: max(24px, env(safe-area-inset-right, 0px));
+}
+
+@media (max-width: 767px) {
+  .poster-detail-page {
+    padding-bottom: calc(var(--mobile-nav-height) + 104px);
+  }
+  .poster-detail-actions {
+    bottom: var(--mobile-nav-height);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
 }
 
 @media (prefers-color-scheme: dark) {
