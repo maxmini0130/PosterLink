@@ -1,0 +1,65 @@
+# UI 개편 2단계 공고 상세·가입 연결 Codex 검토
+
+상태: 수정 필요 (구현 Claude, 검토 Codex) — `0f69c50` P2 4건, P3 보완 1건. 코드 수정 없이 검토 기록만 커밋
+
+## 범위와 판정
+
+- 브랜치 `feat/ui-redesign-s2-detail-20261101`, 대상 `0f69c50afcaa7d6476e70436cfd8e28583cc8941`. fetch 후 깨끗한 작업 트리에서 검토했다.
+- [UI 지시서](docs/UI_REDESIGN_PLAN_2026-10-31.md) 3장 ①~④·3-1·3-2와 [재방문 지시서](docs/RETENTION_PLAN_2026-10-31.md) 1-3·2-1~2-3, [구현 기록](WORK_LOG_20261101_ui_redesign_stage2_detail.md)을 기준으로 했다. 전체 비회원 기록 합치기 등 다음 단계로 명시한 기능은 이번 구현 완료 조건으로 추가하지 않았다.
+- **검토 미통과**. 기본 주 버튼 분기는 맞고 일반 성공·실패 시 기록 처리도 동작하지만, 새 pending 유실·복귀 경로 검증·완료 화면 경합·조기 종료 날짜 안내를 수정해야 한다.
+
+## P2-1 — 이전 작업의 성공 응답이 새 pending 기록을 지운다
+
+위치: `apps/web/app/components/PendingActionRunner.tsx:72-73`.
+
+시작할 때 읽은 작업 A를 서버에 저장하는 동안 다른 탭이나 흐름에서 pending을 B로 바꿀 수 있다. A가 성공하면 현재 기록과 비교하지 않고 단일 키를 무조건 삭제해, 아직 서버에 저장하지 않은 B까지 잃는다. `running`은 한 인스턴스의 실행만 막고 저장소 기록의 교체를 보호하지 않는다. 이후 A의 알림·복귀 경로도 적용된다.
+
+실제 Runner 코드와 guestStore를 실행하고 Auth·DB 응답만 모의한 재현에서 A의 upsert를 대기시킨 뒤 B를 저장했다. A 성공 후 pending 조회는 B가 아닌 null이었고 서버 쓰기 목록에는 A만 있었다. 반대로 일반 A 성공 전에는 기록이 남고 성공 후에만 없어지는 정상 경로는 통과했다.
+
+수정 방향: 작업 식별자/세대를 두고 성공한 작업과 현재 pending이 같은 경우만 확인 처리·삭제·복귀한다. 교체·취소된 기록을 이전 비동기 결과가 소비하지 않게 하고, 여러 탭과 진행 중 새 작업의 회귀 검사를 추가한다. DB 중복 방지와 로컬 작업 인수인계는 별개다.
+
+## P2-2 — 복귀 경로의 정규화 후 외부 주소·인증 경로를 허용한다
+
+위치: `apps/web/lib/guestStore.ts:108-113`.
+
+문자열 앞부분만 검사하고 원본 문자열을 반환한다. `/\t/evil.example`, `/\n/evil.example`는 검증을 통과하지만 URL 해석 시 탭·개행이 제거돼 `https://evil.example/`가 된다. Next App Router도 navigate에서 URL을 해석해 외부 origin을 구분한다. 따라서 변조되거나 잘못 저장된 pending의 returnTo가 앱 내부에만 머문다는 보장이 없다. `/foo/../login`도 허용해 인증 화면 제외 규칙을 우회한다.
+
+실제 safeReturnTo를 호출한 독립 검사 3건이 모두 기대값 null 대신 위 경로를 반환했다. 고정 origin을 준 URL 생성자로 정규화 결과를 확인했다. 외부 주소에 실제로 접속하지 않았다. 이 지적은 저장소 입력의 검증 결함이며 원격 공격자가 임의로 localStorage를 쓸 수 있다고 가정한 별도 공격 경로 주장은 아니다.
+
+수정 방향: 제어 문자를 거부하고 고정된 앱 origin 기준으로 URL을 정규화한 뒤 origin과 정규화된 pathname을 검증한다. 인증·가입·온보딩 제외도 pathname에 적용하고, 검사한 정규화 결과만 저장·반환한다. 제어 문자, dot segment, 인증 경로의 hash/query 사례를 추가한다.
+
+## P2-3 — 완료된 찜을 늦은 초기 조회가 해제 상태로 덮어쓴다
+
+위치: `apps/web/app/posters/[id]/PosterDetailClient.tsx:603-615`.
+
+초기 favorites 조회와 pending 완료 이벤트 사이의 순서가 보호되지 않는다. 초기 조회가 저장 전 상태를 읽고 응답이 늦게 도착하면, 완료 이벤트가 `찜함`으로 바꾼 뒤에도 그 응답이 `false`를 적용한다. `cancelled`는 페이지 unmount만 확인하고 완료 이후 오래된 요청은 구분하지 않는다. 계정에는 저장됐는데 화면은 찜하지 않은 것으로 돌아가며 다음 클릭도 해제가 아니라 중복 upsert가 된다.
+
+실제 PosterDetailClient를 렌더한 브라우저에서 초기 select 응답을 보류하고 `pl:pending-action-done`을 전달했다. 버튼이 `찜함`으로 바뀐 것을 확인한 뒤 저장 전 조회 결과 null을 반환하면 `찜하기`로 되돌아갔다. 실제 서버에 쓰지 않고 같은 완료 이벤트와 응답 순서만 구성했다.
+
+수정 방향: 완료 이벤트나 사용자 저장 이후 이전 조회 결과를 무효화하는 요청 세대/버전 보호를 둔다. 또는 이전 조회를 취소하고 최신 상태를 다시 조회한다. InstitutionFollowButton에도 초기 조회와 완료 이벤트의 동일 패턴이 있으므로 함께 점검한다. 저장 전 조회 → 저장 완료 → 이전 조회 응답 순서를 회귀 검사로 고정한다.
+
+## P2-4 — 조기 종료 공고의 예정 마감일을 실제 종료일로 안내한다
+
+위치: `apps/web/app/posters/[id]/PosterDetailClient.tsx:820`, `1043-1046`.
+
+상태는 `poster_status=closed`를 우선하지만 종료 띠 날짜는 application_end_at을 그대로 사용한다. 운영자가 조기 종료해 예정 마감이 미래인 경우에도 미래 날짜에 이미 접수가 끝났다고 말한다. 예정된 접수 마감과 실제 종료 시각은 다른 정보다.
+
+마감이 현재보다 5일 뒤인 closed 공고로 렌더했을 때 390·768·1280px 모두 미래 날짜를 넣은 "이 공고는 11월 6일에 접수가 끝났어요"가 나왔다(검토일 2026-11-01). 신청 주 버튼과 도장은 올바르게 숨겨졌다.
+
+수정 방향: 실제 종료 시각이 확인되지 않으면 일반적인 종료 안내를 사용한다. 예정 접수 기간은 별도 정보로 유지하되 실제 종료일로 단정하지 않는다. 미래 마감일 + 운영자 closed 조합을 검사한다.
+
+## P3 보완 — pending 저장 실패가 로그인 시작을 막지 않는다
+
+`app/lib/guestSession.ts:40`의 continueWithKakao는 setPendingAction의 false를 무시하고 OAuth를 시작한다. 상세의 다른 방법 로그인과 기관 구독 경로도 rememberActionForLogin 결과를 확인하지 않는다. 저장소가 차단되거나 quota가 부족해 행동을 기록하지 못하면 로그인 후 자동 완료할 정보가 없다. 정적 확인한 보완점으로, 위 P2 재현과는 구분한다. 저장 실패를 안내하고 행동을 안전하게 보존할 수 없는 상태에서는 약속한 자동 완료 흐름을 계속하지 않도록 보강한다.
+
+## 통과한 동작과 검증
+
+- 실제 Runner와 guestStore를 묶은 격리 실행에서 일반 성공 전 무삭제/성공 후 삭제, 반환형 서버 오류 시 유지, 다음 경로에서 재시도, 같은 경로 재렌더로 중복 실행하지 않음, 실행 중 다른 경로에서 동시 요청하지 않음, 로그인·온보딩 대기 및 비회원 유지가 통과했다. 성공 후 pending이 없으면 추가 경로 진입에도 재실행하지 않았다. 한 시간 TTL과 경로 기반 실행 구조이며 이 검사에서 자동 무한 루프는 없었다.
+- favorites의 `(user_id, poster_id)` 고유 조건과 institution_follows의 `(user_id, institution_id)` PK, 본인 RLS를 확인했다. upsert의 ignoreDuplicates는 DB 행 중복 방지에 맞고 서비스 키 우회는 없다. 실제 DB에 새 행을 쓰는 중복 검사는 하지 않았다. 분석 이벤트까지 exactly-once라는 판정은 아니다.
+- 실제 상세 컴포넌트의 신청 링크/원문/홈페이지만 있음/종료 **4분기 × 390·768·1280px**를 확인했다. official_apply가 우선이고, 없으면 official_notice, 둘 다 없으면 주 링크가 없다. homepage가 주 버튼이 되지 않으며 종료 상태에 신청 주 버튼·도장이 없다. 샘플 화면 가로 넘침도 없었다.
+- 상세의 핵심 정보 → 접힌 원문 순서, PC 2열 구조와 고정 행동 상자, 부족한 정보의 원문 링크를 코드·샘플 화면으로 확인했다. Header/Comment/이미지 뷰어/알림 흐름 등은 fixture에서 대체했으므로 전체 화면 E2E 통과로 표현하지 않는다. 관련 공고의 실제 주최 기관만 사용하는 조건과 source=related 연결을 확인했다. 지역 묶음·신청 표시·전체 기록 합치기를 숨긴 사유는 구현 기록에 있다.
+- 현재 guestStore 단위 검사 **4/4 PASS**. 독립 복귀 경로 3건은 실패했다. Runner 격리 4시나리오는 3개 통과, 진행 중 기록 교체 1개 실패다. 브라우저의 오래된 조회 응답·미래 종료일 사례도 재현됐다.
+- 전체 `pnpm test` **229/231 PASS**, 실패 2건은 기존 `profile-role-release` 검사다. web lint·production build PASS. 새 Runner·guestSession·guestStore·저장소 테스트 파일 Prettier PASS. 빌드에는 Supabase 공개 설정의 로컬 대체값을 사용했다.
+- 자료는 Git 제외 `data/results/ui-s2-review/`의 `runner.cjs`/`runner-results.json`, `storage-review.test.ts`/`storage-tests.txt`, `detail-browser.cjs`/`detail-results.json`, 390·768·1280 스크린샷과 검사 로그에 보관했다. Runner는 실제 비동기 본문과 실제 guestStore를 실행하되 React effect·router·Auth·DB·알림을 모의했다. 상세 fixture는 실제 React와 상세/공통 컴포넌트를 쓰고 위 외부 의존을 대체했다. 브라우저 요청은 모두 차단했다.
+- 실제 카카오·이메일 가입/로그인·WebView·운영 DB 쓰기·전체 Next 서버 E2E는 미실행이다. 이전 로컬 서버 시작의 자동 승인 정책 차단을 우회하지 않았고 운영 계정으로 검증하지 않았다. 스테이징에서 이 통합 흐름을 확인해야 한다.
+- 구현 코드·기존 테스트 수정, push·배포·운영 DB 조회/쓰기 없음. 검토 문서와 상태만 같은 브랜치에 로컬 커밋한다. 문서는 Prettier와 `git diff --check`로 확인한다.

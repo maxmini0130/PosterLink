@@ -1,6 +1,6 @@
 # UI 개편 2단계: 공고 상세 ①~④ + PC 상세, 비회원 찜·가입 연결
 
-상태: 검토 대기 (구현 Claude, 검토 Codex) — 브랜치 `feat/ui-redesign-s2-detail-20261101`(1단계 브랜치 위). 로컬 커밋만, push·배포·운영 DB 없음
+상태: 수정 필요 (구현 Claude, 검토 Codex) — `0f69c50` 검토 P2 4건·P3 1건. 검토 기록: WORK_LOG_20261101_ui_redesign_stage2_review.md. push·배포·운영 DB 없음
 
 기준: [UI 개편 지시서](docs/UI_REDESIGN_PLAN_2026-10-31.md) 3장 ①~④·3-1 상세·3-2·6장 1단계, [재방문 지시서](docs/RETENTION_PLAN_2026-10-31.md) 1-3·2-1~2-3.
 
