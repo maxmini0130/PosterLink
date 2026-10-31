@@ -1,6 +1,6 @@
 # 재방문·가입 전환 0단계 측정
 
-상태: 재검토 대기 (구현 Claude, 검토 Codex) — 기준 `25012e0`, Codex 검토 결함 3건 수정 커밋 이후
+상태: 검토 대기 (구현 Claude, 검토 Codex) — `3474a6b` 재검토: 수정 필요 1건, 다음 수정본 대기
 
 사용자가 `docs/RETENTION_PLAN_2026-10-31.md` 0단계부터 진행을 요청했다. 시작 전 `.claude/settings.local.json`에 git push, vercel --prod, supabase db push, psql·`--apply` 등 운영 쓰기 명령 deny 규칙을 추가했다.
 
@@ -25,3 +25,10 @@
 - 검증: lint PASS, tsc PASS, build PASS(Node 24.15.0), `pnpm test` 196/198(실패 2건은 기존 `profile-role-release` 스냅샷, 변경 전과 동일), Prettier·`git diff --check` PASS.
 - 미검증: Playwright·실제 OAuth/이메일 가입 흐름은 여전히 스테이징 필요.
 - 함께 한 작업(다른 브랜치·설정): 협업 규칙 `CLAUDE.md`·`AGENTS.md` 반영(`docs/agent-collaboration-20261031`, `def2c0a`), Claude deny 규칙을 사용자 전역 설정에도 추가.
+
+## Codex 재검토 결과 (`3474a6b`)
+
+- SQL 중복 귀속과 외부 재진입 경로 분류는 해결 확인. 실제 productEvents 모듈도 문서별 격리 컨텍스트로 읽어 메모리 연결부를 검증했다.
+- 가입 연결은 일반 pending 재시도는 동작하나, A 계정의 늦은 Promise reject가 계정 전환 후 B의 백오프를 설정해 pending 재시도를 소진시키는 P2 1건이 남았다. 구현 코드는 수정하지 않고 [같은 브랜치의 검토 기록](WORK_LOG_20261031_retention_stage0_review.md)에 재현·수정 방향을 추가했다.
+- 검토자 직접 실행: 관련 26/26 PASS, 전체 196/198(기존 실패 2건), 실제 모듈 메모리 연결 확인 및 잔여 예외 경로 모의 재현. lint/tsc/build·실제 브라우저 가입 시연은 재실행하지 않았다.
+- 판정: 재검토 미통과, 해당 예외 경로의 회귀 테스트·수정 후 재검토 필요. push·배포·운영 DB 변경 없음.
