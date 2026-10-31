@@ -72,5 +72,5 @@
 - 회귀 검사
   - 단위 15건(`guestStore.test.ts` 8, `deadlineDisplay.test.ts` 7): 경로 정규화(탭·개행·CR·dot segment·`%2e%2e`·인증 경로 hash/query), id·변조·형식 버전, 저장 실패, **A 저장 중 B 등록 → A 완료 후 B 유지·처리**, 로그인 전·쓰기 실패 시 유지, 교체 반복 상한, 조기 종료 날짜. 수정 전 저장소 코드에서 6건 실패 확인.
   - 브라우저 `e2e/poster-detail-guest.spec.ts`(로컬 설정, `E2E_DETAIL_POSTER_ID`·`E2E_SUPABASE_REF` 필요, 브라우저 밖 쓰기 차단): 비회원 찜·토스트 1개·행동 바 위·시트·로그인 이동과 행동 저장, **초기 계정 조회를 보류한 채 완료 이벤트 → 보류 해제 후에도 `찜함` 유지**(가짜 세션은 브라우저 안에서만 설정, 조회 요청은 보류 후 중단). 수정 전 상세 코드에서는 `찜하기`로 되돌아가 실패함을 확인.
-- 검증: 로컬 검사 7/7(컴포넌트 5 + 상세 2), web lint·build PASS, `pnpm test` 231/233(기존 실패 2건), `scripts/security/*` 104/107(기존 실패 3건), Prettier·`git diff --check` PASS.
+- 검증: 로컬 검사 7/7(컴포넌트 5 + 상세 2), web lint·build PASS, `pnpm test` 234/236(기존 실패 2건), `scripts/security/*` 104/107(기존 실패 3건), Prettier·`git diff --check` PASS.
 - 여전히 미검증: 실제 카카오·이메일 로그인 후 자동 완료와 복귀(스테이징 필요), 웹·WebView 각각.
