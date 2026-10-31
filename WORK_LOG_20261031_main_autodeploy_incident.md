@@ -39,7 +39,7 @@
 
 ## 반영 절차 (사용자 실행)
 
-1. Codex 교차 검토 통과 후 이 브랜치를 push하고 `main`으로 PR을 만든다. CI(크롤러 테스트, 웹 lint·build, Node 20)를 확인한다.
+1. Codex 교차 검토 통과 후 이 브랜치를 push하고 `main`으로 PR을 만든다. CI(크롤러 테스트, 웹 lint·build, Node 20)를 확인한다. **병합 방식은 "Create a merge commit"을 쓴다.** squash·rebase로 병합하면 릴리스 계열 이력이 끊겨, 이후 0단계·B 지역 브랜치를 `main`에 합칠 때 같은 변경이 다시 충돌한다.
 2. PR을 병합하면 Vercel이 Production 배포를 만든다. Instant Rollback 상태라 운영 도메인에 자동 연결되지 않는다. 그 배포 URL에서 `/api/auth/naver` 503, `/login` 중단 안내, 홈·목록·상세 200을 확인한다.
 3. 확인 후 그 배포를 Promote한다. 이때부터 다시 `main` push가 운영 배포가 된다(이번 정렬 이후에는 의도된 동작).
 4. 롤백: 문제가 있으면 `K26HCSXnY`로 Instant Rollback한다.
