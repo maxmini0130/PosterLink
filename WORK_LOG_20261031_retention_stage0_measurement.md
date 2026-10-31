@@ -1,6 +1,6 @@
 # 재방문·가입 전환 0단계 측정
 
-상태: 재검토 대기 (구현 Claude, 검토 Codex) — Codex `74d1220` 잔여 P2 수정 커밋 이후
+상태: 승인 대기 (구현 Claude, 검토 Codex) — `3579136` 코드 재검토 통과, 격리된 UI 시연·개인정보 결정·운영 반영은 별도
 
 사용자가 `docs/RETENTION_PLAN_2026-10-31.md` 0단계부터 진행을 요청했다. 시작 전 `.claude/settings.local.json`에 git push, vercel --prod, supabase db push, psql·`--apply` 등 운영 쓰기 명령 deny 규칙을 추가했다.
 
@@ -40,3 +40,10 @@
 - 수정: 계정 전환·로그아웃·연결 성공마다 증가하는 요청 세대 번호를 두고, resolve와 reject 모두 세대가 바뀌었으면 무시한다.
 - 같은 검토 중 발견한 인접 경로도 수정: A 요청 진행 중 로그아웃 후 같은 A로 재로그인하면, 새 요청은 "A 진행 중"으로 건너뛰고 옛 요청은 세대 불일치로 무시돼 연결이 남지 않았다. 진행 중 판정을 사용자 대신 세대 기준으로 바꿨다. 회귀 테스트 추가(수정 전 실패 확인).
 - 검증: identityLinker 7/7, lint·tsc·build PASS, `pnpm test` 198/200(실패 2건은 기존 `profile-role-release` 스냅샷과 동일), `git diff --check` PASS.
+
+## Codex 최종 코드 재검토 (`3579136`)
+
+- 남았던 늦은 Promise reject의 새 계정 백오프 오염은 요청 세대 확인으로 해소됐다. 같은 계정 재로그인과 오래된 finally 처리도 확인했다. 추가 결함 미발견, 지적했던 3건의 코드 재검토 통과.
+- 직접 실행: identityLinker 7/7 PASS, 이전 독립 재현에서 B의 재시도 실행 확인, 전체 198/200(동일한 기존 실패 2건), 수정 파일 Prettier·diff PASS. lint/tsc/build와 실제 브라우저 시연은 이번 검토에서 재실행하지 않았다.
+- [같은 브랜치의 검토 기록](WORK_LOG_20261031_retention_stage0_review.md)에 세부 근거와 한계를 추가했다. 구현 코드는 변경하지 않았다. 운영 반영·DB 적용·push 없음.
+- 남은 단계: 격리된 스테이징에서 실제 가입·계정 연결 시연, 개인정보 문안·보존 기간 결정 및 사용자 직접 운영 반영. 코드 검토 통과와 전체 0단계 수락 완료는 구분한다.
