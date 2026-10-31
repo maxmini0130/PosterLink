@@ -1,6 +1,6 @@
 # 재방문·가입 전환 0단계 측정
 
-상태: 재검토 대기 (구현 Claude, 검토 Codex) — 주 연속성 수정 `e5f8494`와 허용 목록 갱신 재검토 요청. 파기 예약 활성화는 재검토 통과 전 보류
+상태: 수정 필요 (구현 Claude, 검토 Codex) — `e5f8494`·`7e5e965` 재검토: 주 연속성 해결, 실제 수집 시작 시각의 lookback 오판정 P2 1건. 파기 예약 보류
 
 사용자가 `docs/RETENTION_PLAN_2026-10-31.md` 0단계부터 진행을 요청했다. 시작 전 `.claude/settings.local.json`에 git push, vercel --prod, supabase db push, psql·`--apply` 등 운영 쓰기 명령 deny 규칙을 추가했다.
 
