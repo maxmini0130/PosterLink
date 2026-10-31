@@ -23,11 +23,15 @@ ALTER TABLE usage_weekly_cohorts ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE usage_weekly_cohorts FROM anon, authenticated, service_role;
 GRANT SELECT ON TABLE usage_weekly_cohorts TO service_role;
 
--- Latest raw cutoff a run has applied: raw visits before it may be gone, so a
--- week whose 45-day lookback reaches past it cannot tell new from returning.
+-- What lookback completeness depends on, kept after the raw rows are gone:
+--   collection_started_at: the earliest visit ever logged (exact time, not its week)
+--   raw_purged_before: the latest raw cutoff a run has applied; visits before it
+--     may be gone, so a week whose 45-day lookback reaches past it cannot tell new
+--     from returning people.
 CREATE TABLE IF NOT EXISTS usage_log_retention_state (
   singleton BOOLEAN PRIMARY KEY DEFAULT true CHECK (singleton),
-  raw_purged_before TIMESTAMPTZ NOT NULL,
+  collection_started_at TIMESTAMPTZ,
+  raw_purged_before TIMESTAMPTZ,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -46,6 +50,14 @@ AS $$
 DECLARE
   v_inserted INTEGER;
 BEGIN
+  -- Remember the earliest visit before any purge can remove it.
+  INSERT INTO usage_log_retention_state AS s (singleton, collection_started_at)
+  SELECT true, min(created_at) FROM site_visit_logs
+  HAVING min(created_at) IS NOT NULL
+  ON CONFLICT (singleton) DO UPDATE
+    SET collection_started_at = LEAST(s.collection_started_at, EXCLUDED.collection_started_at),
+        updated_at = now();
+
   WITH key_owner AS (
     SELECT DISTINCT ON (visitor_key) visitor_key, user_id
     FROM visitor_identity_links
@@ -63,18 +75,14 @@ BEGIN
   ),
   -- next_week: continue after the last stored week, so weeks keep being stored
   -- while raw logs are empty; only the very first run starts at the first visit.
-  -- data_start: when collection began, kept by the oldest stored week once the
-  -- raw rows of that time are purged.
+  -- data_start and purged_before come from usage_log_retention_state.
   bounds AS (
     SELECT
       COALESCE(
         (SELECT max(cohort_week) + 7 FROM usage_weekly_cohorts),
         date_trunc('week', (SELECT min(kst_day) FROM visits))::date
       ) AS next_week,
-      LEAST(
-        (SELECT min(cohort_week)::timestamp AT TIME ZONE 'Asia/Seoul' FROM usage_weekly_cohorts),
-        (SELECT min(created_at) FROM visits)
-      ) AS data_start,
+      (SELECT collection_started_at FROM usage_log_retention_state) AS data_start,
       (SELECT raw_purged_before FROM usage_log_retention_state) AS purged_before
   ),
   -- First visit of a person after a 45-day gap (or their first visit at all).
@@ -141,9 +149,12 @@ BEGIN
       COALESCE(c.returned_7d, 0)::int,
       COALESCE(c.returned_30d, 0)::int,
       COALESCE(a.n, 0)::int,
-      (w.cohort_week::timestamp AT TIME ZONE 'Asia/Seoul') - interval '45 days' >= b.data_start
-        AND (b.purged_before IS NULL
-             OR (w.cohort_week::timestamp AT TIME ZONE 'Asia/Seoul') - interval '45 days' >= b.purged_before)
+      COALESCE(
+        (w.cohort_week::timestamp AT TIME ZONE 'Asia/Seoul') - interval '45 days' >= b.data_start
+          AND (b.purged_before IS NULL
+               OR (w.cohort_week::timestamp AT TIME ZONE 'Asia/Seoul') - interval '45 days' >= b.purged_before),
+        false
+      )
     FROM weeks w
     CROSS JOIN bounds b
     LEFT JOIN cohorts c USING (cohort_week)

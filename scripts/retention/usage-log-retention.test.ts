@@ -449,8 +449,9 @@ test("lookback is complete only where raw visits were never purged", async () =>
   const db = await setup();
   await expiredFixture(db, 210);
   await db.exec(`
-    INSERT INTO usage_log_retention_state (raw_purged_before)
-      SELECT raw_cutoff FROM usage_log_retention_cutoffs();
+    INSERT INTO usage_log_retention_state (collection_started_at, raw_purged_before)
+      SELECT (SELECT last_week FROM e)::timestamp AT TIME ZONE 'Asia/Seoul', raw_cutoff
+      FROM usage_log_retention_cutoffs();
   `);
   await db.query("SELECT snapshot_usage_weekly_cohorts()");
   const rows = (
@@ -497,4 +498,58 @@ test("each run records the raw cutoff it applied, never moving it back", async (
     SELECT bool_or(has_table_privilege(r, 'usage_log_retention_state', 'SELECT, INSERT, UPDATE, DELETE')) AS any_role
     FROM unnest(ARRAY['anon', 'authenticated', 'service_role']) AS r`);
   assert.equal(rows[0].any_role, false);
+});
+
+/**
+ * Codex re-review (8e40f12): collection that began on a Saturday must not count
+ * the Monday-to-Friday before it as observed, even after its raw rows are gone.
+ */
+test("lookback uses the exact collection start, not its week", async () => {
+  const db = await setup();
+  await db.exec(`
+    CREATE TEMP TABLE e AS SELECT
+      date_trunc('week', (now() AT TIME ZONE 'Asia/Seoul')::date - 120)::date AS last_week;
+    INSERT INTO usage_weekly_cohorts
+      (cohort_week, new_people, returned_7d, returned_30d, active_people, lookback_complete)
+      SELECT last_week, 1, 0, 0, 1, false FROM e;
+    INSERT INTO usage_log_retention_state (collection_started_at)
+      SELECT ((last_week + 5)::timestamp + time '10:00') AT TIME ZONE 'Asia/Seoul' FROM e;
+  `);
+  await db.query("SELECT snapshot_usage_weekly_cohorts()");
+  const flag = async (weeksAfter: number) =>
+    (
+      await db.query<{ lookback_complete: boolean }>(
+        `SELECT lookback_complete FROM usage_weekly_cohorts
+         WHERE cohort_week = (SELECT last_week FROM e) + ${weeksAfter * 7}`,
+      )
+    ).rows[0]?.lookback_complete;
+  assert.equal(await flag(7), false); // lookback starts on the Friday before collection
+  assert.equal(await flag(8), true); // lookback starts after the Saturday start
+});
+
+test("the exact first visit is kept after its raw row is purged", async () => {
+  const db = await setup();
+  await db.exec(`
+    INSERT INTO site_visit_logs (visitor_key, path, created_at) VALUES
+      ('first', '/', '2026-05-16 10:00+09'),
+      ('later', '/', now() - interval '1 day');
+  `);
+  await db.query("SELECT * FROM run_usage_log_retention(50000)");
+  assert.equal(
+    await count(
+      db,
+      "SELECT count(*) AS n FROM site_visit_logs WHERE visitor_key = 'first'",
+    ),
+    0,
+  );
+  const started = async () =>
+    (
+      await db.query<{ ok: boolean }>(
+        "SELECT collection_started_at = '2026-05-16 10:00+09' AS ok FROM usage_log_retention_state",
+      )
+    ).rows[0]?.ok;
+  assert.equal(await started(), true);
+  // A later run with only newer raw rows never moves the start forward.
+  await db.query("SELECT * FROM run_usage_log_retention(50000)");
+  assert.equal(await started(), true);
 });
