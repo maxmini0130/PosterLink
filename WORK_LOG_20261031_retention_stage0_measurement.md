@@ -1,6 +1,6 @@
 # 재방문·가입 전환 0단계 측정
 
-상태: 수정 필요 (구현 Claude, 검토 Codex) — `e5f8494`·`7e5e965` 재검토: 주 연속성 해결, 실제 수집 시작 시각의 lookback 오판정 P2 1건. 파기 예약 보류
+상태: 재검토 대기 (구현 Claude, 검토 Codex) — 수집 시작 시각 보존 `1e69175`와 허용 목록 갱신 재검토 요청. 파기 예약 활성화는 재검토 통과 전 보류
 
 사용자가 `docs/RETENTION_PLAN_2026-10-31.md` 0단계부터 진행을 요청했다. 시작 전 `.claude/settings.local.json`에 git push, vercel --prod, supabase db push, psql·`--apply` 등 운영 쓰기 명령 deny 규칙을 추가했다.
 
@@ -117,3 +117,11 @@
 - 회귀 테스트 5건 추가: 원본 만료 후 다음 주 0 저장, 공백 뒤 새 방문에도 빈 주 연속, 최초 상태 무저장, cutoff 기준 lookback 판정, cutoff 기록 단조 증가와 권한. 수정 전 SQL(`c7e7d9c`)로 되돌리면 4건이 실패함을 확인했다(최초 상태 검사는 이전에도 통과).
 - 허용 목록의 파기 마이그레이션 기준 커밋을 `e5f8494`로 갱신했다(예약 마이그레이션 내용은 변경 없음).
 - 검증: 파기 테스트 15/15, `scripts/retention/*` 26/26, `pnpm test` 217/219, `scripts/security/*` 104/107(남은 실패는 기존 3건), Prettier·`git diff --check` PASS.
+
+## Codex 재검토 반영: 수집 시작 시각 보존 (`1e69175`)
+
+- [검토 기록](WORK_LOG_20261031_usage_log_retention_review.md)(`8e40f12`) P2: 원본이 파기되면 수집 시작점을 가장 오래된 저장 주의 월요일로 대신해, 토요일에 수집을 시작한 경우 그 앞 월~금을 관찰한 것으로 보고 `lookback_complete = true`를 저장했다(저장 후 고정).
+- 수정: `usage_log_retention_state.collection_started_at`에 실제 첫 방문 시각을 저장한다. 집계 함수가 파기 전에 매번 `LEAST`로 갱신하므로 앞으로만 당겨지고, 원본이 사라져도 유지된다. 저장 주로 대신하는 계산은 없앴다. 시작 시각을 모르면 `lookback_complete = false`.
+- 회귀 테스트 2건 추가: 토요일 시작 경계(직전 45일이 금요일에 걸리는 주는 `false`, 다음 주는 `true`), 첫 방문 원본 파기 후에도 정확한 시각 유지. 기존 lookback 테스트는 시작 시각을 상태 표에 넣도록 고쳤다. 수정 전 SQL(`e5f8494`)로 되돌리면 3건이 실패함을 확인했다.
+- 허용 목록의 파기 마이그레이션 기준 커밋을 `1e69175`로 갱신했다.
+- 검증: 파기 테스트 17/17, `scripts/retention/*` 28/28, `pnpm test` 219/221, `scripts/security/*` 104/107(남은 실패는 기존 3건), Prettier·`git diff --check` PASS.
