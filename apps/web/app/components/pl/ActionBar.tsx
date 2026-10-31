@@ -1,9 +1,11 @@
+"use client";
+
 import { Heart } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 /**
  * Bottom action bar on mobile detail screens: 찜하기 on the left, the primary
- * action on the right. Hidden from md up, where the detail page uses its side
+ * action on the right. Hidden from xl (1280px) up, where the detail page uses its side
  * action box instead.
  */
 export function ActionBar({
@@ -18,11 +20,18 @@ export function ActionBar({
   /** The primary link or button (신청 페이지로 이동 / 공식 공고 확인하기 …). */
   primary: ReactNode;
 }) {
+  // Toasts render outside the page; lift them above this bar while it is shown.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.add("pl-action-bar-open");
+    return () => root.classList.remove("pl-action-bar-open");
+  }, []);
+
   return (
     <div
       role="group"
       aria-label="공고 행동"
-      className="pl-action-bar fixed inset-x-0 z-40 flex items-center gap-2 border-t border-pl-line bg-pl-card px-5 py-2.5 md:hidden"
+      className="pl-action-bar fixed inset-x-0 z-40 flex items-center gap-2 border-t border-pl-line bg-pl-card px-5 py-2.5 xl:hidden"
     >
       <FavoriteButton
         favorited={favorited}

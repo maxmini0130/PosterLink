@@ -3,6 +3,7 @@ import { Children, type ReactNode } from "react";
 import type { PosterViewSource } from "../../../lib/productEventsCore";
 import { getDeadlineDisplay } from "../../../lib/deadlineDisplay";
 import { resolvePosterImageGallery } from "../../../lib/posterImage";
+import type { DiscoveryPoster } from "../../../lib/discoveryRoutes";
 import type { PosterCardData } from "../PosterCard";
 import { DeadlineLabel } from "./DeadlineLabel";
 import { PosterThumb } from "./PosterThumb";
@@ -11,6 +12,29 @@ import { RegionLabel, type RegionScope } from "./RegionLabel";
 export type PlPosterCardData = PosterCardData & {
   posterStatus?: string | null;
 };
+
+/** Card data from a public discovery row (same organisation rule as institution pages). */
+export function discoveryPosterToCard(
+  poster: DiscoveryPoster,
+): PlPosterCardData {
+  return {
+    id: poster.id,
+    title: poster.title,
+    org:
+      poster.verification_status === "verified" && poster.verified_at
+        ? poster.organizer_name || poster.source_org_name || undefined
+        : poster.source_org_name || undefined,
+    applicationStartAt: poster.application_start_at,
+    deadline: poster.application_end_at || undefined,
+    deadlineType: poster.deadline_type,
+    tags: [poster.categoryName, poster.regionName].filter(
+      (value): value is string => Boolean(value),
+    ),
+    image: poster.thumbnail_url || undefined,
+    images: poster.images,
+    sourceUrl: poster.source_key || undefined,
+  };
+}
 
 function cardParts(poster: PlPosterCardData) {
   const display = getDeadlineDisplay({

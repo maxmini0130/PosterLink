@@ -7,8 +7,22 @@ import { supabase } from "../lib/supabase";
 
 import { trackAnalytics, setAnalyticsLoginStatus } from "../../lib/analytics";
 import { currentPageType, promptSignup, trackProductEvent } from "../../lib/productEvents";
+import {
+  PENDING_ACTION_DONE_EVENT,
+  rememberActionForLogin,
+  type PendingActionDoneDetail,
+} from "../lib/guestSession";
 
-export function InstitutionFollowButton({ institutionId, returnPath }: { institutionId: string; returnPath: string }) {
+export function InstitutionFollowButton({
+  institutionId,
+  returnPath,
+  variant = "default",
+}: {
+  institutionId: string;
+  returnPath: string;
+  /** "pl": redesigned screens (구독 / 구독 중). */
+  variant?: "default" | "pl";
+}) {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
   const [following, setFollowing] = useState(false);
@@ -39,9 +53,21 @@ export function InstitutionFollowButton({ institutionId, returnPath }: { institu
     };
   }, [institutionId]);
 
+  // Completed after sign-in by PendingActionRunner.
+  useEffect(() => {
+    const onDone = (event: Event) => {
+      const detail = (event as CustomEvent<PendingActionDoneDetail>).detail;
+      if (detail?.type === "follow" && detail.targetId === institutionId) setFollowing(true);
+    };
+    window.addEventListener(PENDING_ACTION_DONE_EVENT, onDone);
+    return () => window.removeEventListener(PENDING_ACTION_DONE_EVENT, onDone);
+  }, [institutionId]);
+
   const toggleFollow = async () => {
     if (!userId) {
       promptSignup(currentPageType(), "follow", { institutionId });
+      // Follow automatically once signed in, then come back here.
+      rememberActionForLogin({ type: "follow", targetId: institutionId, returnTo: returnPath });
       router.push(`/login?redirectTo=${encodeURIComponent(returnPath)}`);
       return;
     }
@@ -64,6 +90,22 @@ export function InstitutionFollowButton({ institutionId, returnPath }: { institu
     }
     setLoading(false);
   };
+
+  if (variant === "pl") {
+    return (
+      <button
+        type="button"
+        onClick={toggleFollow}
+        disabled={loading}
+        aria-pressed={following}
+        className={`inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-full px-4 text-sm font-bold disabled:cursor-wait disabled:opacity-60 ${
+          following ? "border border-pl-line bg-pl-card text-pl-ink" : "bg-pl-ink text-white"
+        }`}
+      >
+        {loading ? "확인 중" : following ? "구독 중" : "구독"}
+      </button>
+    );
+  }
 
   return (
     <button

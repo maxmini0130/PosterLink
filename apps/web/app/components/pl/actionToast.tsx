@@ -17,7 +17,7 @@ export function showActionToast(
         role="status"
         aria-live="polite"
         className={`flex min-h-[48px] max-w-[calc(100vw-40px)] items-center gap-3 rounded-xl bg-pl-ink px-4 py-2 text-sm text-white shadow-lg transition-opacity md:max-w-md ${
-          t.visible ? "opacity-100" : "opacity-0"
+          t.visible ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
         <span className="min-w-0 flex-1">{message}</span>

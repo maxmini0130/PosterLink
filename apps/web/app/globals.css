@@ -57,11 +57,38 @@
   }
   /* PC: no tab bar; toasts sit at the bottom left. */
   .pl-toaster {
-    bottom: 24px !important;
+    bottom: calc(24px + var(--pl-bottom-extra)) !important;
     left: 24px !important;
   }
   .pl-toaster > div {
     justify-content: flex-start !important;
+  }
+  /* Tablet: no tab bar, so the detail action bar sits at the very bottom. */
+  .pl-action-bar {
+    bottom: 0;
+  }
+}
+
+/* Detail screens with a fixed action bar until the PC two-column layout. */
+.pl-has-action-bar {
+  padding-bottom: calc(var(--mobile-nav-height) + 96px);
+}
+/* Set on <html> while such a screen is open: toasts render outside the page,
+   so the offset has to come from the root. */
+.pl-action-bar-open {
+  --pl-bottom-extra: 72px;
+}
+@media (min-width: 768px) {
+  .pl-has-action-bar {
+    padding-bottom: 104px;
+  }
+}
+@media (min-width: 1280px) {
+  .pl-has-action-bar {
+    padding-bottom: 48px;
+  }
+  .pl-action-bar-open {
+    --pl-bottom-extra: 0px;
   }
 }
 

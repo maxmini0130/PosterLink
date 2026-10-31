@@ -455,6 +455,45 @@ export async function fetchPublicInstitution(slug: string) {
   };
 }
 
+/**
+ * The organiser of a poster detail page and up to `limit` of its other
+ * currently accepting public posters, soonest deadline first (retention plan
+ * 1-3 "같은 기관의 접수 중 공고"). Null when the organiser is not a public
+ * institution.
+ */
+export async function fetchInstitutionRelatedPosters(
+  institutionId: string,
+  excludePosterId: string,
+  limit = 3,
+) {
+  const client = createPublicSupabaseClient();
+  const { data: institution, error } = await client
+    .from("institutions")
+    .select("id,slug,name")
+    .eq("id", institutionId)
+    .eq("is_public", true)
+    .maybeSingle();
+  if (error || !institution) return null;
+
+  const { data: posters } = await client
+    .from("posters")
+    .select(PUBLIC_POSTER_SELECT)
+    .eq("poster_status", "published")
+    .or(PUBLIC_POSTER_EXPOSURE_FILTER)
+    .eq("organizer_id", institution.id)
+    .neq("id", excludePosterId)
+    .order("application_end_at", { ascending: true, nullsFirst: false })
+    .limit(24);
+
+  const accepting = ((posters ?? []) as Record<string, unknown>[])
+    .filter((poster) => isAcceptingPoster(poster))
+    .slice(0, limit);
+  return {
+    institution: institution as { id: string; slug: string; name: string },
+    posters: await enrichPublicPosters(client, accepting),
+  };
+}
+
 function isAcceptingPoster(poster: {
   application_start_at?: string | null;
   application_end_at?: string | null;

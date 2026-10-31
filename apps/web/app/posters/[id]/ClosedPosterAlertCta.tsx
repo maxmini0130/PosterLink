@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Bell, Check, ChevronDown, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { trackAlertEvent } from "../../../lib/alertAnalytics";
@@ -35,10 +35,15 @@ export function ClosedPosterAlertCta({
   posterId,
   posterStatus,
   defaults,
+  renderTrigger,
+  className = "mt-5 rounded-3xl border border-blue-100 bg-blue-50 p-5",
 }: {
   posterId: string;
   posterStatus: string;
   defaults: AlertDefaults;
+  /** Custom trigger for redesigned screens; the flow and events stay the same. */
+  renderTrigger?: (open: () => void, disabled: boolean) => ReactNode;
+  className?: string;
 }) {
   const ctaRef = useRef<HTMLDivElement>(null);
   const viewedRef = useRef(false);
@@ -189,8 +194,12 @@ export function ClosedPosterAlertCta({
       <div
         ref={ctaRef}
         data-testid="closed-poster-alert-cta"
-        className="mt-5 rounded-3xl border border-blue-100 bg-blue-50 p-5"
+        className={className}
       >
+        {renderTrigger ? (
+          renderTrigger(openFlow, !hydrated)
+        ) : (
+        <>
         <div className="flex items-start gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm">
             <Bell size={20} />
@@ -211,6 +220,8 @@ export function ClosedPosterAlertCta({
         >
           다음 공고 알림 받기
         </button>
+        </>
+        )}
       </div>
 
       {step && (
