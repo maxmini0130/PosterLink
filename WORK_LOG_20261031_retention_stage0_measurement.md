@@ -126,7 +126,7 @@
 - 허용 목록의 파기 마이그레이션 기준 커밋을 `1e69175`로 갱신했다.
 - 검증: 파기 테스트 17/17, `scripts/retention/*` 28/28, `pnpm test` 219/221, `scripts/security/*` 104/107(남은 실패는 기존 3건), Prettier·`git diff --check` PASS.
 
-## 운영 반영 ①: 0단계 마이그레이션 적용 (2026-10-31 15:57 KST 확인)
+## 운영 반영 ①: 0단계 마이그레이션 적용 (2026-11-01 00:57 KST 확인)
 
 - 사전 점검(사용자 SQL Editor, 조회만): 필요 컬럼·기존 제약 존재, 새 제약·테이블·함수 이름 충돌 없음, 알림 이벤트 필수값 누락 0건, `pg_cron 1.6.4` 설치 10/10 통과. 규모: `site_visit_logs` 4,079건(7/18~), `poster_view_logs` 919, `poster_link_click_logs` 80, `search_logs` 45, `product_events` 41.
 - 적용: 사용자가 SQL Editor에서 Codex 통과본(`3474a6b`)과 동일한 마이그레이션을 `BEGIN`~`COMMIT`으로 한 번에 실행, "Success. No rows returned". 실행 파일 SHA-256(LF) `fa57e52eaf652eb507dfe6b878712a21d8815b38f1a29a868b37f91e20a8b743`. 실행 전 같은 파일을 PGlite에서 적용 확인. migration history INSERT는 하지 않았다(10/23 역할 보안 적용과 같은 방식).
