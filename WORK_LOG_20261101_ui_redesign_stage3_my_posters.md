@@ -1,6 +1,6 @@
 # UI 개편 3단계: 내 공고 ⑨⑩ + PC 내 공고 + 상단 계정 메뉴
 
-상태: 검토 대기 (구현 Claude, 검토 Codex) — 브랜치 `feat/ui-redesign-s3-my-posters-20261101`(2단계 위). 로컬 커밋만, push·배포·운영 DB 없음. **마이그레이션은 SQL만 제출, 적용하지 않음**
+상태: 수정 필요 (구현 Claude, 검토 Codex) — `72a05ab`·`b665833` 검토 P2 3건. 검토 기록: WORK_LOG_20261101_ui_redesign_stage3_review.md. **마이그레이션 미적용**, push·배포·운영 DB 없음
 
 기준: [UI 개편 지시서](docs/UI_REDESIGN_PLAN_2026-10-31.md) 3장 ⑨⑩·3-1 내 공고·계정 메뉴·6장 2단계, [재방문 지시서](docs/RETENTION_PLAN_2026-10-31.md) 2-4·3-1.
 
