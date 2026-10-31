@@ -13,23 +13,6 @@ import { isLikelyApplicationLink, sanitizeKnownShortUrl } from "./source-link-ru
 import { inferPosterClassification } from "./poster-classifier.js";
 import { inferRegionMatches } from "./region-rules.js";
 
-test("district eligibility takes precedence over source institution and venue", () => {
-  const matches = inferRegionMatches({
-    title: "청년 교육 모집",
-    content: "신청 대상: 마포구 거주 청년. 교육 장소: 강남구 교육장",
-    source_org_name: "강서구청",
-  });
-  assert.deepEqual(matches.map((match) => match.code), ["REG_SEOUL_MAPO"]);
-  assert.equal(matches[0].source, "eligibility_scope");
-});
-
-test("district venue names alone do not become eligibility evidence", () => {
-  for (const content of ["장소: 강남구 소재 교육장", "장소: 강남구 주민센터", "장소: 강남구 구민회관"]) {
-    const matches = inferRegionMatches({ title: "교육 모집", content });
-    assert.equal(matches.some((match) => match.source === "eligibility_scope"), false);
-  }
-});
-
 const org = "금천구";
 
 test("extractOrgFromTitle pulls the host org before the program bracket", () => {

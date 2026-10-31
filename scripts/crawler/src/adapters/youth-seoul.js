@@ -8,6 +8,7 @@ import {
 } from "../external-original-resolver.js";
 import { filterAndOrderPosterImages } from "../poster-image-rules.js";
 import { mergeAttachmentImageCandidates } from "../attachment-image-candidates.js";
+import { extractYouthSchedule } from "../youth-seoul-schedule.js";
 import {
   isLikelyApplicationLink,
   shouldUseExternalNoticeDetail,
@@ -195,6 +196,11 @@ export default {
     const parsedTitle = cleanText($(".feed-view .overview .tit").first().text() || $("h3").first().text());
     const title = isInvalidDetailTitle(parsedTitle) ? "" : parsedTitle;
     const overviewText = cleanText($(".feed-view .overview").first().text());
+    const schedule = extractYouthSchedule($);
+    const overviewEvidence = $(".feed-view .overview .info li")
+      .map((_, el) => cleanText($(el).text())).get()
+      .filter((value) => value && value !== "진행일정");
+    if (schedule) overviewEvidence.push(`진행일정: ${schedule} (Asia/Seoul)`);
     const detailText = cleanText($(".feed-view .detail").first().text());
     const { end } = extractDateRange(overviewText);
 
@@ -256,11 +262,13 @@ export default {
       attachments.push(...externalDetail.attachments);
     }
 
-    const content = useExternalNoticeDetail
+    const selectedContent = useExternalNoticeDetail
       && externalDetail?.content
       && externalDetail.content.length > baseContent.length
       ? externalDetail.content
       : baseContent;
+    // Retain labeled metadata and literal dynamic schedule alongside the body.
+    const content = [...overviewEvidence, selectedContent].filter(Boolean).join("\n");
     const sourceUrl = externalIsApplication
       ? postUrl
       : externalDetail?.url ?? postUrl;
