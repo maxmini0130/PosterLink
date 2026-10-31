@@ -1,6 +1,6 @@
 # 이용 기록 파기 배치 Codex 검토
 
-상태: 수정 필요 (구현 Claude, 검토 Codex) — `e5f8494`·`7e5e965` 재검토: 주 연속성 P2 해결, 수집 시작 시각 반올림으로 lookback 오판정 P2 1건. 2026-11-01
+상태: 승인 대기 (구현 Claude, 검토 Codex) — `1e69175`·`791ebb8` 재검토 통과. 기존 P2 해결, 추가 지적 없음. 운영 반영은 사용자 결정. 2026-11-01
 
 ## 대상과 판정
 
@@ -96,3 +96,19 @@
 - 전체 `pnpm test` **217/219 PASS**. 실패 2건은 기존 `profile-role-release` 스냅샷 검사다.
 - 자료: Git 제외 `data/results/usage-retention-rereview-e5f8494/`의 `review.test.ts`, `review-tests.txt`, `precision-tests.txt`, `freeze-tests.txt`, `full-tests.txt`.
 - 운영 DB 접근·migration 적용·파기·push·배포 없음. 앱·SQL·테스트 구현은 수정하지 않고 검토 문서만 같은 브랜치에 커밋한다. Prettier와 `git diff --check`를 확인하며, 실제 pg_cron 실행·앱 lint/build·화면 시연은 이번 범위에서 실행하지 않았다. 파기 예약은 재검토 통과 전 보류한다.
+
+## 2026-11-01 재검토 — 1e69175 / 791ebb8
+
+대상은 `1e6917574e8b8c682d2c189f34c8511f5053b605`와 허용 목록 갱신 `791ebb8`이다. **코드 검토 통과**: `8e40f12`의 P2가 해결됐고, 이번 변경 범위에서 추가 결함을 발견하지 못했다. 앞선 지적은 위에 이력으로 보존한다.
+
+- snapshot이 삭제 전에 정확한 첫 방문 시각을 `collection_started_at`에 보존한다. 이후 LEAST로 갱신하므로 원본이 만료되거나 최근 방문만 남아도 시작 시각을 뒤로 밀지 않는다. 저장 주의 월요일로 대체하지 않는다.
+- `lookback_complete`는 정확한 수집 시작 시각과 직전 적용 cutoff를 모두 만족해야 true다. 시작 시각을 모르면 false다. 토요일 시작 전에 걸리는 금요일 lookback은 false, 이후 충분히 관찰한 주는 true인 것을 확인했다.
+- 시작 시각이 lookback 시작과 정확히 같을 때 true, 1마이크로초 늦을 때 false인 경계도 별도로 확인했다.
+- 신규 없는 주, 오래된 첫 실행 백필, 빈 주의 0 저장, 원본 만료 뒤 주 연속성, 새 방문 이후 빈 주 보존에 관한 이전 재현도 모두 통과했다. 저장된 집계는 계속 덮어쓰지 않는다.
+- 삭제 조건·cutoff·함수 API 권한 회수·상태 테이블 API 권한 회수·예약 SQL의 보호는 유지된다. 3개월/30일 삭제 경계와 월말·윤년, 집계 실패 시 삭제 취소도 다시 확인했다. 시작 시각과 cutoff 저장은 집계·삭제와 같은 트랜잭션에 속한다.
+- 허용 목록의 두 migration이 `1e69175` 내용과 일치한다. 고정·허용 목록 검사 **12/12 PASS**. 경로나 보호 범위를 추가로 넓히지 않았다.
+- 현행 파기 테스트 **17/17 PASS**. 이전 독립 재현과 정밀 경계 검사를 포함한 Git 제외 harness **25/25 PASS**. 대상 TypeScript Prettier PASS.
+- 전체 `pnpm test` **219/221 PASS**. 실패 2건은 이전과 같은 `profile-role-release` 스냅샷 검사다.
+- 재현 자료: Git 제외 `data/results/usage-retention-rereview-1e69175/`의 `review.test.ts`, `review-tests.txt`, `freeze-tests.txt`, `full-tests.txt`.
+
+이 판정은 운영 파기 실행 승인을 대신하지 않는다. 사용자 실행 절차에 따라 함수 migration 적용 후 preview 건수·예외를 검토하고 예약을 별도로 승인해야 한다. 실제 pg_cron 등록·실행과 운영 권한 확인은 미실행이며, 스테이징 가입 시연과 리포트 기간 제한 등 기존 후속 과제도 남는다. 실제 첫 실행 성공 전 자동 파기 완료 문구를 게시하지 않는 운영 절차를 유지한다. 운영 DB 접근·migration 적용·파기·push·배포 없이 검토 문서만 같은 브랜치에 커밋한다. 앱 변경이 없어 lint/build·화면 시연은 반복하지 않았다.
