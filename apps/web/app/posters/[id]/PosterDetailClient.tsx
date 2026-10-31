@@ -28,6 +28,8 @@ import { ClosedPosterAlertCta, type AlertDefaults } from "./ClosedPosterAlertCta
 import { trackAlertEvent } from "../../../lib/alertAnalytics";
 
 import { trackAnalytics, setAnalyticsLoginStatus } from "../../../lib/analytics";
+import { consumePosterViewSource, promptSignup, trackProductEvent } from "../../../lib/productEvents";
+import { shareUrl } from "../../../lib/productEventsCore";
 
 export type PosterDetailPoster = {
   id: string;
@@ -482,6 +484,7 @@ export function PosterDetailClient({
 
   useEffect(() => {
     let cancelled = false;
+    const viewSource = consumePosterViewSource(poster.id);
 
     void fetchPosterMetricCounts([poster.id])
       .then((metricCounts) => {
@@ -490,7 +493,7 @@ export function PosterDetailClient({
         setFavoriteCount(metricCounts.favoriteCounts[poster.id] ?? initialFavoriteCount);
       })
       .finally(() => {
-        void logPosterView(poster.id).then((logged) => {
+        void logPosterView(poster.id, viewSource).then((logged) => {
           if (!cancelled && logged) {
             setViewCount((count) => count + 1);
           }
@@ -535,6 +538,7 @@ export function PosterDetailClient({
       data: { user }
     } = await supabase.auth.getUser();
     if (!user) {
+      promptSignup("detail", "favorite", { posterId: poster.id });
       toast.error("로그인이 필요합니다.");
       return;
     }
@@ -545,6 +549,7 @@ export function PosterDetailClient({
         setIsFavorited(false);
         setAnalyticsLoginStatus(true);
         trackAnalytics("unsave_poster", {poster_id:poster.id,poster_category:poster.categoryId,poster_region:poster.regionId});
+        trackProductEvent("favorite_remove", { posterId: poster.id, metadata: { screen: "detail", logged_in: true } });
         setFavoriteCount((count) => Math.max(0, count - 1));
       }
     } else {
@@ -553,6 +558,7 @@ export function PosterDetailClient({
         setIsFavorited(true);
         setAnalyticsLoginStatus(true);
         trackAnalytics("save_poster", {poster_id:poster.id,poster_category:poster.categoryId,poster_region:poster.regionId});
+        trackProductEvent("favorite_add", { posterId: poster.id, metadata: { screen: "detail", logged_in: true } });
         setFavoriteCount((count) => count + 1);
       }
     }
@@ -921,15 +927,25 @@ export function PosterDetailClient({
 
             <button
               onClick={async () => {
-                if (navigator.share) {
-                  await navigator.share({
-                    title: poster.title,
-                    text: poster.summary_short ?? "",
-                    url: window.location.href
-                  });
-                } else {
-                  navigator.clipboard.writeText(window.location.href);
-                  toast.success("링크가 복사되었습니다.");
+                const url = shareUrl(window.location.href);
+                try {
+                  if (navigator.share) {
+                    await navigator.share({
+                      title: poster.title,
+                      text: poster.summary_short ?? "",
+                      url
+                    });
+                    trackProductEvent("share_click", { posterId: poster.id, metadata: { channel: "native_share" } });
+                  } else {
+                    await navigator.clipboard.writeText(url);
+                    toast.success("링크가 복사되었습니다.");
+                    trackProductEvent("share_click", { posterId: poster.id, metadata: { channel: "link_copy" } });
+                  }
+                } catch (error) {
+                  // Closing the share sheet is not a failure.
+                  if (!(error instanceof DOMException && error.name === "AbortError")) {
+                    toast.error("공유하지 못했습니다. 주소창의 링크를 복사해 주세요.");
+                  }
                 }
               }}
               className="w-14 h-14 flex items-center justify-center border border-gray-100 bg-white rounded-2xl transition-all shadow-sm hover:bg-gray-50"

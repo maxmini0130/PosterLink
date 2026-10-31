@@ -405,6 +405,7 @@ export default function Home({
                 {feedPosters.map((poster) => (
                   <div key={poster.id}>
                     <PosterCard
+                      source="home"
                       poster={{
                         id: poster.id,
                         title: poster.title,
@@ -462,6 +463,7 @@ export default function Home({
                     <Link
                       key={`urgent-${poster.id}`}
                       href={`/posters/${poster.id}`}
+                      data-poster-source="home"
                       className="flex gap-4 p-4 transition-colors hover:bg-slate-50"
                     >
                       <div className="min-w-0 flex-1">

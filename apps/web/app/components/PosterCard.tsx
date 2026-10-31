@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { PosterViewSource } from "../../lib/productEventsCore";
 import {
   Building2,
   CalendarClock,
@@ -32,9 +33,11 @@ interface PosterCardProps {
     similarityScore?: number | null;
     contentState?: "closed" | "information";
   };
+  /** Recorded as the poster_view source when the card is clicked. */
+  source?: PosterViewSource;
 }
 
-export function PosterCard({ poster }: PosterCardProps) {
+export function PosterCard({ poster, source }: PosterCardProps) {
   const applicationState = getPosterApplicationState({
     applicationStartAt: poster.applicationStartAt,
     applicationEndAt: poster.deadline,
@@ -63,7 +66,7 @@ export function PosterCard({ poster }: PosterCardProps) {
   const showFitBadge = fitPercent !== null && fitPercent >= 30;
 
   return (
-    <Link href={`/posters/${poster.id}`} className="group block h-full">
+    <Link href={`/posters/${poster.id}`} data-poster-source={source} className="group block h-full">
       <article
         className={`flex h-full flex-col border bg-white transition-colors group-hover:border-blue-500 ${
           closed ? "border-slate-300" : "border-slate-200"

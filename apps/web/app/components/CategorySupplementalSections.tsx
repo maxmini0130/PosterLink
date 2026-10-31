@@ -69,6 +69,7 @@ export function CategorySupplementalSections({
             <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-3 lg:grid-cols-4">
               {section.data.posters.map((poster) => (
                 <PosterCard
+                  source="list"
                   key={poster.id}
                   poster={{
                     id: poster.id,

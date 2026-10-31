@@ -1,3 +1,6 @@
+import type { PosterViewSource } from "./productEventsCore";
+import { getVisitorKey } from "./visitorIdentity";
+
 export interface PosterMetricCounts {
   viewCounts: Record<string, number>;
   linkClickCounts: Record<string, number>;
@@ -31,7 +34,7 @@ export async function fetchPosterMetricCounts(posterIds: string[]): Promise<Post
   }
 }
 
-export async function logPosterView(posterId: string): Promise<boolean> {
+export async function logPosterView(posterId: string, source: PosterViewSource | null = null): Promise<boolean> {
   const storageKey = `poster_view_logged:${posterId}`;
   const now = Date.now();
 
@@ -41,17 +44,12 @@ export async function logPosterView(posterId: string): Promise<boolean> {
       return false;
     }
 
-    let visitorKey = localStorage.getItem("posterlink_visitor_key");
-    if (!visitorKey) {
-      visitorKey = crypto.randomUUID();
-      localStorage.setItem("posterlink_visitor_key", visitorKey);
-    }
-
     localStorage.setItem(storageKey, String(now));
     const body = JSON.stringify({
       poster_id: posterId,
-      visitor_key: visitorKey,
+      visitor_key: getVisitorKey(),
       referrer_path: window.location.pathname,
+      source,
     });
 
     const response = await fetch("/api/poster-views", {
