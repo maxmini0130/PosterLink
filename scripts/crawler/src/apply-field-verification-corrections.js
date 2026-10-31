@@ -88,6 +88,14 @@ function getYear(value) {
 }
 
 function isStaleDeadlineCorrection(row, verification, correctedDeadline) {
+  const uncertainIssues = [
+    ...(Array.isArray(verification.dateIssues) ? verification.dateIssues : []),
+    ...(Array.isArray(verification.dateQuality?.issues) ? verification.dateQuality.issues : []),
+  ];
+  if (uncertainIssues.some(issue => issue.code === "open-ended-application-period") ||
+      (verification.dateQuality?.decision === "review" && !hasActionableDateQualityCorrection(verification))) {
+    return "unconfirmed_deadline_requires_source_review";
+  }
   const currentDeadline = dateKey(row.application_end_at);
   const correctedYear = getYear(correctedDeadline);
   const referenceYear = Math.max(

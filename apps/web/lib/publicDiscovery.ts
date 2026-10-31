@@ -1,4 +1,6 @@
 import "server-only";
+import { getRegionScopeIds } from "./regionHelpers";
+import { isPosterEligibleForPromotion } from "./promotionEligibility";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -11,9 +13,17 @@ import {
 } from "./discoveryRoutes";
 import { isPosterAcceptingApplications } from "./posterApplication";
 import { PUBLIC_POSTER_EXPOSURE_FILTER } from "./publicPosterVisibility";
+import {
+  INFORMATION_CATEGORY_CODES,
+  isInformationCategory,
+  isInformationalPoster,
+  isClosedCategoryPoster,
+} from "./categoryContent";
+import { assertPublicDiscoveryQuery } from "./publicDiscoveryErrors";
 
 const PUBLIC_POSTER_SELECT =
-  "id,title,source_org_name,organizer_name,organizer_id,source_institution_id,application_institution_id,application_start_at,application_end_at,deadline_type,verification_status,verified_at,thumbnail_url,source_key,summary_short,created_at,updated_at,exposure_tier,field_verification";
+  "id,title,source_org_name,organizer_name,organizer_id,source_institution_id,application_institution_id,application_start_at,application_end_at,deadline_type,verification_status,verified_at,thumbnail_url,source_key,summary_short,created_at,updated_at,exposure_tier,primary_category_code:field_verification->classification->>primaryCategory";
+const PROMOTION_POSTER_SELECT = `${PUBLIC_POSTER_SELECT},deadline_review:field_verification->deadlineReview,date_quality_decision:field_verification->dateQuality->>decision,date_issues:field_verification->dateIssues`;
 
 export type PublicDiscoveryFilters = {
   query?: string | null;
@@ -23,6 +33,7 @@ export type PublicDiscoveryFilters = {
   includeClosed?: boolean;
   limit?: number;
   regionScope?: "hierarchy" | "exact";
+  promotionOnly?: boolean;
 };
 
 export type PublicDiscoveryResult = {
@@ -63,7 +74,12 @@ export function createPublicSupabaseClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
       process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)!,
-    { auth: { persistSession: false, autoRefreshToken: false } },
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: {
+        fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }),
+      },
+    },
   );
 }
 
@@ -85,6 +101,8 @@ export async function fetchPublicTaxonomies(
       .order("full_name", { ascending: true }),
   ]);
 
+  assertPublicDiscoveryQuery(categoriesRes, "categories");
+  assertPublicDiscoveryQuery(regionsRes, "regions");
   return {
     categories: ((categoriesRes.data ?? []) as DiscoveryTaxonomy[]).filter(
       (item) => Boolean(item.id && item.name),
@@ -97,9 +115,11 @@ export async function fetchPublicTaxonomies(
 
 export async function fetchPublicDiscovery(
   filters: PublicDiscoveryFilters = {},
+  client = createPublicSupabaseClient(),
+  taxonomies?: Awaited<ReturnType<typeof fetchPublicTaxonomies>>,
 ): Promise<PublicDiscoveryResult> {
-  const client = createPublicSupabaseClient();
-  const { categories, regions } = await fetchPublicTaxonomies(client);
+  const { categories, regions } =
+    taxonomies ?? (await fetchPublicTaxonomies(client));
   const selectedCategory = resolveTaxonomyByRouteValue(
     categories,
     filters.category,
@@ -111,7 +131,7 @@ export async function fetchPublicDiscovery(
   const regionIds = selectedRegion
     ? filters.regionScope === "exact"
       ? [selectedRegion.id]
-      : getRegionScopeIds(selectedRegion.id, regions)
+      : Array.from(getRegionScopeIds(selectedRegion.id, regions) ?? [])
     : null;
   const searchArgs = {
     p_query: search || null,
@@ -124,23 +144,33 @@ export async function fetchPublicDiscovery(
   const [postersRes, countRes] = await Promise.all([
     client
       .rpc("search_public_posters", searchArgs)
-      .select(PUBLIC_POSTER_SELECT),
-    client.rpc("count_public_posters", {
-      p_query: search || null,
-      p_category_id: selectedCategory?.id ?? null,
-      p_region_ids: regionIds,
-      p_include_closed: includeClosed,
-    }),
+      .select(
+        filters.promotionOnly ? PROMOTION_POSTER_SELECT : PUBLIC_POSTER_SELECT,
+      )
+      .returns<Record<string, unknown>[]>(),
+    filters.promotionOnly
+      ? Promise.resolve({ data: null, error: null })
+      : client.rpc("count_public_posters", {
+          p_query: search || null,
+          p_category_id: selectedCategory?.id ?? null,
+          p_region_ids: regionIds,
+          p_include_closed: includeClosed,
+        }),
   ]);
+  assertPublicDiscoveryQuery(postersRes, "search_public_posters");
+  assertPublicDiscoveryQuery(countRes, "count_public_posters");
+  const rows = postersRes.data ?? [];
   const posters = await enrichPublicPosters(
     client,
-    (postersRes.data ?? []) as Record<string, unknown>[],
+    filters.promotionOnly ? rows.filter(isPosterEligibleForPromotion) : rows,
   );
   const filteredPosters = includeClosed
     ? posters
     : posters.filter(isAcceptingPoster);
   const totalCount =
-    typeof countRes.data === "number" ? countRes.data : filteredPosters.length;
+    !filters.promotionOnly && typeof countRes.data === "number"
+      ? countRes.data
+      : filteredPosters.length;
   return {
     posters: filteredPosters,
     totalCount,
@@ -149,6 +179,77 @@ export async function fetchPublicDiscovery(
     selectedCategory,
     selectedRegion,
     sort,
+  };
+}
+
+export type CategorySupplement = {
+  posters: DiscoveryPoster[];
+  totalCount: number;
+};
+
+// Category-only additions: retain the existing active RPC and search filters.
+export async function fetchCategorySupplements(
+  category: DiscoveryTaxonomy,
+  client = createPublicSupabaseClient(),
+) {
+  const select = `${PUBLIC_POSTER_SELECT},poster_status,poster_categories!inner(category_id)`;
+  const base = () =>
+    client
+      .from("posters")
+      .select(select, { count: "exact" })
+      .eq("poster_categories.category_id", category.id)
+      .or(PUBLIC_POSTER_EXPOSURE_FILTER);
+  const now = new Date().toISOString();
+  const [closed, information] = await Promise.all([
+    base()
+      .in("poster_status", ["published", "closed"])
+      .or(`poster_status.eq.closed,application_end_at.lt.${now}`)
+      .order("application_end_at", { ascending: false, nullsFirst: false })
+      .order("id")
+      .limit(6)
+      .returns<Record<string, unknown>[]>(),
+    isInformationCategory(category.code)
+      ? base()
+          .eq("poster_status", "published")
+          .in("field_verification->classification->>primaryCategory", [
+            ...INFORMATION_CATEGORY_CODES,
+          ])
+          .is("application_start_at", null)
+          .is("application_end_at", null)
+          .or("deadline_type.is.null,deadline_type.eq.unknown")
+          .order("created_at", { ascending: false })
+          .order("id")
+          .limit(6)
+          .returns<Record<string, unknown>[]>()
+      : Promise.resolve({ data: [], count: 0, error: null }),
+  ]);
+  assertPublicDiscoveryQuery(closed, "category_closed");
+  assertPublicDiscoveryQuery(information, "category_information");
+  // Guard display roles independently of deadline inference; never mutate dates.
+  const closedRows = (closed.data ?? []).filter((row) =>
+    isClosedCategoryPoster(row),
+  );
+  const informationRows = (information.data ?? []).filter((row) =>
+    isInformationalPoster(row),
+  );
+  const combined = await enrichPublicPosters(
+    client,
+    [...closedRows, ...informationRows],
+    closedRows.map((row) => String(row.id)),
+  );
+  const byId = new Map(combined.map((poster) => [poster.id, poster]));
+  const result = (
+    rows: Record<string, unknown>[],
+    count: number | null,
+  ): CategorySupplement => ({
+    posters: rows.flatMap((row) =>
+      byId.has(String(row.id)) ? [byId.get(String(row.id))!] : [],
+    ),
+    totalCount: count ?? 0,
+  });
+  return {
+    closed: result(closedRows, closed.count),
+    information: result(informationRows, information.count),
   };
 }
 
@@ -366,29 +467,16 @@ function isAcceptingPoster(poster: {
   });
 }
 
-function getRegionScopeIds(regionId: string, regions: DiscoveryTaxonomy[]) {
-  const selected = regions.find((region) => region.id === regionId);
-  if (!selected || selected.level === "nation")
-    return regions.map((region) => region.id);
-  if (selected.level === "sido") {
-    return [
-      regionId,
-      ...regions
-        .filter((region) => region.parent_id === regionId)
-        .map((region) => region.id),
-    ];
-  }
-  return [regionId, ...(selected.parent_id ? [selected.parent_id] : [])];
-}
-
 async function enrichPublicPosters(
   client: SupabaseClient,
   posterRows: Record<string, unknown>[],
+  imagePosterIds?: string[],
 ) {
   const posterIds = posterRows
     .map((poster) => String(poster.id))
     .filter(Boolean);
   if (posterIds.length === 0) return [];
+  const imageIds = imagePosterIds ?? posterIds;
 
   const [categoryLinksRes, regionLinksRes, imagesRes] = await Promise.all([
     client
@@ -399,12 +487,17 @@ async function enrichPublicPosters(
       .from("poster_regions")
       .select("poster_id,region_id")
       .in("poster_id", posterIds),
-    client
-      .from("poster_images")
-      .select("poster_id,storage_path,image_type,created_at")
-      .in("poster_id", posterIds)
-      .order("created_at", { ascending: true }),
+    imageIds.length
+      ? client
+          .from("poster_images")
+          .select("poster_id,storage_path,image_type,created_at")
+          .in("poster_id", imageIds)
+          .order("created_at", { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
   ]);
+  assertPublicDiscoveryQuery(categoryLinksRes, "poster_categories");
+  assertPublicDiscoveryQuery(regionLinksRes, "poster_regions");
+  assertPublicDiscoveryQuery(imagesRes, "poster_images");
 
   const categoryIds = [
     ...new Set(
@@ -423,14 +516,16 @@ async function enrichPublicPosters(
   const [categoriesRes, regionsRes] = await Promise.all([
     categoryIds.length
       ? client.from("categories").select("id,name,code").in("id", categoryIds)
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve({ data: [], error: null }),
     regionIds.length
       ? client
           .from("regions")
           .select("id,name,full_name,level")
           .in("id", regionIds)
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve({ data: [], error: null }),
   ]);
+  assertPublicDiscoveryQuery(categoriesRes, "poster_category_names");
+  assertPublicDiscoveryQuery(regionsRes, "poster_region_names");
 
   const categoryNames = new Map(
     (categoriesRes.data ?? []).map((row: any) => [row.id, row.name]),
@@ -463,7 +558,7 @@ async function enrichPublicPosters(
     const categoryIdsForPoster = categoriesByPoster.get(id) ?? [];
     const regionIdsForPoster = regionsByPoster.get(id) ?? [];
     const primaryCategoryCode = readPrimaryCategoryCode(
-      (poster as any).field_verification,
+      poster.primary_category_code,
     );
     const categoryId = pickPrimaryCategoryId(
       categoryIdsForPoster,
@@ -489,12 +584,8 @@ async function enrichPublicPosters(
   });
 }
 
-function readPrimaryCategoryCode(fieldVerification: unknown) {
-  const classification =
-    fieldVerification && typeof fieldVerification === "object"
-      ? (fieldVerification as Record<string, any>).classification
-      : null;
-  const code = String(classification?.primaryCategory ?? "").trim();
+function readPrimaryCategoryCode(value: unknown) {
+  const code = String(value ?? "").trim();
   return /^CAT_[A-Z_]+$/.test(code) ? code : null;
 }
 

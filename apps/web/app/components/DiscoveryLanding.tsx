@@ -11,6 +11,10 @@ import { BottomNav } from "./BottomNav";
 import { Footer } from "./Footer";
 import { Header } from "./Header";
 import { PosterCard } from "./PosterCard";
+import {
+  CategorySupplementalSections,
+  type CategorySupplements,
+} from "./CategorySupplementalSections";
 
 type DiscoveryLandingProps = {
   title: string;
@@ -21,6 +25,7 @@ type DiscoveryLandingProps = {
   initialDiscovery?: PublicDiscoveryResult;
   introParagraphs?: string[];
   relatedLinks?: Array<{ href: string; label: string }>;
+  categorySupplements?: CategorySupplements;
 };
 
 export async function DiscoveryLanding({
@@ -32,6 +37,7 @@ export async function DiscoveryLanding({
   initialDiscovery,
   introParagraphs = [],
   relatedLinks = [],
+  categorySupplements,
 }: DiscoveryLandingProps) {
   const discovery =
     initialDiscovery ?? (await fetchPublicDiscovery({ ...filters, limit: 48 }));
@@ -40,6 +46,12 @@ export async function DiscoveryLanding({
     category: discovery.selectedCategory,
     region: discovery.selectedRegion,
   });
+  const supplementalPosters = categorySupplements
+    ? [
+        ...categorySupplements.information.posters,
+        ...categorySupplements.closed.posters,
+      ]
+    : [];
 
   const structuredData = {
     "@context": "https://schema.org",
@@ -49,8 +61,14 @@ export async function DiscoveryLanding({
     url: `${appOrigin}${canonicalPath}`,
     mainEntity: {
       "@type": "ItemList",
-      numberOfItems: discovery.posters.length,
-      itemListElement: discovery.posters.slice(0, 24).map((poster, index) => ({
+      numberOfItems:
+        discovery.totalCount +
+        (categorySupplements?.information.totalCount ?? 0) +
+        (categorySupplements?.closed.totalCount ?? 0),
+      itemListElement: [
+        ...discovery.posters.slice(0, 24),
+        ...supplementalPosters,
+      ].map((poster, index) => ({
         "@type": "ListItem",
         position: index + 1,
         name: poster.title,
@@ -132,13 +150,13 @@ export async function DiscoveryLanding({
           <div className="flex items-end justify-between gap-4">
             <div>
               <p className="text-xs font-black text-slate-500">
-                현재 확인 가능한 공고
+                현재 모집 중 공고
               </p>
               <h2
                 id="landing-results-title"
                 className="mt-1 text-xl font-black text-slate-950"
               >
-                {discovery.posters.length.toLocaleString()}건
+                {discovery.totalCount.toLocaleString()}건
               </h2>
             </div>
             <Link
@@ -181,8 +199,30 @@ export async function DiscoveryLanding({
             <div className="mt-6 border border-dashed border-slate-300 py-20 text-center">
               <Search className="mx-auto text-slate-300" size={36} />
               <p className="mt-4 text-sm font-black text-slate-600">
-                현재 조건에 맞는 공개 공고가 없습니다.
+                현재 조건에 맞는 모집 중 공고가 없습니다.
               </p>
+              {categorySupplements &&
+                categorySupplements.closed.totalCount > 0 && (
+                  <Link
+                    href="#category-closed"
+                    className="mt-4 block text-sm font-bold text-blue-700"
+                  >
+                    마감된 공개 공고{" "}
+                    {categorySupplements.closed.totalCount.toLocaleString()}건
+                    보기
+                  </Link>
+                )}
+              {categorySupplements &&
+                categorySupplements.information.totalCount > 0 && (
+                  <Link
+                    href="#category-information"
+                    className="mt-4 block text-sm font-bold text-blue-700"
+                  >
+                    공개 정보·안내{" "}
+                    {categorySupplements.information.totalCount.toLocaleString()}
+                    건 보기
+                  </Link>
+                )}
               <Link
                 href="/posters"
                 className="mt-4 inline-flex text-sm font-black text-blue-700"
@@ -192,6 +232,13 @@ export async function DiscoveryLanding({
             </div>
           )}
         </section>
+
+        {categorySupplements && (
+          <CategorySupplementalSections
+            supplements={categorySupplements}
+            searchPath={searchPath}
+          />
+        )}
 
         {relatedLinks.length > 0 && (
           <nav

@@ -7,6 +7,8 @@ import {
   detectVisitAutomation,
 } from "../../../lib/siteVisitClassification";
 
+import { sanitizedVisitQuery, safeReferrer, publicAnalyticsPath } from "../../../lib/analyticsPrivacy";
+
 export const runtime = "nodejs";
 
 type SiteVisitPayload = {
@@ -39,7 +41,7 @@ function sanitizePath(value: unknown) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   if (!trimmed.startsWith("/") || trimmed.startsWith("//")) return null;
-  return trimmed.slice(0, 512);
+  return publicAnalyticsPath(trimmed.split(/[?#]/)[0]);
 }
 
 function getReferrerHost(referrerUrl: string | null) {
@@ -133,8 +135,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, ignored: true });
   }
 
-  const queryString = truncate(payload.query_string, 1024);
-  const referrerUrl = truncate(payload.referrer_url, 2048);
+  const safeQuery = sanitizedVisitQuery(truncate(payload.query_string, 1024) || "");
+  const queryString = safeQuery ? `?${safeQuery}` : null;
+  const referrerUrl = safeReferrer(truncate(payload.referrer_url, 2048));
   const referrerHost = getReferrerHost(referrerUrl);
   const searchParams = getSearchParams(queryString);
   const supabaseAdmin = createSupabaseAdmin();

@@ -1,6 +1,14 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("SEO / 공개 페이지", () => {
+  test.beforeEach(async ({ page }) => {
+    // UI regression checks must not persist analytics or other mutations.
+    await page.route("**/api/**", (route) =>
+      ["GET", "HEAD"].includes(route.request().method())
+        ? route.continue()
+        : route.abort(),
+    );
+  });
   test("홈 200 응답", async ({ page }) => {
     const res = await page.goto("/");
     expect(res?.status()).toBeLessThan(400);
@@ -104,5 +112,69 @@ test.describe("SEO / 공개 페이지", () => {
     expect(res.status()).toBeLessThan(400);
     const text = await res.text();
     expect(text).toContain("urlset");
+  });
+
+  test("anonymous home summary is server-rendered", async ({ request }) => {
+    const summary = await (await request.get("/api/home/summary")).json();
+    expect(summary.activePosters).toBeGreaterThan(0);
+    const html = await (await request.get("/")).text();
+    expect(html).toContain(summary.activePosters.toLocaleString());
+    expect(html).not.toContain("신청 가능한 공고 0건");
+  });
+
+  test("sitemap index exposes paginated public poster URLs", async ({
+    request,
+  }) => {
+    const response = await request.get("/sitemap-index.xml");
+    expect(response.status()).toBe(200);
+    const index = await response.text();
+    expect(index).toContain("<sitemapindex");
+    const shards = [
+      ...index.matchAll(/<loc>([^<]+\/sitemaps\/posters\/\d+\.xml)<\/loc>/g),
+    ];
+    expect(shards.length).toBeGreaterThan(0);
+    const urls = new Set<string>();
+    for (const [, url] of shards) {
+      const shard = await request.get(new URL(url).pathname);
+      expect(shard.status()).toBe(200);
+      const entries = [
+        ...(await shard.text()).matchAll(/<loc>([^<]+)<\/loc>/g),
+      ];
+      expect(entries.length).toBeLessThanOrEqual(1000);
+      for (const [, entry] of entries) {
+        expect(urls.has(entry)).toBe(false);
+        urls.add(entry);
+      }
+    }
+    expect(urls.size).toBeGreaterThan(500);
+    expect((await request.get("/sitemaps/posters/invalid.xml")).status()).toBe(
+      404,
+    );
+  });
+
+  test("detail HTML has matching canonical, Twitter metadata and valid JSON-LD", async ({
+    request,
+  }) => {
+    const list = await (await request.get("/posters")).text();
+    const path = list.match(/href="(\/posters\/[0-9a-f-]{36})"/)?.[1];
+    expect(path).toBeTruthy();
+    const response = await request.get(path!);
+    expect(response.status()).toBe(200);
+    const html = await response.text();
+    const canonical = html.match(/<link rel="canonical" href="([^"]+)"/)?.[1];
+    expect(canonical).toBeTruthy();
+    expect(new URL(canonical!).pathname).toBe(path);
+    expect(new URL(canonical!).search).toBe("");
+    expect(html).toContain(`property="og:url" content="${canonical}"`);
+    expect(html).toContain('name="twitter:card"');
+    expect(html).toContain("원문 출처");
+    expect(html).toContain("정보 확인");
+    const json = [
+      ...html.matchAll(
+        /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g,
+      ),
+    ];
+    expect(json.length).toBeGreaterThan(0);
+    for (const [, value] of json) expect(() => JSON.parse(value)).not.toThrow();
   });
 });

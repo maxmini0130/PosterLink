@@ -1,3 +1,5 @@
+/// <reference types="react/experimental" />
+import { cache } from "react";
 import { createServerClient } from "@supabase/ssr";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
@@ -140,7 +142,7 @@ function getPosterDisplayOrgName(poster: PosterDetailPoster) {
   return poster.source_org_name || null;
 }
 
-async function fetchPosterDetail(id: string) {
+const fetchPosterDetail = cache(async (id: string) => {
   const supabase = createPosterServerClient();
 
   const fetchPoster = async () => {
@@ -231,7 +233,7 @@ async function fetchPosterDetail(id: string) {
     categoryIds,
     regionIds,
     categoryName: categoryId ? (categoryMap[categoryId] ?? null) : null,
-    regionName: regionId ? (regionMap[regionId] ?? null) : null,
+    regionName: regionIds.map((id) => regionMap[id]).filter(Boolean).join(", ") || null,
     images: images.map((image) => image.storage_path).filter((path): path is string => Boolean(path))
   };
 
@@ -240,7 +242,7 @@ async function fetchPosterDetail(id: string) {
     alertDefaults,
     links: ((linkRes.data ?? []) as PosterDetailLink[]).filter((link) => Boolean(link.url))
   };
-}
+});
 
 function readPrimaryCategoryCode(fieldVerification: Record<string, any> | null) {
   const code = String(fieldVerification?.classification?.primaryCategory ?? "").trim();
@@ -259,7 +261,7 @@ function buildPosterStructuredData(poster: PosterDetailPoster, links: PosterDeta
   const appOrigin = getAppOrigin();
   const pageUrl = `${appOrigin}/posters/${poster.id}`;
   const imageUrls = resolvePosterImageGallery(poster.images ?? [], poster.thumbnail_url, poster.source_key);
-  const primaryLink = links.find((link) => link.is_primary) || links[0] || null;
+  const primaryLink = links.find((link) => link.link_type === "official_notice") || null;
   return buildPosterStructuredSeoData(poster, {
     pageUrl,
     imageUrls,
@@ -282,7 +284,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
     plainText(poster.summary_short || poster.summary_long).slice(0, 155) ||
     `${organizationName || "공공기관"} 공고를 PosterLink에서 확인하세요.`;
   const imageUrls = resolvePosterImageGallery(poster.images ?? [], poster.thumbnail_url, poster.source_key);
-  const primaryLink = links.find((link) => link.is_primary) || links[0] || null;
+  const primaryLink = links.find((link) => link.link_type === "official_notice") || null;
 
   return {
     title: `${poster.title} | ${organizationName || "공공 공고"}`,
@@ -297,6 +299,13 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
       type: "article",
       images: imageUrls.length > 0 ? imageUrls.map((url) => ({ url })) : undefined
     },
+    twitter: {
+      card: "summary_large_image",
+      title: `${poster.title} | PosterLink`,
+      description,
+      images: imageUrls.length ? imageUrls : ["/opengraph-image"],
+    },
+    robots: ["published", "closed"].includes(poster.poster_status ?? "") ? undefined : { index: false, follow: false },
     ...(primaryLink?.url
       ? {
           other: {
@@ -318,7 +327,7 @@ export default async function PosterDetailPage({ params }: { params: { id: strin
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }} />
       <PosterDetailClient poster={detail.poster} links={detail.links} alertDefaults={detail.alertDefaults} />
     </>
   );

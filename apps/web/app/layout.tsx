@@ -4,10 +4,11 @@ import type { ReactNode } from "react";
 import "./globals.css";
 import { ToastProvider } from "./components/ToastProvider";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import GaAnalytics from "./components/GaAnalytics";
 import SiteVisitTracker from "./components/SiteVisitTracker";
 import { SeoStructuredData } from "./components/SeoStructuredData";
 import { getAppOrigin } from "../lib/siteUrl";
-import { Analytics } from "@vercel/analytics/next";
+import ExistingWebAnalytics from "./components/ExistingWebAnalytics";
 
 const appOrigin = getAppOrigin();
 const siteDescription =
@@ -17,6 +18,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  viewportFit: "cover",
 };
 
 export const metadata: Metadata = {
@@ -77,10 +79,11 @@ export default function RootLayout({
           <SeoStructuredData />
           <Suspense fallback={null}>
             <SiteVisitTracker />
+            <GaAnalytics />
           </Suspense>
           {children}
           <ToastProvider />
-          <Analytics />
+          <ExistingWebAnalytics />
         </ErrorBoundary>
       </body>
     </html>

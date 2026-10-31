@@ -38,18 +38,23 @@ export function buildPosterStructuredSeoData(
   options: PosterStructuredSeoOptions,
 ) {
   const imageUrls = options.imageUrls ?? [];
-  const description = plainText(poster.summary_short || poster.summary_long).slice(0, 300);
+  const description = plainText(
+    poster.summary_short || poster.summary_long,
+  ).slice(0, 300);
   const verified = hasVerifiedPosterStructuredData(poster);
-  const organizationName = verified
-    ? plainText(poster.organizer_name) || plainText(poster.source_org_name)
-    : plainText(poster.source_org_name);
-  const applicationStartAt = verified ? validDate(poster.application_start_at) : null;
-  const applicationEndAt = verified && poster.deadline_type === "fixed"
-    ? validDate(poster.application_end_at)
+  const organizationName = verified ? plainText(poster.organizer_name) : "";
+  const applicationStartAt = verified
+    ? validDate(poster.application_start_at)
     : null;
+  const applicationEndAt =
+    verified && poster.deadline_type === "fixed"
+      ? validDate(poster.application_end_at)
+      : null;
   const eventStartAt = verified ? validDate(poster.event_start_at) : null;
   const eventEndAt = verified ? validDate(poster.event_end_at) : null;
-  const eligibilitySummary = verified ? plainText(poster.eligibility_summary) : "";
+  const eligibilitySummary = verified
+    ? plainText(poster.eligibility_summary)
+    : "";
   const eventLocation = verified ? plainText(poster.event_location) : "";
   const articleId = `${options.pageUrl}#article`;
 
@@ -61,14 +66,30 @@ export function buildPosterStructuredSeoData(
     url: options.pageUrl,
     mainEntityOfPage: options.pageUrl,
     inLanguage: "ko-KR",
-    ...(organizationName
-      ? { publisher: { "@type": "Organization", name: organizationName } }
+    publisher: {
+      "@type": "Organization",
+      name: "PosterLink",
+      url: new URL(options.pageUrl).origin,
+    },
+    ...(poster.source_org_name
+      ? {
+          isBasedOn: {
+            "@type": "CreativeWork",
+            publisher: {
+              "@type": "Organization",
+              name: plainText(poster.source_org_name),
+            },
+            ...(options.primaryLinkUrl ? { url: options.primaryLinkUrl } : {}),
+          },
+        }
       : {}),
     ...(poster.created_at ? { datePublished: poster.created_at } : {}),
     ...(poster.updated_at ? { dateModified: poster.updated_at } : {}),
     ...(applicationEndAt ? { expires: applicationEndAt } : {}),
     ...(applicationStartAt || applicationEndAt
-      ? { temporalCoverage: `${applicationStartAt ?? ""}/${applicationEndAt ?? ""}` }
+      ? {
+          temporalCoverage: `${applicationStartAt ?? ""}/${applicationEndAt ?? ""}`,
+        }
       : {}),
     ...(eligibilitySummary
       ? { audience: { "@type": "Audience", audienceType: eligibilitySummary } }
@@ -77,11 +98,15 @@ export function buildPosterStructuredSeoData(
       ? { contentLocation: { "@type": "Place", name: eventLocation } }
       : {}),
     ...(imageUrls.length > 0 ? { image: imageUrls } : {}),
-    ...(options.primaryLinkUrl ? { sameAs: [options.primaryLinkUrl] } : {}),
+    ...(options.primaryLinkUrl ? { citation: options.primaryLinkUrl } : {}),
     about: [poster.categoryName, poster.regionName].filter(Boolean),
   };
 
-  if (!eventStartAt) {
+  if (
+    !eventStartAt ||
+    !eventLocation ||
+    (eventEndAt && Date.parse(eventEndAt) < Date.parse(eventStartAt))
+  ) {
     return { "@context": "https://schema.org", ...article };
   }
 
@@ -97,7 +122,9 @@ export function buildPosterStructuredSeoData(
     ...(organizationName
       ? { organizer: { "@type": "Organization", name: organizationName } }
       : {}),
-    ...(eventLocation ? { location: { "@type": "Place", name: eventLocation } } : {}),
+    ...(eventLocation
+      ? { location: { "@type": "Place", name: eventLocation } }
+      : {}),
     ...(eligibilitySummary
       ? { audience: { "@type": "Audience", audienceType: eligibilitySummary } }
       : {}),
@@ -106,9 +133,6 @@ export function buildPosterStructuredSeoData(
 
   return {
     "@context": "https://schema.org",
-    "@graph": [
-      { ...article, mainEntity: { "@id": eventId } },
-      event,
-    ],
+    "@graph": [{ ...article, mainEntity: { "@id": eventId } }, event],
   };
 }

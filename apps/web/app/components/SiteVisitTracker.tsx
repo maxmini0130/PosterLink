@@ -3,6 +3,8 @@
 import { useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
+import { publicAnalyticsPath, sanitizedVisitQuery, safeReferrer } from "../../lib/analyticsPrivacy";
+
 const VISITOR_KEY = "posterlink.visitor_key";
 const SESSION_KEY = "posterlink.session_key";
 const AUTOMATION_SOURCE_KEY = "posterlink.automation_source";
@@ -68,7 +70,8 @@ export default function SiteVisitTracker() {
   useEffect(() => {
     if (!pathname || !shouldTrackPath(pathname)) return;
 
-    const queryString = searchParams.toString();
+    if (!publicAnalyticsPath(pathname)) return;
+    const queryString = sanitizedVisitQuery(searchParams);
     const trackingKey = `${pathname}?${queryString}`;
     if (lastTrackedRef.current === trackingKey) return;
     lastTrackedRef.current = trackingKey;
@@ -78,7 +81,7 @@ export default function SiteVisitTracker() {
       session_key: getSessionKey(),
       path: pathname,
       query_string: queryString ? `?${queryString}` : null,
-      referrer_url: document.referrer || null,
+      referrer_url: safeReferrer(document.referrer),
       user_agent: navigator.userAgent || null,
       webdriver: navigator.webdriver === true,
       automation_source: getAutomationSource(searchParams),

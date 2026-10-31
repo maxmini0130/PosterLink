@@ -44,7 +44,7 @@ export async function generateMetadata({ searchParams }: { searchParams: PosterS
     title,
     description,
     alternates: { canonical },
-    robots: filters.query ? { index: false, follow: true } : undefined,
+    robots: filters.query || filters.sort || filters.includeClosed ? { index: false, follow: true } : undefined,
     openGraph: { title: `${title} | PosterLink`, description, url: canonical },
   };
 }
