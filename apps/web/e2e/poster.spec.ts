@@ -94,15 +94,10 @@ test.describe("포스터 상세", () => {
 
     if (!(await gotoFirstPosterDetail(page))) return;
 
-    const favoriteBtn = page.locator("button[aria-label*='찜'], button:has-text('찜')").first();
-    if (await favoriteBtn.count() > 0) {
-      await favoriteBtn.click();
-      await expect(page.locator("body")).toBeVisible();
-      // 로그인 페이지로 이동하거나 모달이 뜨는지 확인
-      const url = page.url();
-      const hasModal = await page.locator("text=로그인").count() > 0;
-      expect(url.includes("login") || hasModal).toBeTruthy();
-    }
+    await page.getByRole("button", { name: "찜하기", exact: true }).click();
+    // Auth lookup and toast rendering are asynchronous. Missing buttons or a
+    // missing login prompt must fail instead of silently skipping this check.
+    await expect(page.getByText("로그인이 필요합니다.", { exact: true }).first()).toBeVisible();
   });
 });
 

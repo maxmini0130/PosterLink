@@ -1,7 +1,17 @@
 import Link from "next/link";
-import { Building2, CalendarClock, Eye, Heart, MapPin } from "lucide-react";
+import {
+  Building2,
+  CalendarClock,
+  FileText,
+  Eye,
+  Heart,
+  MapPin,
+} from "lucide-react";
 import { resolvePosterImageGallery } from "../../lib/posterImage";
-import { formatPosterDate, getPosterApplicationState } from "../../lib/posterApplication";
+import {
+  formatPosterDate,
+  getPosterApplicationState,
+} from "../../lib/posterApplication";
 import { PosterImageCarousel } from "./PosterImageCarousel";
 
 interface PosterCardProps {
@@ -20,6 +30,7 @@ interface PosterCardProps {
     linkClickCount?: number;
     favoriteCount?: number;
     similarityScore?: number | null;
+    contentState?: "closed" | "information";
   };
 }
 
@@ -29,16 +40,26 @@ export function PosterCard({ poster }: PosterCardProps) {
     applicationEndAt: poster.deadline,
     deadlineType: poster.deadlineType,
   });
-  const soon = applicationState.status === "due_today" || applicationState.status === "closing_soon";
-  const closed = applicationState.status === "closed";
+  const soon =
+    applicationState.status === "due_today" ||
+    applicationState.status === "closing_soon";
+  const closed =
+    poster.contentState === "closed" || applicationState.status === "closed";
   const tags = poster.tags ?? [];
   const [category, region] = tags;
-  const imageUrls = resolvePosterImageGallery(poster.images ?? [], poster.image, poster.sourceUrl);
+  const imageUrls = resolvePosterImageGallery(
+    poster.images ?? [],
+    poster.image,
+    poster.sourceUrl,
+  );
   const showViewCount = (poster.viewCount ?? 0) >= 100;
   const showFavoriteCount = (poster.favoriteCount ?? 0) >= 10;
   // 찜/조회 이력 기반 의미 유사도 — 이력이 없거나 임베딩이 없으면 null이라 표시 안 함.
   // 너무 낮은 유사도는 "AI가 이 정도로 추천했다"는 신뢰를 깎으므로 일정 이상만 배지로 노출.
-  const fitPercent = typeof poster.similarityScore === "number" ? Math.round(poster.similarityScore * 100) : null;
+  const fitPercent =
+    typeof poster.similarityScore === "number"
+      ? Math.round(poster.similarityScore * 100)
+      : null;
   const showFitBadge = fitPercent !== null && fitPercent >= 30;
 
   return (
@@ -50,8 +71,14 @@ export function PosterCard({ poster }: PosterCardProps) {
       >
         <div className="flex flex-1 flex-col p-4">
           <div className="mb-3 flex flex-wrap items-center gap-1">
-            {(category ? [category, region].filter(Boolean) : tags.slice(0, 2)).map((tag) => (
-              <span key={tag} className="border border-slate-200 px-2 py-1 text-[10px] font-black text-slate-600">
+            {(category
+              ? [category, region].filter(Boolean)
+              : tags.slice(0, 2)
+            ).map((tag) => (
+              <span
+                key={tag}
+                className="border border-slate-200 px-2 py-1 text-[10px] font-black text-slate-600"
+              >
                 {tag}
               </span>
             ))}
@@ -64,16 +91,28 @@ export function PosterCard({ poster }: PosterCardProps) {
 
           <h3
             className={`line-clamp-3 min-h-[4.5rem] text-base font-black leading-6 transition-colors ${
-              closed ? "text-slate-500 line-through decoration-slate-400" : "text-slate-950 group-hover:text-blue-700"
+              closed
+                ? "text-slate-500 line-through decoration-slate-400"
+                : "text-slate-950 group-hover:text-blue-700"
             }`}
           >
             {poster.title}
           </h3>
 
           <div className="mt-4 space-y-2 text-xs font-bold text-slate-500">
-            <p className={`inline-flex items-center gap-1.5 font-black ${soon && !closed ? "text-rose-700" : "text-slate-700"}`}>
-              <CalendarClock size={14} />
-              {deadlineLabel(poster.deadline, applicationState)}
+            <p
+              className={`inline-flex items-center gap-1.5 font-black ${soon && !closed ? "text-rose-700" : "text-slate-700"}`}
+            >
+              {poster.contentState === "information" ? (
+                <FileText size={14} />
+              ) : (
+                <CalendarClock size={14} />
+              )}
+              {poster.contentState === "information"
+                ? "정보 안내"
+                : closed
+                  ? "신청 마감"
+                  : deadlineLabel(poster.deadline, applicationState)}
             </p>
             {region && (
               <p className="flex items-center gap-1.5">
@@ -90,18 +129,20 @@ export function PosterCard({ poster }: PosterCardProps) {
           </div>
         </div>
 
-        <div className="mx-4 aspect-[4/3] overflow-hidden border border-slate-200 bg-slate-50">
-          <PosterImageCarousel
-            images={imageUrls}
-            title={poster.title}
-            org={poster.org}
-            fallbackClassName="p-3"
-            imgClassName={`h-full w-full object-contain bg-white transition-transform duration-500 group-hover:scale-[1.03] ${
-              closed ? "grayscale opacity-55" : ""
-            }`}
-            iconSize={20}
-          />
-        </div>
+        {poster.contentState !== "information" && (
+          <div className="mx-4 aspect-[4/3] overflow-hidden border border-slate-200 bg-slate-50">
+            <PosterImageCarousel
+              images={imageUrls}
+              title={poster.title}
+              org={poster.org}
+              fallbackClassName="p-3"
+              imgClassName={`h-full w-full object-contain bg-white transition-transform duration-500 group-hover:scale-[1.03] ${
+                closed ? "grayscale opacity-55" : ""
+              }`}
+              iconSize={20}
+            />
+          </div>
+        )}
 
         <div className="mt-4 flex items-center justify-between border-t border-slate-100 px-4 py-3">
           <span className="text-xs font-black text-blue-700">상세보기</span>

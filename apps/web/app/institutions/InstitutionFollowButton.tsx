@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 
+import { trackAnalytics, setAnalyticsLoginStatus } from "../../lib/analytics";
+
 export function InstitutionFollowButton({ institutionId, returnPath }: { institutionId: string; returnPath: string }) {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
@@ -49,7 +51,11 @@ export function InstitutionFollowButton({ institutionId, returnPath }: { institu
           .eq("user_id", userId)
           .eq("institution_id", institutionId)
       : await supabase.from("institution_follows").insert({ user_id: userId, institution_id: institutionId });
-    if (!result.error) setFollowing((value) => !value);
+    if (!result.error) {
+      setFollowing((value) => !value);
+      setAnalyticsLoginStatus(true);
+      trackAnalytics(following ? "unfollow_institution" : "follow_institution", {institution_id:institutionId});
+    }
     setLoading(false);
   };
 

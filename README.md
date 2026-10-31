@@ -1,5 +1,7 @@
 # PosterLink
 
+회원 탈퇴 안전 전용 릴리스는 [적용·검증 기록](WORK_LOG_20261024_withdrawal_safety_release.md)을 참고하세요. 임시 문의처는 운영자가 확정한 `maxmini@maxmini.co.kr`입니다. `NEXT_PUBLIC_WITHDRAWAL_REQUEST_URL`과 `NEXT_PUBLIC_WITHDRAWAL_CONTACT_VERIFIED`로 중앙 기본값을 재정의할 수 있으며 빈 값/false는 접수 링크를 비활성화합니다. 11월 전용 주소 생성 후 수신·담당자 확인을 거쳐 명시적으로 변경·재빌드하며 자동 전환하지 않습니다. 자동 삭제는 계속 차단합니다.
+
 공공 기회를 발견하고, 내용을 판단하고, 실제 신청까지 이어 주는 **포스터링크** 모노레포입니다. 공공기관 공고와 포스터를 수집해 원문 근거와 함께 구조화하며, AI 검증과 사람 검수를 통해 데이터 품질을 관리합니다.
 
 ## 구조
@@ -32,6 +34,10 @@ pnpm --filter posterlink-crawler crawl:dry
 ```
 
 ## 환경변수
+
+현재 보안 릴리스 기반 Auth 가입 통계는 [집계 기준·권한·한계](docs/auth_signup_stats.md)를 참고하세요. GA4/UTM은 포함하지 않으며 새 DB migration이나 환경변수는 필요하지 않습니다.
+
+관리자 역할 보안 전용 릴리스의 범위·검증·DB 승인·복구 절차는 [보안 릴리스 안내](docs/profile_role_security_release.md)를 참고하세요. `pnpm test:security:roles`는 운영 DB에 연결하지 않는 격리 검증입니다. 포함된 보호 SQL은 별도 승인 전 운영에 적용하지 않습니다.
 
 루트 `.env.example`과 `scripts/crawler/.env.example`을 기준으로 로컬 환경 파일을 구성합니다. 실제 키나 서비스 역할 키는 문서, 로그, 커밋에 남기지 않습니다.
 

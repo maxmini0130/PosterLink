@@ -1,11 +1,15 @@
 "use client";
 
+import { NAVER_UNAVAILABLE_MESSAGE } from "../../lib/naverAvailability";
+
 import { useState } from "react";
 import Image from "next/image";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
+
+import { trackAnalytics, setAnalyticsLoginStatus } from "../../lib/analytics";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
@@ -50,9 +54,14 @@ export default function SignupPage() {
 
     // 세션 확보 후 프로필 생성 (이미 있으면 무시)
     await supabase.from("profiles").upsert(
-      { id: data.user.id, nickname: email.split("@")[0], role: 'user' },
+      { id: data.user.id, nickname: email.split("@")[0] },
       { onConflict: "id", ignoreDuplicates: true }
     );
+    if (session) {
+      setAnalyticsLoginStatus(true);
+      // Supabase may return an obfuscated user for an existing email; require a real session.
+      if (data.user.identities?.length) trackAnalytics("sign_up", {method:"email"});
+    }
     localStorage.setItem("onboarding_uid", data.user.id);
     router.push("/onboarding");
     setLoading(false);
@@ -161,15 +170,16 @@ export default function SignupPage() {
           구글로 시작하기
         </button>
         <button
-          onClick={() => {
-            if (!agreed) { toast.error("이용약관 및 개인정보처리방침에 동의해주세요."); return; }
-            window.location.href = '/api/auth/naver';
-          }}
-          className="w-full py-4 bg-[#03C75A] text-white font-bold rounded-2xl flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+          disabled
+          aria-describedby="naver-unavailable"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#03C75A] py-4 font-bold text-white opacity-50 cursor-not-allowed"
         >
-          <span className="w-5 h-5 bg-white rounded-full flex items-center justify-center text-[11px] text-[#03C75A] font-black">N</span>
-          네이버로 시작하기
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-[11px] font-black text-[#03C75A]">N</span>
+          네이버 로그인 일시 중단
         </button>
+        <p id="naver-unavailable" role="status" className="text-sm leading-relaxed text-gray-600">
+          {NAVER_UNAVAILABLE_MESSAGE}
+        </p>
       </div>
 
       <p className="mt-8 text-sm text-gray-500">

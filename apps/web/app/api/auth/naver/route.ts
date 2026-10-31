@@ -1,52 +1,14 @@
-import { NextResponse } from 'next/server';
-import { getAppOrigin } from '../../../../lib/siteUrl';
+import { NextResponse } from "next/server";
+import { NAVER_UNAVAILABLE_MESSAGE } from "../../../../lib/naverAvailability";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
-const BASE_URL = getAppOrigin();
-const ALLOWED_MOBILE_REDIRECTS = [
-  'com.maxmini.posterlink://auth-callback',
-];
-
-function getAllowedMobileRedirect(value: string | null) {
-  if (!value) return null;
-  return ALLOWED_MOBILE_REDIRECTS.find((redirect) => value.startsWith(redirect)) ?? null;
-}
-
-export async function GET(request: Request) {
-  const clientId = process.env.NAVER_CLIENT_ID;
-  if (!clientId) {
-    return NextResponse.redirect(`${BASE_URL}/login?error=naver_not_configured`);
-  }
-
-  const { searchParams } = new URL(request.url);
-  const mobileRedirect = getAllowedMobileRedirect(searchParams.get('mobile_redirect'));
-  const state = crypto.randomUUID();
-  const redirectUri = `${BASE_URL}/api/auth/naver/callback`;
-
-  const url = new URL('https://nid.naver.com/oauth2.0/authorize');
-  url.searchParams.set('response_type', 'code');
-  url.searchParams.set('client_id', clientId);
-  url.searchParams.set('redirect_uri', redirectUri);
-  url.searchParams.set('state', state);
-
-  const response = NextResponse.redirect(url.toString());
-  response.cookies.set('naver_oauth_state', state, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 300,
-    path: '/',
-  });
-  if (mobileRedirect) {
-    response.cookies.set('naver_oauth_mobile_redirect', mobileRedirect, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 300,
-      path: '/',
-    });
-  }
-
-  return response;
+// Do not exchange a code, look up an email, mutate credentials or issue sessions.
+// This also stops callbacks from authorization flows started before suspension.
+export async function GET() {
+  return NextResponse.json(
+    { error: NAVER_UNAVAILABLE_MESSAGE, code: "naver_temporarily_unavailable" },
+    { status: 503, headers: { "Cache-Control": "private, no-store" } },
+  );
 }

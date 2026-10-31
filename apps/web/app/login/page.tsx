@@ -1,11 +1,15 @@
 "use client";
 
+import { NAVER_UNAVAILABLE_MESSAGE } from "../../lib/naverAvailability";
+
 import { Suspense, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { supabase } from "../../lib/supabase";
+
+import { trackAnalytics, setAnalyticsLoginStatus } from "../../lib/analytics";
 
 const ERROR_MESSAGES: Record<string, string> = {
   naver_not_configured: "네이버 로그인이 설정되지 않았습니다.",
@@ -51,6 +55,8 @@ export default function LoginPage() {
     if (error) {
       toast.error(error.message);
     } else {
+      setAnalyticsLoginStatus(true);
+      trackAnalytics("login", {method:"email"});
       router.push("/");
     }
 
@@ -163,14 +169,16 @@ export default function LoginPage() {
         </button>
 
         <button
-          onClick={() => {
-            window.location.href = "/api/auth/naver";
-          }}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#03C75A] py-4 font-bold text-white transition-all active:scale-[0.98]"
+          disabled
+          aria-describedby="naver-unavailable"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#03C75A] py-4 font-bold text-white opacity-50 cursor-not-allowed"
         >
           <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-[11px] font-black text-[#03C75A]">N</span>
-          네이버로 시작하기
+          네이버 로그인 일시 중단
         </button>
+        <p id="naver-unavailable" role="status" className="text-sm leading-relaxed text-gray-600">
+          {NAVER_UNAVAILABLE_MESSAGE}
+        </p>
       </div>
 
       <p className="mt-8 text-sm text-gray-500">
