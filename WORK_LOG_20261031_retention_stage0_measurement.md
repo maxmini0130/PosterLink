@@ -1,6 +1,6 @@
 # 재방문·가입 전환 0단계 측정
 
-상태: 승인 대기 (구현 Claude, 검토 Codex) — `1e69175`·`791ebb8` 파기 배치 재검토 통과. 운영 적용·예약은 별도 사용자 결정
+상태: 승인 대기 (구현 Claude, 검토 Codex) — 측정·고정 검사·파기 배치 모두 Codex 통과(`305a30d`). 운영 반영(push, 마이그레이션, 파기 예약, 방침 게시, 병합)은 사용자 승인 필요
 
 사용자가 `docs/RETENTION_PLAN_2026-10-31.md` 0단계부터 진행을 요청했다. 시작 전 `.claude/settings.local.json`에 git push, vercel --prod, supabase db push, psql·`--apply` 등 운영 쓰기 명령 deny 규칙을 추가했다.
 
