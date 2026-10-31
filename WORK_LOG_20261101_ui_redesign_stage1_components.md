@@ -1,6 +1,6 @@
 # UI 개편 1단계: 공통 컴포넌트와 접수 상태 공용 함수 연결
 
-상태: 승인 대기 (구현 Claude, 검토 Codex) — `b49e3b9` 코드 재검토 통과. 기존 P2 해결. 제공 E2E 5건 실제 서버 실행은 정책 제한으로 미완료
+상태: 승인 대기 (구현 Claude, 검토 Codex) — `b49e3b9` 재검토 통과(`5561859`). 컴포넌트 E2E 5건은 Claude 환경에서 5/5 실행(Codex 환경은 로컬 서버 정책 차단으로 fixture 검증). 로컬 커밋만, push·배포·운영 DB 없음
 
 기준: [UI 개편 지시서](docs/UI_REDESIGN_PLAN_2026-10-31.md) 1·2장, [재방문 지시서](docs/RETENTION_PLAN_2026-10-31.md) 3-1. 브랜치는 PR #16(`feat/retention-stage0-measurement-20261031`) 위에 있다(상세 화면을 두 작업이 함께 고치기 때문).
 
