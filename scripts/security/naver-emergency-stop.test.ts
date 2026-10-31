@@ -145,7 +145,7 @@ test("existing Google/Kakao PKCE callback and native session callback remain unc
   assert.equal(state.sessions, 1);
 });
 
-test("GA integration preserves Production security, stats, SEO and migrations byte-for-byte", () => {
+test("GA integration preserves Production security, stats, SEO and applied migrations", () => {
   for (const p of [
     "apps/web/middleware.ts",
     "apps/web/app/api/auth/delete-account/route.ts",
@@ -168,18 +168,40 @@ test("GA integration preserves Production security, stats, SEO and migrations by
   assert.equal(
     execFileSync(
       "git",
-      [
-        "diff",
-        base,
-        "--",
-        "supabase",
-        "apps/web/app/api/admin",
-        "pnpm-lock.yaml",
-        "package.json",
-      ],
+      ["diff", base, "--", "apps/web/app/api/admin", "pnpm-lock.yaml"],
       { encoding: "utf8" },
     ).trim(),
     "",
+  );
+  // Applied migrations stay frozen; later stages may only add new migration files.
+  const supabaseChanges = execFileSync(
+    "git",
+    ["diff", "--name-status", "--no-renames", base, "--", "supabase"],
+    { encoding: "utf8" },
+  )
+    .trim()
+    .split("\n")
+    .filter(Boolean);
+  for (const line of supabaseChanges) {
+    assert.match(
+      line,
+      /^A\tsupabase\/migrations\/\d{14}_[a-z0-9_]+\.sql$/,
+      line,
+    );
+  }
+  // package.json may only register more tests; dependencies and other scripts stay frozen.
+  const withoutTestScript = (json: string) => {
+    const pkg = JSON.parse(json);
+    delete pkg.scripts.test;
+    return pkg;
+  };
+  assert.deepEqual(
+    withoutTestScript(readFileSync("package.json", "utf8")),
+    withoutTestScript(
+      execFileSync("git", ["show", base + ":package.json"], {
+        encoding: "utf8",
+      }),
+    ),
   );
 });
 

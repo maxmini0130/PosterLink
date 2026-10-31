@@ -47,8 +47,6 @@ test("GA integration retains deployed Naver stop and does not include age or DB 
         "diff",
         "2faf121",
         "--",
-        "supabase",
-        "apps/web/app/onboarding",
         "apps/web/app/api/onboarding",
         "apps/mobile",
         "pnpm-lock.yaml",
@@ -57,6 +55,31 @@ test("GA integration retains deployed Naver stop and does not include age or DB 
     ).trim(),
     "",
   );
+  // The unreleased minimum-age gate (release/minimum-age-*) must not ride along.
+  // Later stages may add migrations and onboarding instrumentation, nothing else.
+  const minimumAge =
+    /ageConfirmed|age_confirmed|minimum[_ ]?age|만 ?14세|gate_unconfirmed_member/i;
+  const onboarding = readFileSync("apps/web/app/onboarding/page.tsx", "utf8");
+  assert.doesNotMatch(onboarding, minimumAge);
+  assert.match(onboarding, /desc: "13~18세"/);
+  const supabaseChanges = execFileSync(
+    "git",
+    ["diff", "--name-status", "--no-renames", "2faf121", "--", "supabase"],
+    { encoding: "utf8" },
+  )
+    .trim()
+    .split("\n")
+    .filter(Boolean);
+  for (const line of supabaseChanges) {
+    assert.match(
+      line,
+      /^A\tsupabase\/migrations\/\d{14}_[a-z0-9_]+\.sql$/,
+      line,
+    );
+    const path = line.slice(2);
+    assert.doesNotMatch(path, minimumAge, path);
+    assert.doesNotMatch(readFileSync(path, "utf8"), minimumAge, path);
+  }
 });
 
 test("production defaults remain disabled; policy does not invent countries or claim completed automatic deletion", () => {

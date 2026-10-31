@@ -1,6 +1,6 @@
 # 재방문·가입 전환 0단계 측정
 
-상태: 승인 대기 (구현 Claude, 검토 Codex) — 코드 재검토 통과(`3579136`), 정렬된 `main`(`91fc839`) 병합 `e22a4d5`. 운영 반영은 사용자 승인 필요
+상태: 검토 대기 (구현 Claude, 검토 Codex) — 보안 고정 검사 범위 조정 커밋 검토 요청. 운영 반영(마이그레이션·병합)은 사용자 승인 필요
 
 사용자가 `docs/RETENTION_PLAN_2026-10-31.md` 0단계부터 진행을 요청했다. 시작 전 `.claude/settings.local.json`에 git push, vercel --prod, supabase db push, psql·`--apply` 등 운영 쓰기 명령 deny 규칙을 추가했다.
 
@@ -54,3 +54,15 @@
 - 재검증: 크롤러 323/323, lint·tsc·build PASS, `pnpm test` 198/200(기존 `profile-role-release` 스냅샷 2건), `git diff --check` PASS.
 - `scripts/security/naver-emergency-stop.test.ts` 4/5: "GA integration preserves ... byte-for-byte" 1건이 실패한다. 10/25 GA 릴리스 시점의 `package.json`·`supabase/`를 고정한 검사라, 이 브랜치의 테스트 목록 추가와 신규 마이그레이션 때문에 예상된 실패다. 네이버 차단 동작 검사 4건은 통과한다. 보안 고정 검사 갱신은 사용자 승인 사항이라 수정하지 않았다(CI 대상 아님).
 - 운영 반영에 필요한 결정: 마이그레이션 적용 승인, 개인정보 문안·보존 기간, 위 고정 검사 처리 방침. 웹 코드는 마이그레이션 전에 배포돼도 조용히 동작한다(RPC 실패는 10분 백오프, 조회 기록은 source 없이 저장).
+
+## 보안 고정 검사 범위 조정 (검토 대기)
+
+- 10/31 사용자가 `main` 배포 `8f6a164`를 Promote했다. 이제 `main` 병합은 곧 운영 배포다. 운영 확인(GET): `/api/auth/naver` 503, `/login` 중단 안내, 홈·목록·상세·`/privacy` 200.
+- 문제: 릴리스 고정 검사 2건이 `supabase/`·`package.json`·`apps/web/app/onboarding` 전체를 바이트 단위로 묶어, 새 마이그레이션이나 테스트 등록만 해도 실패한다. 이 브랜치에서 `naver-emergency-stop` 1건, `ga4-naver-safe-release` 1건이 실패했다(후자는 이전 기록에 빠져 있었다).
+- 결정: 보호 대상은 그대로 두고 허용 범위만 좁게 열었다.
+  - 보안 파일 9개(+네이버 라우트 3개) 바이트 고정, `apps/web/app/api/admin`·`api/onboarding`·`apps/mobile`·`pnpm-lock.yaml` diff 0은 유지.
+  - `supabase/`: 신규 `supabase/migrations/<14자리>_<이름>.sql` 추가만 허용. 적용된 마이그레이션 수정·삭제·이름 변경은 실패.
+  - `package.json`: `scripts.test` 외 필드(의존성·다른 스크립트)는 동일해야 한다.
+  - 최소 연령 기능(`release/minimum-age-*`) 유입 차단: 온보딩 화면과 신규 마이그레이션에 `ageConfirmed`·`만 14세`·`gate_unconfirmed_member` 등이 없어야 하고, 청소년 구간 문구 `13~18세`가 유지돼야 한다.
+- 검증: `naver-emergency-stop` 5/5, `ga4-naver-safe-release` 3/3. 음성 검사로 기존 마이그레이션 수정, devDependency 추가, `release/minimum-age-rls`의 온보딩 화면·마이그레이션 반입, 다른 이름의 마이그레이션에 연령 식별자 추가가 모두 실패함을 확인했다(확인 후 원복).
+- `scripts/security/*.test.ts` 100/103. 남은 3건(`profile-role-release` 2, `withdrawal-release` 1)은 `origin/main`에서도 동일하게 실패하는 기존 실패다.
