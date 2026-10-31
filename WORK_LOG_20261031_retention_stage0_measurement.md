@@ -1,6 +1,6 @@
 # 재방문·가입 전환 0단계 측정
 
-상태: 승인 대기 (구현 Claude, 검토 Codex) — 측정·고정 검사·파기 배치 모두 Codex 통과(`305a30d`). 운영 반영(push, 마이그레이션, 파기 예약, 방침 게시, 병합)은 사용자 승인 필요
+상태: 운영 반영 중 (구현 Claude, 검토 Codex) — ① 0단계 마이그레이션 운영 적용 완료. ② 파기 함수 적용 대기(사용자 실행)
 
 사용자가 `docs/RETENTION_PLAN_2026-10-31.md` 0단계부터 진행을 요청했다. 시작 전 `.claude/settings.local.json`에 git push, vercel --prod, supabase db push, psql·`--apply` 등 운영 쓰기 명령 deny 규칙을 추가했다.
 
@@ -125,3 +125,10 @@
 - 회귀 테스트 2건 추가: 토요일 시작 경계(직전 45일이 금요일에 걸리는 주는 `false`, 다음 주는 `true`), 첫 방문 원본 파기 후에도 정확한 시각 유지. 기존 lookback 테스트는 시작 시각을 상태 표에 넣도록 고쳤다. 수정 전 SQL(`e5f8494`)로 되돌리면 3건이 실패함을 확인했다.
 - 허용 목록의 파기 마이그레이션 기준 커밋을 `1e69175`로 갱신했다.
 - 검증: 파기 테스트 17/17, `scripts/retention/*` 28/28, `pnpm test` 219/221, `scripts/security/*` 104/107(남은 실패는 기존 3건), Prettier·`git diff --check` PASS.
+
+## 운영 반영 ①: 0단계 마이그레이션 적용 (2026-10-31 15:57 KST 확인)
+
+- 사전 점검(사용자 SQL Editor, 조회만): 필요 컬럼·기존 제약 존재, 새 제약·테이블·함수 이름 충돌 없음, 알림 이벤트 필수값 누락 0건, `pg_cron 1.6.4` 설치 10/10 통과. 규모: `site_visit_logs` 4,079건(7/18~), `poster_view_logs` 919, `poster_link_click_logs` 80, `search_logs` 45, `product_events` 41.
+- 적용: 사용자가 SQL Editor에서 Codex 통과본(`3474a6b`)과 동일한 마이그레이션을 `BEGIN`~`COMMIT`으로 한 번에 실행, "Success. No rows returned". 실행 파일 SHA-256(LF) `fa57e52eaf652eb507dfe6b878712a21d8815b38f1a29a868b37f91e20a8b743`. 실행 전 같은 파일을 PGlite에서 적용 확인. migration history INSERT는 하지 않았다(10/23 역할 보안 적용과 같은 방식).
+- 적용 후 확인 8/8: 새 컬럼 5개, 새 제약 3개와 가입완료 1회 인덱스, 연결 표 RLS, anon·authenticated 연결 표 조회 불가, anon 연결 RPC 실행 불가, 이벤트 RPC 실행 가능, `poster_view_logs.source`, 기존 이벤트 41건 유지.
+- 운영 웹(GET): `/`·`/posters` 200, `/api/auth/naver` 503 유지. 운영 웹은 새 RPC를 호출하지 않으므로 화면 변화 없음.
