@@ -219,7 +219,7 @@ async function loadCategoryMap() {
 }
 
 async function loadRegionMap() {
-  const { data, error } = await supabase.from("regions").select("id, code, name, full_name, level, parent_id").eq("is_active", true);
+  const { data, error } = await supabase.from("regions").select("id, code, name, full_name");
   if (error) throw new Error("regions 로드 실패: " + error.message);
   const map = {};
   for (const region of data) {
@@ -227,7 +227,7 @@ async function loadRegionMap() {
     if (region.name) map[region.name] = region.id;
     if (region.full_name) map[region.full_name] = region.id;
   }
-  return { byCode: map, catalog: data };
+  return map;
 }
 
 async function loadAudienceMap() {
@@ -399,8 +399,8 @@ function semanticCategoryEntries(semantic) {
     }));
 }
 
-async function inferUploadClassification(post, regionCatalog) {
-  const fallback = inferPosterClassification(post, { regionCatalog });
+async function inferUploadClassification(post) {
+  const fallback = inferPosterClassification(post);
   const semantic = await classifyPosterCategories({
     title: post.title,
     sourceOrgName: post.source_org_name ?? post.site,
@@ -1281,7 +1281,6 @@ function mergeClassificationIntoFieldVerification(verification = {}, classificat
       classification: {
         categories: classification.categories ?? [],
         regions: classification.regions ?? [],
-        regionContext: classification.regionContext ?? null,
         audiences: classification.audiences ?? [],
         confidence: classification.confidence ?? null,
       },
@@ -1305,7 +1304,6 @@ function mergeClassificationIntoFieldVerification(verification = {}, classificat
     classification: {
       categories: classification.categories ?? [],
       regions: classification.regions ?? [],
-      regionContext: classification.regionContext ?? null,
       audiences: classification.audiences ?? [],
       confidence: classification.confidence ?? null,
     },
@@ -1987,7 +1985,7 @@ async function uploadToSupabase(filePath) {
 
   // 카테고리/지역 맵 로드
   const categoryMap = await loadCategoryMap();
-  const { byCode: regionMap, catalog: regionCatalog } = await loadRegionMap();
+  const regionMap = await loadRegionMap();
   const audienceMap = await loadAudienceMap();
   const duplicateCandidates = await loadDuplicateCandidates();
 
@@ -2039,7 +2037,7 @@ async function uploadToSupabase(filePath) {
       sourceUrl,
       source_key: sourceKey,
     };
-    const classification = await inferUploadClassification(aiPost, regionCatalog);
+    const classification = await inferUploadClassification(aiPost);
     const quality = evaluatePosterQuality({ ...post, images: sourceImages }, {
       sourceKey,
       images: sourceImages,
