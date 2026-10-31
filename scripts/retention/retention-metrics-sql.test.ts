@@ -9,7 +9,11 @@ const read = (name: string) =>
     /NOTIFY pgrst[^;]*;/g,
     "",
   );
-const doc = readFileSync("docs/retention_metrics_20261031.md", "utf8");
+// Normalise line endings: a Windows checkout (core.autocrlf) has CRLF.
+const doc = readFileSync("docs/retention_metrics_20261031.md", "utf8").replace(
+  /\r\n/g,
+  "\n",
+);
 const [Q1, Q2, Q3, Q4] = [...doc.matchAll(/```sql\n([\s\S]*?)```/g)].map((m) =>
   m[1].replace(/:since/g, "'2026-01-01'::timestamptz"),
 );
