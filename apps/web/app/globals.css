@@ -26,6 +26,35 @@
   }
 }
 
+/* UI redesign: fixed elements sit above the mobile tab bar. */
+:root {
+  /* Extra space a screen adds above the tab bar, e.g. its action bar. */
+  --pl-bottom-extra: 0px;
+}
+.pl-action-bar {
+  bottom: var(--mobile-nav-height);
+  padding-left: max(20px, env(safe-area-inset-left, 0px));
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
+}
+.pl-report-fab {
+  bottom: calc(var(--mobile-nav-height) + 16px);
+}
+.pl-toaster {
+  bottom: calc(
+    var(--mobile-nav-height) + var(--pl-bottom-extra) + 12px
+  ) !important;
+}
+@media (min-width: 768px) {
+  /* PC: no tab bar; toasts sit at the bottom left. */
+  .pl-toaster {
+    bottom: 24px !important;
+    left: 24px !important;
+  }
+  .pl-toaster > div {
+    justify-content: flex-start !important;
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0f172a;

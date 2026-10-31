@@ -5,7 +5,10 @@ import { Toaster } from "react-hot-toast";
 export function ToastProvider() {
   return (
     <Toaster
-      position="top-center"
+      // Bottom of the screen above the tab bar on mobile, bottom left on PC
+      // (UI redesign plan 2, 3-1); see .pl-toaster in globals.css.
+      position="bottom-center"
+      containerClassName="pl-toaster"
       toastOptions={{
         duration: 3500,
         style: {

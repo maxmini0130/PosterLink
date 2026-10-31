@@ -10,6 +10,24 @@ import ProductEventsTracker from "./components/ProductEventsTracker";
 import { SeoStructuredData } from "./components/SeoStructuredData";
 import { getAppOrigin } from "../lib/siteUrl";
 import ExistingWebAnalytics from "./components/ExistingWebAnalytics";
+import { Noto_Sans_KR, Noto_Serif_KR } from "next/font/google";
+
+// Fonts for redesigned screens (font-pl-serif / font-pl-sans). Not preloaded so
+// screens that do not use them yet do not pay for the Korean font files.
+const plSerif = Noto_Serif_KR({
+  weight: ["700"],
+  subsets: ["latin"],
+  display: "swap",
+  preload: false,
+  variable: "--font-pl-serif",
+});
+const plSans = Noto_Sans_KR({
+  weight: ["400", "500", "700"],
+  subsets: ["latin"],
+  display: "swap",
+  preload: false,
+  variable: "--font-pl-sans",
+});
 
 const appOrigin = getAppOrigin();
 const siteDescription =
@@ -18,7 +36,6 @@ const siteDescription =
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
   viewportFit: "cover",
 };
 
@@ -74,7 +91,7 @@ export default function RootLayout({
   children: ReactNode;
 }>) {
   return (
-    <html lang="ko">
+    <html lang="ko" className={`${plSerif.variable} ${plSans.variable}`}>
       <body>
         <ErrorBoundary>
           <SeoStructuredData />
