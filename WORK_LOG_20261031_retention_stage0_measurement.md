@@ -1,6 +1,6 @@
 # 재방문·가입 전환 0단계 측정
 
-상태: 승인 대기 (구현 Claude, 검토 Codex) — `3579136` 코드 재검토 통과, 격리된 UI 시연·개인정보 결정·운영 반영은 별도
+상태: 승인 대기 (구현 Claude, 검토 Codex) — 코드 재검토 통과(`3579136`), 정렬된 `main`(`91fc839`) 병합 `e22a4d5`. 운영 반영은 사용자 승인 필요
 
 사용자가 `docs/RETENTION_PLAN_2026-10-31.md` 0단계부터 진행을 요청했다. 시작 전 `.claude/settings.local.json`에 git push, vercel --prod, supabase db push, psql·`--apply` 등 운영 쓰기 명령 deny 규칙을 추가했다.
 
@@ -47,3 +47,10 @@
 - 직접 실행: identityLinker 7/7 PASS, 이전 독립 재현에서 B의 재시도 실행 확인, 전체 198/200(동일한 기존 실패 2건), 수정 파일 Prettier·diff PASS. lint/tsc/build와 실제 브라우저 시연은 이번 검토에서 재실행하지 않았다.
 - [같은 브랜치의 검토 기록](WORK_LOG_20261031_retention_stage0_review.md)에 세부 근거와 한계를 추가했다. 구현 코드는 변경하지 않았다. 운영 반영·DB 적용·push 없음.
 - 남은 단계: 격리된 스테이징에서 실제 가입·계정 연결 시연, 개인정보 문안·보존 기간 결정 및 사용자 직접 운영 반영. 코드 검토 통과와 전체 0단계 수락 완료는 구분한다.
+
+## 정렬된 main 병합 (`e22a4d5`)
+
+- 10/31 사고 후 `main`이 운영 웹 소스와 같아져(PR #14, `91fc839`) `origin/main`을 이 브랜치에 merge로 반영했다. 충돌 없음. 이 브랜치의 크롤러는 `main`과 동일하다.
+- 재검증: 크롤러 323/323, lint·tsc·build PASS, `pnpm test` 198/200(기존 `profile-role-release` 스냅샷 2건), `git diff --check` PASS.
+- `scripts/security/naver-emergency-stop.test.ts` 4/5: "GA integration preserves ... byte-for-byte" 1건이 실패한다. 10/25 GA 릴리스 시점의 `package.json`·`supabase/`를 고정한 검사라, 이 브랜치의 테스트 목록 추가와 신규 마이그레이션 때문에 예상된 실패다. 네이버 차단 동작 검사 4건은 통과한다. 보안 고정 검사 갱신은 사용자 승인 사항이라 수정하지 않았다(CI 대상 아님).
+- 운영 반영에 필요한 결정: 마이그레이션 적용 승인, 개인정보 문안·보존 기간, 위 고정 검사 처리 방침. 웹 코드는 마이그레이션 전에 배포돼도 조용히 동작한다(RPC 실패는 10분 백오프, 조회 기록은 source 없이 저장).
