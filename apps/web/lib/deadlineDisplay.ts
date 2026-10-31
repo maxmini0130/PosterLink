@@ -132,3 +132,28 @@ export function isClosingWithinDays(value: DeadlineDisplay, days = 7) {
     value.daysLeft !== null && value.daysLeft >= 0 && value.daysLeft < days
   );
 }
+
+const MONTH_DAY_KO = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: POSTER_TIME_ZONE,
+  month: "long",
+  day: "numeric",
+});
+
+/**
+ * "8월 10일" when the deadline has already passed, else null. A poster closed
+ * by an operator before its scheduled deadline has no known end day, so the
+ * scheduled date must not be presented as the day reception ended.
+ */
+export function receptionEndedOn(
+  applicationEndAt?: string | null,
+  now: Date = new Date(),
+) {
+  if (!applicationEndAt) return null;
+  const end = Date.parse(
+    /^\d{4}-\d{2}-\d{2}$/.test(applicationEndAt)
+      ? `${applicationEndAt}T23:59:59.999+09:00`
+      : applicationEndAt,
+  );
+  if (Number.isNaN(end) || end > now.getTime()) return null;
+  return MONTH_DAY_KO.format(new Date(end));
+}

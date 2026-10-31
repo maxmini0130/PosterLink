@@ -2,13 +2,15 @@
 
 import { Bell, BellOff } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import toast from "react-hot-toast";
 import { supabase } from "../lib/supabase";
 
 import { trackAnalytics, setAnalyticsLoginStatus } from "../../lib/analytics";
 import { currentPageType, promptSignup, trackProductEvent } from "../../lib/productEvents";
 import {
   PENDING_ACTION_DONE_EVENT,
+  PENDING_NOT_STORED_MESSAGE,
   rememberActionForLogin,
   type PendingActionDoneDetail,
 } from "../lib/guestSession";
@@ -27,9 +29,12 @@ export function InstitutionFollowButton({
   const [userId, setUserId] = useState<string | null>(null);
   const [following, setFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
+  // Bumped by every local change so a slower initial lookup cannot overwrite it.
+  const followVersion = useRef(0);
 
   useEffect(() => {
     let active = true;
+    const startedAt = followVersion.current;
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!active) return;
       setUserId(user?.id ?? null);
@@ -44,7 +49,7 @@ export function InstitutionFollowButton({
         .eq("institution_id", institutionId)
         .maybeSingle();
       if (active) {
-        setFollowing(Boolean(data));
+        if (followVersion.current === startedAt) setFollowing(Boolean(data));
         setLoading(false);
       }
     });
@@ -57,7 +62,10 @@ export function InstitutionFollowButton({
   useEffect(() => {
     const onDone = (event: Event) => {
       const detail = (event as CustomEvent<PendingActionDoneDetail>).detail;
-      if (detail?.type === "follow" && detail.targetId === institutionId) setFollowing(true);
+      if (detail?.type === "follow" && detail.targetId === institutionId) {
+        followVersion.current += 1;
+        setFollowing(true);
+      }
     };
     window.addEventListener(PENDING_ACTION_DONE_EVENT, onDone);
     return () => window.removeEventListener(PENDING_ACTION_DONE_EVENT, onDone);
@@ -67,7 +75,10 @@ export function InstitutionFollowButton({
     if (!userId) {
       promptSignup(currentPageType(), "follow", { institutionId });
       // Follow automatically once signed in, then come back here.
-      rememberActionForLogin({ type: "follow", targetId: institutionId, returnTo: returnPath });
+      if (!rememberActionForLogin({ type: "follow", targetId: institutionId, returnTo: returnPath })) {
+        toast.error(PENDING_NOT_STORED_MESSAGE);
+        return;
+      }
       router.push(`/login?redirectTo=${encodeURIComponent(returnPath)}`);
       return;
     }
@@ -80,6 +91,7 @@ export function InstitutionFollowButton({
           .eq("institution_id", institutionId)
       : await supabase.from("institution_follows").insert({ user_id: userId, institution_id: institutionId });
     if (!result.error) {
+      followVersion.current += 1;
       setFollowing((value) => !value);
       setAnalyticsLoginStatus(true);
       trackAnalytics(following ? "unfollow_institution" : "follow_institution", {institution_id:institutionId});

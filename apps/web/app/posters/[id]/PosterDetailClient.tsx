@@ -2,7 +2,7 @@
 import toast from "react-hot-toast";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, Share2, X } from "lucide-react";
 
 import { Header } from "../../components/Header";
@@ -23,6 +23,7 @@ import { supabase } from "../../lib/supabase";
 import { logPosterView } from "../../lib/posterMetrics";
 import {
   PENDING_ACTION_DONE_EVENT,
+  PENDING_NOT_STORED_MESSAGE,
   continueWithKakao,
   forgetGuestFavorite,
   isGuestFavorite,
@@ -30,7 +31,7 @@ import {
   saveGuestFavorite,
   type PendingActionDoneDetail,
 } from "../../lib/guestSession";
-import { getDeadlineDisplay } from "../../../lib/deadlineDisplay";
+import { getDeadlineDisplay, receptionEndedOn } from "../../../lib/deadlineDisplay";
 import {
   formatApplicationPeriod,
   formatPosterDate,
@@ -474,18 +475,6 @@ function renderSummaryContent(line: SummaryLine) {
   );
 }
 
-const KST_MONTH_DAY = new Intl.DateTimeFormat("ko-KR", {
-  timeZone: "Asia/Seoul",
-  month: "long",
-  day: "numeric",
-});
-
-function formatClosedOn(value?: string | null) {
-  if (!value) return null;
-  const time = Date.parse(value);
-  return Number.isNaN(time) ? null : KST_MONTH_DAY.format(new Date(time));
-}
-
 function formatEventPeriod(start?: string | null, end?: string | null) {
   const from = formatPosterDate(start);
   const to = formatPosterDate(end);
@@ -581,7 +570,14 @@ export function PosterDetailClient({
 }) {
   const router = useRouter();
   const pathname = usePathname() ?? `/posters/${poster.id}`;
-  const [isFavorited, setIsFavorited] = useState(false);
+  const [isFavorited, setIsFavoritedState] = useState(false);
+  // Bumped by every local change (click, completion after sign-in), so a slower
+  // initial lookup cannot overwrite a newer state.
+  const favoriteVersion = useRef(0);
+  const setIsFavorited = (value: boolean) => {
+    favoriteVersion.current += 1;
+    setIsFavoritedState(value);
+  };
   const [favoriteBusy, setFavoriteBusy] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [imageExpanded, setImageExpanded] = useState(false);
@@ -593,11 +589,13 @@ export function PosterDetailClient({
     const viewSource = consumePosterViewSource(poster.id);
     void logPosterView(poster.id, viewSource);
 
+    const startedAt = favoriteVersion.current;
+    const stillCurrent = () => !cancelled && favoriteVersion.current === startedAt;
     supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (cancelled) return;
+      if (!stillCurrent()) return;
       if (!user) {
         // Signed out: the favorite lives in this browser.
-        setIsFavorited(isGuestFavorite(poster.id));
+        setIsFavoritedState(isGuestFavorite(poster.id));
         return;
       }
       const { data: favData } = await supabase
@@ -606,7 +604,7 @@ export function PosterDetailClient({
         .eq("user_id", user.id)
         .eq("poster_id", poster.id)
         .maybeSingle();
-      if (!cancelled) setIsFavorited(!!favData);
+      if (stillCurrent()) setIsFavoritedState(!!favData);
     });
 
     // A favorite started before sign-in, completed by PendingActionRunner.
@@ -708,8 +706,9 @@ export function PosterDetailClient({
   };
 
   const keepInAccount = async () => {
-    const error = await continueWithKakao({ type: "favorite", targetId: poster.id, returnTo: pathname });
-    if (error) toast.error("카카오 로그인을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.");
+    const result = await continueWithKakao({ type: "favorite", targetId: poster.id, returnTo: pathname });
+    if (result === "not_stored") toast.error(PENDING_NOT_STORED_MESSAGE);
+    else if (result === "failed") toast.error("카카오 로그인을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.");
   };
 
   const share = async () => {
@@ -817,13 +816,16 @@ export function PosterDetailClient({
   const sourceOrgName = organizationInfo?.sourceOrgName || poster.source_org_name || null;
   const sourceLabel = sourceOrgName || (noticeLink ? formatHostName(noticeLink.url) : null);
   const eventPeriod = formatEventPeriod(poster.event_start_at, poster.event_end_at);
-  const closedOn = formatClosedOn(poster.application_end_at);
+  // An operator can close a poster before its scheduled deadline; only a
+  // deadline that has already passed is the day reception actually ended.
+  const closedOn = receptionEndedOn(poster.application_end_at, clock);
+  const deadlinePassed = closedOn !== null;
   const logNotice = () => void logOfficialLinkClick(noticeLink);
 
   // Plan ①-3 and ④-4: the facts a person needs to decide and apply.
   const coreFacts: Fact[] = closed
     ? [
-        { fieldKey: "deadline_date", label: "접수 기간", value: period ? `${period} (종료)` : null },
+        { fieldKey: "deadline_date", label: "접수 기간", value: period ? (deadlinePassed ? `${period} (종료)` : period) : null },
         { fieldKey: "target_desc", label: "신청 대상", value: eligibility },
         { fieldKey: "recruitment_count", label: "모집 인원", value: poster.recruitment_count || null },
         ...(eventPeriod ? [{ fieldKey: "event_period", label: "교육/운영 기간", value: eventPeriod }] : []),
@@ -1205,7 +1207,10 @@ export function PosterDetailClient({
             <button
               type="button"
               onClick={() => {
-                rememberActionForLogin({ type: "favorite", targetId: poster.id, returnTo: pathname });
+                if (!rememberActionForLogin({ type: "favorite", targetId: poster.id, returnTo: pathname })) {
+                  toast.error(PENDING_NOT_STORED_MESSAGE);
+                  return;
+                }
                 router.push("/login");
               }}
               className="min-h-[44px] rounded-lg text-sm font-medium text-pl-ink underline underline-offset-2"

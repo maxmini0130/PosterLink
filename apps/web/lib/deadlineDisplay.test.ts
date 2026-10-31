@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getDeadlineDisplay, isClosingWithinDays } from "./deadlineDisplay";
+import {
+  getDeadlineDisplay,
+  isClosingWithinDays,
+  receptionEndedOn,
+} from "./deadlineDisplay";
 import { getPosterApplicationState } from "./posterApplication";
 
 // 2026-11-03 12:00 KST
@@ -142,4 +146,14 @@ test("missing or non-fixed deadline types never become a trusted D-day", () => {
     }).text,
     "D-2",
   );
+});
+
+// Codex review 31abbbb: an operator closed the poster before its deadline.
+test("the end day is only stated once the deadline has passed", () => {
+  assert.equal(receptionEndedOn("2026-08-10T23:59:59+09:00", now), "8월 10일");
+  assert.equal(receptionEndedOn("2026-11-02", now), "11월 2일");
+  assert.equal(receptionEndedOn("2026-11-06T23:59:59+09:00", now), null);
+  assert.equal(receptionEndedOn("2026-11-03", now), null); // ends tonight
+  assert.equal(receptionEndedOn(null, now), null);
+  assert.equal(receptionEndedOn("not a date", now), null);
 });

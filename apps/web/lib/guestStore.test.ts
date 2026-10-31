@@ -8,6 +8,7 @@ import {
   PENDING_ACTION_TTL_MS,
   addGuestFavorite,
   clearPendingAction,
+  completePendingActions,
   hasGuestFavorite,
   readGuestFavorites,
   readPendingAction,
@@ -100,77 +101,226 @@ test("guest favorites are capped and blocked storage does not throw", () => {
   clearPendingAction(blocked);
 });
 
-test("return paths stay inside the app and skip auth pages", () => {
+test("return paths are normalised and stay inside the app, off auth pages", () => {
   assert.equal(safeReturnTo(`/posters/${A}`), `/posters/${A}`);
   assert.equal(
-    safeReturnTo("/institutions/mapo?tab=1"),
-    "/institutions/mapo?tab=1",
+    safeReturnTo("/institutions/mapo?tab=1#top"),
+    "/institutions/mapo?tab=1#top",
   );
+  // Dot segments resolve before the check; the normalised path is returned.
+  assert.equal(safeReturnTo("/posters/x/../list"), "/posters/list");
   for (const bad of [
     "https://evil.example/",
     "//evil.example",
     "/\\evil",
     "posters/1",
+    // Codex review 31abbbb: tab and newline are dropped by URL parsing.
+    "/\t/evil.example",
+    "/\n/evil.example",
+    "/\r/evil.example",
+    // Codex review 31abbbb: dot segments must not reach auth pages.
+    "/foo/../login",
+    "/posters/%2e%2e/%2e%2e/login",
+    "/./signup",
     "/login",
     "/login?x=1",
+    "/login#x",
     "/auth/callback",
     "/onboarding",
-    "/signup",
     null,
+    "",
     `/${"a".repeat(400)}`,
   ]) {
-    assert.equal(safeReturnTo(bad), null, String(bad));
+    assert.equal(safeReturnTo(bad), null, JSON.stringify(bad));
   }
 });
 
-test("a pending action is kept for an hour and only once valid", () => {
+test("a pending action has an id, lasts an hour and is dropped if tampered", () => {
   const store = memory();
   const now = 1_000_000;
-  assert.equal(
-    setPendingAction(
-      store,
-      { type: "favorite", targetId: A, returnTo: `/posters/${A}` },
-      now,
-    ),
-    true,
+  const id = setPendingAction(
+    store,
+    { type: "favorite", targetId: A, returnTo: `/posters/${A}` },
+    now,
+    "action-0001",
   );
+  assert.equal(id, "action-0001");
   assert.deepEqual(readPendingAction(store, now + 1000), {
+    id: "action-0001",
     type: "favorite",
     targetId: A,
     returnTo: `/posters/${A}`,
     createdAt: now,
   });
+  // A generated id is used when none is given.
+  assert.match(
+    String(
+      setPendingAction(
+        store,
+        { type: "follow", targetId: B, returnTo: "/" },
+        now,
+      ),
+    ),
+    /^[A-Za-z0-9-]{8,64}$/,
+  );
   // Expired actions are removed when read.
   assert.equal(readPendingAction(store, now + PENDING_ACTION_TTL_MS), null);
   assert.equal(PENDING_ACTION_KEY in store.data, false);
-  // Unsafe targets are refused.
-  assert.equal(
-    setPendingAction(
-      store,
-      { type: "follow", targetId: B, returnTo: "https://x.example" },
-      now,
-    ),
-    false,
-  );
-  assert.equal(
-    setPendingAction(
-      store,
-      { type: "favorite", targetId: "x", returnTo: "/posters" },
-      now,
-    ),
-    false,
-  );
-  // Tampered records are dropped.
-  store.setItem(
-    PENDING_ACTION_KEY,
-    JSON.stringify({
-      v: 1,
+  // Unsafe input is refused and nothing is stored.
+  for (const action of [
+    { type: "follow" as const, targetId: B, returnTo: "https://x.example" },
+    { type: "favorite" as const, targetId: "x", returnTo: "/posters" },
+    { type: "favorite" as const, targetId: A, returnTo: "/\t/evil.example" },
+  ]) {
+    assert.equal(
+      setPendingAction(store, action, now),
+      null,
+      JSON.stringify(action),
+    );
+  }
+  // Tampered records are dropped, including an unnormalised return path.
+  for (const record of [
+    {
+      v: 2,
+      id: "action-0002",
       type: "delete",
       targetId: A,
       returnTo: "/",
       createdAt: now,
-    }),
+    },
+    {
+      v: 2,
+      id: "action-0002",
+      type: "favorite",
+      targetId: A,
+      returnTo: "/foo/../login",
+      createdAt: now,
+    },
+    { v: 1, type: "favorite", targetId: A, returnTo: "/", createdAt: now },
+  ]) {
+    store.setItem(PENDING_ACTION_KEY, JSON.stringify(record));
+    assert.equal(readPendingAction(store, now), null, JSON.stringify(record));
+    assert.equal(PENDING_ACTION_KEY in store.data, false);
+  }
+});
+
+test("storing a pending action fails visibly when the browser refuses it", () => {
+  const full: KeyValueStore = {
+    getItem: () => null,
+    setItem: () => {
+      throw new Error("quota");
+    },
+    removeItem: () => undefined,
+  };
+  assert.equal(
+    setPendingAction(full, { type: "favorite", targetId: A, returnTo: "/" }, 1),
+    null,
   );
-  assert.equal(readPendingAction(store, now), null);
-  assert.equal(PENDING_ACTION_KEY in store.data, false);
+});
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => (resolve = done));
+  return { promise, resolve };
+}
+
+test("a completed action clears only itself; a newer one stored meanwhile is kept and run", async () => {
+  const store = memory();
+  const now = () => 1_000_000;
+  setPendingAction(
+    store,
+    { type: "favorite", targetId: A, returnTo: `/posters/${A}` },
+    now(),
+    "action-aaaa",
+  );
+  const firstWrite = deferred<boolean>();
+  const writes: string[] = [];
+  const done: Array<[string, boolean]> = [];
+  const run = completePendingActions({
+    store,
+    now,
+    userId: async () => "user-1",
+    complete: async (action) => {
+      writes.push(action.id);
+      return action.id === "action-aaaa" ? firstWrite.promise : true;
+    },
+    onDone: (action, current) => done.push([action.id, current]),
+  });
+  // Codex review 31abbbb: another tab stores B while A is being saved.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  setPendingAction(
+    store,
+    { type: "follow", targetId: B, returnTo: "/institutions/x" },
+    now(),
+    "action-bbbb",
+  );
+  firstWrite.resolve(true);
+  await run;
+  assert.deepEqual(writes, ["action-aaaa", "action-bbbb"]);
+  // A was saved but replaced: no toast or return for it; B is completed and cleared.
+  assert.deepEqual(done, [
+    ["action-aaaa", false],
+    ["action-bbbb", true],
+  ]);
+  assert.equal(readPendingAction(store, now()), null);
+});
+
+test("pending actions stay until signed in and until the write succeeds", async () => {
+  const store = memory();
+  const now = () => 1_000_000;
+  setPendingAction(
+    store,
+    { type: "favorite", targetId: A, returnTo: "/" },
+    now(),
+    "action-cccc",
+  );
+  const done: unknown[] = [];
+  const pass = (userId: string | null, ok: boolean) =>
+    completePendingActions({
+      store,
+      now,
+      userId: async () => userId,
+      complete: async () => ok,
+      onDone: (action) => done.push(action),
+    });
+  await pass(null, true);
+  assert.equal(readPendingAction(store, now())?.id, "action-cccc");
+  await pass("user-1", false);
+  assert.equal(readPendingAction(store, now())?.id, "action-cccc");
+  assert.equal(done.length, 0);
+  await pass("user-1", true);
+  assert.equal(readPendingAction(store, now()), null);
+  assert.equal(done.length, 1);
+  // Nothing left: another pass does nothing.
+  await pass("user-1", true);
+  assert.equal(done.length, 1);
+});
+
+test("one pass handles a bounded number of replacements", async () => {
+  const store = memory();
+  const now = () => 1_000_000;
+  let n = 0;
+  const next = () =>
+    setPendingAction(
+      store,
+      { type: "favorite", targetId: A, returnTo: "/" },
+      now(),
+      `action-${String(n++).padStart(4, "0")}`,
+    );
+  next();
+  let completes = 0;
+  await completePendingActions({
+    store,
+    now,
+    userId: async () => "user-1",
+    // Every write is followed by a new action from elsewhere.
+    complete: async () => {
+      completes += 1;
+      next();
+      return true;
+    },
+    onDone: () => undefined,
+    maxActions: 3,
+  });
+  assert.equal(completes, 3);
 });
