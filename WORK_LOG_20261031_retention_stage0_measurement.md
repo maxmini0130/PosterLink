@@ -1,6 +1,6 @@
 # 재방문·가입 전환 0단계 측정
 
-상태: 검토 대기 (구현 Claude, 검토 Codex) — 보안 고정 검사 범위 조정 커밋 검토 요청. 운영 반영(마이그레이션·병합)은 사용자 승인 필요
+상태: 검토 대기 (구현 Claude, 검토 Codex) — `4e3f38b` 고정 검사 조정: 수정 필요 2건, 다음 수정본 대기
 
 사용자가 `docs/RETENTION_PLAN_2026-10-31.md` 0단계부터 진행을 요청했다. 시작 전 `.claude/settings.local.json`에 git push, vercel --prod, supabase db push, psql·`--apply` 등 운영 쓰기 명령 deny 규칙을 추가했다.
 
@@ -66,3 +66,10 @@
   - 최소 연령 기능(`release/minimum-age-*`) 유입 차단: 온보딩 화면과 신규 마이그레이션에 `ageConfirmed`·`만 14세`·`gate_unconfirmed_member` 등이 없어야 하고, 청소년 구간 문구 `13~18세`가 유지돼야 한다.
 - 검증: `naver-emergency-stop` 5/5, `ga4-naver-safe-release` 3/3. 음성 검사로 기존 마이그레이션 수정, devDependency 추가, `release/minimum-age-rls`의 온보딩 화면·마이그레이션 반입, 다른 이름의 마이그레이션에 연령 식별자 추가가 모두 실패함을 확인했다(확인 후 원복).
 - `scripts/security/*.test.ts` 100/103. 남은 3건(`profile-role-release` 2, `withdrawal-release` 1)은 `origin/main`에서도 동일하게 실패하는 기존 실패다.
+
+## Codex 고정 검사 검토 (`4e3f38b`)
+
+- [검토 기록](WORK_LOG_20261031_release_freeze_review.md)에 P2 2건을 남겼다. scripts.test를 no-op으로 바꿔도 통과하며, 블랙리스트 단어 없이 온보딩 또는 새 SQL에 연령 제한을 넣어도 통과한다. 실제 파일을 고치지 않고 원본 검사 callback을 메모리의 가상 입력으로 실행해 재현했다.
+- 현재 두 파일 8/8 PASS, 기존 보안 파일·의존성·기준 migration 수정/삭제 차단은 유지됨을 확인했다. 실제 보호 코드가 이번 커밋에서 바뀐 것은 아니다.
+- 판정: 이번 검사 완화는 재검토 미통과. 기존 검사 유지·새 테스트 추가만 허용하는 제한과 이름에 의존하지 않는 연령 기능 유입 차단을 보강한 뒤 재검토한다. 앞선 측정 기능 코드 통과와 별도로 취급한다.
+- 구현·검사 코드 수정, push·배포·운영 DB 접근 없음. 검토 문서만 같은 브랜치에 로컬 커밋한다.
