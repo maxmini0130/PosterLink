@@ -244,3 +244,72 @@ export async function completePendingActions(deps: {
     deps.onDone(action, clearPendingActionIf(deps.store, action.id));
   }
 }
+
+// ------------------------------------------------------------- merge (2-4)
+
+export const GUEST_MERGE_NOTICE_KEY = "pl.guest_merge_notice.v1";
+
+export type GuestMergeResult =
+  | { status: "none" }
+  | { status: "failed"; count: number }
+  | { status: "merged"; count: number; added: number; duplicates: number };
+
+/**
+ * Moves this browser's guest favorites into the signed-in account (retention
+ * plan 2-4). The write is an upsert on (user_id, poster_id), so a retry or a
+ * web/app merge at the same time leaves one row per poster. Local favorites are
+ * removed only after the write succeeds, and only the ones read at the start:
+ * a favorite saved meanwhile stays for the next merge. On failure nothing is
+ * removed and the next screen retries.
+ */
+export async function mergeGuestFavorites(deps: {
+  store: KeyValueStore;
+  /** Which of these poster ids the account already has; null on failure. */
+  existing: (posterIds: string[]) => Promise<string[] | null>;
+  /** Upserts the poster ids into the account; false on failure. */
+  upsert: (posterIds: string[]) => Promise<boolean>;
+}): Promise<GuestMergeResult> {
+  const ids = readGuestFavorites(deps.store).map((item) => item.posterId);
+  if (ids.length === 0) return { status: "none" };
+  const already = await deps.existing(ids);
+  if (!already) return { status: "failed", count: ids.length };
+  const owned = new Set(already);
+  const missing = ids.filter((id) => !owned.has(id));
+  if (missing.length > 0 && !(await deps.upsert(missing)))
+    return { status: "failed", count: ids.length };
+  for (const id of ids) removeGuestFavorite(deps.store, id);
+  return {
+    status: "merged",
+    count: ids.length,
+    added: missing.length,
+    duplicates: ids.length - missing.length,
+  };
+}
+
+/** "N개를 계정으로 옮겼어요" notice, shown once on 내 공고 until dismissed. */
+export function rememberMergeNotice(
+  store: KeyValueStore,
+  count: number,
+  now: number,
+) {
+  if (count > 0)
+    writeJson(store, GUEST_MERGE_NOTICE_KEY, { v: 1, count, at: now });
+}
+
+export function readMergeNotice(store: KeyValueStore): number | null {
+  const value = readJson(store, GUEST_MERGE_NOTICE_KEY) as {
+    v?: unknown;
+    count?: unknown;
+  } | null;
+  return value?.v === 1 && typeof value.count === "number" && value.count > 0
+    ? value.count
+    : null;
+}
+
+export function dismissMergeNotice(store: KeyValueStore) {
+  try {
+    store.removeItem(GUEST_MERGE_NOTICE_KEY);
+  } catch {
+    /* storage blocked */
+  }
+}

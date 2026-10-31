@@ -11,6 +11,7 @@ import { CommentSection } from "../../components/CommentSection";
 import { Footer } from "../../components/Footer";
 import { PosterImageCarousel } from "../../components/PosterImageCarousel";
 import { ActionBar, FavoriteButton, PrimaryActionLink } from "../../components/pl/ActionBar";
+import { ApplyMark } from "../../components/pl/ApplyMark";
 import { BottomSheet } from "../../components/pl/BottomSheet";
 import { DdayStamp } from "../../components/pl/DdayStamp";
 import { DeadlineLabel, ReceptionChip } from "../../components/pl/DeadlineLabel";
@@ -32,6 +33,7 @@ import {
   type PendingActionDoneDetail,
 } from "../../lib/guestSession";
 import { getDeadlineDisplay, receptionEndedOn } from "../../../lib/deadlineDisplay";
+import type { UserStatus } from "../../../lib/myPosters";
 import {
   formatApplicationPeriod,
   formatPosterDate,
@@ -579,6 +581,10 @@ export function PosterDetailClient({
     setIsFavoritedState(value);
   };
   const [favoriteBusy, setFavoriteBusy] = useState(false);
+  // Signed-in person's own mark (retention plan 3-1); applySupported stays false
+  // until favorites.user_status exists (migration 20261101010000).
+  const [member, setMember] = useState<{ id: string; applySupported: boolean; status: UserStatus | null } | null>(null);
+  const [applyBusy, setApplyBusy] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [imageExpanded, setImageExpanded] = useState(false);
   const [expandedImageIndex, setExpandedImageIndex] = useState(0);
@@ -598,13 +604,22 @@ export function PosterDetailClient({
         setIsFavoritedState(isGuestFavorite(poster.id));
         return;
       }
-      const { data: favData } = await supabase
-        .from("favorites")
-        .select("poster_id")
-        .eq("user_id", user.id)
-        .eq("poster_id", poster.id)
-        .maybeSingle();
-      if (stillCurrent()) setIsFavoritedState(!!favData);
+      const lookup = (columns: string) =>
+        supabase.from("favorites").select(columns).eq("user_id", user.id).eq("poster_id", poster.id).maybeSingle();
+      let applySupported = true;
+      let result = await lookup("poster_id, user_status");
+      if (result.error && (result.error.code === "42703" || result.error.code === "PGRST204" || /user_status/.test(result.error.message))) {
+        applySupported = false;
+        result = await lookup("poster_id");
+      }
+      const row = result.data as { user_status?: string | null } | null;
+      if (cancelled) return;
+      setMember({
+        id: user.id,
+        applySupported,
+        status: row ? (row.user_status === "applied" ? "applied" : "interested") : null
+      });
+      if (stillCurrent()) setIsFavoritedState(!!row);
     });
 
     // A favorite started before sign-in, completed by PendingActionRunner.
@@ -703,6 +718,27 @@ export function PosterDetailClient({
     } finally {
       setFavoriteBusy(false);
     }
+  };
+
+  // 신청했어요: marking a poster not yet favorited saves it as a favorite too.
+  const setApplyStatus = async (status: UserStatus) => {
+    if (!member || applyBusy) return;
+    setApplyBusy(true);
+    const values = { user_status: status, user_status_updated_at: new Date().toISOString() };
+    const { error } =
+      status === "applied"
+        ? await supabase
+            .from("favorites")
+            .upsert({ user_id: member.id, poster_id: poster.id, ...values }, { onConflict: "user_id,poster_id" })
+        : await supabase.from("favorites").update(values).eq("user_id", member.id).eq("poster_id", poster.id);
+    setApplyBusy(false);
+    if (error) {
+      toast.error("표시를 저장하지 못했어요. 잠시 후 다시 시도해 주세요.");
+      return;
+    }
+    setMember({ ...member, status });
+    if (status === "applied") setIsFavorited(true);
+    trackProductEvent("apply_status_set", { posterId: poster.id, metadata: { screen: "detail", status, logged_in: true } });
   };
 
   const keepInAccount = async () => {
@@ -1136,13 +1172,42 @@ export function PosterDetailClient({
           <div className="min-w-0 space-y-6">
             {titleBlock}
             {closedBanner}
+            {/* ④ 내 기록: only for a member who marked it; the poster closing never changes it. */}
+            {closed && member?.applySupported && member.status === "applied" && (
+              <section aria-labelledby="my-record" className="rounded-xl border border-pl-line bg-pl-card px-4 py-3">
+                <h2 id="my-record" className="pb-2 text-[15px] font-bold">내 기록</h2>
+                <ApplyMark
+                  marked
+                  busy={applyBusy}
+                  onMark={() => void setApplyStatus("applied")}
+                  onUnmark={() => void setApplyStatus("interested")}
+                />
+                <p className="mt-2 text-[13px] leading-5 text-pl-sub">내가 직접 표시한 기록이에요. 공고가 끝나도 그대로 남아요.</p>
+              </section>
+            )}
 
             <section aria-labelledby="core-facts" className="rounded-xl border border-pl-line bg-pl-card px-4 py-3">
               <h2 id="core-facts" className="pb-1.5 pt-1 text-[15px] font-bold">
                 {closed ? "공고 정보" : "신청 핵심 정보"}
               </h2>
               <FactsList facts={coreFacts} posterId={poster.id} noticeLink={noticeLink} onNoticeClick={logNotice} columns={!closed} />
+              {!closed && member?.applySupported && (
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-dashed border-pl-line pt-3">
+                  <p className="text-[13px] leading-5 text-pl-sub">
+                    신청을 마쳤다면 직접 표시해 두세요.
+                    <br />
+                    내 공고에서 따로 모아 볼 수 있어요.
+                  </p>
+                  <ApplyMark
+                    marked={member.status === "applied"}
+                    busy={applyBusy}
+                    onMark={() => void setApplyStatus("applied")}
+                    onUnmark={() => void setApplyStatus("interested")}
+                  />
+                </div>
+              )}
             </section>
+
 
             {!closed && posterFigure("h-[240px] xl:hidden")}
             {originalSection}
@@ -1219,7 +1284,7 @@ export function PosterDetailClient({
             </button>
           </>
         }
-        footnote="지금 찜은 이 기기의 브라우저에 저장돼 있어요. 브라우저 기록을 지우면 사라질 수 있어요."
+        footnote="이 기기에 찜한 공고는 계정으로 그대로 옮겨져요. 지금은 이 브라우저에 저장돼 있어 기록을 지우면 사라질 수 있어요."
       >
         <ul className="list-disc space-y-1 pl-5">
           <li>다른 기기에서도 찜한 공고를 이어서 볼 수 있어요</li>

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, Compass, Heart, User, type LucideIcon } from "lucide-react";
 
-// Labels change to 홈 / 찾기 / 내 공고 / 마이 with the 내 공고 screen (UI redesign stage 3).
 const TABS: {
   href: string;
   label: string;
@@ -14,16 +13,17 @@ const TABS: {
   { href: "/", label: "홈", Icon: Home, match: (path) => path === "/" },
   {
     href: "/posters",
-    label: "공고 찾기",
+    label: "찾기",
     Icon: Compass,
     // A poster detail page belongs to no tab.
     match: (path) => path === "/posters",
   },
   {
-    href: "/favorites",
-    label: "저장",
+    href: "/my-posters",
+    label: "내 공고",
     Icon: Heart,
-    match: (path) => path.startsWith("/favorites"),
+    match: (path) =>
+      path.startsWith("/my-posters") || path.startsWith("/favorites"),
   },
   {
     href: "/mypage",

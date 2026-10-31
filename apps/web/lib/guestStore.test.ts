@@ -9,6 +9,10 @@ import {
   addGuestFavorite,
   clearPendingAction,
   completePendingActions,
+  dismissMergeNotice,
+  mergeGuestFavorites,
+  readMergeNotice,
+  rememberMergeNotice,
   hasGuestFavorite,
   readGuestFavorites,
   readPendingAction,
@@ -323,4 +327,79 @@ test("one pass handles a bounded number of replacements", async () => {
     maxActions: 3,
   });
   assert.equal(completes, 3);
+});
+
+const C = "33333333-3333-4333-8333-333333333333";
+
+test("merging moves every guest favorite once and clears them only after success", async () => {
+  const store = memory();
+  addGuestFavorite(store, A, 1);
+  addGuestFavorite(store, B, 2);
+  const upserts: string[][] = [];
+  const result = await mergeGuestFavorites({
+    store,
+    existing: async () => [B], // the account already has B
+    upsert: async (ids) => {
+      upserts.push(ids);
+      return true;
+    },
+  });
+  assert.deepEqual(result, {
+    status: "merged",
+    count: 2,
+    added: 1,
+    duplicates: 1,
+  });
+  assert.deepEqual(upserts, [[A]]);
+  assert.deepEqual(readGuestFavorites(store), []);
+  // Nothing left: the next merge does nothing.
+  assert.deepEqual(
+    await mergeGuestFavorites({
+      store,
+      existing: async () => [],
+      upsert: async () => true,
+    }),
+    { status: "none" },
+  );
+});
+
+test("a failed merge keeps the guest favorites for a retry", async () => {
+  for (const deps of [
+    { existing: async () => null, upsert: async () => true },
+    { existing: async () => [], upsert: async () => false },
+  ]) {
+    const store = memory();
+    addGuestFavorite(store, A, 1);
+    const result = await mergeGuestFavorites({ store, ...deps });
+    assert.deepEqual(result, { status: "failed", count: 1 });
+    assert.equal(hasGuestFavorite(store, A), true);
+  }
+});
+
+test("a favorite saved during the merge stays for the next one", async () => {
+  const store = memory();
+  addGuestFavorite(store, A, 1);
+  await mergeGuestFavorites({
+    store,
+    existing: async () => [],
+    upsert: async () => {
+      addGuestFavorite(store, C, 2); // another tab saves while the write runs
+      return true;
+    },
+  });
+  assert.deepEqual(
+    readGuestFavorites(store).map((item) => item.posterId),
+    [C],
+  );
+});
+
+test("the merge notice is shown until dismissed", () => {
+  const store = memory();
+  assert.equal(readMergeNotice(store), null);
+  rememberMergeNotice(store, 0, 1);
+  assert.equal(readMergeNotice(store), null);
+  rememberMergeNotice(store, 3, 1);
+  assert.equal(readMergeNotice(store), 3);
+  dismissMergeNotice(store);
+  assert.equal(readMergeNotice(store), null);
 });

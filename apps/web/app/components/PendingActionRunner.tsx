@@ -5,10 +5,13 @@ import { usePathname, useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import {
   completePendingActions,
+  mergeGuestFavorites,
+  rememberMergeNotice,
   type PendingAction,
 } from "../../lib/guestStore";
 import { trackProductEvent } from "../../lib/productEvents";
 import {
+  GUEST_MERGED_EVENT,
   PENDING_ACTION_DONE_EVENT,
   guestLocal,
   type PendingActionDoneDetail,
@@ -37,16 +40,45 @@ async function complete(action: PendingAction, userId: string) {
   return !result.error;
 }
 
+const currentUserId = async () =>
+  // Local session only; row-level security checks the account on write.
+  (await supabase.auth.getSession()).data.session?.user.id ?? null;
+
+/** Moves this browser's guest favorites into the account (retention plan 2-4). */
+async function mergeIntoAccount(userId: string) {
+  return mergeGuestFavorites({
+    store: guestLocal,
+    existing: async (posterIds) => {
+      const { data, error } = await supabase
+        .from("favorites")
+        .select("poster_id")
+        .eq("user_id", userId)
+        .in("poster_id", posterIds);
+      return error ? null : (data ?? []).map((row) => row.poster_id as string);
+    },
+    upsert: async (posterIds) => {
+      const { error } = await supabase.from("favorites").upsert(
+        posterIds.map((posterId) => ({ user_id: userId, poster_id: posterId })),
+        { onConflict: "user_id,poster_id", ignoreDuplicates: true },
+      );
+      return !error;
+    },
+  });
+}
+
 /**
  * Finishes what a signed-out person started (찜, 기관 구독) once they are signed
  * in, then returns them to that screen (retention plan 2-3). See
  * completePendingActions: an action is cleared only after its own server write
- * succeeds and only while it is still the stored one.
+ * succeeds and only while it is still the stored one. Then moves the
+ * browser's guest favorites into the account, clearing them only after the
+ * write succeeds; a failure is retried on a later screen.
  */
 export default function PendingActionRunner() {
   const pathname = usePathname() ?? "";
   const router = useRouter();
   const running = useRef(false);
+  const mergeFailureLogged = useRef(false);
 
   useEffect(() => {
     if (WAIT_ON.test(pathname) || running.current) return;
@@ -56,9 +88,7 @@ export default function PendingActionRunner() {
     void completePendingActions({
       store: guestLocal,
       now: Date.now,
-      // Local session only; row-level security checks the account on write.
-      userId: async () =>
-        (await supabase.auth.getSession()).data.session?.user.id ?? null,
+      userId: currentUserId,
       complete,
       onDone: (action, current) => {
         // The account now has it either way; keep the screen in step.
@@ -88,6 +118,31 @@ export default function PendingActionRunner() {
         returnTo = action.returnTo;
       },
     })
+      .then(async () => {
+        const userId = await currentUserId();
+        if (!userId) return;
+        const result = await mergeIntoAccount(userId);
+        if (result.status === "none") return;
+        const merged = result.status === "merged";
+        if (merged || !mergeFailureLogged.current) {
+          mergeFailureLogged.current = !merged;
+          trackProductEvent("guest_merge", {
+            metadata: {
+              previous_count: result.count,
+              duplicate_count: merged ? result.duplicates : 0,
+              success: merged,
+              logged_in: true,
+            },
+          });
+        }
+        if (!merged) return;
+        rememberMergeNotice(guestLocal, result.count, Date.now());
+        window.dispatchEvent(
+          new CustomEvent(GUEST_MERGED_EVENT, {
+            detail: { count: result.count },
+          }),
+        );
+      })
       .catch(() => undefined) // storage or network failure: retried on a later screen
       .finally(() => {
         running.current = false;

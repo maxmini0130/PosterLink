@@ -148,6 +148,7 @@ export function pageTypeFromPath(pathname: string): PageType {
     case "institutions":
       return "institution";
     case "favorites":
+    case "my-posters": // 내 공고 (UI redesign) replaces /favorites
       return "favorites";
     case "notifications":
       return "notifications";

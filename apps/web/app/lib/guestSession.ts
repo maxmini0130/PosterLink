@@ -64,3 +64,19 @@ export function rememberActionForLogin(action: RequestedAction) {
 /** Shown when the browser refuses to keep the pending action. */
 export const PENDING_NOT_STORED_MESSAGE =
   "이 브라우저에 진행 상황을 저장할 수 없어 로그인 후 자동으로 이어 갈 수 없어요. 로그인한 뒤 다시 눌러 주세요.";
+
+/** Kakao sign-in that returns to `returnTo`, with nothing pending (내 공고). */
+export async function signInWithKakao(returnTo: string) {
+  trackSignupStart("login", "kakao");
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "kakao",
+    options: {
+      redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(safeReturnTo(returnTo) ?? "/")}`,
+      scopes: "profile_nickname profile_image",
+    },
+  });
+  return error;
+}
+
+/** Fired after guest favorites were moved into the account. */
+export const GUEST_MERGED_EVENT = "pl:guest-merged";
