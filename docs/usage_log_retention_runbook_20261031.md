@@ -34,6 +34,7 @@
    첫 실행은 수집 시작(2026-07-18)부터 cutoff 이전 기록 전부가 대상이다. 필요하면 이 시점에 기존 기록을 내보내 보관할지 결정한다(내보낸 파일도 같은 보관 기간 대상이다).
 
 4. 건수를 승인하면 예약 마이그레이션 `20261031030000_schedule_usage_log_retention.sql`을 실행한다. 매일 03:30 KST에 `run_usage_log_retention(50000)`이 돈다.
+   - SQL Editor에서는 `BEGIN`/`COMMIT`으로 감싸지 않는다. 2026-11-01 감싼 실행에서 job id(6)만 반환되고 등록은 롤백됐다. 단일 `cron.schedule(...)` 문장으로 실행하고, 반환된 job id가 아니라 `SELECT jobid, jobname, schedule, username, active FROM cron.job WHERE jobname = 'usage-log-retention-daily';`로 등록을 확인한다.
 5. 다음 날 실행 결과를 확인한다.
 
    ```sql

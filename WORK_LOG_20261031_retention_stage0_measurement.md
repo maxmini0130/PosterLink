@@ -1,6 +1,6 @@
 # 재방문·가입 전환 0단계 측정
 
-상태: 운영 반영 중 (구현 Claude, 검토 Codex) — ①② 적용, ④ 파기 예약 등록(job 6, 첫 실행 11/1 03:30 KST). ⑤ 첫 실행 확인 대기. 방침·관리자 화면(`2c93d70`) Codex 검토 대기
+상태: 운영 반영 중 (구현 Claude, 검토 Codex) — ①② 적용, ④ 파기 예약 job 7 등록 확인(첫 실행 11/1 03:30 KST). ⑤ 첫 실행 확인 대기. 방침·관리자 화면(`2c93d70`) Codex 검토 대기
 
 사용자가 `docs/RETENTION_PLAN_2026-10-31.md` 0단계부터 진행을 요청했다. 시작 전 `.claude/settings.local.json`에 git push, vercel --prod, supabase db push, psql·`--apply` 등 운영 쓰기 명령 deny 규칙을 추가했다.
 
@@ -154,6 +154,10 @@
 
 ## 운영 반영 ④: 파기 예약 등록 (2026-11-01 01:07 KST 무렵)
 
-- 사용자가 ③ 건수를 확인한 뒤 Codex 통과본과 동일한 예약 마이그레이션을 SQL Editor에서 실행했다. 실행 파일 SHA-256(LF) `bd5055c32e5e529db45142b6fca2f8d8b4aac1c0912e6640e92cb409c7312ffb`. 결과 `schedule = 6`(pg_cron job id).
+- 사용자가 ③ 건수를 확인한 뒤 Codex 통과본과 동일한 예약 마이그레이션을 SQL Editor에서 실행했다. 실행 파일 SHA-256(LF) `bd5055c32e5e529db45142b6fca2f8d8b4aac1c0912e6640e92cb409c7312ffb`. 결과 `schedule = 6`이 표시됐지만 **등록이 남지 않았다**(아래 정정).
 - 첫 실행 예정: 2026-11-01 03:30 KST(`30 18 * * *` UTC). 실행 전 취소: `select cron.unschedule('usage-log-retention-daily');`.
 - 남은 확인: `cron.job` 등록 상태, 첫 실행 후 `cron.job_run_details`, preview 0 수렴, `usage_weekly_cohorts`·`usage_log_retention_state` 기록.
+
+- **정정(01:10 KST 무렵)**: 확인 조회에서 `cron.job`에 job 6이 없고 실행 기록도 0건이었다(기존 job 3·4·5만, 모두 `postgres`). `BEGIN`~`COMMIT` 안의 `cron.schedule`이 롤백되고 job id 시퀀스만 소모된 것으로 판단한다. ①·② 같은 방식의 DDL은 정상 반영됐으므로 결과를 반환하는 SELECT가 든 트랜잭션을 SQL Editor가 다르게 처리한 것으로 보이나 원인은 확정하지 못했다. 이 동안 파기는 실행되지 않았다.
+- 재등록: `cron.schedule('usage-log-retention-daily', '30 18 * * *', ...)` 단일 문장을 트랜잭션 없이 실행 → job **7**. 조회 확인 `7 / usage-log-retention-daily / 30 18 * * * / postgres / active=true`. 첫 실행 2026-11-01 03:30 KST.
+- 교훈: SQL Editor에서 `cron.schedule`은 트랜잭션으로 감싸지 않고 실행하고, 반환된 job id만 믿지 말고 `cron.job` 조회로 등록을 확인한다(운영 절차에 반영).
