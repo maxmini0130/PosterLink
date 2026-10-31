@@ -1,6 +1,6 @@
 # UI 개편 공통 컴포넌트 Codex 검토
 
-상태: 수정 필요 (구현 Claude, 검토 Codex) — `2b7e63e` 재검토: D-day·스크롤 해결. P2-2의 disabled fieldset 포커스 예외 1건 남음
+상태: 승인 대기 (구현 Claude, 검토 Codex) — `b49e3b9` 코드 재검토 통과. 기존 P2 모두 해결, 추가 지적 없음. 제공 E2E 5건의 실제 서버 실행은 미완료
 
 ## 범위
 
@@ -72,3 +72,18 @@
 - 코드 Prettier는 `lib/deadlineDisplay.ts` 1파일에 형식 경고가 남았다. 다른 검사 대상 파일은 통과했고 코드는 수정하지 않았다. 검토 문서는 Prettier와 `git diff --check`로 확인한다.
 - 자료: Git 제외 `data/results/ui-s1-rereview-2b7e63e/`의 fixture·브라우저 코드·결과 JSON·스크린샷, 마감 검사·전체 검사·lint·build 로그, E2E 수집 목록. 핵심 재현은 `browser-results.json`의 `disabled-fieldset` 항목이다.
 - 코드 수정·push·배포·운영 DB 쓰기 없음. 같은 브랜치의 검토 문서와 작업 상태만 로컬 커밋한다. 포커스 예외 수정 후 재검토가 필요하다.
+
+## b49e3b9 재검토
+
+대상: `b49e3b93b6ccfbc05b4783100ec3b6f49aa44467`. **코드 검토 통과**: `e1fdecb`의 포커스 P2가 해결됐고 이번 변경 범위에서 추가 결함을 발견하지 못했다. 앞선 D-day·스크롤 수정도 유지된다. 위 미통과 판정은 과거 검토 이력이며, 아래 실제 서버 E2E 실행 제한은 별도로 남긴다.
+
+- 후보에서 네이티브 `:disabled`를 제외해 fieldset으로 상속된 비활성 상태를 반영한다. 이전 fixture의 첫 입력이 제외돼 주 버튼으로 초기 포커스가 들어간다.
+- Tab·Shift+Tab을 직접 처리하고 다음 후보부터 순환하며 실제 activeElement를 확인한다. 초기 진입·키보드 이동·외부 포커스 회수가 같은 검증 함수를 쓰며, 후보가 없거나 포커스 시도가 실패하면 패널로 대체한다.
+- 이전 재현의 Tab과 Shift+Tab 세 번 모두 시트 안에 머물렀다. 배경 링크에 강제로 포커스를 줘도 주 버튼으로 돌아왔다.
+- 동적 상태 검사에서도 fieldset을 활성화하면 입력으로 이동하고, 그 입력에 포커스한 채 fieldset을 비활성화한 다음 Tab을 누르면 활성 주 버튼으로 이동한다. 모든 컨트롤을 비활성화한 검증 상태에서는 Tab·Shift+Tab 및 외부 포커스 회수 모두 패널로 돌아왔다.
+- 실제 TSX와 빌드 CSS를 사용한 격리 브라우저 **8개 시나리오 PASS**: 일반 시트 390·768·1280, 숨겨진 첫 요소, 390×240, 390×600 글자 200%, 비활성 fieldset, 동적 fieldset/후보 없음. 결과 JSON을 별도 assert 스크립트로 확인했다. 외부 네트워크 요청은 모두 차단했다.
+- 전체 `pnpm test` **225/227 PASS**. 실패 2건은 이전과 같은 `profile-role-release` 검사다. 기존 마감 표시·접수 상태 14건은 이 검사에 포함돼 통과했다. web lint·production build PASS. 빌드에는 Supabase 공개 주소·키의 로컬 대체값을 사용했다.
+- 변경된 TSX·E2E와 `deadlineDisplay.ts` Prettier가 모두 통과했다. 이전 형식 경고는 현재 검사에서 재현되지 않았다. 검토 문서도 Prettier와 `git diff --check`로 확인한다.
+- 추가 E2E 사례가 비활성 fieldset을 실제 showcase에 넣고 열자마자 Shift+Tab 순환을 검사하는 것을 확인했다. 전용 설정의 **5건 수집 확인**. 실제 5건은 실행하지 않았다. 이전 자동 승인 검토가 로컬 Next 서버 시작을 `blocked by policy`로 거부했으므로 동일 동작을 우회 재시도하지 않았다. 전체 앱 provider/E2E·실제 스크린리더 조작은 미완료다. 이는 격리 브라우저 8개 시나리오 통과와 구분한다.
+- 자료: Git 제외 `data/results/ui-s1-rereview-b49e3b9/`의 `browser.cjs`, `fixture.tsx`, `validate.cjs`, `browser-results.json`, 스크린샷, 테스트·lint·build·Prettier 로그와 E2E 수집 목록.
+- 앱·테스트 구현은 수정하지 않았다. push·배포·운영 DB 작업 없이 검토 문서만 같은 브랜치에 커밋한다. 실제 서버 E2E는 실행 가능한 환경에서 추가 확인해야 하며, 이번 코드 검토 통과가 운영 배포 승인을 의미하지 않는다.
