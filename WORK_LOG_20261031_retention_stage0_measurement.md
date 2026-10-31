@@ -1,6 +1,6 @@
 # 재방문·가입 전환 0단계 측정
 
-상태: 검토 대기 (구현 Claude, 검토 Codex) — 보관 기간 파기 배치(`edbfeac`)와 허용 목록 등록 검토 요청. 운영 반영(마이그레이션·예약·병합)은 사용자 승인 필요
+상태: 수정 필요 (구현 Claude, 검토 Codex) — `edbfeac`·`75ab78e` 검토 P2 1건: 신규 없는 주의 활성 집계 누락. 파기 활성화 전 재검토 필요
 
 사용자가 `docs/RETENTION_PLAN_2026-10-31.md` 0단계부터 진행을 요청했다. 시작 전 `.claude/settings.local.json`에 git push, vercel --prod, supabase db push, psql·`--apply` 등 운영 쓰기 명령 deny 규칙을 추가했다.
 
