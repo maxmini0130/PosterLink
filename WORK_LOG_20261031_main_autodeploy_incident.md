@@ -1,6 +1,6 @@
 # main 자동 배포로 운영 보호 코드가 빠진 사고
 
-상태: 조치 완료(롤백), 재발 방지 진행 중 (Claude) — 기준 `origin/main` `786acc6`
+상태: 검토 대기 (구현 Claude, 검토 Codex) — 정렬 커밋 `c07b103`(병합)·`8a426db`(크롤러 보류)
 
 ## 경위 (KST)
 
@@ -27,3 +27,19 @@
 - **`main` 정렬 전에는 `main` push를 보류한다.** 협업 규칙 브랜치 `docs/agent-collaboration-20261031`과 이 브랜치도 포함한다.
 - 추천: 릴리스 브랜치의 보호 코드를 `main`에 병합해 `main` = 운영 웹 기준으로 만든다. 병합 PR을 이 브랜치에서 준비해 교차 검토 후 사용자가 push·Promote한다. 대안은 Vercel Production 브랜치 변경이나 Git 자동 배포 해제다.
 - `main`을 건드리는 모든 작업은 웹 운영 배포 영향 확인을 완료 조건에 넣는다.
+
+## main 정렬 (이 브랜치)
+
+- `c07b103`: `release/ga4-production-20261025`(`2c6744a`)를 `--no-ff`로 병합했다. 충돌 없음. 공통 조상은 `3560365`, `main` 전용 커밋은 크롤러 수정 `786acc6` 1개, 릴리스 전용 커밋은 36개.
+- `8a426db`: `scripts/crawler`를 병합 전 `main` 상태로 되돌렸다. 릴리스 브랜치의 지역 분류 변경(`3026020`, `e66bb6b`의 `region-context`, `region-rules`, `poster-classifier`, `upload-to-supabase`)은 일일 크롤러에서 한 번도 실행된 적이 없고, 1단계(B 지역 정리) 검증 대상이기 때문이다. 이미 실행된 일회성 검토 스크립트 5개도 제외했다. 1단계에서 검증한 뒤 이 커밋을 revert해 반영한다.
+- 결과: `apps/web`, `packages`, `supabase`는 운영 소스 `0aa3524`와 **동일**(diff 없음). 크롤러는 현재 `main`과 동일. 릴리스 브랜치 대비 차이는 크롤러와 이 사고 기록뿐이다.
+- 알려진 차이: 관리자 수동 크롤링·공지 후보 변환은 웹 번들의 크롤러 업로드 모듈을 쓴다. 지금 운영 웹은 릴리스의 새 지역 분류를 쓰고 있었고, 정렬 후에는 일일 크롤러와 같은 기존 분류와 `786acc6` 일정 수정을 쓴다. 두 경로가 일치하게 되는 방향이다.
+- 환경 의존성: 네이버 차단 라우트는 환경변수와 무관하게 503이다. GA는 `NEXT_PUBLIC_GA_ENABLED=true` 등이 있어야 동작하는데 Vercel 프로젝트에는 GA 환경변수가 없으므로 `main` 빌드에서도 수집 OFF다.
+- 검증(로컬 Node 24.15.0): 크롤러 `npm test` 323/323, 웹 lint PASS, build PASS, `naver-emergency-stop` 고정 검사 5/5, `pnpm test` 170/172(기존 `profile-role-release` 스냅샷 2건, 릴리스 기준과 동일), `git diff --check` PASS. Node 20 빌드는 로컬에 Node 20이 없어 PR CI에 맡긴다.
+
+## 반영 절차 (사용자 실행)
+
+1. Codex 교차 검토 통과 후 이 브랜치를 push하고 `main`으로 PR을 만든다. CI(크롤러 테스트, 웹 lint·build, Node 20)를 확인한다.
+2. PR을 병합하면 Vercel이 Production 배포를 만든다. Instant Rollback 상태라 운영 도메인에 자동 연결되지 않는다. 그 배포 URL에서 `/api/auth/naver` 503, `/login` 중단 안내, 홈·목록·상세 200을 확인한다.
+3. 확인 후 그 배포를 Promote한다. 이때부터 다시 `main` push가 운영 배포가 된다(이번 정렬 이후에는 의도된 동작).
+4. 롤백: 문제가 있으면 `K26HCSXnY`로 Instant Rollback한다.
