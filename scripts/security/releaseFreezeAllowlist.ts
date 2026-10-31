@@ -8,10 +8,17 @@
 /** Stage 0 retention measurement, reviewed by Codex at 3579136. */
 const STAGE0_REVIEWED = "3474a6bbd68384482ad61f132550134ab22a1bfb";
 
+/** Usage log retention purge; pending Codex review. */
+const RETENTION_PURGE = "edbfeace92f215be347ea1b8ead32282ba2ad89c";
+
 /** New migration path -> commit holding its reviewed content. */
 export const APPROVED_MIGRATIONS: Readonly<Record<string, string>> = {
   "supabase/migrations/20261031010000_extend_product_events_for_retention.sql":
     STAGE0_REVIEWED,
+  "supabase/migrations/20261031020000_add_usage_log_retention.sql":
+    RETENTION_PURGE,
+  "supabase/migrations/20261031030000_schedule_usage_log_retention.sql":
+    RETENTION_PURGE,
 };
 
 /** File path -> commit holding its reviewed content; replaces the base pin. */

@@ -1,6 +1,6 @@
 # 재방문·가입 전환 0단계 측정
 
-상태: 승인 대기 (구현 Claude, 검토 Codex) — `49c4658` 고정 검사 재검토 통과. 스테이징 시연·개인정보 결정·운영 반영은 별도 단계
+상태: 검토 대기 (구현 Claude, 검토 Codex) — 보관 기간 파기 배치(`edbfeac`)와 허용 목록 등록 검토 요청. 운영 반영(마이그레이션·예약·병합)은 사용자 승인 필요
 
 사용자가 `docs/RETENTION_PLAN_2026-10-31.md` 0단계부터 진행을 요청했다. 시작 전 `.claude/settings.local.json`에 git push, vercel --prod, supabase db push, psql·`--apply` 등 운영 쓰기 명령 deny 규칙을 추가했다.
 
@@ -86,3 +86,14 @@
 - 회귀 테스트 `scripts/security/release-freeze-allowlist.test.ts`(4건, 루트 `pnpm test` 등록): Codex 재현 사례(no-op 명령, 출생연도 마이그레이션, 검토본 이후 내용 추가, M·D 상태)를 포함한다.
 - 실파일 음성 검사(확인 후 원복): 온보딩 출생연도 prompt 삽입, 신규 `birth_date` 마이그레이션, no-op 테스트 명령 모두 실패.
 - 검증: 고정·허용 검사 12/12, `scripts/security/*.test.ts` 104/107, `pnpm test` 202/204. 남은 실패 3건은 `origin/main`과 같은 기존 실패(`profile-role-release` 2, `withdrawal-release` 1). Prettier·`git diff --check` PASS.
+
+## 보관 기간 파기 배치 (`edbfeac`, 허용 목록 등록은 다음 커밋)
+
+- 결정(10/31 사용자): 방침 초안(`apps/web/app/privacy/policy.ts`)의 기간을 따른다. 원본 이용 기록·식별자 연결 3개월(KST 달력), 검색 원문과 방문 URL 쿼리·유입 URL 30일, 장기 비교는 식별자 없는 주별 집계만. 앞서 제안한 13개월은 초안을 확인하지 않은 제안이라 철회했다.
+- `20261031020000_add_usage_log_retention.sql`: `usage_weekly_cohorts`, `snapshot_usage_weekly_cohorts()`, `usage_log_retention_cutoffs()`, `usage_log_retention_preview()`(dry-run), `run_usage_log_retention(p_batch)`. 적용해도 삭제하지 않는다. 한 실행에서 집계를 먼저 저장하고 단계별 최대 `p_batch`행을 정리한다. API 역할 실행 권한은 모두 회수했고 집계 표는 `service_role` 조회만 허용한다.
+- `20261031030000_schedule_usage_log_retention.sql`: 매일 03:30 KST `pg_cron` 예약. dry-run 결과 승인 뒤에만 적용한다.
+- 집계의 "신규"는 45일 무방문 후 방문이다. 원본이 3개월만 남아 전체 기간의 첫 방문을 알 수 없기 때문이며, 코호트는 주 시작 37일 뒤(원본이 약 52일 앞까지 남아 있을 때) 한 번 저장되고 바뀌지 않는다.
+- 테스트 `scripts/retention/usage-log-retention.test.ts` 7건(PGlite): KST 달력 cutoff, dry-run 무삭제, cutoff ±1분 경계, 검색 원문 비우기, 활동 중인 키의 연결 유지, 배치 한도와 분할 정리, API 역할 권한, 집계 값(45일 간격·같은 날 재방문·봇 제외·미완료 주 제외), 집계 후 파기 순서와 저장된 주 불변. 첫 실행에서 `service_role`에 집계 표 쓰기 권한이 남는 문제를 테스트로 발견해 조회만 허용하도록 고쳤다.
+- 운영 절차·롤백·알려진 영향: [usage_log_retention_runbook_20261031.md](docs/usage_log_retention_runbook_20261031.md). 운영자·관리자 리포트의 365일 선택은 활성화 후 3개월 이전이 비므로 기간 선택을 줄이는 후속 수정이 필요하다. 감사 기록 90일은 법정 보존 대상과 섞여 있어 제외했다.
+- 방침 문안: [retention_metrics_20261031.md](docs/retention_metrics_20261031.md) 0-6에 확정 기간으로 갱신했다. "자동 파기" 문구는 예약 작업이 운영에서 실제로 실행된 뒤에만 게시한다(초안 문구는 보안 검사가 고정).
+- 검증: 신규 7/7, `scripts/retention/*` 18/18, 고정·허용 검사 통과, `pnpm test` 209/211, `scripts/security/*` 104/107(남은 실패는 기존 3건). `pg_cron` 예약 SQL은 PGlite에 확장이 없어 실행하지 못했고 기존 `close-expired-posters-daily` 패턴을 따랐다.
