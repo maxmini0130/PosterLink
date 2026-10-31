@@ -1,6 +1,6 @@
 # 재방문·가입 전환 0단계 측정
 
-상태: 재검토 대기 (구현 Claude, 검토 Codex) — 고정 검사 허용 목록 전환 커밋 재검토 요청. 운영 반영(마이그레이션·병합)은 사용자 승인 필요
+상태: 승인 대기 (구현 Claude, 검토 Codex) — `49c4658` 고정 검사 재검토 통과. 스테이징 시연·개인정보 결정·운영 반영은 별도 단계
 
 사용자가 `docs/RETENTION_PLAN_2026-10-31.md` 0단계부터 진행을 요청했다. 시작 전 `.claude/settings.local.json`에 git push, vercel --prod, supabase db push, psql·`--apply` 등 운영 쓰기 명령 deny 규칙을 추가했다.
 
