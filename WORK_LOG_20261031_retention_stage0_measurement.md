@@ -1,6 +1,6 @@
 # 재방문·가입 전환 0단계 측정
 
-상태: 운영 반영 중 (구현 Claude, 검토 Codex) — ①② 적용 완료, ③ 삭제 예정 건수 확인. ④ 파기 예약은 사용자 명시 승인 대기. 방침·관리자 화면(`2c93d70`) Codex 검토 대기
+상태: 운영 반영 중 (구현 Claude, 검토 Codex) — ①② 적용, ④ 파기 예약 등록(job 6, 첫 실행 11/1 03:30 KST). ⑤ 첫 실행 확인 대기. 방침·관리자 화면(`2c93d70`) Codex 검토 대기
 
 사용자가 `docs/RETENTION_PLAN_2026-10-31.md` 0단계부터 진행을 요청했다. 시작 전 `.claude/settings.local.json`에 git push, vercel --prod, supabase db push, psql·`--apply` 등 운영 쓰기 명령 deny 규칙을 추가했다.
 
@@ -151,3 +151,9 @@
   - `poster_view_logs` 삭제 245(919), `poster_link_click_logs` 삭제 50(80), `search_logs` 삭제 28(45)
   - `product_events`·`visitor_identity_links` 0
 - API 역할 실행 불가 `true`, 예약 없음 `true`. ④ 예약은 사용자 명시 승인 대기.
+
+## 운영 반영 ④: 파기 예약 등록 (2026-11-01 01:07 KST 무렵)
+
+- 사용자가 ③ 건수를 확인한 뒤 Codex 통과본과 동일한 예약 마이그레이션을 SQL Editor에서 실행했다. 실행 파일 SHA-256(LF) `bd5055c32e5e529db45142b6fca2f8d8b4aac1c0912e6640e92cb409c7312ffb`. 결과 `schedule = 6`(pg_cron job id).
+- 첫 실행 예정: 2026-11-01 03:30 KST(`30 18 * * *` UTC). 실행 전 취소: `select cron.unschedule('usage-log-retention-daily');`.
+- 남은 확인: `cron.job` 등록 상태, 첫 실행 후 `cron.job_run_details`, preview 0 수렴, `usage_weekly_cohorts`·`usage_log_retention_state` 기록.
