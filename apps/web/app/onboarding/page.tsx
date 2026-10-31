@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { MapPin, Star, ChevronRight, Check, Shield, User } from "lucide-react";
 import toast from "react-hot-toast";
 import { getCityRegions, getDistrictRegions, getRegionLabel, getSelectedCityId, getSelectedDistrictId } from "../../lib/regionHelpers";
-import { trackProductEvent } from "../../lib/productEvents";
+import { syncVisitorIdentity, trackProductEvent } from "../../lib/productEvents";
 
 const TOTAL_STEPS = 6;
 
@@ -93,6 +93,7 @@ export default function OnboardingPage() {
         throw new Error(data.error ?? "프로필 저장 실패");
       }
 
+      void syncVisitorIdentity(currentUser.id);
       trackProductEvent("interest_save", {
         metadata: {
           screen: "onboarding",

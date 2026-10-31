@@ -2,15 +2,12 @@
 
 import { supabase } from "./supabase";
 import {
-  IDENTITY_LINK_KEY,
   POSTER_NAV_SOURCE_KEY,
-  PATH_HISTORY_KEY,
   SIGNUP_INTENT_KEY,
   detectClient,
   fallbackSignupIntent,
   pageTypeFromPath,
   parseNavSource,
-  parsePathHistory,
   parseSignupIntent,
   posterIdFromHref,
   previousPathFor,
@@ -18,12 +15,14 @@ import {
   resolvePosterViewSource,
   sanitizeMetadata,
   type PageType,
+  type PathHistory,
   type PosterViewSource,
   type ProductEventMetadata,
   type ProductEventName,
   type SignupFeature,
 } from "./productEventsCore";
 import { getSessionKey, getVisitorKey } from "./visitorIdentity";
+import { createIdentityLinker } from "./identityLinker";
 
 function client() {
   return detectClient(navigator.userAgent || "");
@@ -119,48 +118,49 @@ export function trackSignupStart(
   });
 }
 
-let linking: string | null = null;
-const LINK_RETRY_AT_KEY = "pl.identity_link_retry_at.v1";
-const LINK_RETRY_DELAY_MS = 10 * 60 * 1000;
+// Storage is read lazily: this module is also evaluated during server rendering.
+const lazyStore = (store: () => Storage) => ({
+  getItem: (key: string) => store().getItem(key),
+  setItem: (key: string, value: string) => store().setItem(key, value),
+  removeItem: (key: string) => store().removeItem(key),
+});
 
-/** Links this browser's anonymous key to the signed-in account once per account. */
-export async function syncVisitorIdentity(userId: string) {
-  try {
-    if (
-      linking === userId ||
-      localStorage.getItem(IDENTITY_LINK_KEY) === userId ||
-      Number(sessionStorage.getItem(LINK_RETRY_AT_KEY) ?? 0) > Date.now()
-    )
-      return;
-  } catch {
-    return;
-  }
-  linking = userId;
-  try {
+const identityLinker = createIdentityLinker({
+  link: async () => {
     const intent = readSignupIntent();
-    const { data, error } = await supabase.rpc("link_visitor_identity", {
+    return supabase.rpc("link_visitor_identity", {
       p_visitor_key: getVisitorKey(),
       p_session_key: getSessionKey(),
       p_client: client(),
       p_screen: intent?.screen ?? null,
       p_feature: intent?.feature ?? null,
     });
-    // 'pending' (profile not created yet) retries on the next session check.
-    if (error) {
-      sessionStorage.setItem(
-        LINK_RETRY_AT_KEY,
-        String(Date.now() + LINK_RETRY_DELAY_MS),
-      );
-      return;
+  },
+  local: lazyStore(() => window.localStorage),
+  session: lazyStore(() => window.sessionStorage),
+  now: () => Date.now(),
+  setTimer: (callback, ms) => window.setTimeout(callback, ms),
+  clearTimer: (handle) => window.clearTimeout(handle as number),
+  onLinked: () => {
+    try {
+      localStorage.removeItem(SIGNUP_INTENT_KEY);
+    } catch {
+      /* storage blocked */
     }
-    if (data !== "linked" && data !== "signup") return;
-    localStorage.setItem(IDENTITY_LINK_KEY, userId);
-    localStorage.removeItem(SIGNUP_INTENT_KEY);
-  } catch {
-    /* retried on the next session check */
-  } finally {
-    linking = null;
-  }
+  },
+});
+
+/**
+ * Links this browser's anonymous key to the signed-in account once per account.
+ * Call it again right after the profile row is created; 'pending' results retry
+ * on a short backoff.
+ */
+export function syncVisitorIdentity(userId: string) {
+  return identityLinker.sync(userId);
+}
+
+export function stopVisitorIdentitySync() {
+  identityLinker.signOut();
 }
 
 export function rememberPosterNavSource(href: string, source: string) {
@@ -176,29 +176,21 @@ export function rememberPosterNavSource(href: string, source: string) {
   }
 }
 
+// Module memory, not sessionStorage: it resets on every full document load, so
+// returning from another site is classified by the referrer, not a stale path.
+let pathHistory: PathHistory = { current: null, previous: null };
+
 export function recordPathHistory(pathname: string) {
-  try {
-    const history = parsePathHistory(sessionStorage.getItem(PATH_HISTORY_KEY));
-    sessionStorage.setItem(
-      PATH_HISTORY_KEY,
-      JSON.stringify(pushPathHistory(history, pathname)),
-    );
-  } catch {
-    /* storage blocked */
-  }
+  pathHistory = pushPathHistory(pathHistory, pathname);
 }
 
-/** Reads storage synchronously on detail mount; the order against the layout tracker does not matter. */
+/** Runs on detail mount; the order against the layout tracker does not matter. */
 export function consumePosterViewSource(posterId: string): PosterViewSource {
   let navSource = null;
-  let previousPath: string | null = null;
+  const previousPath = previousPathFor(pathHistory, location.pathname);
   try {
     navSource = parseNavSource(sessionStorage.getItem(POSTER_NAV_SOURCE_KEY));
     sessionStorage.removeItem(POSTER_NAV_SOURCE_KEY);
-    previousPath = previousPathFor(
-      parsePathHistory(sessionStorage.getItem(PATH_HISTORY_KEY)),
-      location.pathname,
-    );
   } catch {
     /* storage blocked */
   }

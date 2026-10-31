@@ -21,7 +21,7 @@
 
 ### 사람 단위
 
-- 회원: `user_id`. 비회원: `visitor_key`. 비회원 키가 나중에 계정과 연결되면 그 키의 과거 방문도 해당 계정으로 합친다(가장 먼저 연결된 계정 기준).
+- 회원: `user_id`. 비회원: `visitor_key`. 비회원 키가 나중에 계정과 연결되면 그 키의 로그아웃 상태 방문 전체를 **가장 먼저 연결된 계정 하나**에 귀속한다. 모든 쿼리가 같은 `key_owner` CTE를 쓰며, 한 방문이 두 계정에 동시에 잡히지 않는다.
 - **한계**: 비회원은 기기·브라우저·앱 WebView가 바뀌거나 브라우저 저장소를 지우면 다른 사람으로 집계된다. 같은 사람이 웹과 앱을 함께 써도 로그인 전에는 2명이다. 시크릿 모드·저장소 차단 브라우저는 방문마다 새 키가 생겨 신규 방문자가 과다 집계될 수 있다. 한 브라우저에서 여러 계정으로 로그인하면 그 키의 비회원 기록은 첫 연결 계정에 귀속된다.
 
 ### 7일/30일 재방문율
@@ -46,19 +46,19 @@
 ### Q1. 주별 첫 방문 코호트의 7일·30일 재방문율
 
 ```sql
-WITH visits AS (
+WITH key_owner AS (
+  -- 브라우저 키의 비회원 기록은 처음 연결된 계정 하나에만 귀속한다(Q1·Q2·Q4 공통).
+  SELECT DISTINCT ON (visitor_key) visitor_key, user_id
+  FROM visitor_identity_links
+  ORDER BY visitor_key, first_linked_at, user_id
+),
+visits AS (
   SELECT
     v.created_at,
     (v.created_at AT TIME ZONE 'Asia/Seoul')::date AS kst_day,
-    COALESCE(v.user_id::text, link.user_id::text, 'v:' || v.visitor_key) AS person
+    COALESCE(v.user_id::text, ko.user_id::text, 'v:' || v.visitor_key) AS person
   FROM site_visit_logs v
-  LEFT JOIN LATERAL (
-    SELECT l.user_id
-    FROM visitor_identity_links l
-    WHERE l.visitor_key = v.visitor_key
-    ORDER BY l.first_linked_at
-    LIMIT 1
-  ) link ON true
+  LEFT JOIN key_owner ko ON ko.visitor_key = v.visitor_key
   WHERE v.actor_type IN ('visitor', 'member') AND NOT v.is_automated
 ),
 firsts AS (
@@ -98,7 +98,13 @@ ORDER BY 1;
 `:since`는 비교 시작 시각(예: `'2026-11-01 00:00+09'`).
 
 ```sql
-WITH signups AS (
+WITH key_owner AS (
+  -- 브라우저 키의 비회원 기록은 처음 연결된 계정 하나에만 귀속한다(Q1·Q2·Q4 공통).
+  SELECT DISTINCT ON (visitor_key) visitor_key, user_id
+  FROM visitor_identity_links
+  ORDER BY visitor_key, first_linked_at, user_id
+),
+signups AS (
   SELECT
     u.id AS user_id,
     u.created_at,
@@ -133,9 +139,9 @@ activation AS (
   GROUP BY s.user_id
 ),
 member_visits AS (
-  SELECT COALESCE(v.user_id, l.user_id) AS user_id, v.created_at
+  SELECT COALESCE(v.user_id, ko.user_id) AS user_id, v.created_at
   FROM site_visit_logs v
-  LEFT JOIN visitor_identity_links l ON l.visitor_key = v.visitor_key AND v.user_id IS NULL
+  LEFT JOIN key_owner ko ON ko.visitor_key = v.visitor_key
   WHERE v.actor_type IN ('visitor', 'member') AND NOT v.is_automated
 ),
 returns AS (
@@ -186,7 +192,13 @@ ORDER BY completes DESC, starts DESC;
 ### Q4. 가입 전 비회원 행동이 가입으로 이어졌는지
 
 ```sql
-WITH first_link AS (
+WITH key_owner AS (
+  -- 브라우저 키의 비회원 기록은 처음 연결된 계정 하나에만 귀속한다(Q1·Q2·Q4 공통).
+  SELECT DISTINCT ON (visitor_key) visitor_key, user_id
+  FROM visitor_identity_links
+  ORDER BY visitor_key, first_linked_at, user_id
+),
+first_link AS (
   SELECT DISTINCT ON (user_id) user_id, visitor_key, client, first_linked_at
   FROM visitor_identity_links
   ORDER BY user_id, first_linked_at
@@ -194,17 +206,24 @@ WITH first_link AS (
 SELECT
   fl.client,
   count(*) AS linked_accounts,
+  -- 다른 계정이 먼저 연결된 공유 브라우저: 비회원 이력은 그 계정 몫이라 0으로 본다.
+  count(*) FILTER (WHERE ko.user_id <> fl.user_id) AS shared_browser_accounts,
   count(*) FILTER (WHERE pre.visits > 0) AS with_anonymous_visits_before,
   round(avg(pre.visits), 1) AS avg_anonymous_visits_before,
   count(*) FILTER (WHERE pre.prompts > 0) AS saw_signup_prompt_before
 FROM first_link fl
 JOIN product_events sc ON sc.event_name = 'signup_complete' AND sc.user_id = fl.user_id
+JOIN key_owner ko ON ko.visitor_key = fl.visitor_key
 CROSS JOIN LATERAL (
   SELECT
-    (SELECT count(*) FROM site_visit_logs v
-      WHERE v.visitor_key = fl.visitor_key AND v.user_id IS NULL AND v.created_at < fl.first_linked_at) AS visits,
-    (SELECT count(*) FROM product_events e
-      WHERE e.visitor_key = fl.visitor_key AND e.event_name = 'signup_prompt_shown' AND e.created_at < fl.first_linked_at) AS prompts
+    CASE WHEN ko.user_id = fl.user_id THEN
+      (SELECT count(*) FROM site_visit_logs v
+        WHERE v.visitor_key = fl.visitor_key AND v.user_id IS NULL AND v.created_at < fl.first_linked_at)
+    ELSE 0 END AS visits,
+    CASE WHEN ko.user_id = fl.user_id THEN
+      (SELECT count(*) FROM product_events e
+        WHERE e.visitor_key = fl.visitor_key AND e.event_name = 'signup_prompt_shown' AND e.created_at < fl.first_linked_at)
+    ELSE 0 END AS prompts
 ) pre
 GROUP BY fl.client;
 ```

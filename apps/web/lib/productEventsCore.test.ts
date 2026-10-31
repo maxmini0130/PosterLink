@@ -6,7 +6,6 @@ import {
   detectClient,
   fallbackSignupIntent,
   pageTypeFromPath,
-  parsePathHistory,
   parseSignupIntent,
   posterIdFromHref,
   previousPathFor,
@@ -109,7 +108,8 @@ test("poster id is read only from same-origin detail links", () => {
 });
 
 test("path history is independent of effect order", () => {
-  const listed = pushPathHistory(parsePathHistory(null), "/posters");
+  const empty = { current: null, previous: null };
+  const listed = pushPathHistory(empty, "/posters");
   // layout recorded the detail path first
   const recorded = pushPathHistory(listed, `/posters/${ID}`);
   assert.equal(previousPathFor(recorded, `/posters/${ID}`), "/posters");
@@ -117,10 +117,51 @@ test("path history is independent of effect order", () => {
   assert.equal(previousPathFor(listed, `/posters/${ID}`), "/posters");
   // re-render of the same path does not overwrite history
   assert.deepEqual(pushPathHistory(recorded, `/posters/${ID}`), recorded);
-  assert.deepEqual(parsePathHistory('{"current":"https://x"}'), {
-    current: null,
-    previous: null,
-  });
+});
+
+test("a new document ignores the previous site visit and uses the referrer (Codex review #3)", () => {
+  // History lives in module memory, so a full load after leaving the site starts empty
+  // whether or not the layout already recorded the current path.
+  const detail = `/posters/${ID}`;
+  for (const history of [
+    { current: null, previous: null },
+    pushPathHistory({ current: null, previous: null }, detail),
+  ]) {
+    const previousPath = previousPathFor(history, detail);
+    assert.equal(previousPath, null);
+    const base = {
+      posterId: ID,
+      navSource: null,
+      search: "",
+      currentPath: detail,
+      previousPath,
+      origin: ORIGIN,
+      now: NOW,
+    };
+    assert.equal(
+      resolvePosterViewSource({ ...base, referrer: "https://www.google.com/" }),
+      "external",
+    );
+    assert.equal(resolvePosterViewSource({ ...base, referrer: "" }), "direct");
+  }
+  // client-side navigation in the same document still uses the in-app path
+  const spa = pushPathHistory(
+    pushPathHistory({ current: null, previous: null }, "/"),
+    detail,
+  );
+  assert.equal(
+    resolvePosterViewSource({
+      posterId: ID,
+      navSource: null,
+      search: "",
+      currentPath: detail,
+      previousPath: previousPathFor(spa, detail),
+      referrer: "https://www.google.com/",
+      origin: ORIGIN,
+      now: NOW,
+    }),
+    "home",
+  );
 });
 
 test("poster view source priority: card click, share link, in-app path, referrer", () => {

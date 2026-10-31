@@ -76,7 +76,6 @@ export type SignupIntent = {
 
 export const SIGNUP_INTENT_KEY = "pl.signup_intent.v1";
 export const POSTER_NAV_SOURCE_KEY = "pl.poster_nav_source.v1";
-export const IDENTITY_LINK_KEY = "pl.identity_link.v1";
 /** Long enough for an OAuth round trip, short enough not to credit an old prompt. */
 export const SIGNUP_INTENT_TTL_MS = 60 * 60 * 1000;
 const NAV_SOURCE_TTL_MS = 60 * 1000;
@@ -255,20 +254,7 @@ export function posterIdFromHref(href: string, origin: string) {
   }
 }
 
-export const PATH_HISTORY_KEY = "pl.path_history.v1";
-
 export type PathHistory = { current: string | null; previous: string | null };
-
-export function parsePathHistory(raw: string | null): PathHistory {
-  try {
-    const value = JSON.parse(raw || "null");
-    const path = (x: unknown) =>
-      typeof x === "string" && x.startsWith("/") ? x : null;
-    return { current: path(value?.current), previous: path(value?.previous) };
-  } catch {
-    return { current: null, previous: null };
-  }
-}
 
 export function pushPathHistory(
   history: PathHistory,

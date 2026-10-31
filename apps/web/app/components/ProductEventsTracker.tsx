@@ -8,6 +8,7 @@ import {
   rememberPosterNavSource,
   recordPathHistory,
   rememberSignupIntent,
+  stopVisitorIdentitySync,
   syncVisitorIdentity,
 } from "../../lib/productEvents";
 import type { SignupFeature } from "../../lib/productEventsCore";
@@ -43,6 +44,7 @@ export default function ProductEventsTracker() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) void syncVisitorIdentity(session.user.id);
+      else stopVisitorIdentitySync();
     });
 
     const onClick = (event: MouseEvent) => {
