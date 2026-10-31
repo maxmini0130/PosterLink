@@ -1,6 +1,6 @@
 # 재방문·가입 전환 0단계 측정
 
-상태: 운영 반영 중 (구현 Claude, 검토 Codex) — ① 0단계 마이그레이션 운영 적용 완료. ② 파기 함수 적용 대기(사용자 실행)
+상태: 운영 반영 중 (구현 Claude, 검토 Codex) — ① 적용 완료, ② 사용자 실행 대기. 방침·관리자 화면 변경 Codex 검토 요청
 
 사용자가 `docs/RETENTION_PLAN_2026-10-31.md` 0단계부터 진행을 요청했다. 시작 전 `.claude/settings.local.json`에 git push, vercel --prod, supabase db push, psql·`--apply` 등 운영 쓰기 명령 deny 규칙을 추가했다.
 
@@ -132,3 +132,13 @@
 - 적용: 사용자가 SQL Editor에서 Codex 통과본(`3474a6b`)과 동일한 마이그레이션을 `BEGIN`~`COMMIT`으로 한 번에 실행, "Success. No rows returned". 실행 파일 SHA-256(LF) `fa57e52eaf652eb507dfe6b878712a21d8815b38f1a29a868b37f91e20a8b743`. 실행 전 같은 파일을 PGlite에서 적용 확인. migration history INSERT는 하지 않았다(10/23 역할 보안 적용과 같은 방식).
 - 적용 후 확인 8/8: 새 컬럼 5개, 새 제약 3개와 가입완료 1회 인덱스, 연결 표 RLS, anon·authenticated 연결 표 조회 불가, anon 연결 RPC 실행 불가, 이벤트 RPC 실행 가능, `poster_view_logs.source`, 기존 이벤트 41건 유지.
 - 운영 웹(GET): `/`·`/posters` 200, `/api/auth/naver` 503 유지. 운영 웹은 새 RPC를 호출하지 않으므로 화면 변화 없음.
+
+## 방침 게시·관리자 화면 준비 (PR #16 병합 시 반영)
+
+- 운영 반영 순서상 이 변경은 ⑤ 첫 파기 실행 확인 뒤 PR #16 병합으로만 운영에 나간다. 병합 전에 예약이 실제로 돌지 않았다면 "매일 자동 파기" 문구가 사실이 아니므로 병합하지 않는다.
+- `apps/web/app/privacy/page.tsx`(운영 공개 방침): 자동 수집 항목에 이용 행태·방문자 식별자·계정 연결 기록 추가, 브라우저 저장소 안내 문단, 이용 목적 구체화, 보유 기간에 이용 기록 3개월·검색 원문 30일·식별 불가 주별 집계 별도 보관과 회원 정보 삭제 시 연결 처리 추가. 최종 업데이트 2026년 11월 1일(병합일이 다르면 병합 전에 맞춘다). `policy.ts`(B 초안, 미게시)는 바꾸지 않았다.
+- `apps/web/app/admin/traffic/page.tsx`: 기간 선택에서 1년 제거(원본 3개월). API(`/api/admin/traffic`)는 보안 고정 범위라 바꾸지 않았고 직접 `days=365`를 넣으면 3개월치만 나온다.
+- `apps/web/app/admin/page.tsx`: "공식 링크 클릭" → "공식 링크 클릭 (최근 3개월)". 운영자 리포트 화면은 30일 고정이라 변경 없음.
+- 검증: web lint PASS, build PASS, `pnpm test` 219/221·`scripts/security/*` 104/107(기존 실패만), `git diff --check` PASS. `/privacy`를 로컬 production 빌드로 모바일 375px·데스크톱 1280px 확인(가로 넘침 없음, 목록 구조 유지). Supabase·`/api/*` 요청은 브라우저에서 차단해 운영 DB에 쓰지 않았다. 관리자 화면은 로그인이 필요해 화면 확인을 하지 않았다(상수·라벨 변경만).
+- 관리자 파일 2개는 수정 전부터 Prettier 형식이 아니어서 전체 재포맷하지 않았다.
+- ④ 예약 실행 파일: Codex 통과본과 동일, SHA-256(LF) `bd5055c32e5e529db45142b6fca2f8d8b4aac1c0912e6640e92cb409c7312ffb`.

@@ -270,6 +270,6 @@ WHERE created_at > now() - interval '1 day' GROUP BY 1 ORDER BY 1;
 
    > 방문·공고 조회·신청 링크 이동·서비스 이용 이벤트 기록과 방문자 식별자·회원 계정 연결 기록은 생성 시각부터 한국시간 기준 3개월이 지나면 매일 자동으로 파기합니다. 검색어 원문과 방문 기록의 URL 쿼리·유입 URL은 30일이 지나면 파기합니다. 서비스 개선 추이를 보기 위해 개인을 식별할 수 없는 주 단위 집계(신규 방문자 수, 7일·30일 재방문 수, 주간 이용자 수)만 별도로 보관합니다. 회원 탈퇴 시 계정과의 연결 기록은 삭제되고, 이용 행태 기록의 계정 연결은 해제됩니다.
    - 구현: [20261031020000_add_usage_log_retention.sql](../supabase/migrations/20261031020000_add_usage_log_retention.sql)(함수, 적용해도 삭제 없음)과 [20261031030000_schedule_usage_log_retention.sql](../supabase/migrations/20261031030000_schedule_usage_log_retention.sql)(매일 03:30 KST 예약). 절차는 [usage_log_retention_runbook_20261031.md](usage_log_retention_runbook_20261031.md).
-   - **게시 조건**: "매일 자동으로 파기"는 예약 작업이 운영에서 실제로 실행된 뒤에만 게시한다. 그 전에는 방침 초안의 "보존기간 자동 정리는 운영하지 않습니다" 문구를 유지한다. 초안 문구는 `scripts/security/ga4-naver-safe-release.test.ts`가 고정하므로, 게시할 때 그 검사도 함께 갱신·검토한다.
+   - **게시 조건**: "매일 자동으로 파기"는 예약 작업이 운영에서 실제로 실행된 뒤에만 게시한다. 공개 방침(`apps/web/app/privacy/page.tsx`) 반영본은 PR #16에 들어 있어 병합 시 게시된다. 그 전에는 방침 초안의 "보존기간 자동 정리는 운영하지 않습니다" 문구를 유지한다. 초안 문구는 `scripts/security/ga4-naver-safe-release.test.ts`가 고정하므로, 게시할 때 그 검사도 함께 갱신·검토한다.
    - 탈퇴 시 `visitor_identity_links`는 `ON DELETE CASCADE`, `product_events.user_id`는 `SET NULL`로 마이그레이션에 반영돼 있다.
    - 파기 후 Q1~Q5는 최근 3개월 원본만 대상으로 한다. 그보다 긴 비교는 `usage_weekly_cohorts`를 쓰며, 이 표의 "신규"는 "45일 동안 방문이 없다가 방문한 사람"이다(원본이 3개월만 남아 전체 기간의 첫 방문을 알 수 없기 때문). `lookback_complete = false`인 주는 기존 방문자와 신규를 구분할 수 없어 비교에서 뺀다.

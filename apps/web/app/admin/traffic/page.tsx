@@ -118,7 +118,8 @@ type TrafficData = {
   recentVisits?: RecentVisit[];
 };
 
-const DAY_OPTIONS = [1, 7, 30, 90, 365];
+// Raw visit logs are kept for 3 months (usage log retention), so no longer ranges.
+const DAY_OPTIONS = [1, 7, 30, 90];
 const ACTOR_FILTERS = [
   { key: "all", label: "전체" },
   { key: "visitor", label: "일반 방문" },
@@ -337,7 +338,7 @@ export default function AdminTrafficPage() {
       );
   const mobileWebSessions = clientPlatforms.find((row) => row.key === "mobile_web")?.sessions ?? 0;
   const appSessions = clientPlatforms.find((row) => row.key === "app")?.sessions ?? 0;
-  const periodLabel = days === 1 ? "오늘" : days === 365 ? "최근 1년" : `최근 ${days}일`;
+  const periodLabel = days === 1 ? "오늘" : `최근 ${days}일`;
   const scopeLabel = includeInternal
     ? "내부·자동 방문 포함"
     : "관리자·운영자·자동 검사 제외";
@@ -366,7 +367,7 @@ export default function AdminTrafficPage() {
                     : "text-gray-400 hover:text-gray-900 dark:hover:text-white"
                 }`}
               >
-                {option === 1 ? "오늘" : option === 365 ? "1년" : `${option}일`}
+                {option === 1 ? "오늘" : `${option}일`}
               </button>
             ))}
           </div>
