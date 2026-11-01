@@ -2,6 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+.feed-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 10px;
+  row-gap: 18px;
+}
+@media (min-width: 768px) {
+  .feed-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 22px 16px;
+  }
+}
+@media (min-width: 1200px) {
+  .feed-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 26px 20px;
+  }
+}
+
 :root {
   --background: #ffffff;
   --foreground: #0f172a;
@@ -120,8 +139,21 @@ html.pl-action-bar-open {
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  font-family:
+    "Pretendard",
+    -apple-system,
+    BlinkMacSystemFont,
+    system-ui,
+    Roboto,
+    "Helvetica Neue",
+    "Segoe UI",
+    "Apple SD Gothic Neo",
+    "Noto Sans KR",
+    "Malgun Gothic",
+    sans-serif;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
 }
 
 .admin-light-surface {

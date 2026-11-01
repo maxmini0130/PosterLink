@@ -25,6 +25,10 @@ interface PosterCardProps {
     deadlineType?: string | null;
     /** event_end_at: a finished event is shown as ended, not open. */
     eventEndAt?: string | null;
+    imageWidth?: number | null;
+    imageHeight?: number | null;
+    imageStatus?: "ok" | "missing" | "unsuitable" | "broken" | null;
+    regionLabel?: string | null;
     tags?: string[];
     image?: string;
     images?: string[];

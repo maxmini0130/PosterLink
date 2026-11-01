@@ -47,6 +47,11 @@ import {
 } from "../../lib/categoryTaxonomy";
 import { searchCategoryScope } from "../../lib/categoryScopedSearch";
 import {
+  loadPosterImageMetadata,
+  metadataForUrl,
+} from "../../lib/posterImageMetadata";
+import { resolvePosterImageGallery } from "../../lib/posterImage";
+import {
   groupByRegionScope,
   isSavedSearch,
   readSavedSearches,
@@ -88,14 +93,15 @@ function toCard(poster: Row): PlPosterCardData {
   return {
     id: poster.id,
     title: poster.title,
-    org:
-      (poster.verification_status === "verified" && poster.verified_at
-        ? poster.organizer_name || poster.source_org_name
-        : poster.source_org_name) ?? undefined,
+    org: poster.organizer_name || undefined,
     applicationStartAt: poster.application_start_at,
     deadline: poster.application_end_at ?? undefined,
     deadlineType: poster.deadline_type,
     eventEndAt: poster.event_end_at,
+    imageWidth: poster.imageWidth,
+    imageHeight: poster.imageHeight,
+    imageStatus: poster.imageStatus,
+    regionLabel: poster.regionName,
     image: poster.thumbnail_url ?? undefined,
     images: poster.images,
     sourceUrl: poster.source_key ?? undefined,
@@ -335,13 +341,22 @@ function PosterListPageContent({
           : data;
 
       const ids = dateFilteredData.map((poster) => poster.id);
-      const [metaMap, metricCounts, imageMap] = await Promise.all([
+      const [metaMap, metricCounts, imageMap, imageMeta] = await Promise.all([
         fetchCategoryRegionNames(ids),
         fetchPosterMetricCounts(ids),
         fetchPosterImages(ids),
+        loadPosterImageMetadata(supabase, ids),
       ]);
       const enriched = dateFilteredData.map((poster) => ({
         ...poster,
+        ...metadataForUrl(
+          imageMeta.get(poster.id),
+          resolvePosterImageGallery(
+            imageMap[poster.id] ?? [],
+            poster.thumbnail_url,
+            poster.source_key,
+          )[0],
+        ),
         ...metaMap[poster.id],
         images: imageMap[poster.id] ?? [],
         viewCount: metricCounts.viewCounts[poster.id] ?? 0,

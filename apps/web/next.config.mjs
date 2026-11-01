@@ -6,6 +6,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Keep the mocked E2E server separate from the user's local preview build.
+  distDir: process.env.NEXT_BUILD_DIR || ".next",
   transpilePackages: ["@posterlink/ui", "@posterlink/types", "@posterlink/lib"],
   experimental: {
     outputFileTracingRoot: path.join(__dirname, "../.."),
@@ -17,6 +19,9 @@ const nextConfig = {
     },
   },
   images: {
+    deviceSizes: [360, 540, 720],
+    imageSizes: [360],
+    formats: ["image/avif", "image/webp"],
     remotePatterns: [
       {
         protocol: "https",
@@ -38,6 +43,9 @@ export default withSentryConfig(nextConfig, {
     automaticVercelMonitors: false,
   },
   errorHandler: (err) => {
-    console.warn("[Sentry] Source map upload failed without blocking the build:", err.message);
+    console.warn(
+      "[Sentry] Source map upload failed without blocking the build:",
+      err.message,
+    );
   },
 });

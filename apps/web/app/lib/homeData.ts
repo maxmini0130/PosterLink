@@ -11,6 +11,11 @@ import { categoryScopeIds } from "../../lib/categoryTaxonomy";
 import { guestLocal } from "./guestSession";
 import { fetchCategoryRegionNames } from "./posterHelpers";
 import { supabase } from "./supabase";
+import {
+  loadPosterImageMetadata,
+  metadataForUrl,
+} from "../../lib/posterImageMetadata";
+import { interestCategories } from "../../lib/categoryTaxonomy";
 
 /** Interest conditions shown on the home button and used for the lists. */
 export type HomeInterest = {
@@ -32,6 +37,11 @@ export type HomeData = {
   regions: RegionNode[];
   /** Interest category id -> the category ids it covers (for the chips). */
   categoryScopes: Record<string, string[]>;
+  availableCategories: Array<{
+    id: string;
+    name: string;
+    code?: string | null;
+  }>;
 };
 
 const SELECT =
@@ -63,12 +73,16 @@ const time = (value: string | null) => {
 };
 
 async function toItems(rows: Row[]): Promise<HomeItem<PlPosterCardData>[]> {
-  const meta = (await fetchCategoryRegionNames(rows.map((row) => row.id)).catch(
-    () => ({}),
-  )) as Record<
+  const ids = rows.map((row) => row.id);
+  const [images, names] = await Promise.all([
+    loadPosterImageMetadata(supabase, ids),
+    fetchCategoryRegionNames(ids).catch(() => ({})),
+  ]);
+  const meta = names as Record<
     string,
     {
       categoryName?: string | null;
+      regionName?: string | null;
       categoryIds?: string[];
       regionIds?: string[];
     }
@@ -91,10 +105,9 @@ async function toItems(rows: Row[]): Promise<HomeItem<PlPosterCardData>[]> {
     data: {
       id: row.id,
       title: row.title,
-      org:
-        (row.verification_status === "verified" && row.verified_at
-          ? row.organizer_name || row.source_org_name
-          : row.source_org_name) ?? undefined,
+      org: row.organizer_name ?? undefined,
+      regionLabel: meta[row.id]?.regionName,
+      ...metadataForUrl(images.get(row.id), row.thumbnail_url),
       applicationStartAt: row.application_start_at,
       deadline: row.application_end_at ?? undefined,
       deadlineType: row.deadline_type,
@@ -115,6 +128,7 @@ type TaxonomyRows = {
     id: string;
     code: string | null;
     parent_id: string | null;
+    name: string;
   }>;
 };
 
@@ -122,7 +136,7 @@ type TaxonomyRows = {
 async function loadTaxonomy(): Promise<TaxonomyRows> {
   const [regions, categories] = await Promise.all([
     supabase.from("regions").select("id, name, level, parent_id"),
-    supabase.from("categories").select("id, code, parent_id"),
+    supabase.from("categories").select("id, name, code, parent_id"),
   ]);
   if (regions.error || categories.error) throw new Error("taxonomy");
   return {
@@ -345,19 +359,28 @@ export async function loadHomeData(): Promise<HomeData> {
       loadRowsByIds(setup.favoriteIds),
       loadFollowedRows(institutionIds),
     ]);
+  // The same poster occurs in several groups. Enrich its public metadata only
+  // once, rather than re-downloading the same rows for every group.
+  const groups = [
+    interestRows,
+    nearbyRows,
+    latestRows,
+    favoriteRows,
+    followedRows,
+  ];
+  const uniqueRows = [
+    ...new Map(groups.flat().map((row) => [row.id, row])).values(),
+  ];
+  const byId = new Map(
+    (await toItems(uniqueRows)).map((item) => [item.id, item]),
+  );
   const [
     interestItems,
     nearbyItems,
     latestItems,
     favoriteItems,
     followedItems,
-  ] = await Promise.all([
-    toItems(interestRows),
-    toItems(nearbyRows),
-    toItems(latestRows),
-    toItems(favoriteRows),
-    toItems(followedRows),
-  ]);
+  ] = groups.map((rows) => rows.map((row) => byId.get(row.id)!));
   return {
     signedIn: Boolean(userId),
     interest: setup.interest,
@@ -369,5 +392,6 @@ export async function loadHomeData(): Promise<HomeData> {
     institutions: setup.institutions,
     regions: taxonomy.regions,
     categoryScopes,
+    availableCategories: interestCategories(taxonomy.categories),
   };
 }

@@ -26,6 +26,9 @@ export type DiscoveryPoster = {
   application_end_at: string | null;
   deadline_type?: string | null;
   event_end_at?: string | null;
+  imageWidth?: number | null;
+  imageHeight?: number | null;
+  imageStatus?: "ok" | "missing" | "unsuitable" | "broken" | null;
   verification_status?: string | null;
   verified_at?: string | null;
   thumbnail_url: string | null;

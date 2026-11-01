@@ -7,27 +7,29 @@ import type { DiscoveryPoster } from "../../../lib/discoveryRoutes";
 import type { PosterCardData } from "../PosterCard";
 import { DeadlineLabel } from "./DeadlineLabel";
 import { PosterThumb } from "./PosterThumb";
+import { PosterArt } from "./PosterArt";
 import { RegionLabel, type RegionScope } from "./RegionLabel";
 
 export type PlPosterCardData = PosterCardData & {
   posterStatus?: string | null;
 };
 
-/** Card data from a public discovery row (same organisation rule as institution pages). */
+/** The collection portal is never substituted for the actual organizer. */
 export function discoveryPosterToCard(
   poster: DiscoveryPoster,
 ): PlPosterCardData {
   return {
     id: poster.id,
     title: poster.title,
-    org:
-      poster.verification_status === "verified" && poster.verified_at
-        ? poster.organizer_name || poster.source_org_name || undefined
-        : poster.source_org_name || undefined,
+    org: poster.organizer_name || undefined,
     applicationStartAt: poster.application_start_at,
     deadline: poster.application_end_at || undefined,
     deadlineType: poster.deadline_type,
     eventEndAt: poster.event_end_at,
+    imageWidth: poster.imageWidth,
+    imageHeight: poster.imageHeight,
+    imageStatus: poster.imageStatus,
+    regionLabel: poster.regionName,
     tags: [poster.categoryName, poster.regionName].filter(
       (value): value is string => Boolean(value),
     ),
@@ -90,7 +92,18 @@ export function PosterListCard({
         data-poster-source={source}
         className="flex min-h-[44px] gap-3 rounded-xl p-3 outline-offset-2 hover:bg-pl-paper/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pl-ink"
       >
-        <PosterThumb src={thumb} />
+        <div className="h-[80px] w-[60px] shrink-0 overflow-hidden rounded-md">
+          <PosterArt
+            id={poster.id}
+            src={thumb}
+            title={poster.title}
+            category={poster.tags?.[0]}
+            organization={poster.org}
+            imageWidth={poster.imageWidth}
+            imageHeight={poster.imageHeight}
+            imageStatus={poster.imageStatus}
+          />
+        </div>
         <div className="min-w-0 flex-1">
           {(meta || region) && (
             <p className="flex items-center gap-1.5 text-xs text-pl-meta">
@@ -138,7 +151,18 @@ export function PosterMiniCard({
         )}
       </div>
       <div className="flex gap-2">
-        <PosterThumb src={thumb} className="h-12 w-9" />
+        <div className="h-12 w-9 shrink-0 overflow-hidden rounded">
+          <PosterArt
+            id={poster.id}
+            src={thumb}
+            title={poster.title}
+            category={poster.tags?.[0]}
+            organization={poster.org}
+            imageWidth={poster.imageWidth}
+            imageHeight={poster.imageHeight}
+            imageStatus={poster.imageStatus}
+          />
+        </div>
         <h3 className="line-clamp-3 text-[13px] font-bold leading-[1.38] text-pl-ink">
           {poster.title}
         </h3>

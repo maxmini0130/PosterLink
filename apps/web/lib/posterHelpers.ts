@@ -24,7 +24,7 @@ export async function fetchCategoryRegionNames(posterIds: string[]): Promise<Rec
       .in("poster_id", ids),
     supabase
       .from("posters")
-      .select("id, field_verification")
+      .select("id, primary_category_code:field_verification->classification->>primaryCategory")
       .in("id", ids),
   ]);
 
@@ -63,7 +63,7 @@ export async function fetchCategoryRegionNames(posterIds: string[]): Promise<Rec
   }
 
   for (const poster of postersRes.data ?? []) {
-    primaryCategoryCodeByPoster.set(poster.id, readPrimaryCategoryCode(poster.field_verification));
+    primaryCategoryCodeByPoster.set(poster.id, readPrimaryCategoryCode({classification:{primaryCategory:poster.primary_category_code}}));
   }
 
   const result: Record<string, PosterWithMeta> = {};

@@ -80,6 +80,8 @@ async function open(
     const req = r.request();
     const u = req.url();
     const m = req.method();
+    if (m === "GET" && /\/rest\/v1\/poster_images/.test(u))
+      return r.fulfill(json([]));
     if (
       m === "GET" &&
       /\/api\/image-proxy|\/storage\/v1\/object\/public\//.test(u)

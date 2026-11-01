@@ -1605,13 +1605,14 @@ export async function importPostImagesToStorage(post, sourceUrl, sourceKey) {
   return [...new Set(imported)];
 }
 
-export async function syncPosterImages(posterId, post, sourceUrl) {
+export async function syncPosterImages(posterId, post, sourceUrl, classification = null) {
   const images = normalizePostImages(post, sourceUrl);
   if (images.length === 0) return;
 
   try {
     await replacePosterImagesWithStorageCleanup(supabase, posterId, images, {
       bucket: POSTER_IMAGE_BUCKET,
+      imageClassification: classification,
     });
   } catch (error) {
     console.warn(`\n  poster_images 저장 실패: ${post.title} — ${error.message}`);
@@ -2360,7 +2361,7 @@ async function uploadToSupabase(filePath) {
         const { error: updateError } = await supabase.from("posters").update(updates).eq("id", existingPoster.id);
         if (updateError) throw updateError;
       }
-      await syncPosterImages(existingPoster.id, postWithStoredImages, sourceUrl);
+      await syncPosterImages(existingPoster.id, postWithStoredImages, sourceUrl, posterRecord.field_verification?.posterImageOcr?.imageClassification);
       await assignPosterCategories(existingPoster.id, post, categoryMap, classification);
       await assignPosterRegions(existingPoster.id, post, regionMap, classification);
       await assignPosterAudiences(existingPoster.id, classification, audienceMap);
@@ -2395,7 +2396,7 @@ async function uploadToSupabase(filePath) {
     }
 
     const posterId = poster.id;
-    await syncPosterImages(posterId, postWithStoredImages, sourceUrl);
+    await syncPosterImages(posterId, postWithStoredImages, sourceUrl, posterRecord.field_verification?.posterImageOcr?.imageClassification);
 
     // ── 2. poster_links 저장 (신청 URL + 원문 URL) ─────────────
     try {

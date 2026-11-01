@@ -85,6 +85,9 @@ export type PosterDetailPoster = {
   verified_at?: string | null;
   verification_status?: string | null;
   data_confidence?: number | null;
+  imageWidth?: number | null;
+  imageHeight?: number | null;
+  imageStatus?: "ok" | "missing" | "unsuitable" | "broken" | null;
   thumbnail_url: string | null;
   source_key: string | null;
   organizer_id?: string | null;

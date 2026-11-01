@@ -291,43 +291,35 @@ const visitDate = (time: number) => {
   return `${parts.month}월 ${parts.day}일(${parts.weekday}) 방문 이후`;
 };
 
-test("home ⑥ first visit: open posters first, a one-line condition prompt, no 'since' line", async ({
+test("feed first visit stays home with two columns and no guest history", async ({
   page,
 }) => {
   await open(page, "/", 390);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "지금 접수 중인 공고",
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("tab", { name: "지금 접수 중" })).toHaveAttribute(
+    "aria-selected",
+    "true",
   );
-  const first = page.getByRole("region", { name: "접수 중인 공고" });
-  await expect(first.getByRole("heading", { level: 3 })).toHaveText([
-    SOON.title as string,
-    ONGOING.title as string,
-    OLDER.title as string,
-  ]);
-  // Screen plan 03·04: no large guide boxes above the posters.
-  await expect(
-    page.getByText("관심 지역·분야를 고르면 맞는 공고를 먼저 보여드려요."),
-  ).toBeVisible();
-  await expect(page.getByText("찜해 두면 다음에 모아 보여드려요")).toHaveCount(
-    0,
-  );
-  // Two cards per row on a phone.
-  const boxes = await first
-    .getByRole("listitem")
+  await expect(page.locator("[data-feed-card]")).toHaveCount(3);
+  await expect(page.locator("[data-interest-prompt]")).toBeVisible();
+  const boxes = await page
+    .locator("[data-feed-card]")
     .evaluateAll((items) =>
       items.slice(0, 2).map((item) => item.getBoundingClientRect().top),
     );
   expect(boxes[0]).toBe(boxes[1]);
-  await expect(page.getByText("방문 이후")).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "포스터 제보" })).toBeVisible();
-  // The first visit is remembered without a baseline.
-  const stored = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem("pl.visit.v1") || "null"),
+  await expect(page.getByText(/방문 이후/)).toHaveCount(0);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveClass('sr-only');
+  await page.getByRole("tab", { name: "지금 접수 중" }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("tab", { name: "7일 안에 마감" })).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(page.getByRole("tab", { name: "지금 접수 중" })).toHaveAttribute(
+    "aria-selected",
+    "true",
   );
-  expect(stored.baselineAt).toBeNull();
 });
-
-test("home ⑦ new posters since the last visit, kept across a reload", async ({
+test("returning guest does not reveal member new-posters state", async ({
   page,
 }) => {
   const last = NOW - 10 * DAY;
@@ -337,57 +329,40 @@ test("home ⑦ new posters since the last visit, kept across a reload", async ({
       lastActiveAt: last,
       baselineAt: null,
     },
-    guestFavorites: [SOON.id as string],
   });
-  await expect(page.getByText(visitDate(last))).toBeVisible();
-  const title = page.getByRole("heading", { level: 1 });
-  await expect(title).toHaveText("지난 방문 이후 새 공고 2건");
-  const fresh = page.getByRole("region", { name: "새로 올라온 공고" });
-  await expect(fresh.getByRole("heading", { level: 3 })).toHaveText([
-    SOON.title as string,
-    ONGOING.title as string,
-  ]);
-  await expect(fresh.getByText("찜")).toBeVisible();
-  // The 찜 poster closing soon is already in the grid: not repeated aside.
+  await expect(page.getByRole("tab", { name: /새 공고/ })).toHaveCount(0);
+  await expect(page.getByText(/방문 이후/)).toHaveCount(0);
+  await page.getByRole("tab", { name: "7일 안에 마감" }).click();
+  await expect(page.locator("[data-feed-card]")).toHaveCount(1);
   await expect(
-    page.getByRole("heading", { name: "7일 이내 마감" }),
-  ).toHaveCount(0);
-  // Same visit: a reload shows the same baseline and list.
-  await page.reload({ waitUntil: "networkidle" });
-  await expect(page.getByText(visitDate(last))).toBeVisible();
-  await expect(title).toHaveText("지난 방문 이후 새 공고 2건");
+    page.locator("[data-feed-card]").getByRole("heading"),
+  ).toHaveText(SOON.title as string);
 });
-
-test("home ⑧ return visit with nothing new: open posters and one line about institutions", async ({
-  page,
-}) => {
-  const last = NOW - 40 * 60 * 1000;
+test("member baseline and new feed survive reload", async ({ page }) => {
+  const last = NOW - 10 * DAY;
   await open(page, "/", 390, {
+    member: true,
     visit: {
       visitStartedAt: last - HOUR,
       lastActiveAt: last,
       baselineAt: null,
     },
   });
-  await expect(
-    page.getByText(`${visitDate(last)} 새 공고는 아직 없어요`),
-  ).toBeVisible();
-  const openList = page.getByRole("region", { name: "접수 중인 공고" });
-  await expect(openList.getByRole("heading", { level: 3 })).toHaveText([
-    SOON.title as string,
-    ONGOING.title as string,
-    OLDER.title as string,
-  ]);
-  await expect(
-    page.getByText("관심 기관을 구독하면 새 공고를 여기에 모아 보여드려요."),
-  ).toBeVisible();
-  await expect(page.getByText("새로 올라온")).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "새 공고 2" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.getByText(/방문 이후/)).toBeVisible();
+  await page.reload({ waitUntil: "networkidle" });
+  await expect(page.getByRole("tab", { name: "새 공고 2" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
 });
-
-test("member home on PC: conditions, 2 columns, follows, started 찜, server visit write", async ({
+test("member with nothing new defaults to closing, PC four columns without aside", async ({
   page,
 }) => {
-  const last = NOW - 3 * DAY;
+  const last = NOW - 40 * 60 * 1000;
   await open(page, "/", 1280, {
     member: true,
     serverVisit: {
@@ -396,34 +371,19 @@ test("member home on PC: conditions, 2 columns, follows, started 찜, server vis
       baselineAt: null,
     },
   });
-  await expect(page.getByText(visitDate(last))).toBeVisible();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "지난 방문 이후 새 관심 공고 2건",
-  );
-  await expect(page.getByText("마포구 · 문화/행사 · 교육/취업")).toBeVisible();
-  await expect(page.getByRole("link", { name: "조건 변경" })).toHaveAttribute(
-    "href",
-    "/mypage/edit",
-  );
-  const aside = page.getByRole("complementary", { name: "마감과 구독 소식" });
-  await expect(aside.getByText("마포문화재단")).toBeVisible();
-  await expect(aside.getByText(FOLLOWED.title as string)).toBeVisible();
+  await expect(page.getByRole("tab", { name: /새 공고/ })).toHaveCount(0);
   await expect(
-    page
-      .getByRole("region", { name: "접수를 시작한 찜 공고" })
-      .getByText(STARTED.title as string),
-  ).toBeVisible();
-  // Two columns at 1280: the aside sits to the right of the main column.
-  const main = await page
-    .getByRole("region", { name: "새로 올라온 관심 공고" })
-    .boundingBox();
-  const side = await aside.boundingBox();
-  expect(side!.x).toBeGreaterThan(main!.x + main!.width - 1);
-  // No bottom tab bar or floating report button on PC.
-  await expect(page.locator(".pl-report-fab")).toBeHidden();
-  // The new visit was sent through record_user_visit (fake response).
-  expect(writes).toContain("POST /rest/v1/rpc/record_user_visit");
-  // No horizontal scroll.
+    page.getByRole("tab", { name: "7일 안에 마감 1" }),
+  ).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("complementary")).toHaveCount(0);
+  expect(
+    await page
+      .locator(".feed-grid")
+      .first()
+      .evaluate(
+        (el) => getComputedStyle(el).gridTemplateColumns.split(" ").length,
+      ),
+  ).toBe(4);
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(1280);
@@ -469,7 +429,9 @@ test("search ⑪ keeps 서울·전국 posters apart with labels, and saves a con
   await expect(matched.getByText(/마포구 대상 · 접수 중/)).toBeVisible();
   const wider = page.getByRole("region", { name: "서울·전국 대상 공고" });
   await expect(wider.getByText("서울 전체", { exact: true })).toBeVisible();
-  await expect(wider.getByText("서울 전체 대상 공고")).toBeVisible();
+  await expect(
+    wider.getByRole("heading", { name: "서울 전체 대상 공고" }),
+  ).toBeVisible();
   // 전국 is not a parent of 서울 in the region table, so the existing region
   // filter never returns nationwide posters here (the unit test covers 전국).
   await expect(page.getByText("신청할 수 있는")).toHaveCount(0);

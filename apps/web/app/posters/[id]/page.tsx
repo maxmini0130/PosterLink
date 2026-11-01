@@ -10,7 +10,12 @@ import { hasVerifiedPosterStructuredData } from "../../../lib/posterStructuredTr
 import { buildPosterStructuredSeoData } from "../../../lib/posterStructuredSeo";
 import { fetchInstitutionRelatedPosters } from "../../../lib/publicDiscovery";
 import { discoveryPosterToCard } from "../../components/pl/PosterListCard";
-import { PosterDetailClient, type PosterDetailLink, type PosterDetailPoster } from "./PosterDetailClient";
+import { imageMetadata, usablePosterImage } from "../../../lib/feedImages";
+import {
+  PosterDetailClient,
+  type PosterDetailLink,
+  type PosterDetailPoster,
+} from "./PosterDetailClient";
 import type { AlertDefaults } from "./ClosedPosterAlertCta";
 
 export const dynamic = "force-dynamic";
@@ -55,13 +60,17 @@ const LEGACY_POSTER_SELECT =
   "id, title, source_org_name, summary_short, summary_long, poster_status, application_start_at, application_end_at, thumbnail_url, source_key, field_verification, published_at, created_at, updated_at";
 const STRUCTURED_POSTER_SELECT = `${LEGACY_POSTER_SELECT}, organizer_name, application_organization_name, deadline_type, event_start_at, event_end_at, eligibility_summary, target_age_min, target_age_max, participation_fee, benefits_summary, recruitment_count, application_method, required_documents, contact_info, event_location, verified_at, verification_status, data_confidence, organizer_id`;
 
-function isMissingStructuredPosterColumn(error: { code?: string; message?: string } | null) {
+function isMissingStructuredPosterColumn(
+  error: { code?: string; message?: string } | null,
+) {
   if (!error) return false;
   const message = error.message ?? "";
   return (
     error.code === "42703" ||
     error.code === "PGRST204" ||
-    /organizer_name|organizer_id|deadline_type|verification_status/.test(message)
+    /organizer_name|organizer_id|deadline_type|verification_status/.test(
+      message,
+    )
   );
 }
 
@@ -107,15 +116,16 @@ function createPosterServerClient() {
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)!,
+    (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)!,
     {
       cookies: {
         getAll: () => cookieStore.getAll(),
         setAll: () => {
           // Server components only need read access to the auth cookies.
-        }
-      }
-    }
+        },
+      },
+    },
   );
 }
 
@@ -149,52 +159,87 @@ const fetchPosterDetail = cache(async (id: string) => {
   const supabase = createPosterServerClient();
 
   const fetchPoster = async () => {
-    const structuredResult = await supabase.from("posters").select(STRUCTURED_POSTER_SELECT).eq("id", id).maybeSingle();
+    const structuredResult = await supabase
+      .from("posters")
+      .select(STRUCTURED_POSTER_SELECT)
+      .eq("id", id)
+      .maybeSingle();
 
-    if (!isMissingStructuredPosterColumn(structuredResult.error)) return structuredResult;
+    if (!isMissingStructuredPosterColumn(structuredResult.error))
+      return structuredResult;
 
-    return supabase.from("posters").select(LEGACY_POSTER_SELECT).eq("id", id).maybeSingle();
+    return supabase
+      .from("posters")
+      .select(LEGACY_POSTER_SELECT)
+      .eq("id", id)
+      .maybeSingle();
   };
 
-  const [posterRes, categoryLinksRes, regionLinksRes, imageRes, linkRes] = await Promise.all([
-    fetchPoster(),
-    supabase.from("poster_categories").select("poster_id, category_id").eq("poster_id", id),
-    supabase.from("poster_regions").select("poster_id, region_id").eq("poster_id", id),
-    supabase
-      .from("poster_images")
-      .select("poster_id, storage_path, image_type, created_at")
-      .eq("poster_id", id)
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("poster_links")
-      .select("id, poster_id, link_type, title, url, is_primary")
-      .eq("poster_id", id)
-      .order("is_primary", { ascending: false })
-      .order("created_at", { ascending: true })
-  ]);
+  const [posterRes, categoryLinksRes, regionLinksRes, imageRes, linkRes] =
+    await Promise.all([
+      fetchPoster(),
+      supabase
+        .from("poster_categories")
+        .select("poster_id, category_id")
+        .eq("poster_id", id),
+      supabase
+        .from("poster_regions")
+        .select("poster_id, region_id")
+        .eq("poster_id", id),
+      supabase
+        .from("poster_images")
+        .select("*")
+        .eq("poster_id", id)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("poster_links")
+        .select("id, poster_id, link_type, title, url, is_primary")
+        .eq("poster_id", id)
+        .order("is_primary", { ascending: false })
+        .order("created_at", { ascending: true }),
+    ]);
 
   if (posterRes.error || !posterRes.data) return null;
 
   const categoryLinks = (categoryLinksRes.data ?? []) as CategoryLinkRow[];
   const regionLinks = (regionLinksRes.data ?? []) as RegionLinkRow[];
-  const categoryIds = [...new Set(categoryLinks.map((link) => link.category_id).filter(Boolean))];
-  const regionIds = [...new Set(regionLinks.map((link) => link.region_id).filter(Boolean))];
+  const categoryIds = [
+    ...new Set(categoryLinks.map((link) => link.category_id).filter(Boolean)),
+  ];
+  const regionIds = [
+    ...new Set(regionLinks.map((link) => link.region_id).filter(Boolean)),
+  ];
 
   const [categoryRes, regionRes] = await Promise.all([
     categoryIds.length
-      ? supabase.from("categories").select("id, name, code").in("id", categoryIds)
+      ? supabase
+          .from("categories")
+          .select("id, name, code")
+          .in("id", categoryIds)
       : Promise.resolve({ data: [] as CategoryRow[] }),
     regionIds.length
-      ? supabase.from("regions").select("id, name, full_name, level").in("id", regionIds)
-      : Promise.resolve({ data: [] as RegionRow[] })
+      ? supabase
+          .from("regions")
+          .select("id, name, full_name, level")
+          .in("id", regionIds)
+      : Promise.resolve({ data: [] as RegionRow[] }),
   ]);
 
   const categories = (categoryRes.data ?? []) as CategoryRow[];
   const regions = (regionRes.data ?? []) as RegionRow[];
-  const categoryMap = Object.fromEntries(categories.map((category) => [category.id, category.name]));
-  const categoryCodeMap = Object.fromEntries(categories.map((category) => [category.id, category.code]));
+  const categoryMap = Object.fromEntries(
+    categories.map((category) => [category.id, category.name]),
+  );
+  const categoryCodeMap = Object.fromEntries(
+    categories.map((category) => [category.id, category.code]),
+  );
   const regionMap = Object.fromEntries(
-    regions.map((region) => [region.id, region.level === "sigungu" ? region.full_name || region.name : region.name])
+    regions.map((region) => [
+      region.id,
+      region.level === "sigungu"
+        ? region.full_name || region.name
+        : region.name,
+    ]),
   );
   const images = [...((imageRes.data ?? []) as ImageRow[])].sort((a, b) => {
     if (a.image_type === "thumbnail" && b.image_type !== "thumbnail") return -1;
@@ -203,20 +248,26 @@ const fetchPosterDetail = cache(async (id: string) => {
   });
 
   const poster = posterRes.data as PosterRow;
-  const categoryId = pickPrimaryCategoryId(categoryIds, categoryCodeMap, readPrimaryCategoryCode(poster.field_verification));
+  const categoryId = pickPrimaryCategoryId(
+    categoryIds,
+    categoryCodeMap,
+    readPrimaryCategoryCode(poster.field_verification),
+  );
   const regionId = first(regionIds);
   const fallbackAlertDefaults: AlertDefaults = {
     regionId,
     regionName: regionId ? (regionMap[regionId] ?? "지역 전체") : "지역 전체",
     categoryId,
-    categoryName: categoryId ? (categoryMap[categoryId] ?? "분야 전체") : "분야 전체"
+    categoryName: categoryId
+      ? (categoryMap[categoryId] ?? "분야 전체")
+      : "분야 전체",
   };
   let alertDefaults = fallbackAlertDefaults;
   if (poster.poster_status === "closed" && (regionId || categoryId)) {
     const { data: alertDefaultData } = await supabase
       .rpc("resolve_closed_poster_alert_default", {
         p_region_id: regionId,
-        p_category_id: categoryId
+        p_category_id: categoryId,
       })
       .maybeSingle();
     const resolved = alertDefaultData as AlertDefaultRow | null;
@@ -225,46 +276,83 @@ const fetchPosterDetail = cache(async (id: string) => {
         regionId: resolved.out_region_id,
         regionName: resolved.out_region_name || "지역 전체",
         categoryId: resolved.out_category_id,
-        categoryName: resolved.out_category_name || "분야 전체"
+        categoryName: resolved.out_category_name || "분야 전체",
       };
     }
   }
   const enrichedPoster: PosterDetailPoster = {
     ...poster,
+    ...imageMetadata(
+      (imageRes.data ?? []).find(
+        (i) =>
+          i.storage_path ===
+          resolvePosterImageGallery(
+            images.map((image) => image.storage_path),
+            poster.thumbnail_url,
+            poster.source_key,
+          )[0],
+      ),
+    ),
     categoryId,
     regionId,
     categoryIds,
     regionIds,
     categoryName: categoryId ? (categoryMap[categoryId] ?? null) : null,
-    regionName: regionIds.map((id) => regionMap[id]).filter(Boolean).join(", ") || null,
-    images: images.map((image) => image.storage_path).filter((path): path is string => Boolean(path))
+    regionName:
+      regionIds
+        .map((id) => regionMap[id])
+        .filter(Boolean)
+        .join(", ") || null,
+    images: images
+      .map((image) => image.storage_path)
+      .filter((path): path is string => Boolean(path)),
   };
 
   return {
     poster: enrichedPoster,
     alertDefaults,
-    links: ((linkRes.data ?? []) as PosterDetailLink[]).filter((link) => Boolean(link.url))
+    links: ((linkRes.data ?? []) as PosterDetailLink[]).filter((link) =>
+      Boolean(link.url),
+    ),
   };
 });
 
-function readPrimaryCategoryCode(fieldVerification: Record<string, any> | null) {
-  const code = String(fieldVerification?.classification?.primaryCategory ?? "").trim();
+function readPrimaryCategoryCode(
+  fieldVerification: Record<string, any> | null,
+) {
+  const code = String(
+    fieldVerification?.classification?.primaryCategory ?? "",
+  ).trim();
   return /^CAT_[A-Z_]+$/.test(code) ? code : null;
 }
 
-function pickPrimaryCategoryId(categoryIds: string[], categoryCodeMap: Record<string, string>, primaryCode: string | null) {
+function pickPrimaryCategoryId(
+  categoryIds: string[],
+  categoryCodeMap: Record<string, string>,
+  primaryCode: string | null,
+) {
   if (primaryCode) {
-    const matched = categoryIds.find((id) => categoryCodeMap[id] === primaryCode);
+    const matched = categoryIds.find(
+      (id) => categoryCodeMap[id] === primaryCode,
+    );
     if (matched) return matched;
   }
   return first(categoryIds);
 }
 
-function buildPosterStructuredData(poster: PosterDetailPoster, links: PosterDetailLink[]) {
+function buildPosterStructuredData(
+  poster: PosterDetailPoster,
+  links: PosterDetailLink[],
+) {
   const appOrigin = getAppOrigin();
   const pageUrl = `${appOrigin}/posters/${poster.id}`;
-  const imageUrls = resolvePosterImageGallery(poster.images ?? [], poster.thumbnail_url, poster.source_key);
-  const primaryLink = links.find((link) => link.link_type === "official_notice") || null;
+  const imageUrls = resolvePosterImageGallery(
+    poster.images ?? [],
+    poster.thumbnail_url,
+    poster.source_key,
+  );
+  const primaryLink =
+    links.find((link) => link.link_type === "official_notice") || null;
   return buildPosterStructuredSeoData(poster, {
     pageUrl,
     imageUrls,
@@ -272,12 +360,16 @@ function buildPosterStructuredData(poster: PosterDetailPoster, links: PosterDeta
   });
 }
 
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: {
+  params: { id: string };
+}): Promise<Metadata> {
   const detail = await fetchPosterDetail(params.id);
 
   if (!detail) {
     return {
-      title: "공고를 찾을 수 없습니다"
+      title: "공고를 찾을 수 없습니다",
     };
   }
 
@@ -286,21 +378,33 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   const description =
     plainText(poster.summary_short || poster.summary_long).slice(0, 155) ||
     `${organizationName || "공공기관"} 공고를 PosterLink에서 확인하세요.`;
-  const imageUrls = resolvePosterImageGallery(poster.images ?? [], poster.thumbnail_url, poster.source_key);
-  const primaryLink = links.find((link) => link.link_type === "official_notice") || null;
+  const candidates = resolvePosterImageGallery(
+    poster.images ?? [],
+    poster.thumbnail_url,
+    poster.source_key,
+  );
+  const imageUrls =
+    poster.imageWidth &&
+    poster.imageHeight &&
+    usablePosterImage(candidates[0], poster)
+      ? candidates
+      : [`/posters/${poster.id}/poster-image`];
+  const primaryLink =
+    links.find((link) => link.link_type === "official_notice") || null;
 
   return {
     title: `${poster.title} | ${organizationName || "공공 공고"}`,
     description,
     alternates: {
-      canonical: `/posters/${poster.id}`
+      canonical: `/posters/${poster.id}`,
     },
     openGraph: {
       title: `${poster.title} | ${organizationName || "공공 공고"} | PosterLink`,
       description,
       url: `/posters/${poster.id}`,
       type: "article",
-      images: imageUrls.length > 0 ? imageUrls.map((url) => ({ url })) : undefined
+      images:
+        imageUrls.length > 0 ? imageUrls.map((url) => ({ url })) : undefined,
     },
     twitter: {
       card: "summary_large_image",
@@ -308,18 +412,24 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
       description,
       images: imageUrls.length ? imageUrls : ["/opengraph-image"],
     },
-    robots: ["published", "closed"].includes(poster.poster_status ?? "") ? undefined : { index: false, follow: false },
+    robots: ["published", "closed"].includes(poster.poster_status ?? "")
+      ? undefined
+      : { index: false, follow: false },
     ...(primaryLink?.url
       ? {
           other: {
-            "posterlink:source_url": primaryLink.url
-          }
+            "posterlink:source_url": primaryLink.url,
+          },
         }
-      : {})
+      : {}),
   };
 }
 
-export default async function PosterDetailPage({ params }: { params: { id: string } }) {
+export default async function PosterDetailPage({
+  params,
+}: {
+  params: { id: string };
+}) {
   const detail = await fetchPosterDetail(params.id);
 
   if (!detail) {
@@ -329,12 +439,20 @@ export default async function PosterDetailPage({ params }: { params: { id: strin
   const structuredData = buildPosterStructuredData(detail.poster, detail.links);
   // Other accepting posters of the same organiser; the page renders without them.
   const related = detail.poster.organizer_id
-    ? await fetchInstitutionRelatedPosters(detail.poster.organizer_id, detail.poster.id).catch(() => null)
+    ? await fetchInstitutionRelatedPosters(
+        detail.poster.organizer_id,
+        detail.poster.id,
+      ).catch(() => null)
     : null;
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }} />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(structuredData).replace(/</g, "\\u003c"),
+        }}
+      />
       <PosterDetailClient
         poster={detail.poster}
         links={detail.links}

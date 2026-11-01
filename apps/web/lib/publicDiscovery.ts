@@ -1,4 +1,6 @@
 import "server-only";
+import { imageMetadata } from "./feedImages";
+import { resolvePosterImageGallery } from "./posterImage";
 import { getRegionScopeIds } from "./regionHelpers";
 import { isPosterEligibleForPromotion } from "./promotionEligibility";
 
@@ -550,7 +552,7 @@ async function enrichPublicPosters(
     imageIds.length
       ? client
           .from("poster_images")
-          .select("poster_id,storage_path,image_type,created_at")
+          .select("*")
           .in("poster_id", imageIds)
           .order("created_at", { ascending: true })
       : Promise.resolve({ data: [], error: null }),
@@ -626,8 +628,20 @@ async function enrichPublicPosters(
       primaryCategoryCode,
     );
     const regionId = regionIdsForPoster[0] ?? null;
+    const selectedImage = resolvePosterImageGallery(
+      imagesByPoster.get(id) ?? [],
+      String(poster.thumbnail_url ?? ""),
+      String(poster.source_key ?? ""),
+    )[0];
+    const imageMeta = imageMetadata(
+      (imagesRes.data ?? []).find(
+        (image: any) =>
+          image.poster_id === id && image.storage_path === selectedImage,
+      ),
+    );
     return {
       ...poster,
+      ...imageMeta,
       id,
       categoryId,
       regionId,
