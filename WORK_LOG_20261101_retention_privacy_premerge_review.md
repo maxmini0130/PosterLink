@@ -1,6 +1,6 @@
 # 개인정보 고지·운영 읽기 전용 대조 SQL 검토 (2026-11-01)
 
-상태: 수정 필요 — P2 3건, P3 참고 1건. 대상 2c93d70·82ad5e0, 브랜치 feat/retention-stage0-measurement-20261031. 검토 Codex. 원본 코드·SQL은 수정하지 않았으며 검토 기록만 같은 브랜치에 커밋한다.
+상태: b128aeb 재검토 수정 필요 — P2 3건. 공개 방침 수정은 해결, 대조 SQL에 통과 오판 경로가 남음. 원본 코드·SQL 수정 없이 검토 기록만 같은 브랜치에 커밋한다.
 
 ## P2-1. 연결 기록을 생성 후 3개월 파기한다고 안내하지만 실제로는 활동에 따라 계속 남음
 
@@ -51,3 +51,52 @@ generate_series의 양 끝이 저장된 집계의 min/max다. 따라서 마지�
 - 로컬 격리 재현: Git 제외 data/results/retention-premerge-review/repro.ts. 실제 마이그레이션으로 구성한 PGlite에 cron 조회용 가짜 표를 두고 SQL 전체를 실행했다. 실제 pg_cron 확장·운영 데이터는 사용하지 않았다.
 - 기존 관련 테스트 28/28 PASS: product-events-migration, retention-metrics-sql, usage-log-retention. 공개 privacy 페이지 Prettier PASS. 검토 기록 Prettier 및 git diff --check 확인. 구현 변경이 없어 웹 build/lint·전체 테스트는 반복하지 않았다.
 - 운영 DB 접속·SQL 실행·쓰기·배포·push 없음. 코드와 대조 SQL은 그대로 두고 이 기록만 로컬 커밋한다. 두 커밋 묶음은 현 상태로 검토 통과 처리하지 않는다.
+
+## b128aeb 재검토
+
+작업 전 origin fetch·status 확인(원격 대비 11커밋 앞섬, 작업 트리 깨끗함). 대상 diff, 새 테스트·공통 PGlite 준비 코드, 방침과 관련 마이그레이션·기존 검토 및 작업 로그를 대조했다.
+
+### 해결된 부분
+
+- 이전 P2-1: 로그와 연결 기록의 기준을 분리했고, 마지막 연결 시각 및 최근 이용 기록 조건과 브라우저 키의 비만료를 설명한다. 실제 파기 구현과 부합한다. 해결.
+- 이전 P2-2: 제약 전체 정의·FK 동작, 유일 인덱스 정의/유효성, 함수 본문/언어/보안 모드/search_path 비교가 추가됐다. 앞선 재현 3건과 새 테스트의 변조 사례들이 실패로 검출된다. 단, 아래 소유자 비교는 여전히 빠졌다.
+- 이전 P2-3: 마지막 성공 실행의 시각으로 관찰 완료 마지막 주를 계산한다. 최근 주 누락·전체 삭제·성공 실행 없음은 잡는다. 단, 시작 범위는 여전히 실제 저장 결과에 의존하여 아래 첫 주 누락을 놓친다.
+- P3의 90일/달력 3개월 차이와 링크 클릭 총계 라벨은 별도 후속으로 남긴 판단을 유지한다. 이번 P2 판정과 분리한다.
+
+### P2-R1. 첫 저장 주를 지우면 기대 시작 주도 같이 뒤로 이동함
+
+위치: scripts/retention/pre-merge-readonly-check.sql:140, 207–209.
+
+missing_weeks 시작을 coalesce(first_stored, start_week)로 정하고 첫 주 검사는 first_stored >= start_week만 요구한다. 따라서 실제로 집계돼야 할 맨 앞 주를 삭제하면 first_stored가 다음 주로 바뀌고 삭제된 주는 검사 범위에서 사라진다. 기존 P2-3에서 요구한 시작 구간 누락 검출이 아직 해결되지 않았다.
+
+로컬 재현: 새 seeded()의 정상 DB에서 min(cohort_week) 한 행만 삭제하고 실제 대조 SQL을 실행했다. 실패 목록은 빈 배열이었다. 이 fixture는 수집 첫 주에 실제 일반 방문이 있어 집계 대상이라는 사실이 확인돼 있으므로 정상적인 수집 전 빈 주를 문제 삼은 사례가 아니다.
+
+수정 방향: 예상 시작점을 현재 남아 있는 min(cohort_week)에서 가져오지 않는다. 최초 집계 대상 일반 방문 주 또는 확인·보존한 최초 기대 주를 독립적으로 사용한다. collection_started_at은 내부 방문도 포함할 수 있으므로 단순 등호가 과도한 경우에는 실제 집계 대상의 시작 근거를 따로 확인·보존하거나 검증 불가로 명시해야 한다. 시작 범위를 검증하지 못했는데 전체 통과로 출력하면 안 된다. 첫 주와 연속된 앞쪽 여러 주를 삭제하는 회귀 사례를 추가한다.
+
+### P2-R2. 함수 소유자가 바뀌어 RPC가 실패해도 전체 통과함
+
+위치: scripts/retention/pre-merge-readonly-check.sql:48–50, 150–157.
+
+이전 검토에서 요청한 함수 소유자 비교가 빠졌다. SECURITY DEFINER 함수는 현재 소유자의 권한으로 동작하므로 본문·search_path·secdef·호출 권한만 같아도 실제 권한이 달라질 수 있다. 새 쿼리는 예전 쿼리에 있던 owner 출력까지 제거해 사람이 결과에서 알아볼 수도 없다.
+
+로컬 재현: 별도 NOLOGIN 역할 no_access_owner를 만들어 record_product_event의 소유자만 그 역할로 바꿨다. 실제 판정 SQL의 모든 항목이 통과했다. 이어 같은 RPC를 호출하면 permission denied for schema auth로 실패했다. 테이블 쓰기와 RLS에 필요한 소유자 권한도 같은 이유로 검사에서 빠질 수 있다.
+
+수정 방향: 정확한 시그니처마다 pg_get_userbyid(proowner)를 actual에 출력하고 적용 주체에 따른 승인된 기대 소유자와 비교한다. 스테이징과 운영에서 이름이 다르다면 기대 소유자를 명시적으로 받되 검증 없이 생략하지 않는다. 보안 정의자 함수 소유자를 권한 없는 역할로 변경하는 음성 검사를 추가한다.
+
+### P2-R3. 예약 명령의 부분 문자열 일치만으로 파기 실행을 보장하지 못함
+
+위치: scripts/retention/pre-merge-readonly-check.sql:146.
+
+j.command LIKE '%public.run_usage_log_retention(50000)%'는 실행할 SQL이 아니라 문자열 리터럴이나 주석 안에 함수 이름이 들어 있어도 true다. 새 판정은 모든 행 true를 요구하므로 잘못된 예약도 통과로 제시한다. 실제 표시된 actual을 사람이 볼 수는 있지만 자동 판정은 거짓 정상이다.
+
+로컬 재현: 정상 seeded DB에서 예약 command만 `SELECT 'public.run_usage_log_retention(50000)'`로 바꿨다. 대조 SQL의 실패 목록은 빈 배열이었다. 이 명령은 문자열을 조회할 뿐 파기를 호출하지 않으며 cron 자체는 성공으로 끝날 수 있다.
+
+수정 방향: 검토된 예약 마이그레이션의 명령과 비교한다. 허용할 차이가 앞뒤 공백뿐이라면 btrim 등으로 한정해서 정확히 비교한다. 문자열·주석 속 함수 이름이나 다른 SQL이 통과하지 않게 하고, 예약 중복과 실행 역할/대상 DB도 실제 적용 기대값으로 확인하면 좋다. 위 문자열 명령을 음성 회귀 사례로 추가한다.
+
+### 검증 및 한계
+
+- Git 제외 data/results/retention-premerge-review/repro-b128.ts에서 새 테스트와 같은 seeded DB 및 실제 판정 SQL을 사용했다. 위 세 경우 모두 전체 통과되는 것을 assert로 확인했고, 소유자 변경 후 실제 RPC 실패도 확인했다. 원본 테스트나 구현은 수정하지 않았다.
+- 새 대조 SQL 테스트 3/3 PASS. 정상 DB 및 작성자가 추가한 9가지 변조 검사는 통과하지만 위 세 경우는 포함하지 않는다.
+- 공개 방침·새 테스트·공통 준비 코드 Prettier PASS, 검토 기록 Prettier 및 git diff --check 확인. 관련 retention 테스트 31/31 PASS(product-events-migration, retention-metrics-sql, usage-log-retention, pre-merge-readonly-check). 구현을 고치지 않아 전체 웹 build/lint와 루트 전체 테스트는 반복하지 않았다.
+- 읽기 전용 트랜잭션과 SELECT 구성은 유지됐다. 운영 DB에 이 SQL을 실행하지 않았으며 실제 pg_cron·서버 버전별 정의 출력은 확인하지 않았다.
+- 코드·SQL 변경, push, 배포, 운영/원격 DB 접속·쓰기·마이그레이션 적용 없음. 검토 기록만 로컬 커밋한다. 방침 수정은 해결됐지만 b128aeb 묶음의 대조 SQL은 재검토 통과로 처리하지 않는다.
