@@ -195,3 +195,44 @@ test("a date-only start counts from midnight in Seoul", () => {
   });
   assert.deepEqual(ids(home.startedFavorites), ["today"]);
 });
+
+test("latest posters fill the home and skip what is already shown above", () => {
+  const open = (id: string) => item(id, { end: "2026-11-20T23:59:59+09:00" });
+  const first = buildHomeSections({
+    ...base,
+    baselineAt: null,
+    interest: ["a", "b", "c", "d", "e"].map(open),
+    latest: [
+      open("a"),
+      open("e"),
+      item("closed", { end: "2026-11-01T23:59:59+09:00" }),
+      item("unconfirmed", { type: "unknown" }),
+      ...Array.from({ length: 10 }, (_, i) => open(`n${i}`)),
+    ],
+  });
+  // "e" is the fifth interest poster, not shown before "모두 보기".
+  assert.deepEqual(ids(first.latest), [
+    "e",
+    "n0",
+    "n1",
+    "n2",
+    "n3",
+    "n4",
+    "n5",
+    "n6",
+  ]);
+
+  const back = buildHomeSections({
+    ...base,
+    baselineAt: BASE,
+    interest: [
+      item("fresh", {
+        published: "2026-11-01T00:00:00+09:00",
+        end: "2026-11-20T23:59:59+09:00",
+      }),
+      item("soon", { end: "2026-11-05T23:59:59+09:00" }),
+    ],
+    latest: [open("fresh"), open("soon"), open("other")],
+  });
+  assert.deepEqual(ids(back.latest), ["other"]);
+});

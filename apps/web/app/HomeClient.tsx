@@ -22,6 +22,7 @@ import { loadHomeData, type HomeData, type HomeInterest } from "./lib/homeData";
 import { recordVisitActivity } from "./lib/visitClock";
 import {
   buildHomeSections,
+  OPEN_INTEREST_SHOWN,
   visitDateLabel,
   type HomeEntry,
 } from "../lib/homeSections";
@@ -72,11 +73,11 @@ function interestSearchPath(interest: HomeInterest) {
   return query ? `/posters?${query}` : "/posters";
 }
 
-/** Condition line under a section title: "마포구 대상 · 문화/행사 외 2 · 접수 중". */
+/** Condition line under a section title: "마포구 · 문화/행사 외 2 · 접수 중". */
 function conditionLine(interest: HomeInterest, status = "접수 중") {
   const [first, ...rest] = interest.categories;
   return [
-    interest.region ? `${interest.region.name} 대상` : null,
+    interest.region ? interest.region.name : null,
     first ? `${first.name}${rest.length ? ` 외 ${rest.length}` : ""}` : null,
     status,
   ]
@@ -127,6 +128,7 @@ export default function Home({
       state.phase === "ready"
         ? buildHomeSections({
             interest: state.data.interestItems,
+            latest: state.data.latestItems,
             favorites: state.data.favoriteItems,
             followed: state.data.followedItems,
             followedInstitutionIds: state.data.institutions.map(
@@ -146,6 +148,14 @@ export default function Home({
   const hasInterest = Boolean(interest.region || interest.categories.length);
   const summary = interestSummary(interest);
   const signedIn = state.phase === "ready" && state.data.signedIn;
+  // An empty side column would leave a third of the PC screen blank.
+  const hasAside = Boolean(
+    sections &&
+    (sections.closingSoon.length > 0 ||
+      sections.followedNews.length > 0 ||
+      sections.startedFavorites.length > 0 ||
+      sections.followGuide),
+  );
 
   // Members edit the account's conditions; guests those kept in this browser.
   const interestButton =
@@ -222,7 +232,10 @@ export default function Home({
                     condition={
                       hasInterest ? conditionLine(interest) : undefined
                     }
-                    entries={sections.openInterest.slice(0, 4)}
+                    entries={sections.openInterest.slice(
+                      0,
+                      OPEN_INTEREST_SHOWN,
+                    )}
                     action={{
                       href: interestSearchPath(interest),
                       label: hasInterest ? "관심 공고 모두 보기" : "모두 보기",
@@ -268,77 +281,95 @@ export default function Home({
                     condition={
                       hasInterest ? conditionLine(interest) : undefined
                     }
-                    entries={sections.openInterest.slice(0, 4)}
+                    entries={sections.openInterest.slice(
+                      0,
+                      OPEN_INTEREST_SHOWN,
+                    )}
                     action={{
                       href: interestSearchPath(interest),
                       label: "모두 보기",
                     }}
                   />
                 )}
-            </div>
 
-            <aside
-              aria-label="마감과 구독 소식"
-              className="w-full min-w-0 space-y-7 xl:w-[340px] xl:flex-none"
-            >
-              {sections.closingSoon.length > 0 && (
-                <ClosingSoon
-                  entries={sections.closingSoon}
-                  quiet={sections.state === "quiet"}
-                  hasInterest={hasInterest}
-                  moreHref={interestSearchPath(interest)}
-                />
-              )}
-              {sections.followedNews.length > 0 && (
-                <section aria-labelledby="home-follows">
-                  <SectionHeader id="home-follows" title="구독 기관 소식" />
-                  <ul className="divide-y divide-pl-divider rounded-xl border border-pl-line bg-pl-card">
-                    {sections.followedNews.map((group) => {
-                      const institution = state.data.institutions.find(
-                        (item) => item.id === group.institutionId,
-                      );
-                      const [latest] = group.items;
-                      return (
-                        <li key={group.institutionId} className="p-3">
-                          <p className="flex items-center justify-between gap-2 text-xs text-pl-meta">
-                            <Link
-                              href={`/institutions/${institution?.slug ?? ""}`}
-                              className="truncate font-bold text-pl-ink underline-offset-2 hover:underline"
-                            >
-                              {institution?.name}
-                            </Link>
-                            <span className="shrink-0">
-                              새 공고 {group.items.length}
-                            </span>
-                          </p>
-                          <Link
-                            href={`/posters/${latest.id}`}
-                            data-poster-source="home"
-                            className="mt-1 line-clamp-2 min-h-[24px] text-sm font-medium leading-snug text-pl-ink underline-offset-2 hover:underline"
-                          >
-                            {latest.data.title}
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
+              {sections.latest.length > 0 && (
+                <section aria-labelledby="home-latest">
+                  <SectionHeader id="home-latest" title="최근 올라온 공고" />
+                  <EntryGrid entries={sections.latest} />
+                  <Link
+                    href="/posters"
+                    className="mt-3 inline-flex min-h-[44px] items-center text-sm font-medium text-pl-sub underline underline-offset-2"
+                  >
+                    전체 공고 보기
+                  </Link>
                 </section>
               )}
-              {sections.startedFavorites.length > 0 && (
-                <EntryList
-                  title="접수를 시작한 찜 공고"
-                  entries={sections.startedFavorites}
-                />
-              )}
-              {sections.followGuide && (
-                <GuideCard
-                  title="자주 보는 기관을 구독해 보세요"
-                  action={{ href: "/institutions", label: "기관 둘러보기" }}
-                >
-                  구독한 기관에 새 공고가 올라오면 홈에 먼저 보여드려요.
-                </GuideCard>
-              )}
-            </aside>
+            </div>
+
+            {hasAside && (
+              <aside
+                aria-label="마감과 구독 소식"
+                className="w-full min-w-0 space-y-7 xl:w-[340px] xl:flex-none"
+              >
+                {sections.closingSoon.length > 0 && (
+                  <ClosingSoon
+                    entries={sections.closingSoon}
+                    quiet={sections.state === "quiet"}
+                    hasInterest={hasInterest}
+                    moreHref={interestSearchPath(interest)}
+                  />
+                )}
+                {sections.followedNews.length > 0 && (
+                  <section aria-labelledby="home-follows">
+                    <SectionHeader id="home-follows" title="구독 기관 소식" />
+                    <ul className="divide-y divide-pl-divider rounded-xl border border-pl-line bg-pl-card">
+                      {sections.followedNews.map((group) => {
+                        const institution = state.data.institutions.find(
+                          (item) => item.id === group.institutionId,
+                        );
+                        const [latest] = group.items;
+                        return (
+                          <li key={group.institutionId} className="p-3">
+                            <p className="flex items-center justify-between gap-2 text-xs text-pl-meta">
+                              <Link
+                                href={`/institutions/${institution?.slug ?? ""}`}
+                                className="truncate font-bold text-pl-ink underline-offset-2 hover:underline"
+                              >
+                                {institution?.name}
+                              </Link>
+                              <span className="shrink-0">
+                                새 공고 {group.items.length}
+                              </span>
+                            </p>
+                            <Link
+                              href={`/posters/${latest.id}`}
+                              data-poster-source="home"
+                              className="mt-1 line-clamp-2 min-h-[24px] text-sm font-medium leading-snug text-pl-ink underline-offset-2 hover:underline"
+                            >
+                              {latest.data.title}
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
+                )}
+                {sections.startedFavorites.length > 0 && (
+                  <EntryList
+                    title="접수를 시작한 찜 공고"
+                    entries={sections.startedFavorites}
+                  />
+                )}
+                {sections.followGuide && (
+                  <GuideCard
+                    title="자주 보는 기관을 구독해 보세요"
+                    action={{ href: "/institutions", label: "기관 둘러보기" }}
+                  >
+                    구독한 기관에 새 공고가 올라오면 홈에 먼저 보여드려요.
+                  </GuideCard>
+                )}
+              </aside>
+            )}
           </div>
         )}
 

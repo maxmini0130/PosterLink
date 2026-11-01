@@ -261,15 +261,17 @@ test("⑤ opening the home directly for the first time asks for conditions first
     name: /마포구 · 관심 분야 2/,
   });
   await expect(button).toHaveAttribute("href", "/interests");
-  // The home asks for 마포구 posters in each chosen category.
+  // The home asks in each chosen category with the same region scope as
+  // 공고 찾기 (마포구 and 서울), plus the newest posters with no condition.
   await expect
     .poll(() =>
       searchCalls.map((call) => [call.p_region_ids, call.p_category_id]),
     )
     .toEqual(
       expect.arrayContaining([
-        [[MAPO], CULTURE],
-        [[MAPO], EDU],
+        [[MAPO, SEOUL], CULTURE],
+        [[MAPO, SEOUL], EDU],
+        [null, null],
       ]),
     );
   await expect(

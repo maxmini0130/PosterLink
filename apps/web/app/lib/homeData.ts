@@ -5,6 +5,7 @@ import type { HomeItem } from "../../lib/homeSections";
 import { readGuestInterest } from "../../lib/guestInterest";
 import { readGuestFavorites } from "../../lib/guestStore";
 import { PUBLIC_POSTER_EXPOSURE_FILTER } from "../../lib/publicPosterVisibility";
+import { getRegionScopeIds } from "../../lib/regionHelpers";
 import { guestLocal } from "./guestSession";
 import { fetchCategoryRegionNames } from "./posterHelpers";
 import { supabase } from "./supabase";
@@ -19,6 +20,7 @@ export type HomeData = {
   signedIn: boolean;
   interest: HomeInterest;
   interestItems: HomeItem<PlPosterCardData>[];
+  latestItems: HomeItem<PlPosterCardData>[];
   favoriteItems: HomeItem<PlPosterCardData>[];
   followedItems: HomeItem<PlPosterCardData>[];
   institutions: Array<{ id: string; name: string; slug: string }>;
@@ -85,33 +87,63 @@ async function toItems(rows: Row[]): Promise<HomeItem<PlPosterCardData>[]> {
   }));
 }
 
+const LATEST_LIMIT = 24;
+
 /**
- * Open public posters for the interest conditions. The region is matched
- * exactly: posters for all of Seoul or the whole country are a separate group
- * (shown after the region clean-up), never mixed into "my area".
+ * The regions searched for a chosen region, the same scope as 공고 찾기:
+ * the region, the districts inside it and the areas above it (시·도, 전국).
  */
+async function loadRegionScope(regionId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("regions")
+    .select("id, level, parent_id");
+  if (error) throw new Error("regions");
+  const scope = getRegionScopeIds(regionId, data ?? []);
+  return scope ? Array.from(scope) : [regionId];
+}
+
+function searchOpen(
+  categoryId: string | null,
+  regionIds: string[] | null,
+  limit: number,
+) {
+  return supabase
+    .rpc("search_public_posters", {
+      p_query: null,
+      p_category_id: categoryId,
+      p_region_ids: regionIds,
+      p_include_closed: false,
+      p_sort: "latest",
+      p_limit: limit,
+    })
+    .select(SELECT)
+    .returns<Record<string, unknown>[]>();
+}
+
+/** Open public posters for the interest conditions. */
 async function loadInterestRows(interest: HomeInterest): Promise<Row[]> {
   const categoryIds = interest.categories.map((category) => category.id);
-  const calls = (categoryIds.length ? categoryIds : [null]).map((categoryId) =>
-    supabase
-      .rpc("search_public_posters", {
-        p_query: null,
-        p_category_id: categoryId,
-        p_region_ids: interest.region ? [interest.region.id] : null,
-        p_include_closed: false,
-        p_sort: "latest",
-        p_limit: 60,
-      })
-      .select(SELECT)
-      .returns<Record<string, unknown>[]>(),
+  const regionIds = interest.region
+    ? await loadRegionScope(interest.region.id)
+    : null;
+  const results = await Promise.all(
+    (categoryIds.length ? categoryIds : [null]).map((categoryId) =>
+      searchOpen(categoryId, regionIds, 60),
+    ),
   );
-  const results = await Promise.all(calls);
   if (results.some((result) => result.error))
     throw new Error("interest posters");
   const seen = new Set<string>();
   return results
     .flatMap((result) => (result.data ?? []) as unknown as Row[])
     .filter((row) => (seen.has(row.id) ? false : (seen.add(row.id), true)));
+}
+
+/** Newest open posters with no conditions, for "최근 올라온 공고". */
+async function loadLatestRows(): Promise<Row[]> {
+  const result = await searchOpen(null, null, LATEST_LIMIT);
+  if (result.error) throw new Error("latest posters");
+  return (result.data ?? []) as unknown as Row[];
 }
 
 async function loadMemberSetup(userId: string) {
@@ -270,20 +302,25 @@ export async function loadHomeData(): Promise<HomeData> {
         institutions: [] as Array<{ id: string; name: string; slug: string }>,
       };
   const institutionIds = setup.institutions.map((item) => item.id);
-  const [interestRows, favoriteRows, followedRows] = await Promise.all([
-    loadInterestRows(setup.interest),
-    loadRowsByIds(setup.favoriteIds),
-    loadFollowedRows(institutionIds),
-  ]);
-  const [interestItems, favoriteItems, followedItems] = await Promise.all([
-    toItems(interestRows),
-    toItems(favoriteRows),
-    toItems(followedRows),
-  ]);
+  const [interestRows, latestRows, favoriteRows, followedRows] =
+    await Promise.all([
+      loadInterestRows(setup.interest),
+      loadLatestRows(),
+      loadRowsByIds(setup.favoriteIds),
+      loadFollowedRows(institutionIds),
+    ]);
+  const [interestItems, latestItems, favoriteItems, followedItems] =
+    await Promise.all([
+      toItems(interestRows),
+      toItems(latestRows),
+      toItems(favoriteRows),
+      toItems(followedRows),
+    ]);
   return {
     signedIn: Boolean(userId),
     interest: setup.interest,
     interestItems,
+    latestItems,
     favoriteItems,
     followedItems,
     institutions: setup.institutions,

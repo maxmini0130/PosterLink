@@ -41,7 +41,17 @@ export type HomeSections<T> = {
   followedNews: Array<{ institutionId: string; items: HomeEntry<T>[] }>;
   /** Return visit with no favorites and no follows: one guide card. */
   followGuide: boolean;
+  /**
+   * Newest open posters regardless of conditions, so the home is never just
+   * one or two cards. Posters already shown above are left out.
+   */
+  latest: HomeEntry<T>[];
 };
+
+/** Open interest posters shown on the home before "모두 보기". */
+export const OPEN_INTEREST_SHOWN = 4;
+/** Posters in "최근 올라온 공고". */
+export const LATEST_SHOWN = 8;
 
 /** A start date without a time begins at 00:00 in Asia/Seoul. */
 function startTime(value?: string | null) {
@@ -61,6 +71,7 @@ export function buildHomeSections<T>(input: {
   interest: HomeItem<T>[];
   favorites: HomeItem<T>[];
   followed: HomeItem<T>[];
+  latest?: HomeItem<T>[];
   followedInstitutionIds: string[];
   baselineAt: number | null;
   now: Date;
@@ -80,6 +91,15 @@ export function buildHomeSections<T>(input: {
   const interest = unique(input.interest).map(entry);
   const favorites = unique(input.favorites).map(entry);
   const followed = unique(input.followed).map(entry);
+  const latestOpen = unique(input.latest ?? [])
+    .map(entry)
+    .filter((item) => isOpen(item.display));
+  const latestExcept = (shown: Array<HomeEntry<T>[]>) => {
+    const ids = new Set(shown.flat().map((item) => item.id));
+    return latestOpen
+      .filter((item) => !ids.has(item.id))
+      .slice(0, LATEST_SHOWN);
+  };
   const baseline = input.baselineAt;
   const isNew = (item: HomeEntry<T>) =>
     baseline !== null &&
@@ -133,6 +153,7 @@ export function buildHomeSections<T>(input: {
       startedFavorites: [],
       followedNews: [],
       followGuide: false,
+      latest: latestExcept([openInterest.slice(0, OPEN_INTEREST_SHOWN)]),
     };
 
   const state: HomeState = fresh.length > 0 ? "new" : "quiet";
@@ -141,10 +162,11 @@ export function buildHomeSections<T>(input: {
     closingSoon.length === 0 &&
     startedFavorites.length === 0 &&
     followedNews.length === 0;
+  // A return visit with nothing to show falls back to open interest posters.
+  const shownInterest = nothingElse ? openInterest : [];
   return {
     state,
-    // A return visit with nothing to show falls back to open interest posters.
-    openInterest: nothingElse ? openInterest : [],
+    openInterest: shownInterest,
     fresh,
     closingSoon,
     startedFavorites,
@@ -153,6 +175,13 @@ export function buildHomeSections<T>(input: {
       state === "quiet" &&
       favorites.length === 0 &&
       input.followedInstitutionIds.length === 0,
+    latest: latestExcept([
+      shownInterest.slice(0, OPEN_INTEREST_SHOWN),
+      fresh,
+      closingSoon,
+      startedFavorites,
+      ...followedNews.map((group) => group.items.slice(0, 1)),
+    ]),
   };
 }
 
