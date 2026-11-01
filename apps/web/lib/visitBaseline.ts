@@ -10,6 +10,17 @@ export const VISIT_GAP_MS = 30 * 60 * 1000;
 export const BASELINE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 /** Activity is sent to the server at most this often within a visit. */
 export const ACTIVITY_WRITE_INTERVAL_MS = 5 * 60 * 1000;
+/**
+ * A record more than this far ahead of the clock came from a clock that was
+ * wrong (the server ignores such times too). It cannot say when the visit
+ * really ended, so it does not keep the visit going.
+ */
+export const CLOCK_SKEW_MS = 5 * 60 * 1000;
+
+/** True when the record's last activity is not in the future of `now`. */
+export function isTrustedVisit(state: VisitState | null, now: number) {
+  return state !== null && state.lastActiveAt <= now + CLOCK_SKEW_MS;
+}
 
 export type VisitState = {
   /** Start of the current visit. */
@@ -51,7 +62,24 @@ export function touchVisit(
       state: { visitStartedAt: now, lastActiveAt: now, baselineAt: null },
       newVisit: true,
     };
-  // A clock moved backwards is treated as activity in the same visit.
+  if (!isTrustedVisit(previous, now)) {
+    // Written while the clock was ahead: start a new visit now, from the
+    // latest recorded time that is not in the future (if any).
+    const past = [previous.visitStartedAt, previous.baselineAt].filter(
+      (time): time is number => time !== null && time <= now,
+    );
+    return {
+      state: {
+        visitStartedAt: now,
+        lastActiveAt: now,
+        baselineAt: past.length
+          ? Math.max(Math.max(...past), now - BASELINE_MAX_AGE_MS)
+          : null,
+      },
+      newVisit: true,
+    };
+  }
+  // A clock a little behind (within the skew) stays in the same visit.
   if (now - previous.lastActiveAt >= VISIT_GAP_MS)
     return {
       state: {

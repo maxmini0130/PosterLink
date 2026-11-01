@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  isTrustedVisit,
   laterVisit,
   parseVisitState,
   shouldSyncVisit,
@@ -134,10 +135,16 @@ export function recordVisitActivity(): Promise<VisitState> {
       (await supabase.auth.getSession()).data.session?.user.id ?? null;
     const now = Date.now();
     const server = userId ? await readServer(userId) : null;
-    const { state, newVisit } = touchVisit(
-      laterVisit(readLocal(userId), server),
-      now,
+    const local = readLocal(userId);
+    // A record from a clock that was ahead never wins over a trustworthy one;
+    // alone, touchVisit starts a new visit from it.
+    const trusted = [local, server].filter((record) =>
+      isTrustedVisit(record, now),
     );
+    const known = trusted.length
+      ? laterVisit(trusted[0], trusted[1] ?? null)
+      : (local ?? server);
+    const { state, newVisit } = touchVisit(known, now);
     writeLocal(userId, state);
     if (!userId || !shouldSyncVisit(newVisit, readSyncedAt(userId), now))
       return state;

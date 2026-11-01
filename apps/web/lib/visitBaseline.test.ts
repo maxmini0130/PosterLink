@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   ACTIVITY_WRITE_INTERVAL_MS,
   BASELINE_MAX_AGE_MS,
+  CLOCK_SKEW_MS,
   VISIT_GAP_MS,
   laterVisit,
   parseVisitState,
@@ -100,11 +101,42 @@ test("a baseline older than 30 days is clamped to 30 days", () => {
   assert.equal(touchVisit(old, T0).state.baselineAt, T0 - BASELINE_MAX_AGE_MS);
 });
 
-test("a clock moved backwards stays in the same visit", () => {
+test("a clock a little behind stays in the same visit", () => {
   const start = touchVisit(null, T0).state;
-  const back = touchVisit(start, T0 - 2 * 60 * MIN);
+  const back = touchVisit(start, T0 - 2 * MIN);
   assert.equal(back.newVisit, false);
   assert.equal(back.state, start); // last activity never moves back
+});
+
+test("a record written while the clock was ahead does not keep the visit going", () => {
+  // Real visit at T0 - 1 day; then the clock jumps a day ahead and back.
+  const real = touchVisit(null, T0 - DAY).state;
+  const ahead = touchVisit(real, T0 + DAY).state; // new visit "tomorrow"
+  assert.equal(ahead.lastActiveAt, T0 + DAY);
+  // Clock fixed, 2 hours of real time later: a new visit starts now, from the
+  // latest recorded time that is not in the future (the real visit).
+  const fixed = touchVisit(ahead, T0 + 2 * 60 * MIN);
+  assert.equal(fixed.newVisit, true);
+  assert.equal(fixed.state.lastActiveAt, T0 + 2 * 60 * MIN);
+  assert.equal(fixed.state.baselineAt, T0 - DAY);
+  // From then on the usual 30-minute rule applies.
+  assert.equal(
+    touchVisit(fixed.state, T0 + 2 * 60 * MIN + 10 * MIN).newVisit,
+    false,
+  );
+  // Nothing in the past to go by: treated like a first visit.
+  const onlyFuture = touchVisit(
+    { visitStartedAt: T0 + DAY, lastActiveAt: T0 + DAY, baselineAt: null },
+    T0,
+  );
+  assert.equal(onlyFuture.newVisit, true);
+  assert.equal(onlyFuture.state.baselineAt, null);
+  // Within the tolerance it is the same visit.
+  const near = touchVisit(
+    { visitStartedAt: T0, lastActiveAt: T0 + CLOCK_SKEW_MS, baselineAt: null },
+    T0,
+  );
+  assert.equal(near.newVisit, false);
 });
 
 test("stored values are read defensively and the later device wins", () => {
