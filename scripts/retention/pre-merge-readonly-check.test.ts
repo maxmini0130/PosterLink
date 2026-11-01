@@ -18,11 +18,11 @@ async function seeded() {
   const db = await retentionDb();
   await db.exec(`
     CREATE SCHEMA cron;
-    CREATE TABLE cron.job (jobid bigint PRIMARY KEY, jobname text, schedule text, command text, active boolean);
+    CREATE TABLE cron.job (jobid bigint PRIMARY KEY, jobname text, schedule text, command text, active boolean, username text);
     CREATE TABLE cron.job_run_details (runid bigint, jobid bigint, status text,
       start_time timestamptz, end_time timestamptz, return_message text);
     INSERT INTO cron.job VALUES (7, 'usage-log-retention-daily', '30 18 * * *',
-      ' select * from public.run_usage_log_retention(50000); ', true);
+      ' select * from public.run_usage_log_retention(50000); ', true, 'postgres');
     -- One visit a week for twelve weeks, then the daily run.
     INSERT INTO site_visit_logs (visitor_key, path, created_at)
       SELECT 'visitor-' || n, '/', now() - (n * interval '7 days') FROM generate_series(1, 12) n;
@@ -91,6 +91,23 @@ test("drift in indexes, constraints, function settings and rights is reported", 
   assert.deepEqual(await failures(db, "UPDATE cron.job SET active = false"), [
     "job: usage-log-retention-daily",
   ]);
+  // A command that only mentions the function, without running the purge.
+  assert.deepEqual(
+    await failures(
+      db,
+      "UPDATE cron.job SET command = 'select ''public.run_usage_log_retention(50000)'''",
+    ),
+    ["job: usage-log-retention-daily"],
+  );
+  // An owner that cannot do what the function needs.
+  assert.deepEqual(
+    await failures(
+      db,
+      `CREATE ROLE weak_owner NOLOGIN;
+       ALTER FUNCTION run_usage_log_retention(integer) OWNER TO weak_owner`,
+    ),
+    ["function: run_usage_log_retention(integer)"],
+  );
 });
 
 test("a missing recent week, no stored weeks or no successful run is reported", async () => {
@@ -109,6 +126,24 @@ test("a missing recent week, no stored weeks or no successful run is reported", 
     [
       "cohort: every closed week stored up to the last run",
       `cohort: missing week ${last}`,
+    ],
+  );
+  const first = (
+    await db.query<{ w: string }>(
+      "SELECT min(cohort_week)::text AS w FROM usage_weekly_cohorts",
+    )
+  ).rows[0].w;
+  assert.deepEqual(
+    (
+      await failures(
+        db,
+        `DELETE FROM usage_weekly_cohorts WHERE cohort_week = '${first}'`,
+      )
+    ).sort(),
+    [
+      "cohort: every closed week stored up to the last run",
+      "cohort: first stored week is the week collection started",
+      `cohort: missing week ${first}`,
     ],
   );
   const empty = await failures(db, "DELETE FROM usage_weekly_cohorts");

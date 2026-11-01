@@ -197,3 +197,11 @@
 - 새 테스트 [pre-merge-readonly-check.test.ts](scripts/retention/pre-merge-readonly-check.test.ts) 3건: 마이그레이션 그대로인 DB는 모든 행 통과. 유일 인덱스 삭제, CHECK를 `CHECK (true)`로 교체, search_path 초기화, FK 삭제 동작 변경, 테이블 권한 추가, 예약 비활성, 최근 주 삭제, 집계 전체 삭제, 성공 실행 없음이 각각 해당 행의 실패로 나온다. PGlite 준비 코드는 [retentionTestDb.ts](scripts/retention/retentionTestDb.ts)로 분리했다.
 - P3(90일 선택과 달력 3개월 차이, 링크 클릭 합계의 기간 조건)는 이번에 고치지 않았다. 화면 일부 기간에 데이터가 비는 표시 문제로, 별도 작업으로 남긴다.
 - 검증: `scripts/retention/*` 31/31, `pnpm test` 222/224·`scripts/security/*` 104/107(실패는 모두 기존 실패), web lint·build 통과. 운영 DB 접속 없음.
+
+## 병합 전 재검토 수정 (Codex `9b0ed9d`)
+
+- P2 첫 집계 주 삭제를 놓침: 누락 검사를 남아 있는 첫 주가 아니라 **수집 시작 주**부터 한다. 첫 저장 주가 수집 시작 주와 다르면 실패로 보고, 다르면 그 주의 첫 방문이 모두 집계 제외(자동·운영자) 방문이었는지 확인하라고 SQL에 적었다.
+- P2 함수 소유자를 검사하지 않음: 함수 6개의 소유자를 기대값(`postgres`)과 비교한다. 권한 없는 역할로 바뀌면 실패다.
+- P2 예약 명령을 부분 문자열로 검사: 공백만 정리한 명령 전체가 `select * from public.run_usage_log_retention(50000);`와 같아야 하고, 작업이 하나뿐이며 실행 계정이 `postgres`여야 한다.
+- 테스트 추가: 첫 주 삭제, 함수 소유자 변경, 함수 이름만 문자열로 조회하는 명령. 세 경우 모두 해당 행의 실패로 나오며, 고치기 전 SQL에서는 이 테스트가 실패함을 확인했다.
+- 검증: `scripts/retention/*` 31/31, `git diff --check` 통과.

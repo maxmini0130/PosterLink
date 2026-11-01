@@ -36,18 +36,19 @@ SELECT * FROM public.usage_log_retention_preview();
 
 -- 3. Verdict.
 WITH
-expected_functions(sig, body_md5, lang, secdef, config) AS (VALUES
-  ('record_product_event(text,text,text,text,uuid,uuid,jsonb)', '9e9d169d21595a4cf8b8adad851ce091', 'plpgsql', true, '{search_path=public}'),
-  ('link_visitor_identity(text,text,text,text,text)', '2e973c9f8d026288e822714f5bb47b8e', 'plpgsql', true, '{"search_path=public, auth"}'),
-  ('snapshot_usage_weekly_cohorts()', '285799e849051c9a61ef03f85cda9f56', 'plpgsql', false, '{search_path=public}'),
-  ('usage_log_retention_cutoffs()', 'fd4deebb79d43544000d1574917597ad', 'sql', false, '{search_path=public}'),
-  ('usage_log_retention_preview()', 'be38ea86be5f9f55cf252068bdccfb45', 'plpgsql', false, '{search_path=public}'),
-  ('run_usage_log_retention(integer)', '8ec0d9b4753a6a464fb7d4a20c189508', 'plpgsql', false, '{search_path=public}')
+expected_functions(sig, body_md5, lang, secdef, config, owner) AS (VALUES
+  ('record_product_event(text,text,text,text,uuid,uuid,jsonb)', '9e9d169d21595a4cf8b8adad851ce091', 'plpgsql', true, '{search_path=public}', 'postgres'),
+  ('link_visitor_identity(text,text,text,text,text)', '2e973c9f8d026288e822714f5bb47b8e', 'plpgsql', true, '{"search_path=public, auth"}', 'postgres'),
+  ('snapshot_usage_weekly_cohorts()', '285799e849051c9a61ef03f85cda9f56', 'plpgsql', false, '{search_path=public}', 'postgres'),
+  ('usage_log_retention_cutoffs()', 'fd4deebb79d43544000d1574917597ad', 'sql', false, '{search_path=public}', 'postgres'),
+  ('usage_log_retention_preview()', 'be38ea86be5f9f55cf252068bdccfb45', 'plpgsql', false, '{search_path=public}', 'postgres'),
+  ('run_usage_log_retention(integer)', '8ec0d9b4753a6a464fb7d4a20c189508', 'plpgsql', false, '{search_path=public}', 'postgres')
 ),
 functions AS (
   SELECT p.oid::regprocedure::text AS sig, p.proname,
          md5(replace(p.prosrc, E'\r', '')) AS body_md5, l.lanname AS lang,
-         p.prosecdef AS secdef, p.proconfig::text AS config
+         p.prosecdef AS secdef, p.proconfig::text AS config,
+         pg_get_userbyid(p.proowner) AS owner
     FROM pg_proc p
     JOIN pg_namespace n ON n.oid = p.pronamespace AND n.nspname = 'public'
     JOIN pg_language l ON l.oid = p.prolang
@@ -111,8 +112,9 @@ expected_columns(tbl, col, data_type) AS (VALUES
 ),
 -- Weekly cohorts: every week whose 30-day return window had closed by the
 -- last successful run must be stored (same KST week and closing rule as
--- snapshot_usage_weekly_cohorts), from the first stored week, which may not be
--- before the week collection started.
+-- snapshot_usage_weekly_cohorts), from the week collection started. The first
+-- stored week must be that week; if not, check whether the earliest visits of
+-- that week were all excluded from the counts (automated or staff visits).
 last_run AS (
   SELECT max(d.start_time) AS at
     FROM cron.job_run_details d
@@ -137,22 +139,25 @@ cohort_bounds AS (
 missing_weeks AS (
   SELECT w::date AS week
     FROM cohort_bounds b,
-         generate_series(coalesce(b.first_stored, b.start_week), b.last_due, interval '1 week') w
+         generate_series(b.start_week, b.last_due, interval '1 week') w
    WHERE NOT EXISTS (SELECT 1 FROM public.usage_weekly_cohorts c WHERE c.cohort_week = w::date)
 ),
 checks(section, item, ok, actual, expected) AS (
   SELECT 'job', 'usage-log-retention-daily',
-         coalesce(bool_and(j.active AND j.schedule = '30 18 * * *'
-                           AND j.command LIKE '%public.run_usage_log_retention(50000)%'), false),
-         string_agg(j.schedule || ' | ' || j.active || ' | ' || j.command, ' ; '),
-         '30 18 * * * | true | select * from public.run_usage_log_retention(50000);'
+         coalesce(count(j.jobid) = 1 AND bool_and(
+                    j.active AND j.schedule = '30 18 * * *' AND j.username = 'postgres'
+                    AND regexp_replace(btrim(j.command), '\s+', ' ', 'g')
+                        = 'select * from public.run_usage_log_retention(50000);'), false),
+         string_agg(concat_ws(' | ', j.schedule, j.active, j.username,
+                              regexp_replace(btrim(j.command), '\s+', ' ', 'g')), ' ; '),
+         '30 18 * * * | true | postgres | select * from public.run_usage_log_retention(50000);'
     FROM (SELECT 1) one LEFT JOIN cron.job j ON j.jobname = 'usage-log-retention-daily'
   UNION ALL
   SELECT 'function', e.sig,
          coalesce(f.body_md5 = e.body_md5 AND f.lang = e.lang AND f.secdef = e.secdef
-                  AND f.config IS NOT DISTINCT FROM e.config, false),
-         concat_ws(' | ', f.body_md5, f.lang, f.secdef, f.config),
-         concat_ws(' | ', e.body_md5, e.lang, e.secdef, e.config)
+                  AND f.config IS NOT DISTINCT FROM e.config AND f.owner = e.owner, false),
+         concat_ws(' | ', f.body_md5, f.lang, f.secdef, f.config, 'owner=' || f.owner),
+         concat_ws(' | ', e.body_md5, e.lang, e.secdef, e.config, 'owner=' || e.owner)
     FROM expected_functions e LEFT JOIN functions f ON f.sig = e.sig
   UNION ALL
   SELECT 'function', 'no other overloads', count(*) = 6, count(*)::text, '6'
@@ -204,9 +209,9 @@ checks(section, item, ok, actual, expected) AS (
          coalesce(b.collection_started_at::text, 'missing'), 'usage_log_retention_state.collection_started_at'
     FROM cohort_bounds b
   UNION ALL
-  SELECT 'cohort', 'first stored week not before collection started',
-         b.first_stored IS NULL OR b.first_stored >= b.start_week,
-         coalesce(b.first_stored::text, 'none'), '>= ' || coalesce(b.start_week::text, '?')
+  SELECT 'cohort', 'first stored week is the week collection started',
+         (b.last_due IS NULL AND b.first_stored IS NULL) OR b.first_stored = b.start_week,
+         coalesce(b.first_stored::text, 'none'), coalesce(b.start_week::text, '?')
     FROM cohort_bounds b
   UNION ALL
   SELECT 'cohort', 'every closed week stored up to the last run',
