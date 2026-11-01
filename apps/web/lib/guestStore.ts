@@ -248,11 +248,40 @@ export async function completePendingActions(deps: {
 // ------------------------------------------------------------- merge (2-4)
 
 export const GUEST_MERGE_NOTICE_KEY = "pl.guest_merge_notice.v1";
+export const GUEST_UNAVAILABLE_KEY = "pl.guest_merge_unavailable.v1";
+/** Posters found gone are looked up again after this, in case they return. */
+export const GUEST_UNAVAILABLE_RECHECK_MS = 24 * 60 * 60 * 1000;
 
 export type GuestMergeResult =
   | { status: "none" }
   | { status: "failed"; count: number }
-  | { status: "merged"; count: number; added: number; duplicates: number };
+  | {
+      status: "merged";
+      /** Favorites now in the account (added + duplicates). */
+      count: number;
+      added: number;
+      duplicates: number;
+      /** Kept on this device: the poster was deleted or is not public. */
+      unavailable: number;
+    };
+
+function readUnavailable(store: KeyValueStore) {
+  const value = readJson(store, GUEST_UNAVAILABLE_KEY) as {
+    v?: unknown;
+    ids?: unknown;
+    at?: unknown;
+  } | null;
+  if (
+    value?.v !== 1 ||
+    !Array.isArray(value.ids) ||
+    typeof value.at !== "number"
+  )
+    return null;
+  return {
+    ids: value.ids.filter((id): id is string => typeof id === "string"),
+    at: value.at,
+  };
+}
 
 /**
  * Moves this browser's guest favorites into the signed-in account (retention
@@ -261,29 +290,86 @@ export type GuestMergeResult =
  * removed only after the write succeeds, and only the ones read at the start:
  * a favorite saved meanwhile stays for the next merge. On failure nothing is
  * removed and the next screen retries.
+ *
+ * A poster that was deleted or hidden would fail the whole write (foreign
+ * key), so posters that cannot be looked up are left out of it: they stay on
+ * this device, are recorded for 내 공고 to offer removing them, and are looked
+ * up again only after GUEST_UNAVAILABLE_RECHECK_MS.
  */
 export async function mergeGuestFavorites(deps: {
   store: KeyValueStore;
+  now: number;
   /** Which of these poster ids the account already has; null on failure. */
   existing: (posterIds: string[]) => Promise<string[] | null>;
+  /** Which of these poster ids are public posters; null on failure. */
+  available: (posterIds: string[]) => Promise<string[] | null>;
   /** Upserts the poster ids into the account; false on failure. */
   upsert: (posterIds: string[]) => Promise<boolean>;
 }): Promise<GuestMergeResult> {
   const ids = readGuestFavorites(deps.store).map((item) => item.posterId);
   if (ids.length === 0) return { status: "none" };
+  const known = readUnavailable(deps.store);
+  if (
+    known &&
+    deps.now - known.at < GUEST_UNAVAILABLE_RECHECK_MS &&
+    ids.every((id) => known.ids.includes(id))
+  )
+    return { status: "none" }; // only known-gone posters left: wait for recheck
   const already = await deps.existing(ids);
   if (!already) return { status: "failed", count: ids.length };
   const owned = new Set(already);
   const missing = ids.filter((id) => !owned.has(id));
-  if (missing.length > 0 && !(await deps.upsert(missing)))
+  let unavailable: string[] = [];
+  if (missing.length > 0) {
+    const found = await deps.available(missing);
+    if (!found) return { status: "failed", count: ids.length };
+    const exists = new Set(found);
+    unavailable = missing.filter((id) => !exists.has(id));
+  }
+  const toAdd = missing.filter((id) => !unavailable.includes(id));
+  if (toAdd.length > 0 && !(await deps.upsert(toAdd)))
     return { status: "failed", count: ids.length };
-  for (const id of ids) removeGuestFavorite(deps.store, id);
+  for (const id of ids)
+    if (!unavailable.includes(id)) removeGuestFavorite(deps.store, id);
+  if (unavailable.length > 0)
+    writeJson(deps.store, GUEST_UNAVAILABLE_KEY, {
+      v: 1,
+      ids: unavailable,
+      at: deps.now,
+    });
+  else clearUnavailableRecord(deps.store);
   return {
     status: "merged",
-    count: ids.length,
-    added: missing.length,
+    count: ids.length - unavailable.length,
+    added: toAdd.length,
     duplicates: ids.length - missing.length,
+    unavailable: unavailable.length,
   };
+}
+
+function clearUnavailableRecord(store: KeyValueStore) {
+  try {
+    store.removeItem(GUEST_UNAVAILABLE_KEY);
+  } catch {
+    /* storage blocked */
+  }
+}
+
+/**
+ * Guest favorites the last merge could not move because the poster is gone,
+ * still on this device (the person may have removed some meanwhile).
+ */
+export function readUnavailableGuestFavorites(store: KeyValueStore) {
+  const known = readUnavailable(store);
+  if (!known) return [];
+  return known.ids.filter((id) => hasGuestFavorite(store, id));
+}
+
+/** The person chose to drop the favorites that could not be moved. */
+export function discardUnavailableGuestFavorites(store: KeyValueStore) {
+  for (const id of readUnavailableGuestFavorites(store))
+    removeGuestFavorite(store, id);
+  clearUnavailableRecord(store);
 }
 
 /** "N개를 계정으로 옮겼어요" notice, shown once on 내 공고 until dismissed. */

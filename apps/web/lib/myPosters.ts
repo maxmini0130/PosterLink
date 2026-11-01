@@ -8,22 +8,35 @@ import type { PosterApplicationInput } from "./posterApplication";
 
 export type UserStatus = "interested" | "applied";
 
-export type ReceptionGroupKey = "scheduled" | "open" | "closed";
+export type ReceptionGroupKey = "scheduled" | "open" | "unconfirmed" | "closed";
 
 export const RECEPTION_GROUP_LABELS: Record<ReceptionGroupKey, string> = {
   scheduled: "접수 예정",
   open: "접수 중",
+  unconfirmed: "접수 일정 확인 필요",
   closed: "접수 종료",
 };
 
-const GROUP_ORDER: ReceptionGroupKey[] = ["scheduled", "open", "closed"];
+const GROUP_ORDER: ReceptionGroupKey[] = [
+  "scheduled",
+  "open",
+  "unconfirmed",
+  "closed",
+];
 
 export function receptionGroup(display: DeadlineDisplay): ReceptionGroupKey {
-  if (display.reception === "scheduled") return "scheduled";
-  if (display.reception === "closed") return "closed";
-  // Open, no-date (상시·소진 시) and unconfirmed deadlines are all still listed
-  // as accepting; the card's own label says which.
-  return "open";
+  switch (display.reception) {
+    case "scheduled":
+    case "closed":
+    case "unconfirmed":
+      // Unconfirmed (no date, unparseable or untrusted deadline type) is not
+      // claimed to be open; the card sends the person to the original.
+      return display.reception;
+    case "open":
+    case "ongoing":
+    case "until_exhausted":
+      return "open";
+  }
 }
 
 /** Card note for a deadline that has no date to be reminded of. */
@@ -37,9 +50,10 @@ export function noDateNote(display: DeadlineDisplay) {
 export type GroupedItem<T> = { item: T; display: DeadlineDisplay };
 
 /**
- * Groups items by reception status in the order 접수 예정 → 접수 중 → 접수 종료,
- * dropping empty groups. Within 접수 중, trusted deadlines come first, soonest
- * first; elsewhere the original order (most recently saved) is kept.
+ * Groups items by reception status in the order 접수 예정 → 접수 중 → 접수 일정
+ * 확인 필요 → 접수 종료, dropping empty groups. Within 접수 중, dated deadlines
+ * come first, soonest first; elsewhere the original order (most recently
+ * saved) is kept.
  */
 export function groupByReception<T>(
   items: T[],
@@ -64,4 +78,49 @@ export function groupByReception<T>(
     label: RECEPTION_GROUP_LABELS[key],
     items: groups.get(key)!,
   }));
+}
+
+/**
+ * Keeps a list screen's reads from undoing its own writes. A read started
+ * before or during a write may return the old row, so while a write runs no
+ * read result is applied: a read already in flight is dropped and one asked
+ * for meanwhile is deferred, and `endWrite` says when to read again. Among
+ * reads, only the newest result is applied.
+ */
+export function createReadWriteGate() {
+  let seq = 0;
+  let inFlight = 0;
+  let writes = 0;
+  let readAgain = false;
+  return {
+    /** A token for a new read, or null when a write runs (read after it). */
+    beginRead(): number | null {
+      if (writes > 0) {
+        readAgain = true;
+        return null;
+      }
+      inFlight = ++seq;
+      return seq;
+    },
+    /** Whether this read's result may still be applied. */
+    endRead(token: number) {
+      if (inFlight === token) inFlight = 0;
+      return token === seq && writes === 0;
+    },
+    beginWrite() {
+      writes += 1;
+      if (inFlight) {
+        seq += 1; // the read in flight may predate this write
+        inFlight = 0;
+        readAgain = true;
+      }
+    },
+    /** True when the last write ended and a dropped or deferred read is due. */
+    endWrite() {
+      writes = Math.max(0, writes - 1);
+      if (writes > 0 || !readAgain) return false;
+      readAgain = false;
+      return true;
+    },
+  };
 }

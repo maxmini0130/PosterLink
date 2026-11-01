@@ -9,8 +9,11 @@ import {
   addGuestFavorite,
   clearPendingAction,
   completePendingActions,
+  GUEST_UNAVAILABLE_RECHECK_MS,
+  discardUnavailableGuestFavorites,
   dismissMergeNotice,
   mergeGuestFavorites,
+  readUnavailableGuestFavorites,
   readMergeNotice,
   rememberMergeNotice,
   hasGuestFavorite,
@@ -338,7 +341,9 @@ test("merging moves every guest favorite once and clears them only after success
   const upserts: string[][] = [];
   const result = await mergeGuestFavorites({
     store,
+    now: 10,
     existing: async () => [B], // the account already has B
+    available: async (ids) => ids,
     upsert: async (ids) => {
       upserts.push(ids);
       return true;
@@ -349,6 +354,7 @@ test("merging moves every guest favorite once and clears them only after success
     count: 2,
     added: 1,
     duplicates: 1,
+    unavailable: 0,
   });
   assert.deepEqual(upserts, [[A]]);
   assert.deepEqual(readGuestFavorites(store), []);
@@ -356,7 +362,9 @@ test("merging moves every guest favorite once and clears them only after success
   assert.deepEqual(
     await mergeGuestFavorites({
       store,
+      now: 10,
       existing: async () => [],
+      available: async (ids) => ids,
       upsert: async () => true,
     }),
     { status: "none" },
@@ -364,13 +372,19 @@ test("merging moves every guest favorite once and clears them only after success
 });
 
 test("a failed merge keeps the guest favorites for a retry", async () => {
+  const ok = async (ids: string[]) => ids;
   for (const deps of [
-    { existing: async () => null, upsert: async () => true },
-    { existing: async () => [], upsert: async () => false },
+    { existing: async () => null, available: ok, upsert: async () => true },
+    {
+      existing: async () => [],
+      available: async () => null,
+      upsert: async () => true,
+    },
+    { existing: async () => [], available: ok, upsert: async () => false },
   ]) {
     const store = memory();
     addGuestFavorite(store, A, 1);
-    const result = await mergeGuestFavorites({ store, ...deps });
+    const result = await mergeGuestFavorites({ store, now: 10, ...deps });
     assert.deepEqual(result, { status: "failed", count: 1 });
     assert.equal(hasGuestFavorite(store, A), true);
   }
@@ -381,7 +395,9 @@ test("a favorite saved during the merge stays for the next one", async () => {
   addGuestFavorite(store, A, 1);
   await mergeGuestFavorites({
     store,
+    now: 10,
     existing: async () => [],
+    available: async (ids) => ids,
     upsert: async () => {
       addGuestFavorite(store, C, 2); // another tab saves while the write runs
       return true;
@@ -402,4 +418,91 @@ test("the merge notice is shown until dismissed", () => {
   assert.equal(readMergeNotice(store), 3);
   dismissMergeNotice(store);
   assert.equal(readMergeNotice(store), null);
+});
+
+test("a deleted poster does not block the others and is kept for the person to remove", async () => {
+  const store = memory();
+  addGuestFavorite(store, A, 1); // still public
+  addGuestFavorite(store, C, 2); // deleted since
+  const upserts: string[][] = [];
+  const deps = {
+    store,
+    existing: async () => [],
+    available: async (ids: string[]) => ids.filter((id) => id !== C),
+    upsert: async (ids: string[]) => {
+      upserts.push(ids);
+      return true;
+    },
+  };
+  assert.deepEqual(await mergeGuestFavorites({ ...deps, now: 100 }), {
+    status: "merged",
+    count: 1,
+    added: 1,
+    duplicates: 0,
+    unavailable: 1,
+  });
+  assert.deepEqual(upserts, [[A]]); // the gone poster never reaches the write
+  assert.deepEqual(
+    readGuestFavorites(store).map((item) => item.posterId),
+    [C],
+  );
+  assert.deepEqual(readUnavailableGuestFavorites(store), [C]);
+
+  // Only the gone poster left: no lookups until the recheck time.
+  let lookups = 0;
+  const counting = {
+    ...deps,
+    existing: async () => {
+      lookups += 1;
+      return [];
+    },
+  };
+  assert.deepEqual(await mergeGuestFavorites({ ...counting, now: 200 }), {
+    status: "none",
+  });
+  assert.equal(lookups, 0);
+
+  // A favorite saved later is still merged, the gone one still kept.
+  addGuestFavorite(store, B, 3);
+  const later = await mergeGuestFavorites({ ...counting, now: 300 });
+  assert.equal(later.status, "merged");
+  assert.deepEqual(upserts.at(-1), [B]);
+  assert.deepEqual(readUnavailableGuestFavorites(store), [C]);
+
+  // After the recheck time it is looked up again, and moved if it is back.
+  const back = await mergeGuestFavorites({
+    ...deps,
+    available: async (ids: string[]) => ids,
+    now: 300 + GUEST_UNAVAILABLE_RECHECK_MS,
+  });
+  assert.deepEqual(back, {
+    status: "merged",
+    count: 1,
+    added: 1,
+    duplicates: 0,
+    unavailable: 0,
+  });
+  assert.deepEqual(readGuestFavorites(store), []);
+  assert.deepEqual(readUnavailableGuestFavorites(store), []);
+});
+
+test("the person can drop favorites that could not be moved", async () => {
+  const store = memory();
+  addGuestFavorite(store, A, 1);
+  addGuestFavorite(store, C, 2);
+  await mergeGuestFavorites({
+    store,
+    now: 100,
+    existing: async () => [],
+    available: async () => [], // both gone
+    upsert: async () => {
+      throw new Error("must not write gone posters");
+    },
+  });
+  assert.deepEqual(readUnavailableGuestFavorites(store).sort(), [A, C].sort());
+  removeGuestFavorite(store, A); // removed elsewhere meanwhile
+  assert.deepEqual(readUnavailableGuestFavorites(store), [C]);
+  discardUnavailableGuestFavorites(store);
+  assert.deepEqual(readGuestFavorites(store), []);
+  assert.deepEqual(readUnavailableGuestFavorites(store), []);
 });

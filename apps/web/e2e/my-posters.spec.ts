@@ -27,7 +27,20 @@ const CLOSED =
 const OTHER =
   process.env.E2E_OTHER_POSTER_ID ?? "59d9c004-c280-4867-b49b-6ac45c432c86";
 const USER = "00000000-0000-4000-8000-000000000001";
+const GONE = "99999999-9999-4999-8999-999999999999"; // no such poster
 let writes: string[] = [];
+// The mocked account's favorites; writes update it like the server would.
+let account = new Map<string, string>();
+// When set, the next favorites read answers with what it saw at request time
+// only after release() — replays a reload that finishes after a write.
+type Hold = {
+  /** Resolves when the held read reaches the mock. */
+  arrived: Promise<void>;
+  release: () => void;
+  reached: () => void;
+  released: Promise<void>;
+};
+let hold: Hold | null = null;
 const json = (body: unknown, headers: Record<string, string> = {}) => ({
   status: 200,
   contentType: "application/json",
@@ -36,7 +49,21 @@ const json = (body: unknown, headers: Record<string, string> = {}) => ({
 });
 test.beforeEach(() => {
   writes = [];
+  hold = null;
+  account = new Map([
+    [OPEN, "applied"],
+    [NOTICE, "interested"],
+    [CLOSED, "applied"],
+  ]);
 });
+
+function holdNextFavoritesRead(): Hold {
+  const entry = {} as Hold;
+  entry.released = new Promise<void>((resolve) => (entry.release = resolve));
+  entry.arrived = new Promise<void>((resolve) => (entry.reached = resolve));
+  hold = entry;
+  return entry;
+}
 
 async function open(
   p: Page,
@@ -71,6 +98,12 @@ async function open(
       // Writes get a fake success here and never reach the server.
       if (m !== "GET" && m !== "HEAD") {
         writes.push(m + " " + new URL(u).pathname);
+        const target = new URL(u).searchParams.get("poster_id")?.slice(3);
+        if (/\/rest\/v1\/favorites/.test(u) && target) {
+          if (m === "DELETE") account.delete(target);
+          if (m === "PATCH")
+            account.set(target, JSON.parse(req.postData() || "{}").user_status);
+        }
         return r.fulfill({ status: 204, body: "" });
       }
       if (member && /\/rest\/v1\/favorites/.test(u)) {
@@ -83,13 +116,17 @@ async function open(
               message: "column favorites.user_status does not exist",
             }),
           });
-        return r.fulfill(
-          json([
-            { poster_id: OPEN, user_status: "applied" },
-            { poster_id: NOTICE, user_status: "interested" },
-            { poster_id: CLOSED, user_status: "applied" },
-          ]),
-        );
+        const ids = new URL(u).searchParams.get("poster_id");
+        const rows = [...account]
+          .filter(([id]) => !ids || ids.includes(id))
+          .map(([poster_id, user_status]) => ({ poster_id, user_status }));
+        const held = hold;
+        if (held && !ids) {
+          hold = null;
+          held.reached();
+          await held.released; // answers with the rows as they were at request time
+        }
+        return r.fulfill(json(rows));
       }
       if (member && /\/rest\/v1\/institution_follows/.test(u))
         return r.fulfill(
@@ -271,4 +308,57 @@ test("PC account menu opens, moves with keys and closes", async ({ page }) => {
       .getByRole("navigation", { name: "주요 메뉴" })
       .getByRole("link", { name: "내 공고" }),
   ).toHaveAttribute("aria-current", "page");
+});
+
+test("a reload that finishes after a write does not undo it", async ({
+  page,
+}) => {
+  await open(page, 390, { member: true });
+  const panel = page.locator("#my-panel-favorites");
+  const reload = () =>
+    page.evaluate(() => window.dispatchEvent(new Event("pl:guest-merged")));
+
+  // 신청 표시 while an older reload is still on its way.
+  let held = holdNextFavoritesRead();
+  await reload();
+  await held.arrived;
+  await panel.getByRole("button", { name: "신청했어요" }).first().click();
+  await expect(panel.getByText("신청 표시됨")).toHaveCount(3);
+  held.release();
+  await page.waitForTimeout(800);
+  await expect(panel.getByText("신청 표시됨")).toHaveCount(3);
+
+  // 찜 취소 while another older reload is on its way.
+  held = holdNextFavoritesRead();
+  await reload();
+  await held.arrived;
+  await panel.getByRole("button", { name: "찜 취소" }).first().click();
+  await expect(panel.locator("li")).toHaveCount(2);
+  held.release();
+  await page.waitForTimeout(800);
+  await expect(panel.locator("li")).toHaveCount(2);
+});
+
+test("a deleted poster does not block the merge and can be removed from this device", async ({
+  page,
+}) => {
+  await open(page, 390, { member: true, guestIds: [GONE, OTHER] });
+  await expect(
+    page.getByText("이 기기에 찜한 공고 1개를 계정으로 옮겼어요"),
+  ).toBeVisible();
+  expect(writes.filter((x) => x === "POST /rest/v1/favorites")).toHaveLength(1);
+  await expect(
+    page.getByText("1개는 삭제되었거나 지금 볼 수 없는 공고라"),
+  ).toBeVisible();
+  const left = () =>
+    page.evaluate(
+      () =>
+        JSON.parse(
+          localStorage.getItem("pl.guest_favorites.v1") || "{}",
+        ).items?.map((item: { posterId: string }) => item.posterId) ?? [],
+    );
+  expect(await left()).toEqual([GONE]);
+  await page.getByRole("button", { name: "이 기기에서 지우기" }).click();
+  await expect(page.getByText("삭제되었거나")).toHaveCount(0);
+  expect(await left()).toEqual([]);
 });

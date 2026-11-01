@@ -1,6 +1,6 @@
 # UI 개편 3단계: 내 공고 ⑨⑩ + PC 내 공고 + 상단 계정 메뉴
 
-상태: 수정 필요 (구현 Claude, 검토 Codex) — `72a05ab`·`b665833` 검토 P2 3건. 검토 기록: WORK_LOG_20261101_ui_redesign_stage3_review.md. **마이그레이션 미적용**, push·배포·운영 DB 없음
+상태: 재검토 대기 (구현 Claude, 검토 Codex) — `72a05ab`·`b665833` 검토 P2 3건을 아래 "검토 수정"에서 고침. 검토 기록: WORK_LOG_20261101_ui_redesign_stage3_review.md. **마이그레이션 미적용**, push·배포·운영 DB 없음
 
 기준: [UI 개편 지시서](docs/UI_REDESIGN_PLAN_2026-10-31.md) 3장 ⑨⑩·3-1 내 공고·계정 메뉴·6장 2단계, [재방문 지시서](docs/RETENTION_PLAN_2026-10-31.md) 2-4·3-1.
 
@@ -10,7 +10,7 @@
 
 - 새 경로를 만들었다. 기존 `/favorites`는 미들웨어에서 로그인 필수인데 미들웨어는 보안 고정 검사 대상이라 바꾸지 않았다. `/favorites`는 `/my-posters`로 이동시키고, 하단 탭·상단 메뉴·마이페이지 링크를 새 경로로 바꿨다. 공고 상세 링크 출처 분류에서 `/my-posters`도 `favorites`로 본다.
 - 비회원(⑨): "이 기기에 찜한 공고 N개" + 이점 문구 + `카카오로 계속하기`(돌아올 곳 `/my-posters`) / `다른 방법으로 로그인`. 카드마다 "이 기기에 저장됨"과 `찜 취소`. 알림·신청 표시·구독 탭은 보여 주지 않는다. 찜이 없으면 안내 카드 하나.
-- 회원(⑩): 탭 `찜 N` / `신청 표시 N` / `구독 기관 N`(`role="tablist"`, `aria-selected`, 좌우 화살표). 찜 탭은 공고 접수 상태별 묶음 **접수 예정 → 접수 중 → 접수 종료**, 빈 묶음 숨김(`lib/myPosters.ts` `groupByReception`, 1단계 공용 상태 함수 사용). 접수 중은 날짜 신뢰 공고 먼저, 마감 가까운 순. 상시·소진 시 마감 카드에는 "마감일이 없는 공고라 날짜 알림은 없어요".
+- 회원(⑩): 탭 `찜 N` / `신청 표시 N` / `구독 기관 N`(`role="tablist"`, `aria-selected`, 좌우 화살표). 찜 탭은 공고 접수 상태별 묶음 **접수 예정 → 접수 중 → 접수 일정 확인 필요 → 접수 종료**(확인 필요는 검토 수정에서 추가), 빈 묶음 숨김(`lib/myPosters.ts` `groupByReception`, 1단계 공용 상태 함수 사용). 접수 중은 날짜 신뢰 공고 먼저, 마감 가까운 순. 상시·소진 시 마감 카드에는 "마감일이 없는 공고라 날짜 알림은 없어요".
 - 가입 직후 안내 "이 기기에 찜한 공고 N개를 계정으로 옮겼어요"(닫기 가능, 닫으면 다시 안 나옴). 모바일은 제목 → 안내 → 탭, PC는 제목·탭 한 줄 아래 안내 띠.
 - PC: 제목 오른쪽 탭, 묶음마다 카드 격자 `repeat(auto-fill, minmax(340px, 1fr))`.
 
@@ -48,6 +48,23 @@
 - 전체 로컬 검사 12/12(1·2단계 포함), 390·768·1280px 가로 넘침 없음, web lint·build PASS, `pnpm test` 242/244(기존 실패 2건), `scripts/security/*` 104/107(기존 실패 3건, 새 마이그레이션은 허용 목록에 `72a05ab` 고정), `git diff --check` PASS.
 - 스크린샷: 스크래치패드 `ui-s3/`(`compare-9-guest`, `compare-10-member`, `compare-pc-my-posters`, `guest-*`, `member-*`, `member-merged-390`, `account-menu-1280`).
 - **미검증**: 실제 로그인 후 합치기·신청 표시 저장(운영 DB 쓰기라 스테이징 필요), 웹·WebView 각각.
+
+## 검토 수정 (Codex `7edb30b` P2 3건)
+
+- **P2-1 삭제된 공고가 합치기 전체를 막음**: `mergeGuestFavorites`가 계정에 없는 공고를 쓰기 전에 `posters`에서 공개 공고인지 먼저 조회(`available`)하고, 조회되지 않는 공고(삭제·비공개)는 쓰기에서 뺀다. 나머지는 정상 이전. 빠진 공고는 **지우지 않고 이 기기에 남기고** `pl.guest_merge_unavailable.v1`에 기록한다. 회원 내 공고에 "이 기기에 찜한 공고 N개는 삭제되었거나 지금 볼 수 없는 공고라 계정으로 옮기지 못했어요" + `이 기기에서 지우기`. 기록된 공고만 남으면 24시간(`GUEST_UNAVAILABLE_RECHECK_MS`) 동안 다시 조회하지 않고, 그 뒤 다시 조회해 공고가 돌아왔으면 옮긴다. 조회·쓰기 실패(일시 오류)는 이전과 같이 아무것도 지우지 않고 다음 화면에서 재시도. 옮긴 것이 0개면 이벤트·안내 없이 화면만 갱신. `guest_merge.previous_count`는 남긴 공고를 포함한 원래 개수.
+- **P2-2 늦은 재조회가 쓰기를 되돌림**: `createReadWriteGate`(`lib/myPosters.ts`). 쓰기(찜 취소·신청 표시)가 시작되면 진행 중인 조회 결과를 버리고, 쓰기 중 요청된 조회는 미룬다. 마지막 쓰기가 끝나면 한 번 다시 조회해 서버 상태로 맞춘다. 여러 카드의 동시 쓰기도 마지막 것이 끝날 때까지 기다린다.
+- **P2-3 미확인 일정이 접수 중으로 묶임**: 묶음에 **접수 일정 확인 필요**를 추가(접수 중과 접수 종료 사이). 공용 함수의 `unconfirmed`(날짜 없음·해석 실패·fixed가 아닌 유형)를 그대로 쓴다. 상시·소진 시 마감은 접수 중에 남는다.
+- **구주소 `/favorites`(검토 4번)**: 로그인 회원은 페이지에서 `/my-posters`로 이동한다. 비회원은 보안 고정 대상인 미들웨어가 먼저 `/login?redirectTo=%2Ffavorites`로 보내고, 기존 로그인 화면은 `redirectTo`를 쓰지 않아 로그인 후 홈으로 간다. 미들웨어를 바꾸지 않는 한 고칠 수 없어 그대로 두고, 새 내비게이션은 모두 `/my-posters`를 가리킨다. 외부에 남은 `/favorites` 링크는 비회원에게 로그인을 거친다.
+- 검증:
+  - 단위 `myPosters.test.ts` 5(미확인 4가지 사례, 읽기·쓰기 순서 3), `guestStore.test.ts` 14(삭제된 공고 분리·보관·재조회·지우기 2 추가), PGlite `favorite-user-status-migration.test.ts` 3(**실제 favorites→posters FK에서 삭제된 공고 1 + 신규 1 + 기존 1 → 신규만 저장, 삭제된 공고는 로컬 보관**).
+  - 로컬 브라우저 14/14(상세 2 포함):
+    - 새 검사 "a reload that finishes after a write does not undo it"는 조회 하나를 붙잡은 채 신청 표시·찜 취소를 한 뒤 풀어 준다. **수정 전 코드로 빌드해 실행하면 실패**(신청 표시 3→2)함을 확인했다.
+    - 새 검사 "a deleted poster does not block the merge ..."는 없는 공고 ID와 공개 공고를 함께 합친다.
+    - 모의 계정 찜은 쓰기를 반영하는 상태형으로 바꿨다. 쓰기는 여전히 가짜 응답이다.
+  - web lint·build·`tsc --noEmit` PASS
+  - `pnpm test` 248/250(기존 실패 2건)
+  - `scripts/security/*` 104/107(기존 실패 3건)
+  - Prettier, `git diff --check` PASS
 
 ## 운영 반영 시
 

@@ -31,11 +31,14 @@ import {
 import { loadPosterCards } from "../lib/posterCards";
 import { supabase } from "../lib/supabase";
 import {
+  discardUnavailableGuestFavorites,
   dismissMergeNotice,
   readGuestFavorites,
   readMergeNotice,
+  readUnavailableGuestFavorites,
 } from "../../lib/guestStore";
 import {
+  createReadWriteGate,
   groupByReception,
   noDateNote,
   type UserStatus,
@@ -155,18 +158,34 @@ export function MyPostersClient() {
   const [state, setState] = useState<State>({ phase: "loading" });
   const [tab, setTab] = useState<Tab>("favorites");
   const [mergedCount, setMergedCount] = useState<number | null>(null);
+  const [unmovedCount, setUnmovedCount] = useState(0);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const loadSeq = useRef(0);
+  // Reads (first load, merge and pending-action events) must not undo a
+  // write the person just made on this screen.
+  const gate = useRef(createReadWriteGate()).current;
 
   const load = useCallback(async () => {
-    const seq = ++loadSeq.current;
+    const token = gate.beginRead();
+    if (token === null) return; // a write is running; read again after it
     const userId =
       (await supabase.auth.getSession()).data.session?.user.id ?? null;
     const next = userId ? await loadMember(userId) : await loadGuest();
-    if (seq !== loadSeq.current) return; // a newer load started meanwhile
+    if (!gate.endRead(token)) return; // superseded by a newer read or a write
     setState(next);
-    if (userId) setMergedCount(readMergeNotice(guestLocal));
-  }, []);
+    if (userId) {
+      setMergedCount(readMergeNotice(guestLocal));
+      setUnmovedCount(readUnavailableGuestFavorites(guestLocal).length);
+    }
+  }, [gate]);
+
+  const write = async (run: () => Promise<void>) => {
+    gate.beginWrite();
+    try {
+      await run();
+    } finally {
+      if (gate.endWrite()) void load();
+    }
+  };
 
   useEffect(() => {
     void load();
@@ -196,7 +215,10 @@ export function MyPostersClient() {
     );
   };
 
-  const removeMember = async (userId: string, posterId: string) => {
+  const removeMember = (userId: string, posterId: string) =>
+    write(() => removeMemberNow(userId, posterId));
+
+  const removeMemberNow = async (userId: string, posterId: string) => {
     setBusyId(posterId);
     const { error } = await supabase
       .from("favorites")
@@ -224,7 +246,10 @@ export function MyPostersClient() {
     );
   };
 
-  const setApplied = async (
+  const setApplied = (userId: string, posterId: string, status: UserStatus) =>
+    write(() => setAppliedNow(userId, posterId, status));
+
+  const setAppliedNow = async (
     userId: string,
     posterId: string,
     status: UserStatus,
@@ -282,6 +307,11 @@ export function MyPostersClient() {
             onDismissNotice={() => {
               dismissMergeNotice(guestLocal);
               setMergedCount(null);
+            }}
+            unmovedCount={unmovedCount}
+            onDiscardUnmoved={() => {
+              discardUnavailableGuestFavorites(guestLocal);
+              setUnmovedCount(0);
             }}
             busyId={busyId}
             onRemove={(posterId) => void removeMember(state.userId, posterId)}
@@ -400,6 +430,8 @@ function MemberView({
   setTab,
   mergedCount,
   onDismissNotice,
+  unmovedCount,
+  onDiscardUnmoved,
   busyId,
   onRemove,
   onApply,
@@ -409,6 +441,8 @@ function MemberView({
   setTab: (tab: Tab) => void;
   mergedCount: number | null;
   onDismissNotice: () => void;
+  unmovedCount: number;
+  onDiscardUnmoved: () => void;
   busyId: string | null;
   onRemove: (posterId: string) => void;
   onApply: (posterId: string, status: UserStatus) => void;
@@ -498,6 +532,24 @@ function MemberView({
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg"
             >
               <X size={18} aria-hidden="true" />
+            </button>
+          </div>
+        )}
+        {unmovedCount > 0 && (
+          <div
+            role="status"
+            className="order-2 flex flex-col gap-2 rounded-xl border border-pl-line bg-pl-card px-4 py-3 text-sm text-pl-ink sm:flex-row sm:items-center sm:justify-between md:order-4 md:w-full"
+          >
+            <span>
+              이 기기에 찜한 공고 {unmovedCount}개는 삭제되었거나 지금 볼 수
+              없는 공고라 계정으로 옮기지 못했어요.
+            </span>
+            <button
+              type="button"
+              onClick={onDiscardUnmoved}
+              className="inline-flex min-h-[44px] shrink-0 items-center self-start rounded-lg border border-pl-line px-3 font-medium sm:self-auto"
+            >
+              이 기기에서 지우기
             </button>
           </div>
         )}

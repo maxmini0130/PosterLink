@@ -48,6 +48,7 @@ const currentUserId = async () =>
 async function mergeIntoAccount(userId: string) {
   return mergeGuestFavorites({
     store: guestLocal,
+    now: Date.now(),
     existing: async (posterIds) => {
       const { data, error } = await supabase
         .from("favorites")
@@ -55,6 +56,14 @@ async function mergeIntoAccount(userId: string) {
         .eq("user_id", userId)
         .in("poster_id", posterIds);
       return error ? null : (data ?? []).map((row) => row.poster_id as string);
+    },
+    available: async (posterIds) => {
+      // Deleted or hidden posters are not readable and would fail the write.
+      const { data, error } = await supabase
+        .from("posters")
+        .select("id")
+        .in("id", posterIds);
+      return error ? null : (data ?? []).map((row) => row.id as string);
     },
     upsert: async (posterIds) => {
       const { error } = await supabase.from("favorites").upsert(
@@ -124,11 +133,20 @@ export default function PendingActionRunner() {
         const result = await mergeIntoAccount(userId);
         if (result.status === "none") return;
         const merged = result.status === "merged";
+        if (merged && result.count === 0) {
+          // Only posters that are gone: nothing moved; 내 공고 offers removing them.
+          window.dispatchEvent(
+            new CustomEvent(GUEST_MERGED_EVENT, { detail: { count: 0 } }),
+          );
+          return;
+        }
         if (merged || !mergeFailureLogged.current) {
           mergeFailureLogged.current = !merged;
           trackProductEvent("guest_merge", {
             metadata: {
-              previous_count: result.count,
+              previous_count: merged
+                ? result.count + result.unavailable
+                : result.count,
               duplicate_count: merged ? result.duplicates : 0,
               success: merged,
               logged_in: true,

@@ -2,6 +2,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { PGlite } from "@electric-sql/pglite";
+import {
+  addGuestFavorite,
+  mergeGuestFavorites,
+  readGuestFavorites,
+  readUnavailableGuestFavorites,
+  type KeyValueStore,
+} from "../../apps/web/lib/guestStore";
 
 const migration = readFileSync(
   "supabase/migrations/20261101010000_add_favorite_user_status.sql",
@@ -88,4 +95,72 @@ test("a person can mark only their own favorite, and a closed poster keeps the m
   await db.exec(`UPDATE posters SET poster_status = 'closed'`);
   const mine = await as(db, OWNER, "SELECT user_status FROM favorites");
   assert.deepEqual(mine, [{ user_status: "applied" }]);
+});
+
+test("merging guest favorites with a deleted poster still moves the others (real foreign key)", async () => {
+  const db = await setup();
+  const NEW = "44444444-4444-4444-8444-444444444444";
+  const GONE = "55555555-5555-4555-8555-555555555555"; // deleted, FK would fail
+  await db.query("INSERT INTO posters VALUES ($1, 'published')", [NEW]);
+  const data: Record<string, string> = {};
+  const store: KeyValueStore = {
+    getItem: (key) => data[key] ?? null,
+    setItem: (key, value) => {
+      data[key] = value;
+    },
+    removeItem: (key) => {
+      delete data[key];
+    },
+  };
+  addGuestFavorite(store, GONE, 1);
+  addGuestFavorite(store, NEW, 2);
+  addGuestFavorite(store, POSTER, 3); // the account already has it
+  const list = (ids: string[]) => ids.map((id) => `'${id}'`).join(",");
+  const result = await mergeGuestFavorites({
+    store,
+    now: 10,
+    existing: async (ids) =>
+      (
+        await as(
+          db,
+          OWNER,
+          `SELECT poster_id FROM favorites WHERE poster_id IN (${list(ids)})`,
+        )
+      ).map((row) => row.poster_id as string),
+    available: async (ids) =>
+      (
+        await db.query<{ id: string }>(
+          `SELECT id FROM posters WHERE id IN (${list(ids)})`,
+        )
+      ).rows.map((row) => row.id),
+    upsert: async (ids) => {
+      await as(
+        db,
+        OWNER,
+        `INSERT INTO favorites (user_id, poster_id) VALUES ${ids
+          .map((id) => `('${OWNER}', '${id}')`)
+          .join(",")} ON CONFLICT (user_id, poster_id) DO NOTHING`,
+      );
+      return true;
+    },
+  });
+  assert.deepEqual(result, {
+    status: "merged",
+    count: 2,
+    added: 1,
+    duplicates: 1,
+    unavailable: 1,
+  });
+  const owned = (
+    await db.query<{ poster_id: string }>(
+      "SELECT poster_id FROM favorites WHERE user_id = $1 ORDER BY poster_id",
+      [OWNER],
+    )
+  ).rows.map((row) => row.poster_id);
+  assert.deepEqual(owned, [POSTER, NEW]);
+  assert.deepEqual(
+    readGuestFavorites(store).map((item) => item.posterId),
+    [GONE],
+  );
+  assert.deepEqual(readUnavailableGuestFavorites(store), [GONE]);
 });
