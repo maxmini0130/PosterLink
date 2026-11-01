@@ -4,7 +4,10 @@
 
 로컬 PGlite는 연결이 하나뿐이라 잠금 대기·교착·한도 경합을 실제로 일으킬 수 없습니다. 이 문서는 그 확인을 **운영과 분리된 스테이징 Supabase**에서 `psql` 두 개로 하는 절차입니다.
 
-> **운영 프로젝트에서 실행하지 않습니다.** Preview 배포도 운영 DB를 쓰므로 쓰지 않습니다. 모든 세션은 [session.sql](../scripts/staging/naver/session.sql)로 시작하고, 이 파일이 접속 대상을 확인하지 못하면 쓰기 없이 psql을 종료합니다.
+> **운영 프로젝트에서 실행하지 않습니다.** Preview 배포도 운영 DB를 쓰므로 쓰지 않습니다.
+>
+> - 쓰기는 모두 [check_target.sql](../scripts/staging/naver/check_target.sql)로 **바로 그 순간의 접속**을 다시 확인한 뒤 `\if :target_ok` 안에서만 실행합니다. 이전 확인 결과는 믿지 않습니다.
+> - psql 안에서 `\connect`로 다른 DB에 다시 붙지 않습니다. 다른 곳에 붙어야 하면 psql을 끝내고 새로 엽니다.
 
 ## 0. 세션 규칙
 
@@ -25,8 +28,10 @@ psql "$STAGING_DSN" -v STAGING_REF=<스테이징 ref> -v PROD_REF=<운영 ref> \
 
 session.sql이 하는 일:
 
-- **접속 대상 확인:** psql의 접속 호스트·사용자로 프로젝트를 확인합니다(`current_database()`는 모든 프로젝트에서 `postgres`라 근거가 되지 않습니다).
-  - 기대한 스테이징 ref와 맞지 않거나, 운영 ref가 보이거나, 트랜잭션 풀러이거나, 값이 빠졌거나 A·B가 자리표시 값이면 **쓰기 없이 종료**합니다.
+- **접속 대상 확인(check_target.sql):** psql이 지금 쓰는 접속 호스트·사용자·포트로 프로젝트를 확인합니다(`current_database()`는 모든 프로젝트에서 `postgres`라 근거가 되지 않습니다).
+  - 기대한 스테이징 ref와 맞지 않거나, 운영 ref가 보이거나, 트랜잭션 풀러이거나, 값이 빠졌거나 A·B가 자리표시 값이면 `target_ok`가 거짓이 되고, 오류로 스크립트를 멈춥니다. 아무것도 쓰지 않습니다.
+  - 통과하면 `target OK: <호스트> <사용자> <포트>`가 나옵니다. 이 줄이 안 보이면 진행하지 않고 psql을 끝냅니다.
+  - psql은 `\i`로 실행한 파일 안의 `\quit`을 그 파일만 끝내는 것으로 처리하므로, 이 확인은 `\quit`에 기대지 않고 `\if :target_ok`로 쓰기를 막습니다.
 - **시간 제한:** `statement_timeout`과 `lock_timeout`을 설정합니다. 아래 "멈춤" 단계는 상대 세션에서 **2분 안에** 커밋해야 합니다.
 - **시험 계정 확인:** A·B가 이메일 확인을 마친 계정인지 보고, 이메일을 보여 줍니다. 시험 계정이 맞는지 눈으로 확인합니다.
 - **이번 실행 값:** 거래 state 해시 `:st`, 네이버 ID 해시 `:hx`, 단계별 비밀값 `:s1`~`:s6`, 클라이언트 키 `:c1`~`:c6`를 만듭니다.
@@ -48,6 +53,7 @@ session.sql이 하는 일:
 ### 0-3. 정리
 
 - 이번 실행이 만든 데이터만 지웁니다: [cleanup.sql](../scripts/staging/naver/cleanup.sql)은 `:st`가 붙은 거래와 A·B의 연결·이력만 삭제합니다. 다른 사람의 스테이징 데이터는 건드리지 않습니다.
+- cleanup.sql도 삭제 직전에 check_target.sql로 현재 접속을 다시 확인하고, `\if :target_ok` 안에서만 지웁니다.
 - 각 시험 전에 정리합니다.
 
   ```sql
@@ -58,17 +64,20 @@ session.sql이 하는 일:
 
 ### 1-1. 마이그레이션과 키 (한 번)
 
-1. 세션 1에서 session.sql 통과를 확인한 **뒤에** 같은 `$STAGING_DSN`으로 마이그레이션을 적용합니다. 예: `supabase db push --db-url "$STAGING_DSN"`. 이 브랜치 기준 마지막 세 개는 다음과 같습니다.
+1. 세션 1에서 session.sql 통과(`target OK` 줄)를 확인한 **뒤에** 같은 `$STAGING_DSN`으로 마이그레이션을 적용합니다. 예: `supabase db push --db-url "$STAGING_DSN"`. 이 브랜치 기준 마지막 세 개는 다음과 같습니다.
    - `20261101010000_add_favorite_user_status.sql`
    - `20261101020000_add_user_visit_state.sql`
    - `20261101030000_add_naver_identity.sql`
 2. 키 버전 1을 등록합니다(세션 1, postgres).
 
    ```sql
+   \i scripts/staging/naver/check_target.sql
+   \if :target_ok
    BEGIN;
    LOCK TABLE public.naver_hash_keys IN SHARE ROW EXCLUSIVE MODE;
    INSERT INTO public.naver_hash_keys (version, status) VALUES (1, 'active') ON CONFLICT (version) DO NOTHING;
    COMMIT;
+   \endif
    SELECT * FROM public.naver_hash_keys;
    ```
 
@@ -91,11 +100,13 @@ SELECT :'owner' AS owner,
 
 ```sql
 \i scripts/staging/naver/cleanup.sql
+\if :target_ok
 BEGIN; SET LOCAL ROLE service_role;
 SELECT naver_tx_start('link_session', :'s1', :'st', :'c1', :'A') AS ltx \gset
 SELECT * FROM naver_tx_callback(:'ltx', :'s1', :'st', jsonb_build_object('1', :'hx'));
 SELECT complete_naver_link(:'ltx', :'s1', :'A', now()) AS linked \gset
 COMMIT;
+\endif
 \echo linked = :linked
 SELECT state FROM naver_auth_transactions WHERE id = :'ltx';
 ```
@@ -147,7 +158,9 @@ BEGIN; SET LOCAL ROLE service_role; SELECT count(*) FROM naver_subjects; ROLLBAC
 - 각 시험은 **세션 1**과 **세션 2**를 표 순서대로 번갈아 실행합니다.
 - `deadlock detected` 오류가 한 번도 나오지 않아야 합니다.
 - "멈춤"은 상대가 커밋하면 이어서 끝나야 합니다. 2분이 넘어 `lock timeout`이 나면 그 세션에서 `ROLLBACK;` 후 시험을 처음부터 다시 합니다.
-- 각 시험 시작 전 세션 1에서 `\i scripts/staging/naver/cleanup.sql`.
+- 각 시험 시작 전 세션 1에서 `\i scripts/staging/naver/cleanup.sql`(이때 접속을 다시 확인하고 `target_ok`를 정합니다). 준비 블록의 쓰기는 `\if :target_ok` 안에 있습니다.
+- 세션 2는 시험을 시작하기 전에 `\i scripts/staging/naver/check_target.sql`로 `target OK`를 확인합니다.
+- 표의 단계는 같은 psql에서 이어서 실행합니다. 그사이 `\connect`하지 않습니다.
 
 ### 2-1. 로그인 완료가 먼저 잠근 경우 → 해제는 기다림
 
@@ -155,6 +168,7 @@ BEGIN; SET LOCAL ROLE service_role; SELECT count(*) FROM naver_subjects; ROLLBAC
 
 ```sql
 \i scripts/staging/naver/cleanup.sql
+\if :target_ok
 BEGIN; SET LOCAL ROLE service_role;
 SELECT naver_tx_start('link_session', :'s1', :'st', :'c1', :'A') AS ltx \gset
 SELECT * FROM naver_tx_callback(:'ltx', :'s1', :'st', jsonb_build_object('1', :'hx'));
@@ -162,6 +176,7 @@ SELECT complete_naver_link(:'ltx', :'s1', :'A', now());
 SELECT naver_tx_start('login', :'s2', :'st', :'c2') AS tx \gset
 SELECT target_user_id FROM naver_tx_callback(:'tx', :'s2', :'st', jsonb_build_object('1', :'hx'));
 COMMIT;
+\endif
 ```
 
 | 순서 | 세션 1                                                                                                | 세션 2                                                                      |
@@ -195,12 +210,14 @@ COMMIT;
 ```sql
 \i scripts/staging/naver/cleanup.sql
 SELECT count(*) AS x_links FROM naver_subject_hashes WHERE hash = :'hx';   -- 0이어야 함
+\if :target_ok
 BEGIN; SET LOCAL ROLE service_role;
 SELECT naver_tx_start('link_session', :'s3', :'st', :'c3', :'A') AS ta \gset
 SELECT * FROM naver_tx_callback(:'ta', :'s3', :'st', jsonb_build_object('1', :'hx'));
 SELECT naver_tx_start('link_session', :'s4', :'st', :'c4', :'B') AS tb \gset
 SELECT * FROM naver_tx_callback(:'tb', :'s4', :'st', jsonb_build_object('1', :'hx'));
 COMMIT;
+\endif
 ```
 
 세션 2는 B의 거래 id를 조회해 받습니다(postgres로):
@@ -227,8 +244,10 @@ SELECT id AS tb FROM naver_auth_transactions WHERE browser_secret_hash = :'s4' A
 ```sql
 \i scripts/staging/naver/cleanup.sql
 SELECT count(*) AS others FROM naver_auth_transactions WHERE created_at > now() - interval '1 minute';  -- 0이어야 함
+\if :target_ok
 INSERT INTO naver_auth_transactions (purpose, browser_secret_hash, oauth_state_hash, expires_at)
 SELECT 'login', :'s5', :'st', now() + interval '30 minutes' FROM generate_series(1, 599);
+\endif
 ```
 
 | 순서 | 세션 1                                                                                                   | 세션 2                                                                                                |
@@ -249,10 +268,12 @@ SELECT 'login', :'s5', :'st', now() + interval '30 minutes' FROM generate_series
 ```sql
 \i scripts/staging/naver/cleanup.sql
 SELECT count(*) AS v2 FROM naver_hash_keys WHERE version = 2;   -- 0이어야 함
+\if :target_ok
 BEGIN; SET LOCAL ROLE service_role;
 SELECT naver_tx_start('login', :'s1', :'st', :'c1') AS k1 \gset
 SELECT naver_tx_start('login', :'s2', :'st', :'c2') AS k2 \gset
 COMMIT;
+\endif
 ```
 
 | 순서 | 세션 1                                                                                                                                                          | 세션 2 (postgres)                                                                    |
@@ -268,10 +289,13 @@ V2 키 제거(세션 1, postgres). V2 해시가 없어야 지울 수 있습니�
 
 ```sql
 SELECT count(*) AS v2_hashes FROM naver_subject_hashes WHERE key_version = 2;   -- 0이어야 함
+\i scripts/staging/naver/check_target.sql
+\if :target_ok
 BEGIN;
 LOCK TABLE public.naver_hash_keys IN SHARE ROW EXCLUSIVE MODE;
 DELETE FROM public.naver_hash_keys WHERE version = 2;
 COMMIT;
+\endif
 \i scripts/staging/naver/cleanup.sql
 ```
 
@@ -321,4 +345,4 @@ done
 
 ## 이 문서의 한계
 
-session.sql·cleanup.sql과 위 명령은 로컬에 psql·Postgres가 없어 **실행해 보지 못했습니다**(문법 확인 포함). 첫 실행에서 psql 오류가 나면 그 줄을 보고해 주세요. SQL 함수 동작은 PGlite 테스트로 확인돼 있습니다.
+session.sql·check_target.sql·cleanup.sql과 위 명령은 로컬에 psql·Postgres가 없어 **실행해 보지 못했습니다**(문법 확인 포함). 스테이징에서 처음 쓸 때는 먼저 **일부러 틀린 `STAGING_REF`로** session.sql과 cleanup.sql을 실행해 `STOP`이 나오고 아무것도 지워지지 않는지 확인한 뒤 시작합니다. 첫 실행에서 psql 오류가 나면 그 줄을 보고해 주세요. SQL 함수 동작은 PGlite 테스트로 확인돼 있습니다.
