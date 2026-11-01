@@ -1,6 +1,6 @@
 # 네이버 로그인 재개 1차 구현: 연결된 계정 로그인·계정 화면 연결 (2026-11-01)
 
-상태: 검토 대기 (구현 Claude, 검토 Codex). 브랜치 `feat/naver-identity-b-20261101`(UI 5단계 `35ce551` 위). **마이그레이션 미적용, 스위치 꺼짐(모든 경로 503).** push·배포·운영 DB 없음.
+상태: 검토 완료·수정 필요 (구현 Claude, 검토 Codex; b9eb89e, P1 1건·P2 2건, WORK_LOG_20261101_naver_identity_b_review.md 참조). 브랜치 `feat/naver-identity-b-20261101`(UI 5단계 `35ce551` 위). **마이그레이션 미적용, 스위치 꺼짐(모든 경로 503).** push·배포·운영 DB 없음.
 
 기준: [보안 설계안 v4](docs/NAVER_LOGIN_SECURITY_DESIGN_2026-11-01.md)(Codex 설계 검토 통과), 사용자 승인(2026-11-01): 방식 B, 서비스 역할 키 예외 5-11 범위. 스테이징 Supabase는 준비 예정.
 
