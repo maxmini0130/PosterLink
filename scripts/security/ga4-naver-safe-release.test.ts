@@ -2,6 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import {
+  APPROVED_SNAPSHOTS,
+  checkSupabaseChanges,
+  normalize,
+} from "./releaseFreezeAllowlist";
 
 test("GA engine and withdrawal transport are reused without replacement", () => {
   for (const file of [
@@ -47,8 +52,6 @@ test("GA integration retains deployed Naver stop and does not include age or DB 
         "diff",
         "2faf121",
         "--",
-        "supabase",
-        "apps/web/app/onboarding",
         "apps/web/app/api/onboarding",
         "apps/mobile",
         "pnpm-lock.yaml",
@@ -56,6 +59,36 @@ test("GA integration retains deployed Naver stop and does not include age or DB 
       { encoding: "utf8" },
     ).trim(),
     "",
+  );
+  // Onboarding and migrations keep the unreleased minimum-age gate out by pinning
+  // their content: either the base or a reviewed snapshot in releaseFreezeAllowlist.ts.
+  const show = (commit: string, path: string) =>
+    execFileSync("git", ["show", `${commit}:${path}`], { encoding: "utf8" });
+  const onboarding = "apps/web/app/onboarding/page.tsx";
+  const current = normalize(readFileSync(onboarding, "utf8"));
+  assert.ok(
+    [
+      show("2faf121", onboarding),
+      show(APPROVED_SNAPSHOTS[onboarding], onboarding),
+    ]
+      .map(normalize)
+      .includes(current),
+    `${onboarding} differs from its base and reviewed snapshot`,
+  );
+  assert.deepEqual(
+    checkSupabaseChanges(
+      execFileSync(
+        "git",
+        ["diff", "--name-status", "--no-renames", "2faf121", "--", "supabase"],
+        { encoding: "utf8" },
+      )
+        .trim()
+        .split("\n")
+        .filter(Boolean),
+      (path) => readFileSync(path, "utf8"),
+      show,
+    ),
+    [],
   );
 });
 

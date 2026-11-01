@@ -7,6 +7,7 @@ import { BottomNav } from "../components/BottomNav";
 import { Bell, Clock, Calendar, CheckCircle2, ChevronRight, Inbox } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { rememberSignupIntent } from "../../lib/productEvents";
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -16,7 +17,7 @@ export default function NotificationsPage() {
   const fetchNotifications = async () => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push("/login"); return; }
+    if (!user) { rememberSignupIntent("notifications", "alert"); router.push("/login"); return; }
     if (user) {
       const { data } = await supabase
         .from("notifications")
@@ -93,6 +94,7 @@ export default function NotificationsPage() {
                   {notif.target_id && (
                     <Link 
                       href={`/posters/${notif.target_id}`}
+                      data-poster-source="notification"
                       className="inline-flex items-center gap-1.5 text-[10px] font-black text-blue-600 bg-blue-50/50 px-2.5 py-1 rounded-lg"
                     >
                       공고 확인하기 <ChevronRight size={10} />

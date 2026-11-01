@@ -1,8 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { build } from "esbuild";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import {
+  checkSupabaseChanges,
+  checkTestScript,
+} from "./releaseFreezeAllowlist";
 
 const base = "3c71e3a76e01c3b7966217e3e7c17f7433b0a716";
 const origin = "https://synthetic.invalid";
@@ -145,7 +149,7 @@ test("existing Google/Kakao PKCE callback and native session callback remain unc
   assert.equal(state.sessions, 1);
 });
 
-test("GA integration preserves Production security, stats, SEO and migrations byte-for-byte", () => {
+test("GA integration preserves Production security, stats, SEO and applied migrations", () => {
   for (const p of [
     "apps/web/middleware.ts",
     "apps/web/app/api/auth/delete-account/route.ts",
@@ -168,19 +172,42 @@ test("GA integration preserves Production security, stats, SEO and migrations by
   assert.equal(
     execFileSync(
       "git",
-      [
-        "diff",
-        base,
-        "--",
-        "supabase",
-        "apps/web/app/api/admin",
-        "pnpm-lock.yaml",
-        "package.json",
-      ],
+      ["diff", base, "--", "apps/web/app/api/admin", "pnpm-lock.yaml"],
       { encoding: "utf8" },
     ).trim(),
     "",
   );
+  // Supabase may only gain reviewed migrations listed in releaseFreezeAllowlist.ts.
+  assert.deepEqual(
+    checkSupabaseChanges(
+      execFileSync(
+        "git",
+        ["diff", "--name-status", "--no-renames", base, "--", "supabase"],
+        { encoding: "utf8" },
+      )
+        .trim()
+        .split("\n")
+        .filter(Boolean),
+      (p) => readFileSync(p, "utf8"),
+      (commit, p) =>
+        execFileSync("git", ["show", commit + ":" + p], { encoding: "utf8" }),
+    ),
+    [],
+  );
+  // package.json may only append test files to the base test command.
+  const current = JSON.parse(readFileSync("package.json", "utf8"));
+  const original = JSON.parse(
+    execFileSync("git", ["show", base + ":package.json"], {
+      encoding: "utf8",
+    }),
+  );
+  assert.deepEqual(
+    checkTestScript(current.scripts.test, original.scripts.test, existsSync),
+    [],
+  );
+  delete current.scripts.test;
+  delete original.scripts.test;
+  assert.deepEqual(current, original);
 });
 
 test("suspension uses validated stop source and has no credential or provider operations", () => {

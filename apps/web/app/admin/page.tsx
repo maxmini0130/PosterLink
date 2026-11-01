@@ -107,7 +107,7 @@ export default function AdminDashboardPage() {
       urgent: false,
     },
     {
-      label: "공식 링크 클릭",
+      label: "공식 링크 클릭 (최근 3개월)",
       value: stats.linkClicks,
       icon: <MousePointerClick size={24} />,
       color: "bg-amber-50 text-amber-600",

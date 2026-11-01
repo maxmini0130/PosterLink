@@ -63,6 +63,7 @@ export function Header() {
             <>
               <Link
                 href="/login"
+                data-signup-feature="header"
                 className="px-2.5 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:text-blue-700"
                 style={{ whiteSpace: "nowrap" }}
               >
@@ -70,6 +71,7 @@ export function Header() {
               </Link>
               <Link
                 href="/signup"
+                data-signup-feature="header"
                 className="bg-slate-950 px-2.5 py-1.5 text-xs font-black text-white transition-colors hover:bg-blue-800"
                 style={{ whiteSpace: "nowrap" }}
               >

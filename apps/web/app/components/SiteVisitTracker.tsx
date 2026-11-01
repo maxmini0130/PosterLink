@@ -4,42 +4,9 @@ import { useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
 import { publicAnalyticsPath, sanitizedVisitQuery, safeReferrer } from "../../lib/analyticsPrivacy";
+import { getSessionKey, getVisitorKey } from "../../lib/visitorIdentity";
 
-const VISITOR_KEY = "posterlink.visitor_key";
-const SESSION_KEY = "posterlink.session_key";
 const AUTOMATION_SOURCE_KEY = "posterlink.automation_source";
-
-function createKey() {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
-  }
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-}
-
-function getStoredKey(storage: Storage, key: string) {
-  let value = storage.getItem(key);
-  if (!value) {
-    value = createKey();
-    storage.setItem(key, value);
-  }
-  return value;
-}
-
-function getVisitorKey() {
-  try {
-    return getStoredKey(window.localStorage, VISITOR_KEY);
-  } catch {
-    return createKey();
-  }
-}
-
-function getSessionKey() {
-  try {
-    return getStoredKey(window.sessionStorage, SESSION_KEY);
-  } catch {
-    return createKey();
-  }
-}
 
 function getAutomationSource(searchParams: URLSearchParams) {
   const querySource = searchParams.get("_pl_automation")?.trim().slice(0, 80);

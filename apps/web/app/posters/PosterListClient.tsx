@@ -558,6 +558,7 @@ function PosterListPageContent({
             <div className="grid grid-cols-2 md:grid-cols-4 gap-x-5 gap-y-10 mt-8">
               {posters.slice(0, displayCount).map((poster) => (
                 <PosterCard
+                  source="search"
                   key={poster.id}
                   poster={{
                     id: poster.id,

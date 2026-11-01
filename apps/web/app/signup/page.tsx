@@ -10,6 +10,7 @@ import Link from "next/link";
 import toast from "react-hot-toast";
 
 import { trackAnalytics, setAnalyticsLoginStatus } from "../../lib/analytics";
+import { syncVisitorIdentity, trackSignupStart } from "../../lib/productEvents";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
@@ -25,6 +26,7 @@ export default function SignupPage() {
       return;
     }
     setLoading(true);
+    trackSignupStart("signup", "email");
     const { data, error } = await supabase.auth.signUp({ email, password });
 
     if (error) {
@@ -58,6 +60,8 @@ export default function SignupPage() {
       { onConflict: "id", ignoreDuplicates: true }
     );
     if (session) {
+      // The auth listener may have run before the profile existed ('pending').
+      void syncVisitorIdentity(data.user.id);
       setAnalyticsLoginStatus(true);
       // Supabase may return an obfuscated user for an existing email; require a real session.
       if (data.user.identities?.length) trackAnalytics("sign_up", {method:"email"});
@@ -72,6 +76,7 @@ export default function SignupPage() {
       toast.error("이용약관 및 개인정보처리방침에 동의해주세요.");
       return;
     }
+    trackSignupStart("signup", provider);
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
