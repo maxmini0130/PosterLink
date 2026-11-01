@@ -103,6 +103,22 @@ export function validNaverId(value: unknown): value is string {
   );
 }
 
+/**
+ * The client address as the platform reports it (Vercel sets the first
+ * x-forwarded-for entry), or "unknown". Used only for the start rate limit.
+ */
+export function clientAddress(headers: { get(name: string): string | null }) {
+  const forwarded = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return forwarded || headers.get("x-real-ip")?.trim() || "unknown";
+}
+
+/** Keyed hash of the client address, so the database never stores the address. */
+export function clientKey(address: string, keys: HashKey[]) {
+  const key = keys[keys.length - 1]?.key;
+  if (!key) throw new Error("no hash key");
+  return createHmac("sha256", key).update(`client:${address}`).digest("hex");
+}
+
 /** Same-origin check for state-changing POSTs (CSRF), from Origin or Referer. */
 export function sameOrigin(
   headers: { get(name: string): string | null },

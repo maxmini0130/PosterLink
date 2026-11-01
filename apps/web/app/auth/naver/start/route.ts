@@ -4,6 +4,8 @@ import {
   NAVER_NEXT_COOKIE,
   NAVER_TX_COOKIE,
   NAVER_TX_TTL_SECONDS,
+  clientAddress,
+  clientKey,
   encodeTxCookie,
   isRecentSignIn,
   naverEnabled,
@@ -65,11 +67,13 @@ export async function POST(request: NextRequest) {
     purpose,
     sha256Hex(secret),
     sha256Hex(state),
+    clientKey(clientAddress(request.headers), keys),
     sessionUserId,
   );
+  // Null also when the start budget is used up (rate limit).
   if (!id)
     return redirectTo(
-      `${origin}${purpose === "login" ? "/login?error=naver_failed" : "/mypage/edit?naver=link_failed"}`,
+      `${origin}${purpose === "login" ? "/login?error=naver_busy" : "/mypage/edit?naver=busy"}`,
     );
 
   const response = redirectTo(

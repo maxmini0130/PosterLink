@@ -26,6 +26,8 @@ type Fakes = {
   verifiedUser?: string;
   completeLink?: string | null;
   unlink?: boolean;
+  beginCallback?: boolean;
+  stillLinked?: boolean;
   naverId?: string | null;
 };
 
@@ -93,6 +95,8 @@ async function route(file: string, fakes: Fakes) {
                 export const naverDb = {
                   start: (...a) => call("start", fx.fakes.start === undefined ? "${TX}" : fx.fakes.start)(...a),
                   callback: (...a) => call("callback", fx.fakes.callback ?? null)(...a),
+                  beginCallback: (...a) => call("beginCallback", fx.fakes.beginCallback ?? true)(...a),
+                  stillLinked: (...a) => call("stillLinked", fx.fakes.stillLinked ?? true)(...a),
                   completeLogin: (...a) => call("completeLogin", fx.fakes.completeLogin ?? true)(...a),
                   fail: (...a) => call("fail", null)(...a),
                   completeLink: (...a) => call("completeLink", fx.fakes.completeLink ?? null)(...a),
@@ -210,8 +214,9 @@ test("start: same-origin only; binds a transaction to this browser and goes to N
     location.searchParams.get("redirect_uri"),
     `${ORIGIN}/auth/naver/callback`,
   );
-  const [, purpose, secretHash, stateHash, sessionUser] = calls[0];
+  const [, purpose, secretHash, stateHash, client, sessionUser] = calls[0];
   assert.deepEqual([purpose, sessionUser], ["login", null]);
+  assert.match(String(client), /^[0-9a-f]{64}$/); // keyed hash, never the address
   assert.match(String(secretHash), /^[0-9a-f]{64}$/);
   assert.match(String(stateHash), /^[0-9a-f]{64}$/);
   assert.notEqual(stateHash, location.searchParams.get("state")); // only the hash is stored
@@ -226,6 +231,38 @@ test("start: same-origin only; binds a transaction to this browser and goes to N
     { httpOnly: true, sameSite: "lax", path: "/auth/naver" },
   );
   assert.equal(cookies.find((c) => c.name === "pl_naver_next")?.value, "/"); // unsafe next dropped
+});
+
+test("start: when the budget is used up nothing is created and Naver is not reached", async () => {
+  withEnv(ON);
+  for (const [purpose, location] of [
+    ["login", "/login?error=naver_busy"],
+    ["link_session", "/mypage/edit?naver=busy"],
+  ]) {
+    const { api, calls, cookies } = await route(`${R}/start/route.ts`, {
+      start: null,
+      member: { id: USER, signedInAt: Date.now() },
+    });
+    const response = await api.POST(
+      request("/auth/naver/start", { form: { purpose } }),
+    );
+    assert.equal(response.headers.get("location"), ORIGIN + location);
+    assert.deepEqual(names(calls), ["start"]);
+    assert.deepEqual(cookies, []);
+  }
+  // Different addresses get different keys; the same address the same key.
+  const keyFor = async (forwarded: string) => {
+    const { api, calls } = await route(`${R}/start/route.ts`, {});
+    const req = request("/auth/naver/start", { form: { purpose: "login" } });
+    req.headers.set("x-forwarded-for", forwarded);
+    await api.POST(req);
+    return calls[0][4];
+  };
+  assert.equal(
+    await keyFor("203.0.113.1, 10.0.0.1"),
+    await keyFor("203.0.113.1"),
+  );
+  assert.notEqual(await keyFor("203.0.113.1"), await keyFor("203.0.113.2"));
 });
 
 test("start for linking needs a member who signed in within 10 minutes", async () => {
@@ -258,7 +295,7 @@ test("start for linking needs a member who signed in within 10 minutes", async (
     request("/auth/naver/start", { form: { purpose: "link_session" } }),
   );
   assert.deepEqual(
-    [fresh.calls[0][0], fresh.calls[0][1], fresh.calls[0][4]],
+    [fresh.calls[0][0], fresh.calls[0][1], fresh.calls[0][5]],
     ["start", "link_session", USER],
   );
 });
@@ -273,17 +310,19 @@ test("callback: a linked Naver ID signs in to exactly that account, after consum
   );
   assert.equal(response.headers.get("location"), `${ORIGIN}/my-posters`);
   assert.deepEqual(names(calls), [
+    "beginCallback",
     "naverIdForCode",
     "callback",
     "completeLogin",
     "sessionTokenFor",
     "verifyOtp",
+    "stillLinked",
     "receipt",
   ]);
-  const hashes = calls[1][4] as Record<string, string>;
+  const hashes = calls[2][4] as Record<string, string>;
   assert.deepEqual(Object.keys(hashes), ["1"]);
   assert.ok(!JSON.stringify(calls).includes("naver-user-1")); // the raw Naver id never leaves the route
-  assert.equal(calls[3][1], USER);
+  assert.equal(calls[4][1], USER);
   assert.equal(
     cookies.find((c) => c.name === "sb-session")?.value,
     `session-of-${USER}`,
@@ -300,7 +339,7 @@ test("callback: unlinked, unconsumed, sessionless and failed Naver answers never
     [
       { callback: { purpose: "login", flow: null, target_user_id: null } },
       "/login?error=naver_not_linked",
-      ["naverIdForCode", "callback", "fail"],
+      ["beginCallback", "naverIdForCode", "callback", "fail"],
     ],
     [
       {
@@ -308,7 +347,7 @@ test("callback: unlinked, unconsumed, sessionless and failed Naver answers never
         completeLogin: false,
       },
       "/login?error=naver_failed",
-      ["naverIdForCode", "callback", "completeLogin", "fail"],
+      ["beginCallback", "naverIdForCode", "callback", "completeLogin", "fail"],
     ],
     [
       {
@@ -317,6 +356,7 @@ test("callback: unlinked, unconsumed, sessionless and failed Naver answers never
       },
       "/login?error=naver_failed",
       [
+        "beginCallback",
         "naverIdForCode",
         "callback",
         "completeLogin",
@@ -332,6 +372,7 @@ test("callback: unlinked, unconsumed, sessionless and failed Naver answers never
       },
       "/login?error=naver_failed",
       [
+        "beginCallback",
         "naverIdForCode",
         "callback",
         "completeLogin",
@@ -344,12 +385,37 @@ test("callback: unlinked, unconsumed, sessionless and failed Naver answers never
     [
       { callback: null },
       "/login?error=naver_failed",
-      ["naverIdForCode", "callback", "fail"],
+      ["beginCallback", "naverIdForCode", "callback", "fail"],
+    ],
+    // Unlinked between completing and issuing: the new session is signed out.
+    [
+      {
+        callback: { purpose: "login", flow: "login", target_user_id: USER },
+        stillLinked: false,
+      },
+      "/login?error=naver_failed",
+      [
+        "beginCallback",
+        "naverIdForCode",
+        "callback",
+        "completeLogin",
+        "sessionTokenFor",
+        "verifyOtp",
+        "stillLinked",
+        "signOut",
+        "fail",
+      ],
+    ],
+    // Unknown, consumed or over-tried transaction: Naver is never asked.
+    [
+      { beginCallback: false },
+      "/login?error=naver_failed",
+      ["beginCallback", "fail"],
     ],
     [
       { naverId: null },
       "/login?error=naver_failed",
-      ["naverIdForCode", "fail"],
+      ["beginCallback", "naverIdForCode", "fail"],
     ],
   ];
   for (const [fakes, location, expected] of cases) {

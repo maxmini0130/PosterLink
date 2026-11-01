@@ -24,6 +24,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   set_session_failed: "소셜 로그인 세션 저장에 실패했습니다.",
   login_failed: "로그인 처리 중 오류가 발생했습니다.",
   naver_failed: "네이버 로그인을 완료하지 못했습니다. 다시 시도해주세요.",
+  naver_busy: "네이버 로그인 요청이 많습니다. 잠시 후 다시 시도해주세요.",
   naver_not_linked:
     "이 네이버 계정에 연결된 PosterLink 계정이 없습니다. 기존 방법으로 로그인한 뒤 프로필 수정에서 네이버를 연결해 주세요.",
 };

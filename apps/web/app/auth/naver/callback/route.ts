@@ -45,6 +45,10 @@ export async function GET(request: NextRequest) {
   } catch {
     return failed();
   }
+  // Naver is asked only for a live transaction of this browser (at most 3 times).
+  const secretHash = sha256Hex(tx.secret);
+  if (!(await naverDb.beginCallback(tx.id, secretHash, sha256Hex(state))))
+    return failed();
   const naverId = await naverIdForCode({
     clientId: process.env.NAVER_CLIENT_ID ?? "",
     clientSecret: process.env.NAVER_CLIENT_SECRET ?? "",
@@ -53,7 +57,6 @@ export async function GET(request: NextRequest) {
   });
   if (!naverId || keys.length === 0) return failed();
 
-  const secretHash = sha256Hex(tx.secret);
   const row = await naverDb.callback(
     tx.id,
     secretHash,
@@ -87,6 +90,11 @@ export async function GET(request: NextRequest) {
     if (data?.session)
       await client.auth.signOut({ scope: "local" }).catch(() => undefined);
     console.error("naver session user mismatch or verify failure");
+    return failed();
+  }
+  // Unlinked between completing and issuing: the new session is not kept.
+  if (!(await naverDb.stillLinked(tx.id, secretHash, row.target_user_id))) {
+    await client.auth.signOut({ scope: "local" }).catch(() => undefined);
     return failed();
   }
   const next =

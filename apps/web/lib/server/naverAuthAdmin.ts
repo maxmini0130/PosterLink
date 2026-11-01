@@ -49,12 +49,14 @@ export const naverDb = {
     purpose: "login" | "link_session",
     secretHash: string,
     stateHash: string,
+    clientKey: string,
     sessionUserId: string | null,
   ) =>
     rpc<string>("naver_tx_start", {
       p_purpose: purpose,
       p_browser_secret_hash: secretHash,
       p_oauth_state_hash: stateHash,
+      p_client_key: clientKey,
       p_session_user_id: sessionUserId,
       p_parent_id: null,
     }),
@@ -78,6 +80,18 @@ export const naverDb = {
     });
     return rows?.[0] ?? null;
   },
+  beginCallback: (id: string, secretHash: string, stateHash: string) =>
+    rpc<boolean>("naver_tx_begin_callback", {
+      p_id: id,
+      p_secret_hash: secretHash,
+      p_state_hash: stateHash,
+    }),
+  stillLinked: (id: string, secretHash: string, userId: string) =>
+    rpc<boolean>("naver_tx_still_linked", {
+      p_id: id,
+      p_secret_hash: secretHash,
+      p_user_id: userId,
+    }),
   completeLogin: (id: string, secretHash: string, userId: string) =>
     rpc<boolean>("naver_tx_complete_login", {
       p_id: id,
