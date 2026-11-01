@@ -1,6 +1,6 @@
 # 네이버 신원 B 1차 구현 검토 (2026-11-01)
 
-상태: 7e7a478·209cf35 재검토 수정 필요 — 기존 지적의 수정 반영 확인, 동시성 P2 2건. 검토 Codex, 구현 Claude. 구현 코드는 수정하지 않는다. 스위치를 켜거나 운영 재개를 승인하는 검토가 아니다.
+상태: a87cb40·79237de 코드 검토 통과 — 이전 동시성 P2 2건 해결 확인. 실제 다중 연결 검증·운영 재개 승인은 별도. 검토 Codex, 구현 Claude. 구현 코드는 수정하지 않는다. 스위치를 켜거나 운영 재개를 승인하는 검토가 아니다.
 
 대상: feat/naver-identity-b-20261101의 afc931a5eb71a900e3ab1ca7b213b13065b1c1cc·e0ac23669085880003d946cdc5324a8fd27f9005·b9eb89e0f8310eefb3bbf51ac895f8bd26f2bb98. 기준: 보안 설계 v4, 그 검토 기록과 WORK_LOG_20261101_naver_identity_b.md. 작업 전 fetch·status·worktree와 AGENTS/CLAUDE/README를 확인했다.
 
@@ -115,3 +115,31 @@ complete_login은 거래 T를 FOR UPDATE로 잠근 뒤 신원 S를 FOR SHARE로 
 - 전체 검사 305/307(기존 profile-role-release 2건 실패), 보안 검사 125/128(위 2건과 기존 withdrawal-only 스냅샷 1건 실패). 신규 DB 13·경로 8건 통과. web lint·production build 통과. 공개 Supabase 설정은 로컬 비접속 값으로 대체했다. 이번에도 test-concurrency=1로 실행했다.
 - 두 추가 P2는 SQL 경합 순서 분석 결과이며 로컬에서 동시 실행 오류를 관측했다고 주장하지 않는다. PostgreSQL 공식 잠금 규칙과 실행문 순서를 근거로 한다.
 - 구현/기존 테스트 수정, 실제 키 사용, push·PR 생성·배포·운영 DB 조회/쓰기·마이그레이션 적용 없음. 검토 기록과 상태만 같은 브랜치에 로컬 커밋한다. UTF-8·Prettier·git diff --check 확인.
+
+## a87cb40·79237de 재검토
+
+대상 a87cb401513ed8d9fd8bb1bbc60e485c897f15eb·79237de. **코드 검토 통과: 78aeebc의 동시성 P2 2건 해결 확인. 이번 수정 범위에서 추가 차단 결함은 발견하지 못했다.** 실제 다중 연결 시험과 운영 재개 승인은 별도다. 앞선 판정과 재현은 이력으로 보존한다.
+
+### 잠금 순서 수정 확인
+
+- \_naver_lock_subjects가 관련 해시 또는 대상 회원의 기존 신원들을 찾아 id 순으로 잠근다. 로그인 완료는 SHARE, 콜백·최종 연결은 UPDATE를 사용한다. 새로운 helper도 API 역할의 실행 권한 회수 목록에 들어 있다.
+- naver_tx_callback은 거래를 갱신하기 전에 신원을 잠그며, 내부 \_naver_resolve가 다시 잠그는 신원도 이미 이 경로에서 보호한다. 로그인 완료는 거래의 해시를 잠금 없이 읽고 신원을 잠근 뒤, 거래 행을 FOR UPDATE로 다시 읽어 회원 ID·상태·만료·비밀값을 재검사한다. naver_verified 이후 그 로그인 거래의 해시가 다시 쓰이는 정상 경로는 없다.
+- complete_naver_link도 사전 읽기 → 관련 신원 잠금 → 거래 잠금·예상 상태/비밀값 재검사 → Auth 계정 행 잠금·최종 검사를 수행한다. 사전 읽기 자체로 인증이나 최종 연결을 승인하지 않는다. 기존 신원에 대한 후반의 추가 FOR UPDATE는 이 정상 확정 경로에서 선행 helper가 잡은 잠금을 다시 사용하는 것으로 확인했다.
+- naver_unlink는 신원 → 관련 진행 중 거래 순서다. 이전에 제시한 로그인 L이 거래를 잡고 신원을 기다리며 해제 U가 신원을 잡고 거래를 기다리는 역전은 새 정상 경로에서 해소됐다.
+- 키 표 잠금과 신원 id 정렬, 거래/계정 검증 순서를 함께 대조했다. 이 검토는 외부 Auth 관리 작업·모든 FK cascade까지 포함해 DB 전체에 교착이 전혀 없다는 보증은 아니다.
+
+### 시작 한도 수정 확인
+
+- naver_tx_start의 잠금 식별자가 client key를 포함하지 않는 고정 naver_tx_start로 바뀌었다. 모든 시작 요청이 같은 transaction advisory lock을 얻은 뒤 두 count와 INSERT를 수행하므로, 서로 다른 주소가 동시에 599를 읽던 이전 검사/쓰기 경합이 직렬화된다.
+- 같은 잠금이 per-client 검사도 포함한다. 거절·예외 시 트랜잭션 종료로 잠금이 풀리며, 외부 네이버 네트워크 요청을 이 DB 잠금 안에서 수행하지 않는다.
+- 보안 고정 79237de는 새 SQL 스냅샷을 a87cb40으로 갱신할 뿐 허용 파일이나 권한 범위를 넓히지 않는다.
+
+### 검증과 남는 범위
+
+- 기존 실제 SQL 독립 검사를 새 마이그레이션으로 재실행했다. A 연결 → callback → 해제 → B 재연결 후 A 완료 거절, 기본 ALL ACL 환경의 service_role 직접 쓰기/내부 helper 거절이 계속 통과했다. Git 제외 data/results/naver-rereview/sql-check.cjs를 사용했다.
+- 신규 source guard는 실제 마이그레이션의 helper 호출·잠금 순서·공통 advisory lock 표현을 검사한다. 순서 변경을 고정하는 보조 검사로 적절하지만, 실제 대기·40P01·동시 한도 초과를 실행한 회귀 검사와는 구분한다.
+- 전체 검사 306/308(기존 profile-role-release 2건 실패), 보안 검사 126/129(위 2건과 기존 withdrawal-only 비교 1건 실패). DB 14건·경로 8건 통과. web lint 통과. SQL·검사·허용 목록·문서만 바뀌어 이번에는 웹 build를 반복하지 않았다. 이전 209cf35의 웹 build 통과 이력은 유지된다.
+- 실제 독립 DB 연결 2개 이상으로 로그인 완료/해제, 동일 네이버 연결, 키 교체/복구, 서로 다른 client key의 599→600 경계를 겹치는 시험은 여전히 미실행이다. 스테이징에서 해당 시험과 Auth 행 잠금 권한, 실제 네이버·WebView·메일을 확인해야 한다. 코드 검토 통과를 이 검증까지 끝났다는 뜻으로 사용하지 않는다.
+- 자료: Git 제외 data/results/naver-rereview-a87cb40/의 tests.txt·security.txt·lint.txt. 운영 DB·실제 키를 사용하지 않았다.
+
+검토 기록과 구현 로그 상태만 같은 브랜치에 로컬 커밋한다. 구현/기존 테스트 수정, push·PR 생성·배포·운영 DB/설정 변경·마이그레이션 적용 없음. 문서는 UTF-8·Prettier·git diff --check로 확인한다.
