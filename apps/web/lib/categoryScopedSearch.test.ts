@@ -83,6 +83,46 @@ test("a failed call fails the search; a full call makes the count inexact", asyn
   assert.equal(full.rows.length, 2);
 });
 
+test("the open count covers every merged poster, not the shown 240 (Codex P2-4)", async () => {
+  // 300 open 교육강좌 posters, 5 of them shared with 교육/취업, and 10 that
+  // the caller would hide (ended events) — none of the calls is full.
+  const course = Array.from({ length: 300 }, (_, i) =>
+    row(
+      `c${i}`,
+      `2026-10-01T00:00:${String(i % 60).padStart(2, "0")}Z`,
+      i < 10 ? "ended" : null,
+    ),
+  );
+  const result = await searchCategoryScope({
+    categoryIds: ["edu", "course"],
+    sort: "latest",
+    limit: 240,
+    countable: (r) => r.application_end_at !== "ended",
+    search: async (id, limit) => ({
+      data: (id === "course" ? course : course.slice(0, 5)).slice(0, limit),
+      error: null,
+    }),
+  });
+  assert.equal(result.rows.length, 240);
+  assert.equal(result.total, 290);
+  assert.equal(result.exact, true);
+
+  // A full per-category call makes the count a lower bound only.
+  const full = await searchCategoryScope({
+    categoryIds: ["edu", "course"],
+    sort: "latest",
+    limit: 240,
+    search: async (id, limit) => ({
+      data: Array.from({ length: id === "course" ? limit : 0 }, (_, i) =>
+        row(`f${i}`, "2026-10-01"),
+      ),
+      error: null,
+    }),
+  });
+  assert.equal(full.total, 500);
+  assert.equal(full.exact, false);
+});
+
 test("deadline order puts dated posters first, soonest first, like the database", () => {
   const rows = [
     row("none", "2026-11-05", null),
