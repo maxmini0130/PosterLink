@@ -23,6 +23,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   auth_callback_failed: "소셜 로그인 세션 교환에 실패했습니다.",
   set_session_failed: "소셜 로그인 세션 저장에 실패했습니다.",
   login_failed: "로그인 처리 중 오류가 발생했습니다.",
+  naver_failed: "네이버 로그인을 완료하지 못했습니다. 다시 시도해주세요.",
+  naver_busy: "네이버 로그인 요청이 많습니다. 잠시 후 다시 시도해주세요.",
+  naver_not_linked:
+    "이 네이버 계정에 연결된 PosterLink 계정이 없습니다. 기존 방법으로 로그인한 뒤 프로필 수정에서 네이버를 연결해 주세요.",
 };
 
 function LoginErrorHandler() {
@@ -171,17 +175,33 @@ export default function LoginPage() {
           구글로 시작하기
         </button>
 
-        <button
-          disabled
-          aria-describedby="naver-unavailable"
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#03C75A] py-4 font-bold text-white opacity-50 cursor-not-allowed"
-        >
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-[11px] font-black text-[#03C75A]">N</span>
-          네이버 로그인 일시 중단
-        </button>
-        <p id="naver-unavailable" role="status" className="text-sm leading-relaxed text-gray-600">
-          {NAVER_UNAVAILABLE_MESSAGE}
-        </p>
+        {/* Naver sign-in for accounts that linked it (security design option B). */}
+        {process.env.NEXT_PUBLIC_NAVER_LOGIN_ENABLED === "true" ? (
+          <form method="post" action="/auth/naver/start">
+            <input type="hidden" name="purpose" value="login" />
+            <button
+              type="submit"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#03C75A] py-4 font-bold text-white transition-all active:scale-[0.98]"
+            >
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-[11px] font-black text-[#03C75A]">N</span>
+              네이버로 로그인
+            </button>
+          </form>
+        ) : (
+          <>
+            <button
+              disabled
+              aria-describedby="naver-unavailable"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#03C75A] py-4 font-bold text-white opacity-50 cursor-not-allowed"
+            >
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-[11px] font-black text-[#03C75A]">N</span>
+              네이버 로그인 일시 중단
+            </button>
+            <p id="naver-unavailable" role="status" className="text-sm leading-relaxed text-gray-600">
+              {NAVER_UNAVAILABLE_MESSAGE}
+            </p>
+          </>
+        )}
       </div>
 
       <p className="mt-8 text-sm text-gray-500">
