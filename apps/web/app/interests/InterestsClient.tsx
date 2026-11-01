@@ -20,6 +20,7 @@ import {
 } from "../../lib/regionHelpers";
 import { guestLocal } from "../lib/guestSession";
 import { supabase } from "../lib/supabase";
+import { interestCategories } from "../../lib/categoryTaxonomy";
 
 type Region = {
   id: string;
@@ -75,7 +76,10 @@ export function InterestsClient() {
           .in("level", ["nation", "sido", "sigungu"])
           .order("level", { ascending: false })
           .order("full_name", { ascending: true }),
-        supabase.from("categories").select("id, name").order("sort_order"),
+        supabase
+          .from("categories")
+          .select("id, name, code")
+          .order("sort_order"),
       ]);
       if (!active) return;
       if (regions.error || categories.error) {
@@ -95,7 +99,7 @@ export function InterestsClient() {
       setState({
         phase: "ready",
         regions: regionList,
-        categories: (categories.data ?? []) as Category[],
+        categories: interestCategories((categories.data ?? []) as Category[]),
       });
     })().catch(() => {
       if (active) setState({ phase: "error" });

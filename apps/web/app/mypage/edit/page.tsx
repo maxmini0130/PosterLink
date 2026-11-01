@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@posterlink/ui";
 import { getCityRegions, getDistrictRegions, getRegionLabel, getSelectedCityId, getSelectedDistrictId } from "../../lib/regionHelpers";
 import { trackProductEvent } from "../../../lib/productEvents";
+import { interestCategories } from "../../../lib/categoryTaxonomy";
 
 export default function ProfileEditPage() {
   const [loading, setLoading] = useState(true);
@@ -67,7 +68,7 @@ export default function ProfileEditPage() {
       }
       
       if (regionRes.data) setRegions(regionRes.data);
-      if (categoryRes.data) setCategories(categoryRes.data);
+      if (categoryRes.data) setCategories(interestCategories(categoryRes.data));
       if (interestRes.data) {
         setFormData(prev => ({
           ...prev,

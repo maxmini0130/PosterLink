@@ -42,6 +42,10 @@ import {
 import { readGuestFavorites } from "../../lib/guestStore";
 import { isPosterAcceptingApplications } from "../../lib/posterApplication";
 import {
+  categoryScopeIds,
+  interestCategories,
+} from "../../lib/categoryTaxonomy";
+import {
   groupByRegionScope,
   isSavedSearch,
   readSavedSearches,
@@ -237,6 +241,11 @@ function PosterListPageContent({
         regions,
       );
       const includeClosed = !hideClosedPosters || normalizedQuery.length > 0;
+      // A main category also covers the content types folded into it
+      // (교육/취업 -> 교육강좌, 채용); each is searched and the results merged.
+      const categoryScope = categoryScopeIds(selectedCategoryId, categories);
+      const multiCategory = categoryScope.length > 1;
+      const categoryScopeSet = new Set(categoryScope);
       const searchArgs = {
         p_query: normalizedQuery || null,
         p_category_id: selectedCategoryId,
@@ -247,12 +256,14 @@ function PosterListPageContent({
         p_sort: sortBy === "deadline" ? "deadline" : "latest",
         p_limit: 240,
       };
-      const countPromise = supabase.rpc("count_public_posters", {
-        p_query: searchArgs.p_query,
-        p_category_id: searchArgs.p_category_id,
-        p_region_ids: searchArgs.p_region_ids,
-        p_include_closed: includeClosed,
-      });
+      const countPromise = multiCategory
+        ? Promise.resolve({ data: null, error: null })
+        : supabase.rpc("count_public_posters", {
+            p_query: searchArgs.p_query,
+            p_category_id: searchArgs.p_category_id,
+            p_region_ids: searchArgs.p_region_ids,
+            p_include_closed: includeClosed,
+          });
 
       if (hideClosedPosters && normalizedQuery.length >= 2) {
         const semanticResponse = await fetch("/api/posters/semantic-search", {
@@ -261,7 +272,7 @@ function PosterListPageContent({
           body: JSON.stringify({
             query: normalizedQuery,
             limit: 80,
-            categoryId: selectedCategoryId,
+            categoryId: multiCategory ? null : selectedCategoryId,
             regionIds: searchArgs.p_region_ids,
           }),
         }).catch(() => null);
@@ -280,13 +291,31 @@ function PosterListPageContent({
       }
 
       if (!semanticSearchUsed || includeClosed) {
-        const { data: rpcData, error } = await supabase
-          .rpc("search_public_posters", searchArgs)
-          .select(PUBLIC_POSTER_SELECT);
-        if (error) throw error;
-        const keywordData = (
-          Array.isArray(rpcData) ? rpcData : rpcData ? [rpcData] : []
-        ) as Row[];
+        const responses = await Promise.all(
+          (multiCategory ? categoryScope : [selectedCategoryId]).map(
+            (categoryId) =>
+              supabase
+                .rpc("search_public_posters", {
+                  ...searchArgs,
+                  p_category_id: categoryId,
+                })
+                .select(PUBLIC_POSTER_SELECT),
+          ),
+        );
+        const failedResponse = responses.find((response) => response.error);
+        if (failedResponse?.error) throw failedResponse.error;
+        const keywordData = responses.reduce<Row[]>(
+          (merged, { data: rpcData }) =>
+            mergeUniquePosters(
+              merged,
+              (Array.isArray(rpcData)
+                ? rpcData
+                : rpcData
+                  ? [rpcData]
+                  : []) as Row[],
+            ),
+          [],
+        );
         data = semanticSearchUsed
           ? mergeUniquePosters(data, keywordData)
           : keywordData;
@@ -327,7 +356,9 @@ function PosterListPageContent({
       const filtered = enriched.filter(
         (poster) =>
           (!selectedCategoryId ||
-            poster.categoryIds?.includes(selectedCategoryId)) &&
+            poster.categoryIds?.some((categoryId: string) =>
+              categoryScopeSet.has(categoryId),
+            )) &&
           (!selectedRegionScopeIds ||
             poster.regionIds?.some((regionId: string) =>
               selectedRegionScopeIds.has(regionId),
@@ -512,6 +543,12 @@ function PosterListPageContent({
 
   const selectedRegion = regionById(selectedRegionId);
   const selectedCategory = categoryById(selectedCategoryId);
+  // Seven main categories and 기타 as filters (screen plan v1.0, 05); content
+  // types are searched through them, never listed beside them.
+  const filterCategories = useMemo(
+    () => interestCategories(categories),
+    [categories],
+  );
   const groups = useMemo(
     () =>
       groupByRegionScope(
@@ -550,7 +587,7 @@ function PosterListPageContent({
       idPrefix="filter"
       cityRegions={cityRegions}
       districtRegions={districtRegions}
-      categories={categories}
+      categories={filterCategories}
       selectedRegionId={selectedRegionId}
       selectedCityId={selectedCityId || null}
       selectedCategoryId={selectedCategoryId}
@@ -884,7 +921,7 @@ function PosterListPageContent({
           idPrefix="sheet"
           cityRegions={cityRegions}
           districtRegions={districtRegions}
-          categories={categories}
+          categories={filterCategories}
           selectedRegionId={selectedRegionId}
           selectedCityId={selectedCityId || null}
           selectedCategoryId={selectedCategoryId}

@@ -6,6 +6,7 @@ import { readGuestInterest } from "../../lib/guestInterest";
 import { readGuestFavorites } from "../../lib/guestStore";
 import { PUBLIC_POSTER_EXPOSURE_FILTER } from "../../lib/publicPosterVisibility";
 import { getRegionScopeIds } from "../../lib/regionHelpers";
+import { categoryScopeIds } from "../../lib/categoryTaxonomy";
 import { guestLocal } from "./guestSession";
 import { fetchCategoryRegionNames } from "./posterHelpers";
 import { supabase } from "./supabase";
@@ -123,12 +124,28 @@ function searchOpen(
     .returns<Record<string, unknown>[]>();
 }
 
+/**
+ * Each chosen category with the content types folded into it (교육/취업 also
+ * finds 교육강좌 and 채용), so a main category is not limited to the few
+ * posters tagged with it directly.
+ */
+async function loadCategoryScope(categoryIds: string[]): Promise<string[]> {
+  if (categoryIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("categories")
+    .select("id, code, parent_id");
+  if (error) throw new Error("categories");
+  return Array.from(
+    new Set(categoryIds.flatMap((id) => categoryScopeIds(id, data ?? []))),
+  );
+}
+
 /** Open public posters for the interest conditions. */
 async function loadInterestRows(interest: HomeInterest): Promise<Row[]> {
-  const categoryIds = interest.categories.map((category) => category.id);
-  const regionIds = interest.region
-    ? await loadRegionScope(interest.region.id)
-    : null;
+  const [regionIds, categoryIds] = await Promise.all([
+    interest.region ? loadRegionScope(interest.region.id) : null,
+    loadCategoryScope(interest.categories.map((category) => category.id)),
+  ]);
   const results = await Promise.all(
     (categoryIds.length ? categoryIds : [null]).map((categoryId) =>
       searchOpen(categoryId, regionIds, 60),

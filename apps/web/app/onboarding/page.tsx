@@ -16,6 +16,7 @@ import {
   type GuestInterest,
 } from "../../lib/guestInterest";
 import { guestLocal } from "../lib/guestSession";
+import { interestCategories } from "../../lib/categoryTaxonomy";
 
 const TOTAL_STEPS = 6;
 
@@ -63,10 +64,12 @@ export default function OnboardingPage() {
         .order("level", { ascending: false })
         .order("full_name", { ascending: true });
 
-      const { data: categoryData } = await supabase
+      const { data: categoryRows } = await supabase
         .from("categories")
-        .select("id, name")
+        .select("id, name, code")
         .order("sort_order");
+      // Seven main categories and 기타 only (screen plan v1.0, 05).
+      const categoryData = categoryRows ? interestCategories(categoryRows) : null;
 
       if (regionData) setRegions(regionData);
       if (categoryData) setCategories(categoryData);
