@@ -766,3 +766,49 @@ test("Naver is asked only for a live transaction, at most 3 times", async () => 
     false,
   );
 });
+
+// PGlite has one connection, so lock waits cannot be run here (staging runs
+// them with several connections). This pins the order every function takes:
+// key table -> identities -> transaction row -> account row.
+test("every function locks identities before the transaction row, and starts share one lock", () => {
+  const body = (name: string) => {
+    const start = migration.indexOf(`CREATE FUNCTION public.${name}(`);
+    assert.ok(start >= 0, name);
+    return migration.slice(start, migration.indexOf("END $$;", start));
+  };
+  const before = (name: string, first: string, second: string) => {
+    const text = body(name);
+    const a = text.indexOf(first);
+    const b = text.indexOf(second);
+    assert.ok(a >= 0 && b >= 0 && a < b, `${name}: ${first} before ${second}`);
+  };
+  before(
+    "naver_tx_callback",
+    "_naver_lock_subjects",
+    "SET state = 'naver_verified'",
+  );
+  before("naver_tx_complete_login", "_naver_lock_subjects", "FOR UPDATE");
+  before(
+    "complete_naver_link",
+    "_naver_lock_subjects",
+    "WHERE t.id = p_tx_id FOR UPDATE",
+  );
+  before(
+    "complete_naver_link",
+    "WHERE t.id = p_tx_id FOR UPDATE",
+    "FROM auth.users a",
+  );
+  before("naver_unlink", "FOR UPDATE", "UPDATE public.naver_auth_transactions");
+  // No transaction row is locked before the identities in these functions.
+  for (const name of ["naver_tx_complete_login", "complete_naver_link"]) {
+    const text = body(name);
+    assert.ok(
+      text.indexOf("FOR UPDATE") > text.indexOf("_naver_lock_subjects"),
+      name,
+    );
+  }
+  assert.match(
+    body("naver_tx_start"),
+    /pg_advisory_xact_lock\(hashtextextended\('naver_tx_start', 0\)\)/,
+  );
+});

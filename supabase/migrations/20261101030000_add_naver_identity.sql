@@ -16,6 +16,12 @@
 -- my_login_methods(). Starting transactions is rate limited per client and
 -- overall.
 --
+-- Lock order, the same in every function, so none can wait on another in a
+-- cycle: naver_hash_keys (table) -> naver_subjects rows (by id) ->
+-- naver_auth_transactions row -> auth.users row. A function that needs a
+-- transaction's hashes to find the identities reads the row unlocked first
+-- (hashes never change after naver_verified) and locks it after the identities.
+--
 -- Key rotation: change naver_hash_keys only in a transaction that first runs
 --   LOCK TABLE public.naver_hash_keys IN SHARE ROW EXCLUSIVE MODE;
 -- every function takes SHARE on the table, so a rotation waits for running
@@ -34,6 +40,7 @@
 --     public.naver_tx_start(text, text, text, text, uuid, uuid), public.naver_tx_begin_callback(uuid, text, text),
 --     public.naver_tx_still_linked(uuid, text, uuid),
 --     public._naver_resolve(jsonb, smallint[]), public._naver_covers_active(jsonb, smallint[]),
+--     public._naver_lock_subjects(jsonb, uuid, boolean),
 --     public._naver_active_versions();
 --   DROP TABLE IF EXISTS public.naver_auth_transactions, public.naver_identity_events,
 --     public.naver_subject_hashes, public.naver_subjects, public.naver_hash_keys;
@@ -143,6 +150,26 @@ RETURNS boolean LANGUAGE sql IMMUTABLE SET search_path = '' AS $$
        WHERE coalesce(p_hashes ->> v::text, '') !~ '^[0-9a-f]{64}$')
 $$;
 
+-- Locks, in id order, the identities holding any of these hashes or belonging
+-- to p_user_id (step 2 of the lock order).
+CREATE FUNCTION public._naver_lock_subjects(p_hashes jsonb, p_user_id uuid, p_exclusive boolean)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+BEGIN
+  IF p_exclusive THEN
+    PERFORM 1 FROM public.naver_subjects s
+     WHERE s.user_id = p_user_id
+        OR s.id IN (SELECT h.subject_id FROM public.naver_subject_hashes h
+                     WHERE h.hash IN (SELECT value FROM jsonb_each_text(coalesce(p_hashes, '{}'::jsonb))))
+     ORDER BY s.id FOR UPDATE;
+  ELSE
+    PERFORM 1 FROM public.naver_subjects s
+     WHERE s.user_id = p_user_id
+        OR s.id IN (SELECT h.subject_id FROM public.naver_subject_hashes h
+                     WHERE h.hash IN (SELECT value FROM jsonb_each_text(coalesce(p_hashes, '{}'::jsonb))))
+     ORDER BY s.id FOR SHARE;
+  END IF;
+END $$;
+
 -- The account of these hashes, or null. Adds the hashes of active versions the
 -- identity lacks (rotation). Hashes pointing at two identities stop everything.
 CREATE FUNCTION public._naver_resolve(p_hashes jsonb, p_active smallint[])
@@ -183,7 +210,8 @@ END $$;
 -- ------------------------------------------------------------- transactions
 
 -- Starts a transaction, or returns null when the budget is used up: 20 starts
--- per client key in 10 minutes, 600 overall per minute. The client key is a
+-- per client key in 10 minutes, 600 overall per minute, counted under one
+-- lock shared by all starts. The client key is a
 -- keyed hash of the address, made by the server.
 CREATE FUNCTION public.naver_tx_start(
   p_purpose text, p_browser_secret_hash text, p_oauth_state_hash text, p_client_key text,
@@ -192,7 +220,9 @@ RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE
   v_id uuid;
 BEGIN
-  PERFORM pg_advisory_xact_lock(hashtextextended('naver_tx_start:' || coalesce(p_client_key, ''), 0));
+  -- One lock for every start, so both the per-client and the overall counts
+  -- are exact under concurrent requests (starts are short and rare).
+  PERFORM pg_advisory_xact_lock(hashtextextended('naver_tx_start', 0));
   IF (SELECT count(*) FROM public.naver_auth_transactions t
        WHERE t.client_key = p_client_key AND t.created_at > now() - interval '10 minutes') >= 20
      OR (SELECT count(*) FROM public.naver_auth_transactions t
@@ -238,6 +268,8 @@ BEGIN
      WHERE t.id = p_id AND t.state = 'started' AND t.browser_secret_hash = p_secret_hash;
     RETURN;
   END IF;
+  -- Identities before the transaction row (lock order).
+  PERFORM public._naver_lock_subjects(p_hashes, NULL, true);
   UPDATE public.naver_auth_transactions t
      SET state = 'naver_verified', naver_hashes = p_hashes, updated_at = now()
    WHERE t.id = p_id AND t.state = 'started' AND t.purpose <> 'reauth'
@@ -401,18 +433,17 @@ DECLARE
   tx public.naver_auth_transactions;
   v_users uuid[];
 BEGIN
+  -- Read unlocked for its hashes, lock the identities, then the transaction.
+  SELECT * INTO tx FROM public.naver_auth_transactions t
+   WHERE t.id = p_id AND t.flow = 'login' AND t.state = 'naver_verified';
+  IF NOT FOUND THEN RETURN false; END IF;
+  PERFORM public._naver_lock_subjects(tx.naver_hashes, p_user_id, false);
   SELECT * INTO tx FROM public.naver_auth_transactions t
    WHERE t.id = p_id AND t.flow = 'login' AND t.state = 'naver_verified'
      AND t.target_user_id = p_user_id AND t.expires_at > now()
      AND t.browser_secret_hash = p_secret_hash
    FOR UPDATE;
   IF NOT FOUND THEN RETURN false; END IF;
-  PERFORM 1 FROM public.naver_subjects s
-   WHERE s.id IN (
-     SELECT h.subject_id FROM public.naver_subject_hashes h
-      WHERE h.key_version = ANY (v_active)
-        AND h.hash = tx.naver_hashes ->> h.key_version::text)
-   FOR SHARE;
   SELECT array_agg(DISTINCT s.user_id) INTO v_users
     FROM public.naver_subjects s
    WHERE s.id IN (
@@ -463,6 +494,11 @@ DECLARE
   v_event text;
   v smallint;
 BEGIN
+  -- Read unlocked for the target and hashes, lock the identities, then the transaction.
+  SELECT * INTO tx FROM public.naver_auth_transactions t WHERE t.id = p_tx_id;
+  IF NOT FOUND THEN RETURN NULL; END IF;
+  PERFORM public._naver_lock_subjects(
+    tx.naver_hashes, CASE WHEN tx.flow = 'signup' THEN tx.created_user_id ELSE tx.target_user_id END, true);
   SELECT * INTO tx FROM public.naver_auth_transactions t WHERE t.id = p_tx_id FOR UPDATE;
   IF NOT FOUND OR tx.browser_secret_hash <> p_secret_hash THEN RETURN NULL; END IF;
   v_expected := CASE tx.flow WHEN 'signup' THEN 'user_created'
@@ -600,6 +636,7 @@ $$;
 REVOKE ALL ON FUNCTION
   public._naver_active_versions(), public._naver_covers_active(jsonb, smallint[]),
   public._naver_resolve(jsonb, smallint[]),
+  public._naver_lock_subjects(jsonb, uuid, boolean),
   public.naver_tx_start(text, text, text, text, uuid, uuid),
   public.naver_tx_begin_callback(uuid, text, text),
   public.naver_tx_still_linked(uuid, text, uuid),
