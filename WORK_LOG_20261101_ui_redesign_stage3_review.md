@@ -1,6 +1,6 @@
 # UI 개편 3단계 내 공고·합치기 Codex 검토
 
-상태: 수정 필요 (구현 Claude, 검토 Codex) — `72a05ab`·`b665833`, P2 3건. 검토 문서만 같은 브랜치에 커밋
+상태: 승인 대기 (구현 Claude, 검토 Codex) — `48719bf` 코드 재검토 통과. 기존 P2 3건 해결, 비차단 P3 1건(공개 조회 범위). 실제 서버 통합 검증은 미완료
 
 ## 범위
 
@@ -53,3 +53,31 @@ receptionGroup은 scheduled·closed 이외를 모두 open으로 반환한다. �
 - 전용 E2E 12건은 **수집만 확인**했다. 이전 로컬 Next 서버 시작의 자동 승인 정책 차단을 우회하지 않았다. 실제 로그인·합치기·신청 표시 저장과 웹·WebView는 스테이징 검증이 남는다.
 - 자료: Git 제외 data/results/ui-s3-review/의 browser.cjs·browser-results.json, detail-browser.cjs·detail-results.json, group-review.test.ts, deleted-merge.test.ts·실패 로그, routing.cjs·routing-results.json, 테스트·lint·build·고정 검사 로그와 스크린샷.
 - 구현 코드·기존 테스트 수정, 운영 DB 조회/쓰기·마이그레이션 적용·push·배포 없음. 검토 문서와 상태만 같은 브랜치에 로컬 커밋한다. 문서는 Prettier와 git diff --check로 확인한다.
+
+## 48719bf 재검토
+
+대상 `48719bfdb9cd6c12a3cdc8d7cff421edc7a9b9ed`. **코드 검토 통과**: 이전 P2 3건이 해결됐고 추가 차단 결함은 발견하지 못했다. 아래 P3 보완과 실제 서버 검증 제한을 남긴다. 앞선 미통과 판정은 이력이다.
+
+### 수정 확인
+
+- **합치기:** 실제 guestStore와 FK가 있는 PGlite DB로 이전 삭제 ID + 정상 ID 사례를 재실행했다. 정상 공고만 계정에 저장되고 삭제된 ID는 로컬에 남으며 unavailable로 표시됐다. 조회·쓰기의 반환형 오류는 failed로 유지되고 unavailable로 잘못 확정되지 않는다. 새 찜 유지와 명시적인 보관 항목 제거도 기존·추가 검사에서 통과했다.
+- **24시간 경계:** 원본이 다시 생긴 상태에서도 24시간 직전에는 조회하지 않고, 정확히 24시간이 된 호출에서는 재확인해 이전·정리했다. 정시 실행 배치가 아니라 기간이 지난 다음 합치기 호출(다음 진입 등)에서 확인하는 동작이다.
+- **화면 복구:** 실제 MyPostersClient에서 오래된 조회를 붙잡은 채 신청 표시·찜 취소를 성공시킨 뒤 응답을 풀어도 표시가 유지되고 취소 카드가 되살아나지 않았다. 모의 서버도 쓰기 결과를 반영하도록 구성해 새 조회에는 최신 상태, 보류한 조회에는 과거 상태를 반환했다.
+- **게이트 범위:** 시작 전 조회는 버리고 쓰기 중 조회 요청은 미루며, 충돌·대기 조회가 있으면 마지막 쓰기 뒤 다시 읽는다. 여러 쓰기 중에는 먼저 끝난 요청이 재조회를 시작하지 않는다. 충돌한 조회가 전혀 없으면 성공 상태만 반영하고 추가 읽기는 하지 않는 구현이며, 이를 단위 검사도 명시한다.
+- **미확인 일정:** 날짜 없음·유형 없음·해석 불가·신뢰하지 않는 유형은 접수 일정 확인 필요로 분리되고, 공고는 계속 목록에 남는다. 이전 독립 부정 검사와 실제 화면에서 접수 중으로 분류하지 않는 것을 확인했다. 상시·소진 시 마감의 기존 동작은 유지된다.
+- **기존 보호:** AccountMenu의 키보드 이동·포커스 복귀·바깥 클릭 닫기와 마이그레이션 전 신청 표시 숨김이 다시 통과했다. DB migration과 허용 목록 보호는 변경되지 않았다. 미적용 상태 그대로다.
+
+### 비차단 P3 — 조회 가능과 공개 상태를 더 명확히 구분
+
+위치: PendingActionRunner.tsx의 available 조회. 현재 SELECT id + in 조건은 RLS가 허용하는 행을 확인한다. 현행 posters_select는 공개 행 외에도 작성자 본인과 관리자에게 비공개 행 조회를 허용한다. 따라서 이 계정들에서는 숨김/노출 C인 공고도 available에 포함돼 계정으로 이전되고 로컬에서는 정리될 수 있다. 일반 계정의 타인 비공개 공고에 대한 권한 우회나 누출은 아니다.
+
+현행 SELECT 정책을 그대로 적용한 PGlite에서 작성자 계정으로 자기 hidden/C 공고를 조회하도록 구성해 실제 mergeGuestFavorites에 전달했다. 결과는 merged·added 1·unavailable 0이었고 로컬에서 없어졌다. 이 재현은 현재 권한 범위 확인이며 공개 공고 필터의 통과 검사라는 의미는 아니다. "공개 공고만 이전"을 모든 역할에서 일관되게 적용하려면 published/closed와 공개 exposure 조건을 명시적으로 맞추는 후속 보완을 권한다. 기존 P2 수정 판정을 막는 항목으로 보지 않는다.
+
+### 구주소 판단과 검증 결과
+
+- **/favorites 제한 유지 판단:** 이번 범위에서 수용 가능하며 재검토 차단 사유가 아니다. 기존 익명 인증 흐름을 유지하고 신규 내비게이션은 /my-posters로 연결한다. 다만 완전한 비회원 별칭은 아니며, 기존 로그인 화면의 redirectTo 미사용으로 로그인 후 홈에 가는 제한은 계속 명시해야 한다. 실제 middleware를 모의 Auth로 재실행해 옛 경로는 로그인 redirect, 새 경로는 guest 허용인 것을 확인했다. 이 판단이 향후 별도 라우팅 개선이 불가능하다는 뜻은 아니다.
+- 대상 단위·migration과 이전 분류 재현 **23/23 PASS**, 별도 실제 FK·24시간 경계 검사 **1/1 PASS**. 격리 브라우저 **6시나리오 PASS**(메뉴, schema fallback, 신청 표시 경합, 찜 취소 경합, 미확인 묶음, 보관 항목만 지우기). 결과 JSON을 assert 스크립트로 확인했고 새 묶음 스크린샷도 확인했다.
+- 전체 pnpm test **248/250 PASS**, 기존 profile-role-release 실패 2건이다. web lint·production build·변경 코드 Prettier PASS. 고정 검사 **12/12 PASS**. 빌드에는 Supabase 공개 설정의 로컬 대체값을 사용했다.
+- 자료: Git 제외 data/results/ui-s3-rereview-48719bf/의 browser.cjs·browser-results.json·validate.cjs, deleted-merge.test.ts·결과, availability-scope.test.ts·재현 결과, routing 결과, 대상/전체 검사와 lint·build·Prettier 로그. 실제 컴포넌트와 실제 순수 함수를 실행하되 외부 의존을 모의하고 브라우저 네트워크를 전부 차단했다.
+- 전용 E2E **14건 수집만 확인**했다. 이전 자동 승인 검토의 Next 로컬 서버 시작 차단(`blocked by policy`)을 우회하지 않았고, 실제 서버 E2E·로그인·웹/WebView 통합은 미실행이다. 스테이징 검증이 남는다.
+- 구현·기존 테스트 수정, 운영 DB 조회/쓰기·migration 적용·push·배포 없음. 검토 문서와 상태만 같은 브랜치에 커밋한다. 문서는 Prettier와 git diff --check로 확인한다. 코드 검토 통과는 운영 migration·배포 실행 승인을 의미하지 않는다.
