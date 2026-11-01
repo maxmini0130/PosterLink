@@ -66,6 +66,11 @@
   - `scripts/security/*` 104/107(기존 실패 3건)
   - Prettier, `git diff --check` PASS
 
+## 재검토 P3 반영 (Codex `108373e`)
+
+- 작성자·관리자는 정책상 비공개 공고도 읽을 수 있어, 합치기 전 공개 확인이 비공개 공고를 통과시킬 수 있었다. `PendingActionRunner`의 확인 조회에 `posters_select` 정책의 공개 조건(`poster_status IN ('published','closed')` + `PUBLIC_POSTER_EXPOSURE_FILTER`)을 명시했다. 접수 종료 공고는 공개 공고라 그대로 옮긴다.
+- 검증: tsc·lint·build PASS, 로컬 브라우저 14/14(합치기 2건은 실제 공개 공고 조회에 이 조건이 붙은 상태로 통과).
+
 ## 운영 반영 시
 
 1. 마이그레이션 `20261101010000` 적용(승인 후) → 확인: 컬럼·체크 제약, 기존 행 `interested`.

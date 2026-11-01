@@ -10,6 +10,7 @@ import {
   type PendingAction,
 } from "../../lib/guestStore";
 import { trackProductEvent } from "../../lib/productEvents";
+import { PUBLIC_POSTER_EXPOSURE_FILTER } from "../../lib/publicPosterVisibility";
 import {
   GUEST_MERGED_EVENT,
   PENDING_ACTION_DONE_EVENT,
@@ -58,11 +59,15 @@ async function mergeIntoAccount(userId: string) {
       return error ? null : (data ?? []).map((row) => row.poster_id as string);
     },
     available: async (posterIds) => {
-      // Deleted or hidden posters are not readable and would fail the write.
+      // Only publicly visible posters, as in the posters_select policy's public
+      // branch: an author or admin can also read their non-public posters,
+      // and deleted ones would fail the write.
       const { data, error } = await supabase
         .from("posters")
         .select("id")
-        .in("id", posterIds);
+        .in("id", posterIds)
+        .in("poster_status", ["published", "closed"])
+        .or(PUBLIC_POSTER_EXPOSURE_FILTER);
       return error ? null : (data ?? []).map((row) => row.id as string);
     },
     upsert: async (posterIds) => {
