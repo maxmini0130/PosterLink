@@ -1,6 +1,6 @@
 # UI 개편 5단계: 관심 지역·분야 고르기(⑤)와 전체 흐름 E2E (2026-11-01)
 
-상태: 검토 완료·수정 필요 (구현 Claude, 검토 Codex; 0ebec60·c3748da, P2 1건·P3 1건, WORK_LOG_20261101_ui_redesign_stage5_review.md 참조). 브랜치 `feat/ui-redesign-s5-interests-20261101`(4단계 `de7832c` 위). **새 마이그레이션 없음.** push·배포·운영 DB 없음.
+상태: 재검토 대기 (구현 Claude, 검토 Codex) — `cbdad15` 검토의 P2 1건·P3 1건을 아래 "검토 수정"에서 고침(`WORK_LOG_20261101_ui_redesign_stage5_review.md` 참조). 브랜치 `feat/ui-redesign-s5-interests-20261101`(4단계 `de7832c` 위). **새 마이그레이션 없음.** push·배포·운영 DB 없음.
 
 기준: [UI 지시서](docs/UI_REDESIGN_PLAN_2026-10-31.md) ⑤·4단계·전체 흐름 E2E, [재방문 지시서](docs/RETENTION_PLAN_2026-10-31.md) 2-1·2-4, 시안 `docs/design/posterlink-mobile-v3/Onboarding.dc.html`.
 
@@ -56,6 +56,18 @@
 - `pnpm test` 276/278(실패 2건은 **기존 실패** `profile-role-release`).
 - `scripts/security/*` 104/107: 온보딩 고정을 기능 커밋 `0ebec60`으로 옮긴 뒤(피닝 커밋 전에는 고정 검사 1건이 추가로 실패). 기존 실패 3건(과거 릴리스 바이트 비교)은 **기존 실패**.
 - 스크린샷(로컬 보관, 커밋 안 함): `compare-5-interests.png`(시안과 나란히), `interests-390/768/1280.png`, `interests-picker-390.png`, `home-guest-interest-390.png`, `home-guest-suggest-390.png`.
+
+## 검토 수정 (Codex `cbdad15`)
+
+- **P2 다른 탭에서 바꾼 조건까지 지워짐**: 온보딩이 A로 미리 채워 계정 저장 중일 때 다른 탭에서 B로 바꾸면, 저장 성공 후 B까지 지웠다.
+  - 온보딩이 미리 채울 때 읽은 기록을 기억하고, 저장 성공 후 `clearGuestInterestIf`로 **지금 기록이 그것과 같을 때만**(지역·분야·저장 시각) 지운다. 그사이 저장된 기록은 같은 선택이라도 남긴다.
+- **P3 조건 삭제 실패를 성공으로 처리**: 아무것도 고르지 않고 저장할 때 브라우저가 삭제를 막아도 `true`를 돌려 안내 없이 홈으로 갔다.
+  - 삭제 실패를 `false`로 돌려 화면이 "저장하지 못했어요"를 보여주고 머문다. `clearGuestInterest`도 결과를 돌려준다.
+- 온보딩 파일이 바뀌어 보안 고정을 이 수정 커밋으로 다시 옮긴다(다음 커밋).
+- 검증:
+  - 단위 `guestInterest` 8(추가 2: 삭제 차단 시 실패 보고, 옮긴 기록만 삭제·다른 탭 기록 유지)
+  - 로컬 브라우저 25/25, lint·`tsc`·build 통과
+  - `pnpm test` 278/280(기존 실패 2건)
 
 ## 남은 일
 

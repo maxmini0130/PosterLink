@@ -39,11 +39,13 @@ function writeJson(store: KeyValueStore, key: string, value: unknown) {
   }
 }
 
+/** Removes the key; false when the browser would not (storage blocked). */
 function remove(store: KeyValueStore, key: string) {
   try {
     store.removeItem(key);
+    return true;
   } catch {
-    /* storage blocked */
+    return false;
   }
 }
 
@@ -79,7 +81,7 @@ export function readGuestInterest(store: KeyValueStore): GuestInterest | null {
 
 /**
  * Stores the conditions. Choosing nothing clears them ("전체 분야", no region).
- * Returns false when the browser would not store them.
+ * Returns false when the browser would not store (or clear) them.
  */
 export function saveGuestInterest(
   store: KeyValueStore,
@@ -89,10 +91,8 @@ export function saveGuestInterest(
   const regionId =
     choice.regionId && UUID.test(choice.regionId) ? choice.regionId : null;
   const categoryIds = cleanCategories(choice.categoryIds);
-  if (!regionId && categoryIds.length === 0) {
-    remove(store, GUEST_INTEREST_KEY);
-    return true;
-  }
+  if (!regionId && categoryIds.length === 0)
+    return remove(store, GUEST_INTEREST_KEY);
   return writeJson(store, GUEST_INTEREST_KEY, {
     v: 1,
     regionId,
@@ -102,7 +102,27 @@ export function saveGuestInterest(
 }
 
 export function clearGuestInterest(store: KeyValueStore) {
-  remove(store, GUEST_INTEREST_KEY);
+  return remove(store, GUEST_INTEREST_KEY);
+}
+
+const sameInterest = (a: GuestInterest, b: GuestInterest) =>
+  a.regionId === b.regionId &&
+  a.savedAt === b.savedAt &&
+  a.categoryIds.length === b.categoryIds.length &&
+  a.categoryIds.every((id, i) => id === b.categoryIds[i]);
+
+/**
+ * Clears the conditions only if they are still the ones that were moved to
+ * the account: a choice saved meanwhile (another tab) is kept.
+ * Returns true when cleared.
+ */
+export function clearGuestInterestIf(
+  store: KeyValueStore,
+  moved: GuestInterest,
+) {
+  const current = readGuestInterest(store);
+  if (!current || !sameInterest(current, moved)) return false;
+  return remove(store, GUEST_INTEREST_KEY);
 }
 
 export function markInterestOffered(store: KeyValueStore, now: number) {

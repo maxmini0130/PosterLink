@@ -6,6 +6,7 @@ import {
   GUEST_INTEREST_KEY,
   GUEST_INTEREST_MAX_CATEGORIES,
   clearGuestInterest,
+  clearGuestInterestIf,
   markInterestOffered,
   readEntry,
   readGuestInterest,
@@ -150,4 +151,39 @@ test("offering is remembered", () => {
   assert.equal(wasInterestOffered(store), false);
   markInterestOffered(store, 1);
   assert.equal(wasInterestOffered(store), true);
+});
+
+test("clearing nothing-chosen reports a blocked browser store", () => {
+  const store = memory();
+  saveGuestInterest(store, { regionId: R, categoryIds: [] }, 1);
+  const blocked: KeyValueStore = {
+    ...store,
+    removeItem: () => {
+      throw new Error("blocked");
+    },
+  };
+  assert.equal(
+    saveGuestInterest(blocked, { regionId: null, categoryIds: [] }, 2),
+    false,
+  );
+  assert.equal(clearGuestInterest(blocked), false);
+  assert.notEqual(readGuestInterest(store), null);
+});
+
+test("after the account save only the moved conditions are cleared", () => {
+  const store = memory();
+  saveGuestInterest(store, { regionId: R, categoryIds: [C1] }, 10);
+  const moved = readGuestInterest(store)!;
+  assert.equal(clearGuestInterestIf(store, moved), true);
+  assert.equal(readGuestInterest(store), null);
+
+  // Another tab chose B while the account save of A was running: B stays.
+  saveGuestInterest(store, { regionId: R, categoryIds: [C1] }, 20);
+  const a = readGuestInterest(store)!;
+  saveGuestInterest(store, { regionId: R, categoryIds: [C2] }, 21);
+  assert.equal(clearGuestInterestIf(store, a), false);
+  assert.deepEqual(readGuestInterest(store)?.categoryIds, [C2]);
+  // Same choice saved again later is also a different record.
+  saveGuestInterest(store, { regionId: R, categoryIds: [C1] }, 30);
+  assert.equal(clearGuestInterestIf(store, a), false);
 });
