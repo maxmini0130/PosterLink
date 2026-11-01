@@ -1,6 +1,6 @@
 # UI 개편 5단계 검토
 
-상태: 수정 필요 — P2 1건, P3 1건 (검토 Codex, 구현 Claude). 대상 0ebec607d273daac4d0b832722e857c43b3c4c37·c3748da, 브랜치 feat/ui-redesign-s5-interests-20261101. 구현 코드는 수정하지 않는다.
+상태: ac2d355·f7bfd91 재검토 코드 검토 통과 — 기존 P2·P3 해결 확인 (검토 Codex, 구현 Claude). 대상 0ebec607d273daac4d0b832722e857c43b3c4c37·c3748da, 브랜치 feat/ui-redesign-s5-interests-20261101. 구현 코드는 수정하지 않는다.
 
 ## P2. 온보딩 저장 성공 후 더 새로 고른 비회원 조건까지 삭제함
 
@@ -42,3 +42,30 @@
 - Git 제외 자료: data/results/ui-s5-review/onboarding.cjs, storage.ts, interests-browser.cjs, interests-390.png·1280.png, 테스트·보안·lint·build 로그.
 
 작업 전 fetch·worktree·상태·AGENTS·CLAUDE·README·지시서·구현 로그 확인. 검토 문서와 상태만 같은 기능 브랜치에 로컬 커밋한다. 구현·기존 테스트 수정, push·배포·운영 DB·설정 변경 없음. UTF-8·Prettier·git diff --check 확인.
+
+## ac2d355·f7bfd91 재검토
+
+대상 ac2d35526fffc016de48cd5f59e06a6010706f9d·f7bfd91. **코드 검토 통과: 기존 P2 1건·P3 1건 해결 확인. 이번 수정 범위에서 추가 차단 결함은 발견하지 못했다.** 이전 수정 필요 판정은 이력이며 실제 OAuth·운영 반영 승인은 별도다.
+
+### 수정 확인
+
+- 온보딩은 비회원 조건을 읽어 미리 채우는 같은 effect에서 carriedInterest.current에 기록을 보존한다. API 성공 후 현재 저장소의 지역·분야 순서/내용·savedAt이 모두 일치할 때만 clearGuestInterestIf로 지운다. 페이지를 열거나 저장한 뒤 새로 고른 조건은 비교가 달라 보존된다. 같은 선택을 더 늦은 시각에 다시 저장하는 경우도 단위 검사에서 보존됐다.
+- 실제 OnboardingPage를 번들링하고 실제 미리 채우기 effect와 최종 버튼 핸들러를 실행했다. 분류·Auth·React hooks·API는 fixture로 대체했다. API 응답 보류 중 A를 B로 교체한 뒤 A 성공 → B 유지, 변경 없는 A 성공 → 삭제, API 실패 → 기록 유지가 모두 통과했다. effect가 실행되지 않아 정리 자체를 생략하는 거짓 통과가 아니도록 변경 없는 A의 정상 삭제도 확인했다.
+- remove 함수는 삭제 성공 여부를 반환하고, saveGuestInterest의 빈 조건 저장도 그 결과를 반환한다. 실제 InterestsClient의 격리 Chromium 검사에서 removeItem 실패 시 오류 안내 1건·홈 이동 없음·기존 기록 보존을 확인했다. 정상 지역·분야 저장도 390/1280px에서 통과했고 가로 넘침은 없었다.
+- f7bfd91은 승인 스냅샷을 수정 기능 커밋으로 갱신할 뿐 허용 파일 범위를 넓히지 않는다. 보안 검사 결과도 기존과 같았다.
+
+### 검증
+
+- pnpm test **278/280**. 실패 2건은 기존 profile-role-release 스냅샷 항목이다.
+- scripts/security 전체 **104/107**. 실패 3건은 위 2건과 기존 withdrawal-only 생산 소스 비교 항목이다. 신규 guestInterest 단위 8건은 통과했다.
+- web lint·production build 통과. 공개 Supabase 설정은 로컬 비접속 대체값을 사용했다.
+- Git 제외 자료: data/results/ui-s5-rereview/onboarding.cjs·interests-browser.cjs, 390/1280px 스크린샷, 테스트·보안·lint·build 로그. 실제 컴포넌트를 사용하지만 전체 서비스 E2E는 아니다. 브라우저의 외부 요청은 모두 차단했고 계정·분류·라우팅·측정은 모의 처리했다.
+- 실제 카카오 왕복·회원 온보딩 저장·여러 실제 탭의 완전 동시 스케줄·WebView·운영 설정은 이번 검사 범위 밖이다. 조건 비교와 삭제는 localStorage의 원자적 DB CAS를 제공하는 구조는 아니며, 재현했던 저장 요청 전후의 새 기록 보존을 검증했다. 기존 전체 서버 E2E를 새로 실행했다고 주장하지 않는다.
+
+### 함께 요청된 콜백 push·메일 템플릿 확인
+
+- 사용자의 명시적 push 승인에 따라 별도 fix/auth-callback-url-token-20261101 브랜치를 origin에 push했다. 원격 refs/heads/fix/auth-callback-url-token-20261101이 검토 기록을 포함한 2fbc232ff77f0474f7b3f72f18f3eeb2ef285f4c와 일치함을 ls-remote로 확인했다. main 병합·운영 배포는 하지 않았다. UI 브랜치는 push하지 않는다.
+- Supabase 메일 템플릿은 미확인이다. computer-use 스킬로 기존 Chrome 창을 선택하려 했으나 Windows 컴퓨터 사용 도구가 '현재 브라우저 URL을 충분한 확신으로 확인할 수 없어 정책을 집행할 수 없다'고 중단했다. 이후 브라우저 입력이나 다른 경로의 컴퓨터 사용 우회는 하지 않았다. 대시보드/메일 템플릿을 읽거나 바꾸지 않았다.
+- 실제 재설정 메일의 PKCE code 형식, 시작한 브라우저의 verifier와 교환되는 흐름은 여전히 운영 반영 전 확인 대상이다. URL 토큰 수신을 되살리는 단순 revert를 복구 방법으로 권하지 않는 기존 검토 의견도 유지한다.
+
+검토 문서와 구현 로그의 상태만 같은 UI 브랜치에 로컬 커밋한다. 구현·기존 테스트 수정, 운영 DB·설정 변경·마이그레이션 적용·배포 없음. 콜백 기능 브랜치 push만 위 명시 승인 범위에서 실행했다. 문서 UTF-8·Prettier·git diff --check 확인.
