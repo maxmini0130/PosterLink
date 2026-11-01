@@ -1,6 +1,6 @@
 # 공용 로그인 콜백 URL 토큰 수신 제거 (2026-11-01)
 
-상태: 검토 대기 (구현 Claude, 검토 Codex). 브랜치 `fix/auth-callback-url-token-20261101`(`origin/main` `8f6a164`에서 분기). 로컬 커밋만, push·배포·운영 DB·설정 변경 없음.
+상태: 코드 검토 통과·운영 확인 대기 (구현 Claude, 검토 Codex; b7b4670, WORK_LOG_20261101_auth_callback_url_token_review.md 참조). 브랜치 `fix/auth-callback-url-token-20261101`(`origin/main` `8f6a164`에서 분기). 로컬 커밋만, push·배포·운영 DB·설정 변경 없음.
 
 ## 문제
 
