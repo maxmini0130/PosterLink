@@ -36,6 +36,8 @@ import {
 } from "../../lib/guestSession";
 import { getDeadlineDisplay, receptionEndedOn } from "../../../lib/deadlineDisplay";
 import { readEntry, readGuestInterest } from "../../../lib/guestInterest";
+import { canGoBackInSite } from "../../../lib/backTarget";
+import { currentArrival } from "../../lib/inSiteHistory";
 import type { UserStatus } from "../../../lib/myPosters";
 import {
   formatApplicationPeriod,
@@ -805,12 +807,17 @@ export function PosterDetailClient({
   };
 
   // The tab bar is hidden here on a phone, so 뒤로 가기 must never leave the
-  // site: a detail opened first in this tab (a shared link, a new tab) goes
-  // to the home instead of the previous page outside PosterLink.
+  // site: it goes back only to a page of PosterLink, otherwise to the home
+  // (lib/backTarget.ts).
   const goBack = () => {
-    const entry = readEntry(guestTab);
-    const openedHere = entry?.path === window.location.pathname;
-    if (!openedHere && window.history.length > 1) router.back();
+    const back = canGoBackInSite({
+      ...currentArrival(),
+      historyLength: window.history.length,
+      referrer: document.referrer,
+      origin: window.location.origin,
+      firstPageOfTab: readEntry(guestTab)?.path === window.location.pathname,
+    });
+    if (back) router.back();
     else router.push("/");
   };
 

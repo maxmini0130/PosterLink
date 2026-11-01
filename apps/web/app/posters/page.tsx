@@ -75,6 +75,7 @@ export default async function PosterListPage({ searchParams }: { searchParams: P
       <PosterListClient
         initialPosters={discovery.posters}
         initialTotalCount={discovery.totalCount}
+        initialTotalIsMinimum={discovery.totalIsMinimum}
         initialCategories={discovery.categories}
         initialRegions={discovery.regions}
         initialQuery={filters.query}

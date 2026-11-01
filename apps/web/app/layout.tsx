@@ -9,6 +9,7 @@ import SiteVisitTracker from "./components/SiteVisitTracker";
 import ProductEventsTracker from "./components/ProductEventsTracker";
 import PendingActionRunner from "./components/PendingActionRunner";
 import VisitClock from "./components/VisitClock";
+import InSiteHistoryTracker from "./components/InSiteHistoryTracker";
 import { SeoStructuredData } from "./components/SeoStructuredData";
 import { getAppOrigin } from "../lib/siteUrl";
 import ExistingWebAnalytics from "./components/ExistingWebAnalytics";
@@ -103,6 +104,7 @@ export default function RootLayout({
             <ProductEventsTracker />
             <PendingActionRunner />
             <VisitClock />
+            <InSiteHistoryTracker />
           </Suspense>
           {children}
           <ToastProvider />

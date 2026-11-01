@@ -41,6 +41,8 @@ export type PublicDiscoveryFilters = {
 export type PublicDiscoveryResult = {
   posters: DiscoveryPoster[];
   totalCount: number;
+  /** The category calls hit their limit; there are at least `totalCount`. */
+  totalIsMinimum: boolean;
   categories: DiscoveryTaxonomy[];
   regions: DiscoveryTaxonomy[];
   selectedCategory: DiscoveryTaxonomy | null;
@@ -157,6 +159,15 @@ export async function fetchPublicDiscovery(
         select: filters.promotionOnly
           ? PROMOTION_POSTER_SELECT
           : PUBLIC_POSTER_SELECT,
+        countable: includeClosed
+          ? undefined
+          : (row) =>
+              isAcceptingPoster({
+                application_start_at: row.application_start_at,
+                application_end_at: row.application_end_at,
+                deadline_type: row.deadline_type,
+                event_end_at: row.event_end_at,
+              }),
       },
     ),
     filters.promotionOnly || multiCategory
@@ -184,12 +195,13 @@ export async function fetchPublicDiscovery(
   const totalCount =
     !filters.promotionOnly && typeof countRes.data === "number"
       ? countRes.data
-      : multiCategory && !filters.promotionOnly && includeClosed
+      : multiCategory && !filters.promotionOnly
         ? scoped.total
         : filteredPosters.length;
   return {
     posters: filteredPosters,
     totalCount,
+    totalIsMinimum: multiCategory && !filters.promotionOnly && !scoped.exact,
     categories,
     regions,
     selectedCategory,
@@ -513,17 +525,19 @@ export async function fetchInstitutionRelatedPosters(
   };
 }
 
+/** Takes enriched posters and the raw search rows alike. */
 function isAcceptingPoster(poster: {
-  application_start_at?: string | null;
-  application_end_at?: string | null;
-  deadline_type?: string | null;
-  event_end_at?: string | null;
+  application_start_at?: unknown;
+  application_end_at?: unknown;
+  deadline_type?: unknown;
+  event_end_at?: unknown;
 }) {
+  const text = (value: unknown) => (typeof value === "string" ? value : null);
   return isPosterAcceptingApplications({
-    applicationStartAt: poster.application_start_at,
-    applicationEndAt: poster.application_end_at,
-    deadlineType: poster.deadline_type,
-    eventEndAt: poster.event_end_at,
+    applicationStartAt: text(poster.application_start_at),
+    applicationEndAt: text(poster.application_end_at),
+    deadlineType: text(poster.deadline_type),
+    eventEndAt: text(poster.event_end_at),
   });
 }
 

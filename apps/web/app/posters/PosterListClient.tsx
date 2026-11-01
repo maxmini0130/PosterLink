@@ -72,6 +72,7 @@ const SORTS: Array<{ key: DiscoverySort; label: string }> = [
 type PosterListClientProps = {
   initialPosters: DiscoveryPoster[];
   initialTotalCount: number;
+  initialTotalIsMinimum: boolean;
   initialCategories: DiscoveryTaxonomy[];
   initialRegions: DiscoveryTaxonomy[];
   initialQuery: string;
@@ -115,6 +116,7 @@ export function PosterListClient(props: PosterListClientProps) {
 function PosterListPageContent({
   initialPosters,
   initialTotalCount,
+  initialTotalIsMinimum,
   initialCategories,
   initialRegions,
   initialQuery,
@@ -127,6 +129,7 @@ function PosterListPageContent({
   const [failed, setFailed] = useState(false);
   const [posters, setPosters] = useState<Row[]>(initialPosters);
   const [resultTotalCount, setResultTotalCount] = useState(initialTotalCount);
+  const [totalIsMinimum, setTotalIsMinimum] = useState(initialTotalIsMinimum);
   const [categories, setCategories] = useState<Row[]>(initialCategories);
   const [regions, setRegions] = useState<Row[]>(initialRegions);
 
@@ -258,6 +261,7 @@ function PosterListPageContent({
         p_limit: 240,
       };
       let scopedTotal: number | null = null;
+      let scopedExact = true;
       const countPromise = multiCategory
         ? Promise.resolve({ data: null, error: null })
         : supabase.rpc("count_public_posters", {
@@ -297,6 +301,16 @@ function PosterListPageContent({
           categoryIds: categoryScope,
           sort: searchArgs.p_sort === "deadline" ? "deadline" : "latest",
           limit: searchArgs.p_limit,
+          countable:
+            !includeClosed && hideClosedPosters
+              ? (poster) =>
+                  isPosterAcceptingApplications({
+                    applicationStartAt: poster.application_start_at,
+                    applicationEndAt: poster.application_end_at,
+                    deadlineType: poster.deadline_type,
+                    eventEndAt: poster.event_end_at,
+                  })
+              : undefined,
           search: (categoryId, limit) =>
             supabase
               .rpc("search_public_posters", {
@@ -312,7 +326,10 @@ function PosterListPageContent({
         });
         if (scoped.error) throw scoped.error;
         const keywordData = scoped.rows;
-        if (multiCategory && includeClosed) scopedTotal = scoped.total;
+        if (multiCategory) {
+          scopedTotal = scoped.total;
+          scopedExact = scoped.exact;
+        }
         data = semanticSearchUsed
           ? mergeUniquePosters(data, keywordData)
           : keywordData;
@@ -396,6 +413,7 @@ function PosterListPageContent({
           ? sorted.length
           : (serverTotalCount ?? sorted.length),
       );
+      setTotalIsMinimum(!semanticSearchUsed && !scopedExact);
       setSemanticSearchActive(semanticSearchUsed);
       setDisplayCount(PAGE_SIZE);
       setWiderCount(WIDER_FIRST);
@@ -829,6 +847,9 @@ function PosterListPageContent({
                         선택한 조건에 맞는 공고{" "}
                         <span className="text-pl-accent">
                           {matchedCount.toLocaleString()}
+                          {totalIsMinimum && !groups.wider.length
+                            ? "건 이상"
+                            : null}
                         </span>
                       </>
                     }
@@ -910,7 +931,8 @@ function PosterListPageContent({
             onClick={() => setFilterOpen(false)}
             className="min-h-[48px] w-full rounded-lg bg-pl-ink font-bold text-white"
           >
-            {resultTotalCount.toLocaleString()}건 보기
+            {resultTotalCount.toLocaleString()}건{totalIsMinimum ? " 이상" : ""}{" "}
+            보기
           </button>
         }
       >

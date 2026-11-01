@@ -350,6 +350,34 @@ test("⑤ a search result or shared link is shown first; the home only suggests"
   await expect(shared).toHaveURL(/\/interests$/);
 });
 
+test("뒤로 가기 on a detail opened again from a search returns to the search", async ({
+  page,
+}) => {
+  // Codex review P2-5: shared detail → search → the same detail. The detail
+  // is still the tab's first page, but the entry before it is the search.
+  await mock(page);
+  await page.goto(`/posters/${OPEN}`, { waitUntil: "networkidle" });
+  await page.goto("/posters?q=review-navigation", { waitUntil: "networkidle" });
+  // Typed in the address bar (no referrer).
+  await page.goto(`/posters/${OPEN}`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "뒤로 가기" }).click();
+  await expect(page).toHaveURL(/\/posters\?q=review-navigation$/);
+  // Followed from a page of the site (referrer).
+  await page.goto(`/posters/${OPEN}`, {
+    waitUntil: "networkidle",
+    referer: page.url(),
+  });
+  await page.getByRole("button", { name: "뒤로 가기" }).click();
+  await expect(page).toHaveURL(/\/posters\?q=review-navigation$/);
+
+  // The browser's back to the tab's first page, then 뒤로 가기: before it is
+  // only the outside of the site, so the home.
+  await page.goBack({ waitUntil: "networkidle" });
+  await expect(page).toHaveURL(new RegExp(`/posters/${OPEN}$`));
+  await page.getByRole("button", { name: "뒤로 가기" }).click();
+  await expect(page).toHaveURL(/\/$/);
+});
+
 test("⑤ a member opening the picker goes to the account's conditions", async ({
   page,
 }) => {

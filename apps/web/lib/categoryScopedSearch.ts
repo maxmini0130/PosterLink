@@ -47,18 +47,22 @@ export function sortLikeSearch<R extends ScopedSearchRow>(
 /**
  * Runs `search` once per category id (or once with null) and returns the
  * posters once each in search order, cut to `limit`. `total` counts them
- * before the cut; `exact` is true when no category call was cut at its own
- * limit, so `total` is the full count.
+ * before the cut, only those `countable` keeps when it is given (the same
+ * check the caller applies to the shown rows); `exact` is true when no
+ * category call was cut at its own limit, so `total` is the full count and
+ * otherwise only a lower bound.
  */
 export async function searchCategoryScope<R extends ScopedSearchRow>({
   categoryIds,
   sort,
   limit,
   search,
+  countable,
 }: {
   categoryIds: string[];
   sort: "deadline" | "latest";
   limit: number;
+  countable?: (row: R) => boolean;
   search: (
     categoryId: string | null,
     limit: number,
@@ -81,7 +85,7 @@ export async function searchCategoryScope<R extends ScopedSearchRow>({
   const ordered = ids.length > 1 ? sortLikeSearch(merged, sort) : merged;
   return {
     rows: ordered.slice(0, limit),
-    total: ordered.length,
+    total: countable ? ordered.filter(countable).length : ordered.length,
     error: null,
     exact,
   };
@@ -113,6 +117,7 @@ export function searchPublicPostersInScope<R extends ScopedSearchRow>(
     sort,
     limit,
     select,
+    countable,
   }: {
     categoryIds: string[];
     query: string | null;
@@ -121,12 +126,14 @@ export function searchPublicPostersInScope<R extends ScopedSearchRow>(
     sort: "deadline" | "latest";
     limit: number;
     select: string;
+    countable?: (row: R) => boolean;
   },
 ) {
   return searchCategoryScope<R>({
     categoryIds,
     sort,
     limit,
+    countable,
     search: (categoryId, callLimit) =>
       client
         .rpc("search_public_posters", {
