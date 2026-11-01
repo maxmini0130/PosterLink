@@ -23,6 +23,9 @@ const USER_VISIT_STATE = "98145cf4e64a02e8b6fa0eba3ebbc4da960f9b3d";
  */
 const STAGE5_ONBOARDING = "ac2d35526fffc016de48cd5f59e06a6010706f9d";
 
+/** Screen plan v1.0 section 09: finished events left out of open search; pending Codex review. */
+const FINISHED_EVENTS_SEARCH = "b143a7694cbd729a979e9deee543ccea0fbe8924";
+
 /** New migration path -> commit holding its reviewed content. */
 export const APPROVED_MIGRATIONS: Readonly<Record<string, string>> = {
   "supabase/migrations/20261031010000_extend_product_events_for_retention.sql":
@@ -35,6 +38,8 @@ export const APPROVED_MIGRATIONS: Readonly<Record<string, string>> = {
     FAVORITE_USER_STATUS,
   "supabase/migrations/20261101020000_add_user_visit_state.sql":
     USER_VISIT_STATE,
+  "supabase/migrations/20261102010000_exclude_finished_events_from_open_search.sql":
+    FINISHED_EVENTS_SEARCH,
 };
 
 /** File path -> commit holding its reviewed content; replaces the base pin. */
