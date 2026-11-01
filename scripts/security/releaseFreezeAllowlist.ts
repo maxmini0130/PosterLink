@@ -15,7 +15,7 @@ const RETENTION_PURGE = "1e6917574e8b8c682d2c189f34c8511f5053b605";
 const FAVORITE_USER_STATUS = "72a05ab93ea353381446cdf85d8fe578a2afb755";
 
 /** UI redesign stage 4 user_visit_state; pending Codex review. */
-const USER_VISIT_STATE = "f2465edd7c309050562c4dba80f60f26aecf1283";
+const USER_VISIT_STATE = "98145cf4e64a02e8b6fa0eba3ebbc4da960f9b3d";
 
 /** New migration path -> commit holding its reviewed content. */
 export const APPROVED_MIGRATIONS: Readonly<Record<string, string>> = {
