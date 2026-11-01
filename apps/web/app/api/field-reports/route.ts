@@ -23,6 +23,7 @@ const FIELD_KEYS = new Set([
   "capacity",
   "venue",
   "required_documents",
+  "event_period",
 ]);
 
 function adminClient() {

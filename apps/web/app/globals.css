@@ -78,6 +78,19 @@
 .pl-action-bar-open {
   --pl-bottom-extra: 72px;
 }
+/* Screen plan v1.0 (06): on a phone the detail's 찜·신청 bar replaces the tab
+   bar, so two fixed bars never cover the text. The bar takes the tab bar's
+   place, including the home-indicator area. */
+html.pl-action-bar-open {
+  --mobile-nav-height: env(safe-area-inset-bottom, 0px);
+}
+.pl-action-bar-open .mobile-bottom-nav {
+  display: none;
+}
+.pl-action-bar-open .pl-action-bar {
+  bottom: 0;
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+}
 @media (min-width: 768px) {
   .pl-has-action-bar {
     padding-bottom: 104px;

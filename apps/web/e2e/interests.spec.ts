@@ -331,14 +331,17 @@ test("⑤ a search result or shared link is shown first; the home only suggests"
     page.getByText("관심 지역·분야를 고르면 맞는 공고를 먼저 보여드려요."),
   ).toBeVisible();
 
-  // A new tab opened on a shared poster, then the home from the tab bar.
+  // A new tab opened on a shared poster. The detail's 찜·신청 bar replaces
+  // the tab bar (screen plan v1.0, 06); 뒤로 가기 on a detail opened first in
+  // this tab goes to the home, never out of the site.
   const shared = await page.context().newPage();
   await mock(shared);
   await shared.goto(`/posters/${OPEN}`, { waitUntil: "networkidle" });
-  await shared
-    .getByRole("navigation", { name: "주요 탐색" })
-    .getByRole("link", { name: "홈" })
-    .click();
+  await expect(
+    shared.getByRole("navigation", { name: "주요 탐색" }),
+  ).toBeHidden();
+  await expect(shared.getByRole("group", { name: "공고 행동" })).toBeVisible();
+  await shared.getByRole("button", { name: "뒤로 가기" }).click();
   await expect(shared).toHaveURL(/\/$/);
   await expect(
     shared.getByText("관심 지역·분야를 고르면 맞는 공고를 먼저 보여드려요."),
@@ -388,6 +391,8 @@ test("full flow on a phone: guest 찜 → later → 내 공고 → sign-in → m
   await sheet.getByRole("button", { name: "나중에 할게요" }).click();
   await expect(sheet).toBeHidden();
 
+  // Back from the detail opened by a shared link: the home, then 내 공고.
+  await page.getByRole("button", { name: "뒤로 가기" }).click();
   await page
     .getByRole("navigation", { name: "주요 탐색" })
     .getByRole("link", { name: "내 공고" })
