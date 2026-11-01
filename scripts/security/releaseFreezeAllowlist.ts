@@ -19,9 +19,9 @@ const USER_VISIT_STATE = "98145cf4e64a02e8b6fa0eba3ebbc4da960f9b3d";
 
 /**
  * UI redesign stage 5: onboarding prefilled from the guest's interest choice
- * (no age gate); pending Codex review.
+ * (no age gate), with the cbdad15 review fix; pending Codex re-review.
  */
-const STAGE5_ONBOARDING = "0ebec607d273daac4d0b832722e857c43b3c4c37";
+const STAGE5_ONBOARDING = "ac2d35526fffc016de48cd5f59e06a6010706f9d";
 
 /** New migration path -> commit holding its reviewed content. */
 export const APPROVED_MIGRATIONS: Readonly<Record<string, string>> = {
