@@ -2,220 +2,284 @@
 
 대상: `feat/naver-identity-b-20261101`의 마이그레이션 `20261101030000_add_naver_identity.sql`과 `/auth/naver/*` 경로. 설계는 [NAVER_LOGIN_SECURITY_DESIGN_2026-11-01.md](NAVER_LOGIN_SECURITY_DESIGN_2026-11-01.md)를 따릅니다.
 
-로컬 PGlite는 연결이 하나뿐이라 잠금 대기·교착·한도 경합을 실제로 일으킬 수 없습니다. 이 문서는 그 확인을 **운영과 분리된 스테이징 Supabase**에서 하는 절차입니다.
+로컬 PGlite는 연결이 하나뿐이라 잠금 대기·교착·한도 경합을 실제로 일으킬 수 없습니다. 이 문서는 그 확인을 **운영과 분리된 스테이징 Supabase**에서 `psql` 두 개로 하는 절차입니다.
 
-> **운영 프로젝트에서 실행하지 않습니다.** Preview 배포도 운영 DB를 쓰므로 이 절차에 쓰지 않습니다. 각 세션을 열면 0-2의 확인부터 합니다.
+> **운영 프로젝트에서 실행하지 않습니다.** Preview 배포도 운영 DB를 쓰므로 쓰지 않습니다. 모든 세션은 [session.sql](../scripts/staging/naver/session.sql)로 시작하고, 이 파일이 접속 대상을 확인하지 못하면 쓰기 없이 psql을 종료합니다.
 
-## 0. 준비
+## 0. 세션 규칙
 
-### 0-1. 스테이징 프로젝트
+### 0-1. 접속
 
-1. 운영과 다른 Supabase 프로젝트를 만듭니다.
-2. 저장소의 마이그레이션을 순서대로 적용합니다. 이 브랜치 기준 마지막 세 개는 다음과 같습니다.
+- **연결 방식:** 직접 연결(`db.<ref>.supabase.co:5432`) 또는 세션 풀러(사용자 `postgres.<ref>`, 포트 5432)만 씁니다. 트랜잭션 풀러(6543)는 세션 상태와 잠금을 붙잡지 못해 쓰지 않습니다. session.sql도 6543이면 멈춥니다.
+- **접속 문자열:** 스테이징 Settings → Database에서 가져오고, 문서·로그·화면 공유에 남기지 않습니다.
+- **두 세션:** 두 터미널에서 같은 값으로 엽니다(`RUN`도 같게).
+
+```bash
+psql "$STAGING_DSN" -v STAGING_REF=<스테이징 ref> -v PROD_REF=<운영 ref> \
+     -v A=<시험 계정 A id> -v B=<시험 계정 B id> -v RUN=<이번 실행 이름, 예: run1>
+```
+
+```sql
+\i scripts/staging/naver/session.sql
+```
+
+session.sql이 하는 일:
+
+- **접속 대상 확인:** psql의 접속 호스트·사용자로 프로젝트를 확인합니다(`current_database()`는 모든 프로젝트에서 `postgres`라 근거가 되지 않습니다).
+  - 기대한 스테이징 ref와 맞지 않거나, 운영 ref가 보이거나, 트랜잭션 풀러이거나, 값이 빠졌거나 A·B가 자리표시 값이면 **쓰기 없이 종료**합니다.
+- **시간 제한:** `statement_timeout`과 `lock_timeout`을 설정합니다. 아래 "멈춤" 단계는 상대 세션에서 **2분 안에** 커밋해야 합니다.
+- **시험 계정 확인:** A·B가 이메일 확인을 마친 계정인지 보고, 이메일을 보여 줍니다. 시험 계정이 맞는지 눈으로 확인합니다.
+- **이번 실행 값:** 거래 state 해시 `:st`, 네이버 ID 해시 `:hx`, 단계별 비밀값 `:s1`~`:s6`, 클라이언트 키 `:c1`~`:c6`를 만듭니다.
+- **연결 번호:** `backend` 번호를 보여 줍니다. 두 세션의 번호가 달라야 서로 다른 연결입니다.
+
+### 0-2. 역할과 오류
+
+- **기본 역할:** 세션은 `postgres`로 둡니다. 조회·정리는 이 역할로 합니다.
+- **API 호출:** 서버와 같은 권한인 `service_role`로 실행하되, 항상 트랜잭션 안에서만 바꿉니다.
+
+  ```sql
+  BEGIN; SET LOCAL ROLE service_role; <함수 호출>; COMMIT;
+  ```
+
+  `SET LOCAL ROLE`이 거부되면 결과를 보고하고 멈춥니다(`postgres`로 대신 실행한 결과는 API 역할 시험으로 인정하지 않습니다).
+
+- **오류가 나면:** 그 세션에서 `ROLLBACK;`부터 실행합니다. 열린 트랜잭션을 남기지 않습니다.
+
+### 0-3. 정리
+
+- 이번 실행이 만든 데이터만 지웁니다: [cleanup.sql](../scripts/staging/naver/cleanup.sql)은 `:st`가 붙은 거래와 A·B의 연결·이력만 삭제합니다. 다른 사람의 스테이징 데이터는 건드리지 않습니다.
+- 각 시험 전에 정리합니다.
+
+  ```sql
+  \i scripts/staging/naver/cleanup.sql
+  ```
+
+## 1. 준비와 권한
+
+### 1-1. 마이그레이션과 키 (한 번)
+
+1. 세션 1에서 session.sql 통과를 확인한 **뒤에** 같은 `$STAGING_DSN`으로 마이그레이션을 적용합니다. 예: `supabase db push --db-url "$STAGING_DSN"`. 이 브랜치 기준 마지막 세 개는 다음과 같습니다.
    - `20261101010000_add_favorite_user_status.sql`
    - `20261101020000_add_user_visit_state.sql`
    - `20261101030000_add_naver_identity.sql`
-3. 대시보드 Authentication → Users에서 이메일 확인을 마친 시험 계정 2개(A, B)를 만듭니다. 이메일·비밀번호로 만들면 `auth.identities` 행이 생겨 연결 해제 조건(다른 로그인 수단)을 만족합니다.
-4. 해시 키 버전 1을 등록합니다. 키 표는 반드시 잠근 뒤 바꿉니다.
+2. 키 버전 1을 등록합니다(세션 1, postgres).
 
    ```sql
    BEGIN;
    LOCK TABLE public.naver_hash_keys IN SHARE ROW EXCLUSIVE MODE;
-   INSERT INTO public.naver_hash_keys (version, status) VALUES (1, 'active');
+   INSERT INTO public.naver_hash_keys (version, status) VALUES (1, 'active') ON CONFLICT (version) DO NOTHING;
    COMMIT;
+   SELECT * FROM public.naver_hash_keys;
    ```
 
-### 0-2. 세션을 열 때마다
+### 1-2. 계정 행 잠금 (참고값)
 
-동시 실행 시험은 **터미널 두 개에서 `psql`로** 합니다(대시보드 SQL 편집기는 문장마다 트랜잭션을 끝내므로 잠금을 붙잡아 둘 수 없습니다). 접속 문자열은 스테이징 프로젝트의 Settings → Database에서 가져오고, 문서·로그에 남기지 않습니다.
-
-```sql
--- 스테이징인지 확인: 운영 프로젝트 ref가 아니어야 합니다.
-SELECT current_database(), current_user, now();
-```
+`complete_naver_link`는 `auth.users` 행을 `FOR SHARE`로 잠그지 못하면 연결을 거절합니다(설계 5-8). 잠금에는 SELECT 권한과 **한 컬럼 이상**의 UPDATE 권한이면 충분하므로, 테이블 UPDATE 권한만 보고 판단하지 않습니다. 아래는 참고값이고, **진행 여부는 1-3의 실제 연결로 정합니다.**
 
 ```sql
--- 시험 값(가짜 해시)과 시험 계정. A, B는 0-1에서 만든 계정 id로 바꿉니다.
-\set A '00000000-0000-0000-0000-00000000000a'
-\set B '00000000-0000-0000-0000-00000000000b'
-SELECT encode(sha256('stg-secret-1'::bytea), 'hex') AS sec,
-       encode(sha256('stg-secret-2'::bytea), 'hex') AS sec2,
-       encode(sha256('stg-state-1'::bytea), 'hex')  AS st,
-       encode(sha256('stg-client-1'::bytea), 'hex') AS cli,
-       encode(sha256('stg-client-2'::bytea), 'hex') AS cli2,
-       encode(sha256('stg-naver-x'::bytea), 'hex')  AS hx
+SELECT pg_get_userbyid(p.proowner) AS owner
+  FROM pg_proc p
+ WHERE p.oid = 'public.complete_naver_link(uuid, text, uuid, timestamptz)'::regprocedure
 \gset
+SELECT :'owner' AS owner,
+       has_table_privilege(:'owner', 'auth.users', 'SELECT') AS can_select,
+       has_table_privilege(:'owner', 'auth.users', 'UPDATE') AS table_update,
+       has_any_column_privilege(:'owner', 'auth.users', 'UPDATE') AS any_column_update;
 ```
 
-서버가 쓰는 권한과 같게 `service_role`로 실행합니다. 세션마다 한 번:
+### 1-3. 실제 연결 (진행 여부 판정)
 
 ```sql
-SET ROLE service_role;
+\i scripts/staging/naver/cleanup.sql
+BEGIN; SET LOCAL ROLE service_role;
+SELECT naver_tx_start('link_session', :'s1', :'st', :'c1', :'A') AS ltx \gset
+SELECT * FROM naver_tx_callback(:'ltx', :'s1', :'st', jsonb_build_object('1', :'hx'));
+SELECT complete_naver_link(:'ltx', :'s1', :'A', now()) AS linked \gset
+COMMIT;
+\echo linked = :linked
+SELECT state FROM naver_auth_transactions WHERE id = :'ltx';
 ```
 
-`SET ROLE`이 거부되면 그 결과를 보고하고, `postgres`로 이어서 실행합니다. 그 경우 2장의 잠금 동작 확인은 유효하지만 1-3의 권한 결과는 별도로 봐야 합니다.
+| 결과                                | 판단                                                                                                                            |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `linked`가 A의 id, 상태 `completed` | 잠금·연결 정상. 다음으로                                                                                                        |
+| `linked`가 비어 있고 상태 `failed`  | A가 이메일 확인·변경 없음 상태인지 다시 본다(session.sql이 확인함). 그래도 실패면 **잠금 불가로 보고 멈춤**(1-2 값을 함께 보고) |
 
-같은 클라이언트 키(`cli`)로 10분에 20번 넘게 시작하면 `naver_tx_start`가 `NULL`을 돌려줍니다(시작 한도). 준비를 여러 번 반복하다 `NULL`이 나오면 `SELECT encode(sha256('stg-client-3'::bytea), 'hex') AS cli \gset`처럼 다른 키를 만들거나 10분 기다립니다.
+### 1-4. API 역할 권한
 
-## 1. 권한 확인
-
-### 1-1. 계정 행 잠금 권한 (가장 먼저)
-
-`complete_naver_link`는 `auth.users` 행을 `FOR SHARE`로 잠그지 못하면 연결을 거절합니다(설계 5-8). 이 권한이 없으면 B 방식으로는 재개할 수 없습니다.
-
-```sql
-RESET ROLE;
-SELECT pg_get_userbyid(proowner) AS owner
-  FROM pg_proc WHERE proname = 'complete_naver_link';
--- 'postgres' 자리에 위에서 나온 owner를 넣습니다(보통 postgres):
-SELECT has_table_privilege('postgres', 'auth.users', 'UPDATE') AS can_lock;
-SET ROLE service_role;
-```
-
-- 기대: `can_lock = true`.
-- `false`이면 여기서 멈추고 보고합니다. 연결이 모두 거절되므로 재개할 수 없고, 다른 원자적 방법을 찾아야 합니다.
-
-### 1-2. 실제 연결 한 번 (권한 확인의 대조)
+postgres로 조회합니다(역할 이름을 지정해 묻는 것이라 이 조회 자체는 유효합니다).
 
 ```sql
-SELECT naver_tx_start('link_session', :'sec', :'st', :'cli', :'A') AS tx \gset
-SELECT * FROM naver_tx_callback(:'tx', :'sec', :'st', jsonb_build_object('1', :'hx'));
-SELECT complete_naver_link(:'tx', :'sec', :'A', now());
-```
-
-- 기대: 마지막 결과가 A의 id.
-- `NULL`이고 거래 상태가 `failed`라면 잠금 권한 문제를 의심합니다. 상태는 `RESET ROLE` 뒤 `SELECT state FROM naver_auth_transactions WHERE id = :'tx';`로 봅니다.
-- 다음 시험을 위해 연결을 지웁니다: `SELECT naver_unlink(:'A');` → `true`.
-
-### 1-3. API 역할 권한
-
-```sql
-RESET ROLE;
 SELECT r.role, t.tbl,
        has_table_privilege(r.role, t.tbl, 'SELECT,INSERT,UPDATE,DELETE') AS any_table_right
   FROM (VALUES ('anon'), ('authenticated'), ('service_role')) r(role),
        (VALUES ('public.naver_hash_keys'), ('public.naver_subjects'), ('public.naver_subject_hashes'),
                ('public.naver_identity_events'), ('public.naver_auth_transactions')) t(tbl);
-SELECT has_sequence_privilege('service_role', 'public.naver_identity_events_id_seq', 'USAGE');
-SELECT f, has_function_privilege('service_role', f, 'EXECUTE')
+SELECT has_sequence_privilege('service_role', 'public.naver_identity_events_id_seq', 'USAGE') AS seq_right;
+SELECT f, has_function_privilege('service_role', f, 'EXECUTE') AS can_execute
   FROM unnest(ARRAY[
     'public._naver_active_versions()', 'public._naver_resolve(jsonb, smallint[])',
     'public._naver_lock_subjects(jsonb, uuid, boolean)',
     'public.naver_tx_start(text, text, text, text, uuid, uuid)',
     'public.complete_naver_link(uuid, text, uuid, timestamptz)',
     'public.naver_unlink(uuid)']) f;
-SELECT has_function_privilege('authenticated', 'public.my_login_methods()', 'EXECUTE');
-SET ROLE service_role;
+SELECT has_function_privilege('authenticated', 'public.my_login_methods()', 'EXECUTE') AS members_read;
 ```
 
 기대:
 
-- 표 권한은 15줄 모두 `false`이고, 시퀀스 권한도 `false`입니다.
-- 함수 실행 권한은 `_naver_*` 내부 함수 3개가 `false`, 나머지는 `true`입니다.
-- `my_login_methods`는 `true`입니다.
+- 표 권한은 15줄 모두 `false`이고, `seq_right`도 `false`입니다.
+- `_naver_*` 3개는 `false`, 나머지 3개는 `true`입니다.
+- `members_read`는 `true`입니다.
+
+실제 역할로도 한 번 확인합니다(거절되어야 정상).
+
+```sql
+BEGIN; SET LOCAL ROLE service_role; SELECT count(*) FROM naver_subjects; ROLLBACK;
+```
+
+`permission denied`가 나오면 정상입니다. 오류 뒤에는 `ROLLBACK;`이 이미 실행된 상태인지 확인합니다.
 
 ## 2. 동시 실행 시험
 
-각 시험은 **세션 1**과 **세션 2**를 번갈아 실행합니다. 공통 기대는 다음과 같습니다.
+공통:
 
-- `deadlock detected` 오류가 한 번도 나오지 않습니다.
-- 기다리는 쪽은 상대가 `COMMIT`할 때까지 멈춰 있다가 이어서 끝납니다.
-
-### 시험용 연결·로그인 만들기 (각 시험 전, 세션 1)
-
-```sql
--- X를 A에 연결
-SELECT naver_tx_start('link_session', :'sec', :'st', :'cli', :'A') AS ltx \gset
-SELECT * FROM naver_tx_callback(:'ltx', :'sec', :'st', jsonb_build_object('1', :'hx'));
-SELECT complete_naver_link(:'ltx', :'sec', :'A', now());            -- A
--- X로 로그인 거래를 A까지 해석
-SELECT naver_tx_start('login', :'sec', :'st', :'cli') AS tx \gset
-SELECT * FROM naver_tx_callback(:'tx', :'sec', :'st', jsonb_build_object('1', :'hx'));  -- target A
-```
-
-세션 2에서도 같은 `\set`·`\gset` 값을 쓰려면 `\set tx '<세션 1에서 나온 id>'`처럼 거래 id를 옮겨 적습니다.
+- 각 시험은 **세션 1**과 **세션 2**를 표 순서대로 번갈아 실행합니다.
+- `deadlock detected` 오류가 한 번도 나오지 않아야 합니다.
+- "멈춤"은 상대가 커밋하면 이어서 끝나야 합니다. 2분이 넘어 `lock timeout`이 나면 그 세션에서 `ROLLBACK;` 후 시험을 처음부터 다시 합니다.
+- 각 시험 시작 전 세션 1에서 `\i scripts/staging/naver/cleanup.sql`.
 
 ### 2-1. 로그인 완료가 먼저 잠근 경우 → 해제는 기다림
 
-| 순서 | 세션 1                                                          | 세션 2                                  |
-| ---- | --------------------------------------------------------------- | --------------------------------------- |
-| 1    | `BEGIN; SET LOCAL ROLE service_role;`                           |                                         |
-| 2    | `SELECT naver_tx_complete_login(:'tx', :'sec', :'A');` → `true` |                                         |
-| 3    |                                                                 | `SELECT naver_unlink(:'A');` → **멈춤** |
-| 4    | `COMMIT;`                                                       | → `true`                                |
-| 5    | `SELECT naver_tx_still_linked(:'tx', :'sec', :'A');` → `false`  |                                         |
+준비(세션 1): X를 A에 연결하고, X 로그인 거래를 A까지 해석합니다.
 
-마지막 줄은 "완료 뒤 해제되면 앱이 새 세션을 로그아웃한다"는 경로의 근거입니다.
+```sql
+\i scripts/staging/naver/cleanup.sql
+BEGIN; SET LOCAL ROLE service_role;
+SELECT naver_tx_start('link_session', :'s1', :'st', :'c1', :'A') AS ltx \gset
+SELECT * FROM naver_tx_callback(:'ltx', :'s1', :'st', jsonb_build_object('1', :'hx'));
+SELECT complete_naver_link(:'ltx', :'s1', :'A', now());
+SELECT naver_tx_start('login', :'s2', :'st', :'c2') AS tx \gset
+SELECT target_user_id FROM naver_tx_callback(:'tx', :'s2', :'st', jsonb_build_object('1', :'hx'));
+COMMIT;
+```
+
+| 순서 | 세션 1                                                                                                | 세션 2                                                                      |
+| ---- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| 1    | `BEGIN; SET LOCAL ROLE service_role;`                                                                 |                                                                             |
+| 2    | `SELECT naver_tx_complete_login(:'tx', :'s2', :'A');` → `t`                                           |                                                                             |
+| 3    |                                                                                                       | `BEGIN; SET LOCAL ROLE service_role; SELECT naver_unlink(:'A');` → **멈춤** |
+| 4    | `COMMIT;`                                                                                             | → `t`                                                                       |
+| 5    |                                                                                                       | `COMMIT;`                                                                   |
+| 6    | `BEGIN; SET LOCAL ROLE service_role; SELECT naver_tx_still_linked(:'tx', :'s2', :'A'); COMMIT;` → `f` |                                                                             |
+
+6번은 "완료 뒤 해제되면 앱이 새 세션을 로그아웃한다"는 경로의 근거입니다.
 
 ### 2-2. 해제가 먼저 잠근 경우 → 로그인 완료는 기다렸다가 거절
 
-연결·로그인을 다시 만든 뒤:
+준비는 2-1과 같습니다(cleanup부터 다시).
 
-| 순서 | 세션 1                                                            | 세션 2                                |
-| ---- | ----------------------------------------------------------------- | ------------------------------------- |
-| 1    |                                                                   | `BEGIN; SET LOCAL ROLE service_role;` |
-| 2    |                                                                   | `SELECT naver_unlink(:'A');` → `true` |
-| 3    | `SELECT naver_tx_complete_login(:'tx', :'sec', :'A');` → **멈춤** |                                       |
-| 4    |                                                                   | `COMMIT;`                             |
-| 5    | → `false`                                                         |                                       |
-
-확인: `RESET ROLE; SELECT state FROM naver_auth_transactions WHERE id = :'tx';` → `failed`.
+| 순서 | 세션 1                                                                                               | 세션 2                                                                 |
+| ---- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| 1    |                                                                                                      | `BEGIN; SET LOCAL ROLE service_role; SELECT naver_unlink(:'A');` → `t` |
+| 2    | `BEGIN; SET LOCAL ROLE service_role; SELECT naver_tx_complete_login(:'tx', :'s2', :'A');` → **멈춤** |                                                                        |
+| 3    |                                                                                                      | `COMMIT;`                                                              |
+| 4    | → `f`                                                                                                |                                                                        |
+| 5    | `COMMIT;`                                                                                            |                                                                        |
+| 6    | `SELECT state FROM naver_auth_transactions WHERE id = :'tx';` → `failed`                             |                                                                        |
 
 ### 2-3. 같은 네이버 ID를 두 계정에 동시에 연결 → 하나만 성공
 
-연결이 없는 상태에서 거래 두 개를 만듭니다.
+준비(세션 1): cleanup 뒤 연결 없이 거래 두 개를 만듭니다.
 
 ```sql
-SELECT naver_tx_start('link_session', :'sec', :'st', :'cli', :'A') AS ta \gset
-SELECT * FROM naver_tx_callback(:'ta', :'sec', :'st', jsonb_build_object('1', :'hx'));
-SELECT naver_tx_start('link_session', :'sec2', :'st', :'cli2', :'B') AS tb \gset
-SELECT * FROM naver_tx_callback(:'tb', :'sec2', :'st', jsonb_build_object('1', :'hx'));
+\i scripts/staging/naver/cleanup.sql
+SELECT count(*) AS x_links FROM naver_subject_hashes WHERE hash = :'hx';   -- 0이어야 함
+BEGIN; SET LOCAL ROLE service_role;
+SELECT naver_tx_start('link_session', :'s3', :'st', :'c3', :'A') AS ta \gset
+SELECT * FROM naver_tx_callback(:'ta', :'s3', :'st', jsonb_build_object('1', :'hx'));
+SELECT naver_tx_start('link_session', :'s4', :'st', :'c4', :'B') AS tb \gset
+SELECT * FROM naver_tx_callback(:'tb', :'s4', :'st', jsonb_build_object('1', :'hx'));
+COMMIT;
 ```
 
-| 순서 | 세션 1                                                        | 세션 2                                                                |
-| ---- | ------------------------------------------------------------- | --------------------------------------------------------------------- |
-| 1    | `BEGIN; SET LOCAL ROLE service_role;`                         |                                                                       |
-| 2    | `SELECT complete_naver_link(:'ta', :'sec', :'A', now());` → A |                                                                       |
-| 3    |                                                               | `SELECT complete_naver_link(:'tb', :'sec2', :'B', now());` → **멈춤** |
-| 4    | `COMMIT;`                                                     | → `NULL`                                                              |
-
-확인: `naver_subjects`에 A 한 행만 있고, `tb`는 `failed`입니다.
-
-### 2-4. 전체 시작 한도(1분 600건)가 서로 다른 주소에서도 정확함
+세션 2는 B의 거래 id를 조회해 받습니다(postgres로):
 
 ```sql
-RESET ROLE;
-DELETE FROM naver_auth_transactions;   -- 스테이징 시험 데이터만
+SELECT id AS tb FROM naver_auth_transactions WHERE browser_secret_hash = :'s4' AND oauth_state_hash = :'st' \gset
+```
+
+| 순서 | 세션 1                                                                                                                    | 세션 2                                                                                                  |
+| ---- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 1    | `BEGIN; SET LOCAL ROLE service_role; SELECT complete_naver_link(:'ta', :'s3', :'A', now());` → A                          |                                                                                                         |
+| 2    |                                                                                                                           | `BEGIN; SET LOCAL ROLE service_role; SELECT complete_naver_link(:'tb', :'s4', :'B', now());` → **멈춤** |
+| 3    | `COMMIT;`                                                                                                                 | → 빈 값(NULL)                                                                                           |
+| 4    |                                                                                                                           | `COMMIT;`                                                                                               |
+| 5    | `SELECT user_id FROM naver_subjects s JOIN naver_subject_hashes h ON h.subject_id = s.id WHERE h.hash = :'hx';` → A 한 행 |                                                                                                         |
+
+### 2-4. 전체 시작 한도(1분 600건)가 서로 다른 클라이언트에서도 정확함
+
+- 이 시험은 스테이징 전체의 로그인 시작을 1분 동안 막으므로, 다른 사람이 스테이징을 쓰지 않을 때 합니다.
+- 1분 시간창 안에 끝내야 합니다. 그래서 준비 직후 세션 1의 1번까지 바로 이어서 실행합니다.
+
+준비(세션 1, postgres):
+
+```sql
+\i scripts/staging/naver/cleanup.sql
+SELECT count(*) AS others FROM naver_auth_transactions WHERE created_at > now() - interval '1 minute';  -- 0이어야 함
 INSERT INTO naver_auth_transactions (purpose, browser_secret_hash, oauth_state_hash, expires_at)
-SELECT 'login', :'sec', :'st', now() + interval '30 minutes' FROM generate_series(1, 599);
-SET ROLE service_role;
+SELECT 'login', :'s5', :'st', now() + interval '30 minutes' FROM generate_series(1, 599);
 ```
 
-| 순서 | 세션 1                                                                 | 세션 2                                                                |
-| ---- | ---------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| 1    | `BEGIN; SET LOCAL ROLE service_role;`                                  |                                                                       |
-| 2    | `SELECT naver_tx_start('login', :'sec', :'st', :'cli');` → id(600번째) |                                                                       |
-| 3    |                                                                        | `SELECT naver_tx_start('login', :'sec2', :'st', :'cli2');` → **멈춤** |
-| 4    | `COMMIT;`                                                              | → `NULL`                                                              |
+| 순서 | 세션 1                                                                                                   | 세션 2                                                                                                |
+| ---- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 1    | `BEGIN; SET LOCAL ROLE service_role; SELECT naver_tx_start('login', :'s5', :'st', :'c5');` → id(600번째) |                                                                                                       |
+| 2    |                                                                                                          | `BEGIN; SET LOCAL ROLE service_role; SELECT naver_tx_start('login', :'s6', :'st', :'c6');` → **멈춤** |
+| 3    | `COMMIT;`                                                                                                | → 빈 값(NULL)                                                                                         |
+| 4    |                                                                                                          | `COMMIT;`                                                                                             |
+| 5    | `SELECT count(*) FROM naver_auth_transactions WHERE oauth_state_hash = :'st';` → 600                     |                                                                                                       |
+| 6    | `\i scripts/staging/naver/cleanup.sql`                                                                   |                                                                                                       |
 
-확인: `SELECT count(*) FROM naver_auth_transactions WHERE created_at > now() - interval '1 minute';` → 600. 시험 후 `DELETE FROM naver_auth_transactions;`.
+3번에서 id가 나왔다면 준비에서 1분이 지난 것입니다(시간창이 지나 599건이 빠짐). 6번 정리 후 다시 합니다.
 
 ### 2-5. 키 회전은 진행 중인 처리를 기다리고, 이후 처리는 새 키를 요구함
 
-| 순서 | 세션 1                                                               | 세션 2                                                                                                                                             |
-| ---- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | `BEGIN; SET LOCAL ROLE service_role;`                                |                                                                                                                                                    |
-| 2    | 새 로그인 거래로 `SELECT * FROM naver_tx_callback(...);`             |                                                                                                                                                    |
-| 3    |                                                                      | `RESET ROLE; BEGIN; LOCK TABLE public.naver_hash_keys IN SHARE ROW EXCLUSIVE MODE;` → **멈춤** (`service_role`은 키 표 권한이 없으므로 postgres로) |
-| 4    | `COMMIT;`                                                            | → 잠금 획득                                                                                                                                        |
-| 5    |                                                                      | `INSERT INTO naver_hash_keys VALUES (2, 'active', now(), NULL); COMMIT;`                                                                           |
-| 6    | V1 해시만으로 새 거래 `naver_tx_callback` → 결과 없음, 거래 `failed` |                                                                                                                                                    |
+준비(세션 1):
 
-시험 후 V2 행을 지웁니다. 운영 키 회전은 별도 승인 절차를 따릅니다.
+```sql
+\i scripts/staging/naver/cleanup.sql
+SELECT count(*) AS v2 FROM naver_hash_keys WHERE version = 2;   -- 0이어야 함
+BEGIN; SET LOCAL ROLE service_role;
+SELECT naver_tx_start('login', :'s1', :'st', :'c1') AS k1 \gset
+SELECT naver_tx_start('login', :'s2', :'st', :'c2') AS k2 \gset
+COMMIT;
+```
+
+| 순서 | 세션 1                                                                                                                                                          | 세션 2 (postgres)                                                                    |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| 1    | `BEGIN; SET LOCAL ROLE service_role; SELECT * FROM naver_tx_callback(:'k1', :'s1', :'st', jsonb_build_object('1', :'hx'));` → 한 행(연결 없음이라 target 빈 값) |                                                                                      |
+| 2    |                                                                                                                                                                 | `BEGIN; LOCK TABLE public.naver_hash_keys IN SHARE ROW EXCLUSIVE MODE;` → **멈춤**   |
+| 3    | `COMMIT;`                                                                                                                                                       | → 잠금 획득                                                                          |
+| 4    |                                                                                                                                                                 | `INSERT INTO public.naver_hash_keys (version, status) VALUES (2, 'active'); COMMIT;` |
+| 5    | `BEGIN; SET LOCAL ROLE service_role; SELECT * FROM naver_tx_callback(:'k2', :'s2', :'st', jsonb_build_object('1', :'hx')); COMMIT;` → 결과 없음                 |                                                                                      |
+| 6    | `SELECT state FROM naver_auth_transactions WHERE id = :'k2';` → `failed`                                                                                        |                                                                                      |
+
+V2 키 제거(세션 1, postgres). V2 해시가 없어야 지울 수 있습니다.
+
+```sql
+SELECT count(*) AS v2_hashes FROM naver_subject_hashes WHERE key_version = 2;   -- 0이어야 함
+BEGIN;
+LOCK TABLE public.naver_hash_keys IN SHARE ROW EXCLUSIVE MODE;
+DELETE FROM public.naver_hash_keys WHERE version = 2;
+COMMIT;
+\i scripts/staging/naver/cleanup.sql
+```
+
+운영 키 회전은 별도 승인 절차를 따릅니다.
 
 ## 3. 앱 흐름 확인
 
-스테이징 DB를 가리키는 앱(로컬 `next start` + 스테이징 환경값, 또는 스테이징 전용 배포)에서 합니다.
+스테이징 DB를 가리키는 앱에서 합니다(로컬 `next start` + 스테이징 환경값, 또는 스테이징 전용 배포).
 
 1. 환경값을 설정합니다.
    - `NAVER_LOGIN_ENABLED=true`, `NEXT_PUBLIC_NAVER_LOGIN_ENABLED=true`
@@ -232,8 +296,9 @@ SET ROLE service_role;
 | 연결 안 된 네이버 계정으로 로그인                      | "연결된 PosterLink 계정이 없습니다" 안내, 로그인 안 됨           |
 | 로그인 11분 뒤 연결·해제 시도                          | "다시 로그인한 다음 10분 안에" 안내                              |
 | 연결 해제 → 같은 네이버로 로그인                       | 연결 없음 안내                                                   |
-| 같은 주소에서 시작 요청 21번(아래 명령)                | 21번째는 `/login?error=naver_busy`로 이동, 거래 20건             |
 | 앱(WebView)에서 위 연결·로그인                         | 웹과 같음, 앱으로 세션 전달                                      |
+
+시작 한도(같은 주소 10분 20건)는 위 시험을 마친 뒤 **10분 기다렸다가** 확인합니다. 앞선 시험의 시작도 같은 주소로 세어지기 때문입니다.
 
 ```bash
 for i in $(seq 1 21); do
@@ -242,8 +307,18 @@ for i in $(seq 1 21); do
 done
 ```
 
-## 4. 정리와 보고
+기대: 1~20번은 네이버 주소, 21번째는 `/login?error=naver_busy`. 앱 화면 시험과 curl로 생긴 거래는 이번 실행의 `:st`가 아니므로 cleanup.sql로 지워지지 않습니다. 30분 뒤 만료되고 `naver_purge_transactions()`가 정리합니다.
 
-- 시험 데이터를 지웁니다: `DELETE FROM naver_auth_transactions; DELETE FROM naver_subjects; DELETE FROM naver_identity_events;`(postgres로, 스테이징에서만).
-- 보고에 넣을 것: 1-1 결과(`can_lock`), 1-3 권한 표, 2-1~2-5 각 결과와 `deadlock detected` 발생 여부, 3의 표.
-- 1-1이 `false`이거나 2장에서 교착이 나오면 운영 재개 절차로 넘어가지 않습니다.
+## 4. 보고
+
+- **1-2:** `owner`, `can_select`, `table_update`, `any_column_update` 값
+- **1-3:** `linked`와 상태
+- **1-4:** 권한 결과와 실제 역할 거절 여부
+- **2-1~2-5:** 각 결과, `deadlock detected`·`lock timeout` 발생 여부, 두 세션의 `backend` 번호
+- **3:** 확인 표 결과
+- 1-3이 실패하거나 2장에서 교착이 나오면 운영 재개 절차로 넘어가지 않습니다.
+- 마지막으로 `\i scripts/staging/naver/cleanup.sql`.
+
+## 이 문서의 한계
+
+session.sql·cleanup.sql과 위 명령은 로컬에 psql·Postgres가 없어 **실행해 보지 못했습니다**(문법 확인 포함). 첫 실행에서 psql 오류가 나면 그 줄을 보고해 주세요. SQL 함수 동작은 PGlite 테스트로 확인돼 있습니다.
