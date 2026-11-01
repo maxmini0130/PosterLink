@@ -2,6 +2,7 @@
 
 import type { PlPosterCardData } from "../components/pl/PosterListCard";
 import type { HomeItem } from "../../lib/homeSections";
+import type { RegionNode } from "../../lib/searchGroups";
 import { readGuestInterest } from "../../lib/guestInterest";
 import { readGuestFavorites } from "../../lib/guestStore";
 import { PUBLIC_POSTER_EXPOSURE_FILTER } from "../../lib/publicPosterVisibility";
@@ -21,10 +22,16 @@ export type HomeData = {
   signedIn: boolean;
   interest: HomeInterest;
   interestItems: HomeItem<PlPosterCardData>[];
+  /** Open posters for the other districts of the chosen 시·도. */
+  nearbyItems: HomeItem<PlPosterCardData>[];
   latestItems: HomeItem<PlPosterCardData>[];
   favoriteItems: HomeItem<PlPosterCardData>[];
   followedItems: HomeItem<PlPosterCardData>[];
   institutions: Array<{ id: string; name: string; slug: string }>;
+  /** The region tree, for grouping by region scope. */
+  regions: RegionNode[];
+  /** Interest category id -> the category ids it covers (for the chips). */
+  categoryScopes: Record<string, string[]>;
 };
 
 const SELECT =
@@ -58,13 +65,22 @@ const time = (value: string | null) => {
 async function toItems(rows: Row[]): Promise<HomeItem<PlPosterCardData>[]> {
   const meta = (await fetchCategoryRegionNames(rows.map((row) => row.id)).catch(
     () => ({}),
-  )) as Record<string, { categoryName?: string | null }>;
+  )) as Record<
+    string,
+    {
+      categoryName?: string | null;
+      categoryIds?: string[];
+      regionIds?: string[];
+    }
+  >;
   return rows.map((row) => ({
     id: row.id,
     publishedAt: time(row.published_at) ?? time(row.created_at),
     institutionIds: [row.source_institution_id, row.organizer_id].filter(
       (id): id is string => Boolean(id),
     ),
+    regionIds: meta[row.id]?.regionIds ?? [],
+    categoryIds: meta[row.id]?.categoryIds ?? [],
     application: {
       applicationStartAt: row.application_start_at,
       applicationEndAt: row.application_end_at,
@@ -92,18 +108,28 @@ async function toItems(rows: Row[]): Promise<HomeItem<PlPosterCardData>[]> {
 }
 
 const LATEST_LIMIT = 24;
+const NEARBY_LIMIT = 60;
 
-/**
- * The regions searched for a chosen region, the same scope as 공고 찾기:
- * the region, the districts inside it and the areas above it (시·도, 전국).
- */
-async function loadRegionScope(regionId: string): Promise<string[]> {
-  const { data, error } = await supabase
-    .from("regions")
-    .select("id, level, parent_id");
-  if (error) throw new Error("regions");
-  const scope = getRegionScopeIds(regionId, data ?? []);
-  return scope ? Array.from(scope) : [regionId];
+type TaxonomyRows = {
+  regions: RegionNode[];
+  categories: Array<{
+    id: string;
+    code: string | null;
+    parent_id: string | null;
+  }>;
+};
+
+/** The region tree and the category list, read once per home load. */
+async function loadTaxonomy(): Promise<TaxonomyRows> {
+  const [regions, categories] = await Promise.all([
+    supabase.from("regions").select("id, name, level, parent_id"),
+    supabase.from("categories").select("id, code, parent_id"),
+  ]);
+  if (regions.error || categories.error) throw new Error("taxonomy");
+  return {
+    regions: (regions.data ?? []) as RegionNode[],
+    categories: (categories.data ?? []) as TaxonomyRows["categories"],
+  };
 }
 
 function searchOpen(
@@ -124,28 +150,33 @@ function searchOpen(
     .returns<Record<string, unknown>[]>();
 }
 
-/**
- * Each chosen category with the content types folded into it (교육/취업 also
- * finds 교육강좌 and 채용), so a main category is not limited to the few
- * posters tagged with it directly.
- */
-async function loadCategoryScope(categoryIds: string[]): Promise<string[]> {
-  if (categoryIds.length === 0) return [];
-  const { data, error } = await supabase
-    .from("categories")
-    .select("id, code, parent_id");
-  if (error) throw new Error("categories");
-  return Array.from(
-    new Set(categoryIds.flatMap((id) => categoryScopeIds(id, data ?? []))),
-  );
+function uniqueRows(results: Array<{ data: unknown }>) {
+  const seen = new Set<string>();
+  return results
+    .flatMap((result) => (result.data ?? []) as Row[])
+    .filter((row) => (seen.has(row.id) ? false : (seen.add(row.id), true)));
 }
 
-/** Open public posters for the interest conditions. */
-async function loadInterestRows(interest: HomeInterest): Promise<Row[]> {
-  const [regionIds, categoryIds] = await Promise.all([
-    interest.region ? loadRegionScope(interest.region.id) : null,
-    loadCategoryScope(interest.categories.map((category) => category.id)),
-  ]);
+/**
+ * Open public posters for the interest conditions. The region scope is the
+ * same as 공고 찾기 (the region, its districts and the areas above it); each
+ * category also covers the content types folded into it (교육/취업 ->
+ * 교육강좌, 채용), so a main category is not limited to the few posters
+ * tagged with it directly.
+ */
+async function loadInterestRows(
+  interest: HomeInterest,
+  taxonomy: TaxonomyRows,
+  categoryIds: string[],
+): Promise<Row[]> {
+  const scope = interest.region
+    ? getRegionScopeIds(interest.region.id, taxonomy.regions)
+    : null;
+  const regionIds = interest.region
+    ? scope
+      ? Array.from(scope)
+      : [interest.region.id]
+    : null;
   const results = await Promise.all(
     (categoryIds.length ? categoryIds : [null]).map((categoryId) =>
       searchOpen(categoryId, regionIds, 60),
@@ -153,10 +184,32 @@ async function loadInterestRows(interest: HomeInterest): Promise<Row[]> {
   );
   if (results.some((result) => result.error))
     throw new Error("interest posters");
-  const seen = new Set<string>();
-  return results
-    .flatMap((result) => (result.data ?? []) as unknown as Row[])
-    .filter((row) => (seen.has(row.id) ? false : (seen.add(row.id), true)));
+  return uniqueRows(results);
+}
+
+/**
+ * Open posters for the other districts of the chosen district's 시·도, in the
+ * chosen categories. Kept apart from "my area" and never described as
+ * open to people living in the chosen district.
+ */
+async function loadNearbyRows(
+  interest: HomeInterest,
+  taxonomy: TaxonomyRows,
+): Promise<Row[]> {
+  const chosen = taxonomy.regions.find(
+    (region) => region.id === interest.region?.id,
+  );
+  if (!chosen || chosen.level !== "sigungu" || !chosen.parent_id) return [];
+  const siblings = taxonomy.regions
+    .filter(
+      (region) =>
+        region.parent_id === chosen.parent_id && region.id !== chosen.id,
+    )
+    .map((region) => region.id);
+  if (siblings.length === 0) return [];
+  const result = await searchOpen(null, siblings, NEARBY_LIMIT);
+  if (result.error) throw new Error("nearby posters");
+  return uniqueRows([result]);
 }
 
 /** Newest open posters with no conditions, for "최근 올라온 공고". */
@@ -312,37 +365,61 @@ async function loadGuestInterest(): Promise<HomeInterest> {
 export async function loadHomeData(): Promise<HomeData> {
   const userId =
     (await supabase.auth.getSession()).data.session?.user.id ?? null;
-  const setup = userId
-    ? await loadMemberSetup(userId)
-    : {
-        interest: await loadGuestInterest(),
-        favoriteIds: readGuestFavorites(guestLocal).map(
-          (item) => item.posterId,
-        ),
-        institutions: [] as Array<{ id: string; name: string; slug: string }>,
-      };
+  const [setup, taxonomy] = await Promise.all([
+    userId
+      ? loadMemberSetup(userId)
+      : loadGuestInterest().then((interest) => ({
+          interest,
+          favoriteIds: readGuestFavorites(guestLocal).map(
+            (item) => item.posterId,
+          ),
+          institutions: [] as Array<{ id: string; name: string; slug: string }>,
+        })),
+    loadTaxonomy(),
+  ]);
+  const categoryScopes = Object.fromEntries(
+    setup.interest.categories.map((category) => [
+      category.id,
+      categoryScopeIds(category.id, taxonomy.categories),
+    ]),
+  );
+  const searchedCategoryIds = Array.from(
+    new Set(Object.values(categoryScopes).flat()),
+  );
   const institutionIds = setup.institutions.map((item) => item.id);
-  const [interestRows, latestRows, favoriteRows, followedRows] =
+  const [interestRows, nearbyRows, latestRows, favoriteRows, followedRows] =
     await Promise.all([
-      loadInterestRows(setup.interest),
+      loadInterestRows(setup.interest, taxonomy, searchedCategoryIds),
+      loadNearbyRows(setup.interest, taxonomy),
       loadLatestRows(),
       loadRowsByIds(setup.favoriteIds),
       loadFollowedRows(institutionIds),
     ]);
-  const [interestItems, latestItems, favoriteItems, followedItems] =
+  const [interestItems, nearbyAll, latestItems, favoriteItems, followedItems] =
     await Promise.all([
       toItems(interestRows),
+      toItems(nearbyRows),
       toItems(latestRows),
       toItems(favoriteRows),
       toItems(followedRows),
     ]);
+  // Nearby posters were searched without a category; keep the chosen ones.
+  const searched = new Set(searchedCategoryIds);
+  const nearbyItems = searched.size
+    ? nearbyAll.filter((item) =>
+        (item.categoryIds ?? []).some((id) => searched.has(id)),
+      )
+    : nearbyAll;
   return {
     signedIn: Boolean(userId),
     interest: setup.interest,
     interestItems,
+    nearbyItems,
     latestItems,
     favoriteItems,
     followedItems,
     institutions: setup.institutions,
+    regions: taxonomy.regions,
+    categoryScopes,
   };
 }

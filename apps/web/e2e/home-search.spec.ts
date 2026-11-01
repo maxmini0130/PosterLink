@@ -291,19 +291,33 @@ const visitDate = (time: number) => {
   return `${parts.month}월 ${parts.day}일(${parts.weekday}) 방문 이후`;
 };
 
-test("home ⑥ first visit: open posters and the 찜 guide, no 'since' line", async ({
+test("home ⑥ first visit: open posters first, a one-line condition prompt, no 'since' line", async ({
   page,
 }) => {
   await open(page, "/", 390);
-  const first = page.getByRole("region", { name: "지금 접수 중인 공고" });
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "지금 접수 중인 공고",
+  );
+  const first = page.getByRole("region", { name: "접수 중인 공고" });
   await expect(first.getByRole("heading", { level: 3 })).toHaveText([
     SOON.title as string,
     ONGOING.title as string,
     OLDER.title as string,
   ]);
+  // Screen plan 03·04: no large guide boxes above the posters.
   await expect(
-    page.getByText("찜해 두면 다음에 모아 보여드려요"),
+    page.getByText("관심 지역·분야를 고르면 맞는 공고를 먼저 보여드려요."),
   ).toBeVisible();
+  await expect(page.getByText("찜해 두면 다음에 모아 보여드려요")).toHaveCount(
+    0,
+  );
+  // Two cards per row on a phone.
+  const boxes = await first
+    .getByRole("listitem")
+    .evaluateAll((items) =>
+      items.slice(0, 2).map((item) => item.getBoundingClientRect().top),
+    );
+  expect(boxes[0]).toBe(boxes[1]);
   await expect(page.getByText("방문 이후")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "포스터 제보" })).toBeVisible();
   // The first visit is remembered without a baseline.
@@ -326,22 +340,25 @@ test("home ⑦ new posters since the last visit, kept across a reload", async ({
     guestFavorites: [SOON.id as string],
   });
   await expect(page.getByText(visitDate(last))).toBeVisible();
-  await expect(page.getByText("새로 올라온 공고 2건")).toBeVisible();
+  const title = page.getByRole("heading", { level: 1 });
+  await expect(title).toHaveText("지난 방문 이후 새 공고 2건");
+  const fresh = page.getByRole("region", { name: "새로 올라온 공고" });
+  await expect(fresh.getByRole("heading", { level: 3 })).toHaveText([
+    SOON.title as string,
+    ONGOING.title as string,
+  ]);
+  await expect(fresh.getByText("찜")).toBeVisible();
+  // The 찜 poster closing soon is already in the grid: not repeated aside.
   await expect(
-    page
-      .getByRole("region", { name: "새로 올라온 공고" })
-      .getByRole("heading", { level: 3 }),
-  ).toHaveText([SOON.title as string, ONGOING.title as string]);
-  const rail = page.getByRole("list", { name: "7일 안에 마감" });
-  await expect(rail.getByRole("link")).toHaveCount(1);
-  await expect(rail.getByText("찜")).toBeVisible();
+    page.getByRole("heading", { name: "7일 이내 마감" }),
+  ).toHaveCount(0);
   // Same visit: a reload shows the same baseline and list.
   await page.reload({ waitUntil: "networkidle" });
   await expect(page.getByText(visitDate(last))).toBeVisible();
-  await expect(page.getByText("새로 올라온 공고 2건")).toBeVisible();
+  await expect(title).toHaveText("지난 방문 이후 새 공고 2건");
 });
 
-test("home ⑧ return visit with nothing new: 7-day deadlines and one guide card", async ({
+test("home ⑧ return visit with nothing new: open posters and one line about institutions", async ({
   page,
 }) => {
   const last = NOW - 40 * 60 * 1000;
@@ -355,11 +372,15 @@ test("home ⑧ return visit with nothing new: 7-day deadlines and one guide card
   await expect(
     page.getByText(`${visitDate(last)} 새 공고는 아직 없어요`),
   ).toBeVisible();
-  const closing = page.getByRole("region", { name: "7일 안에 마감되는 공고" });
-  await expect(closing.getByRole("heading", { level: 3 })).toHaveText([
+  const openList = page.getByRole("region", { name: "접수 중인 공고" });
+  await expect(openList.getByRole("heading", { level: 3 })).toHaveText([
     SOON.title as string,
+    ONGOING.title as string,
+    OLDER.title as string,
   ]);
-  await expect(page.getByText("자주 보는 기관을 구독해 보세요")).toBeVisible();
+  await expect(
+    page.getByText("관심 기관을 구독하면 새 공고를 여기에 모아 보여드려요."),
+  ).toBeVisible();
   await expect(page.getByText("새로 올라온")).toHaveCount(0);
 });
 
@@ -376,10 +397,14 @@ test("member home on PC: conditions, 2 columns, follows, started 찜, server vis
     },
   });
   await expect(page.getByText(visitDate(last))).toBeVisible();
-  await expect(page.getByText("새로 올라온 관심 공고 2건")).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: /마포구 · 문화\/행사 · 교육\/취업/ }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "지난 방문 이후 새 관심 공고 2건",
+  );
+  await expect(page.getByText("마포구 · 문화/행사 · 교육/취업")).toBeVisible();
+  await expect(page.getByRole("link", { name: "조건 변경" })).toHaveAttribute(
+    "href",
+    "/mypage/edit",
+  );
   const aside = page.getByRole("complementary", { name: "마감과 구독 소식" });
   await expect(aside.getByText("마포문화재단")).toBeVisible();
   await expect(aside.getByText(FOLLOWED.title as string)).toBeVisible();

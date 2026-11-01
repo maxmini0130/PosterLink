@@ -257,10 +257,11 @@ test("⑤ opening the home directly for the first time asks for conditions first
 
   await page.getByRole("button", { name: "마포구 공고 보기" }).click();
   await expect(page).toHaveURL(/\/$/);
-  const button = page.locator("header").getByRole("link", {
-    name: /마포구 · 관심 분야 2/,
-  });
-  await expect(button).toHaveAttribute("href", "/interests");
+  await expect(page.getByText("마포구 · 관심 분야 2")).toBeVisible();
+  await expect(page.getByRole("link", { name: "조건 변경" })).toHaveAttribute(
+    "href",
+    "/interests",
+  );
   // The home asks in each chosen category with the same region scope as
   // 공고 찾기 (마포구 and 서울), plus the newest posters with no condition.
   await expect
@@ -274,8 +275,11 @@ test("⑤ opening the home directly for the first time asks for conditions first
         [null, null],
       ]),
     );
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "마포구의 새로운 기회",
+  );
   await expect(
-    page.getByRole("region", { name: "지금 접수 중인 관심 공고" }),
+    page.getByRole("region", { name: "마포구 접수 중 관심 공고" }),
   ).toBeVisible();
   expect(await stored(page, "pl.guest_interest.v1")).toMatchObject({
     v: 1,
@@ -296,10 +300,13 @@ test("⑤ 건너뛰기 goes home, and the picker never opens by itself again", a
   await expect(page).toHaveURL(/\/interests$/);
   await page.getByRole("button", { name: "건너뛰기" }).click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByText("관심 지역·분야를 골라 보세요")).toBeVisible();
   await expect(
-    page.locator("header").getByRole("link", { name: "관심 조건 정하기" }),
-  ).toHaveAttribute("href", "/interests");
+    page.getByText("관심 지역·분야를 고르면 맞는 공고를 먼저 보여드려요."),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "조건 고르기" })).toHaveAttribute(
+    "href",
+    "/interests",
+  );
   expect(await stored(page, "pl.guest_interest.v1")).toBeNull();
   await page.reload({ waitUntil: "networkidle" });
   await expect(page).toHaveURL(/\/$/);
@@ -315,7 +322,9 @@ test("⑤ a search result or shared link is shown first; the home only suggests"
     referer: "https://search.example/",
   });
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByText("관심 지역·분야를 골라 보세요")).toBeVisible();
+  await expect(
+    page.getByText("관심 지역·분야를 고르면 맞는 공고를 먼저 보여드려요."),
+  ).toBeVisible();
 
   // A new tab opened on a shared poster, then the home from the tab bar.
   const shared = await page.context().newPage();
@@ -326,8 +335,10 @@ test("⑤ a search result or shared link is shown first; the home only suggests"
     .getByRole("link", { name: "홈" })
     .click();
   await expect(shared).toHaveURL(/\/$/);
-  await expect(shared.getByText("관심 지역·분야를 골라 보세요")).toBeVisible();
-  await shared.getByRole("link", { name: "관심 조건 고르기" }).click();
+  await expect(
+    shared.getByText("관심 지역·분야를 고르면 맞는 공고를 먼저 보여드려요."),
+  ).toBeVisible();
+  await shared.getByRole("link", { name: "조건 고르기" }).click();
   await expect(shared).toHaveURL(/\/interests$/);
 });
 
@@ -400,7 +411,9 @@ test("full flow on a phone: guest 찜 → later → 내 공고 → sign-in → m
     .getByRole("link", { name: "홈" })
     .click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByText("새로 올라온 관심 공고 2건")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "지난 방문 이후 새 관심 공고 2건",
+  );
   await expect(page.getByText(/방문 이후/).first()).toBeVisible();
   await expect(
     page

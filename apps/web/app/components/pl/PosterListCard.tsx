@@ -177,15 +177,23 @@ export function PosterMiniRail({
   );
 }
 
-/** Vertical card with the poster on top, for the PC home grid. */
+/**
+ * Vertical card with the poster on top, for the home grid (screen plan v1.0,
+ * 02: 80~100px thumbnail on phones, 90~110px on PC; 2 columns on phones).
+ */
 export function PosterTileCard({
   poster,
   source,
   badge,
+  region,
+  regionLabel,
 }: {
   poster: PlPosterCardData;
   source?: PosterViewSource;
   badge?: ReactNode;
+  region?: RegionScope;
+  /** Overrides the region label wording, e.g. "서울 전체". */
+  regionLabel?: string;
 }) {
   const { display, thumb, meta } = cardParts(poster);
   return (
@@ -194,13 +202,21 @@ export function PosterTileCard({
       data-poster-source={source}
       className="flex h-full flex-col overflow-hidden rounded-xl border border-pl-line bg-pl-card outline-offset-2 hover:bg-pl-paper/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pl-ink"
     >
-      <PosterThumb src={thumb} className="h-36 w-full rounded-none" />
-      <div className="flex flex-1 flex-col gap-1 p-3">
-        {meta && <p className="truncate text-xs text-pl-meta">{meta}</p>}
-        <h3 className="line-clamp-2 font-pl-serif text-[15px] font-bold leading-[1.38] text-pl-ink">
+      <PosterThumb
+        src={thumb}
+        className="h-[92px] w-full rounded-none md:h-[104px]"
+      />
+      <div className="flex flex-1 flex-col gap-1 p-2.5 md:p-3">
+        {(meta || region) && (
+          <p className="flex min-w-0 items-center gap-1.5 text-xs text-pl-meta">
+            {region && <RegionLabel scope={region} label={regionLabel} />}
+            <span className="truncate">{meta}</span>
+          </p>
+        )}
+        <h3 className="line-clamp-2 font-pl-serif text-[14px] font-bold leading-[1.4] text-pl-ink md:text-[15px] min-[1200px]:text-[16px]">
           {poster.title}
         </h3>
-        <p className="mt-auto flex items-center gap-2 pt-1">
+        <p className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-0.5 pt-1">
           <DeadlineLabel display={display} />
           {badge && <span className="text-xs text-pl-meta">{badge}</span>}
         </p>

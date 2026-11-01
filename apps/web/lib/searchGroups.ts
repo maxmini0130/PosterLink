@@ -54,6 +54,14 @@ export function groupByRegionScope<T>(
     ancestors.push(parent);
     parentId = parent.parent_id ?? null;
   }
+  // 전국 is the widest scope even without a parent link from the 시·도.
+  for (const region of regions)
+    if (
+      region.level === "nation" &&
+      !own.has(region.id) &&
+      !ancestors.some((ancestor) => ancestor.id === region.id)
+    )
+      ancestors.push(region);
 
   const matched: T[] = [];
   const wider: SearchGroups<T>["wider"] = [];
