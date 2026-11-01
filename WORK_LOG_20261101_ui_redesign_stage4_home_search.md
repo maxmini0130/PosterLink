@@ -141,3 +141,10 @@
 1. 마이그레이션 `20261101010000`(3단계)·`20261101020000` 적용(승인 후). 확인: 테이블·읽기 정책 1개·체크 제약·`record_user_visit` 실행 권한(authenticated만).
 2. 그 뒤 웹 배포. 적용 전에 배포돼도 회원은 브라우저 기록으로 동작한다.
 3. 변경 적용일을 기록한다(재방문 0-4): 홈·찾기 개편.
+
+## 운영 마이그레이션 적용 (2026-11-01 KST 18시 무렵)
+
+- 사용자 승인 후 사용자가 직접 실행(Claude가 준비한 스크립트, Claude의 운영 쓰기는 자동 검사에서 차단됨): `20261101010000_add_favorite_user_status.sql`, `20261101020000_add_user_visit_state.sql`. 파일마다 단일 트랜잭션, `lock_timeout` 5초. 출력의 NOTICE 2건은 `DROP ... IF EXISTS`의 정상 안내.
+- 사전(읽기 전용): `favorites` 4행, 추가 대상 객체 없음.
+- 사후 대조(읽기 전용, Claude) 15항목 모두 일치: `favorites.user_status`(text, NOT NULL, 기본 `interested`)·`user_status_updated_at`, CHECK, 기존 4행 모두 `interested`; `user_visit_state` 컬럼·순서 CHECK·PK·FK(CASCADE)·RLS·본인 SELECT 정책·권한(anon 없음, authenticated SELECT만); `record_user_visit` 본문 md5·SECURITY DEFINER·`search_path=public, pg_temp`·소유자 postgres·실행 권한(authenticated만).
+- 마이그레이션 이력 표에는 기록되지 않음(기존처럼 SQL 직접 적용). `supabase db push` 사용 금지.
