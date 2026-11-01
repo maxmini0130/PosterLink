@@ -17,6 +17,12 @@ const FAVORITE_USER_STATUS = "72a05ab93ea353381446cdf85d8fe578a2afb755";
 /** UI redesign stage 4 user_visit_state; pending Codex review. */
 const USER_VISIT_STATE = "98145cf4e64a02e8b6fa0eba3ebbc4da960f9b3d";
 
+/**
+ * UI redesign stage 5: onboarding prefilled from the guest's interest choice
+ * (no age gate); pending Codex review.
+ */
+const STAGE5_ONBOARDING = "0ebec607d273daac4d0b832722e857c43b3c4c37";
+
 /** New migration path -> commit holding its reviewed content. */
 export const APPROVED_MIGRATIONS: Readonly<Record<string, string>> = {
   "supabase/migrations/20261031010000_extend_product_events_for_retention.sql":
@@ -33,7 +39,7 @@ export const APPROVED_MIGRATIONS: Readonly<Record<string, string>> = {
 
 /** File path -> commit holding its reviewed content; replaces the base pin. */
 export const APPROVED_SNAPSHOTS: Readonly<Record<string, string>> = {
-  "apps/web/app/onboarding/page.tsx": STAGE0_REVIEWED,
+  "apps/web/app/onboarding/page.tsx": STAGE5_ONBOARDING,
 };
 
 const TEST_PATH = /^[A-Za-z0-9_][A-Za-z0-9_./-]*\.test\.ts$/;

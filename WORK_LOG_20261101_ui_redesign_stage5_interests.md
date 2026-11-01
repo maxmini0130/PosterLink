@@ -54,7 +54,7 @@
   - 모든 쓰기는 가짜 응답, 공개 읽기만 공개 키로 실제 조회.
 - lint·`tsc`·build 통과, `git diff --check` 통과.
 - `pnpm test` 276/278(실패 2건은 **기존 실패** `profile-role-release`).
-- `scripts/security/*`: 피닝 커밋 후 결과는 아래 "고정" 참고. 기존 실패 3건(과거 릴리스 바이트 비교)은 **기존 실패**.
+- `scripts/security/*` 104/107: 온보딩 고정을 기능 커밋 `0ebec60`으로 옮긴 뒤(피닝 커밋 전에는 고정 검사 1건이 추가로 실패). 기존 실패 3건(과거 릴리스 바이트 비교)은 **기존 실패**.
 - 스크린샷(로컬 보관, 커밋 안 함): `compare-5-interests.png`(시안과 나란히), `interests-390/768/1280.png`, `interests-picker-390.png`, `home-guest-interest-390.png`, `home-guest-suggest-390.png`.
 
 ## 남은 일
