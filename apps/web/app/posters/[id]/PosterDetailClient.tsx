@@ -27,12 +27,14 @@ import {
   PENDING_NOT_STORED_MESSAGE,
   continueWithKakao,
   forgetGuestFavorite,
+  guestLocal,
   isGuestFavorite,
   rememberActionForLogin,
   saveGuestFavorite,
   type PendingActionDoneDetail,
 } from "../../lib/guestSession";
 import { getDeadlineDisplay, receptionEndedOn } from "../../../lib/deadlineDisplay";
+import { readGuestInterest } from "../../../lib/guestInterest";
 import type { UserStatus } from "../../../lib/myPosters";
 import {
   formatApplicationPeriod,
@@ -586,6 +588,8 @@ export function PosterDetailClient({
   const [member, setMember] = useState<{ id: string; applySupported: boolean; status: UserStatus | null } | null>(null);
   const [applyBusy, setApplyBusy] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // Guests without interest conditions are offered to choose them (UI plan ⑤).
+  const [suggestInterest, setSuggestInterest] = useState(false);
   const [imageExpanded, setImageExpanded] = useState(false);
   const [expandedImageIndex, setExpandedImageIndex] = useState(0);
   const clock = usePosterClock();
@@ -684,6 +688,7 @@ export function PosterDetailClient({
             onClick: () => {
               // Nothing may sit on top of the sheet.
               toast.dismiss();
+              setSuggestInterest(!readGuestInterest(guestLocal));
               setSheetOpen(true);
             }
           },
@@ -1290,6 +1295,14 @@ export function PosterDetailClient({
           <li>다른 기기에서도 찜한 공고를 이어서 볼 수 있어요</li>
           <li>관심 지역과 기관의 새 공고를 모아 볼 수 있어요</li>
         </ul>
+        {suggestInterest && (
+          <Link
+            href={`/interests?next=${encodeURIComponent(pathname)}`}
+            className="mt-3 inline-flex min-h-[44px] items-center text-sm font-medium text-pl-ink underline underline-offset-2"
+          >
+            가입 전에 관심 지역·분야만 먼저 고르기
+          </Link>
+        )}
       </BottomSheet>
 
       {imageExpanded && imageUrls.length > 0 && (

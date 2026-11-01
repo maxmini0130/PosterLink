@@ -2,6 +2,7 @@
 
 import type { PlPosterCardData } from "../components/pl/PosterListCard";
 import type { HomeItem } from "../../lib/homeSections";
+import { readGuestInterest } from "../../lib/guestInterest";
 import { readGuestFavorites } from "../../lib/guestStore";
 import { PUBLIC_POSTER_EXPOSURE_FILTER } from "../../lib/publicPosterVisibility";
 import { guestLocal } from "./guestSession";
@@ -214,6 +215,47 @@ async function loadFollowedRows(institutionIds: string[]): Promise<Row[]> {
   return data ?? [];
 }
 
+/**
+ * The guest's conditions from this browser, with names from the database.
+ * A region or category that no longer exists is left out.
+ */
+async function loadGuestInterest(): Promise<HomeInterest> {
+  const stored = readGuestInterest(guestLocal);
+  if (!stored) return { region: null, categories: [] };
+  const [region, categories] = await Promise.all([
+    stored.regionId
+      ? supabase
+          .from("regions")
+          .select("id, name, full_name, level")
+          .eq("id", stored.regionId)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    stored.categoryIds.length
+      ? supabase
+          .from("categories")
+          .select("id, name")
+          .in("id", stored.categoryIds)
+          .order("sort_order")
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (region.error || categories.error) throw new Error("guest interest");
+  const row = region.data as {
+    id: string;
+    name: string;
+    full_name: string | null;
+    level: string;
+  } | null;
+  return {
+    region: row
+      ? {
+          id: row.id,
+          name: row.level === "sigungu" ? row.name : row.full_name || row.name,
+        }
+      : null,
+    categories: (categories.data ?? []) as Array<{ id: string; name: string }>,
+  };
+}
+
 /** Everything the home needs, for a member or for this browser's guest. */
 export async function loadHomeData(): Promise<HomeData> {
   const userId =
@@ -221,7 +263,7 @@ export async function loadHomeData(): Promise<HomeData> {
   const setup = userId
     ? await loadMemberSetup(userId)
     : {
-        interest: { region: null, categories: [] } as HomeInterest,
+        interest: await loadGuestInterest(),
         favoriteIds: readGuestFavorites(guestLocal).map(
           (item) => item.posterId,
         ),

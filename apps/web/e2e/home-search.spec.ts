@@ -226,6 +226,12 @@ async function open(
       // Seed once per tab so a reload keeps what the app wrote.
       if (sessionStorage.getItem("e2e-seeded")) return;
       sessionStorage.setItem("e2e-seeded", "1");
+      // These checks are about the home itself: the picker that opens on a
+      // first direct visit (interests.spec.ts) is marked as already offered.
+      localStorage.setItem(
+        "pl.interest_offered.v1",
+        JSON.stringify({ v: 1, at: 1 }),
+      );
       if (visit)
         localStorage.setItem(
           member ? `pl.visit.v1:${user}` : "pl.visit.v1",

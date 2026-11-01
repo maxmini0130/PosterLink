@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { SlidersHorizontal } from "lucide-react";
 import { BottomNav } from "./components/BottomNav";
 import { Footer } from "./components/Footer";
@@ -16,6 +17,7 @@ import {
 } from "./components/pl/PosterListCard";
 import { ReportFab } from "./components/pl/ReportFab";
 import { SectionHeader } from "./components/pl/SectionHeader";
+import { guestLocal, guestTab } from "./lib/guestSession";
 import { loadHomeData, type HomeData, type HomeInterest } from "./lib/homeData";
 import { recordVisitActivity } from "./lib/visitClock";
 import {
@@ -23,6 +25,12 @@ import {
   visitDateLabel,
   type HomeEntry,
 } from "../lib/homeSections";
+import {
+  readEntry,
+  readGuestInterest,
+  shouldOfferInterestPicker,
+  wasInterestOffered,
+} from "../lib/guestInterest";
 import type { TopDiscoveryCombination } from "../lib/publicDiscovery";
 
 type Entry = HomeEntry<PlPosterCardData>;
@@ -83,13 +91,28 @@ export default function Home({
 }) {
   const [state, setState] = useState<State>({ phase: "loading" });
   const [showAllFresh, setShowAllFresh] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     let active = true;
     Promise.all([loadHomeData(), recordVisitActivity()])
       .then(([data, visit]) => {
-        if (active)
-          setState({ phase: "ready", data, baselineAt: visit.baselineAt });
+        if (!active) return;
+        // Opening the service for the first time: choose conditions first
+        // (UI plan ⑤). Shared links and searches never get here by themselves.
+        if (
+          shouldOfferInterestPicker({
+            signedIn: data.signedIn,
+            interest: readGuestInterest(guestLocal),
+            offered: wasInterestOffered(guestLocal),
+            firstVisit: visit.baselineAt === null,
+            entry: readEntry(guestTab),
+          })
+        ) {
+          router.replace("/interests");
+          return;
+        }
+        setState({ phase: "ready", data, baselineAt: visit.baselineAt });
       })
       .catch(() => {
         if (active) setState({ phase: "error" });
@@ -97,7 +120,7 @@ export default function Home({
     return () => {
       active = false;
     };
-  }, []);
+  }, [router]);
 
   const sections = useMemo(
     () =>
@@ -124,23 +147,23 @@ export default function Home({
   const summary = interestSummary(interest);
   const signedIn = state.phase === "ready" && state.data.signedIn;
 
-  // The interest button edits the member's conditions; guests choose theirs
-  // in the onboarding step (next stage), so it is not shown to them yet.
-  const interestButton = signedIn ? (
-    <Link
-      href="/mypage/edit"
-      className="inline-flex min-h-[44px] max-w-full items-center gap-1.5 rounded-lg border border-pl-line bg-pl-card px-3 text-[13px] font-medium text-pl-ink"
-    >
-      <SlidersHorizontal size={15} aria-hidden="true" />
-      <span className="truncate">
-        <span className="xl:hidden">{summary ?? "관심 조건 정하기"}</span>
-        <span className="hidden xl:inline">
-          {hasInterest ? interestFull(interest) : "관심 조건 정하기"}
+  // Members edit the account's conditions; guests those kept in this browser.
+  const interestButton =
+    state.phase === "ready" ? (
+      <Link
+        href={signedIn ? "/mypage/edit" : "/interests"}
+        className="inline-flex min-h-[44px] max-w-full items-center gap-1.5 rounded-lg border border-pl-line bg-pl-card px-3 text-[13px] font-medium text-pl-ink"
+      >
+        <SlidersHorizontal size={15} aria-hidden="true" />
+        <span className="truncate">
+          <span className="xl:hidden">{summary ?? "관심 조건 정하기"}</span>
+          <span className="hidden xl:inline">
+            {hasInterest ? interestFull(interest) : "관심 조건 정하기"}
+          </span>
         </span>
-      </span>
-      {hasInterest && <span className="sr-only">(관심 조건 바꾸기)</span>}
-    </Link>
-  ) : null;
+        {hasInterest && <span className="sr-only">(관심 조건 바꾸기)</span>}
+      </Link>
+    ) : null;
 
   return (
     <div className="pl-home min-h-screen bg-pl-paper pb-[calc(var(--mobile-nav-height)+32px)] font-pl-sans text-pl-ink md:pb-12">
@@ -177,6 +200,16 @@ export default function Home({
                 hasInterest={hasInterest}
                 interestButton={interestButton}
               />
+
+              {!signedIn && !hasInterest && (
+                <GuideCard
+                  title="관심 지역·분야를 골라 보세요"
+                  action={{ href: "/interests", label: "관심 조건 고르기" }}
+                >
+                  고른 조건에 맞는 공고를 홈에 먼저 보여드려요. 가입 없이 이
+                  기기에 저장돼요.
+                </GuideCard>
+              )}
 
               {sections.state === "first" && (
                 <>

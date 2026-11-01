@@ -13,6 +13,7 @@ export default defineConfig({
     "poster-detail-guest.spec.ts",
     "my-posters.spec.ts",
     "home-search.spec.ts",
+    "interests.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,

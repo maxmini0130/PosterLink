@@ -19,6 +19,13 @@ export const guestLocal: KeyValueStore = {
   removeItem: (key) => window.localStorage.removeItem(key),
 };
 
+/** sessionStorage (this tab only), resolved lazily like guestLocal. */
+export const guestTab: KeyValueStore = {
+  getItem: (key) => window.sessionStorage.getItem(key),
+  setItem: (key, value) => window.sessionStorage.setItem(key, value),
+  removeItem: (key) => window.sessionStorage.removeItem(key),
+};
+
 export const isGuestFavorite = (posterId: string) =>
   typeof window !== "undefined" && hasGuestFavorite(guestLocal, posterId);
 export const saveGuestFavorite = (posterId: string) =>
