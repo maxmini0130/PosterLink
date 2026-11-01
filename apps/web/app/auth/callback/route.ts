@@ -23,8 +23,14 @@ export async function GET(request: NextRequest) {
       { error: NAVER_UNAVAILABLE_MESSAGE, code: "naver_temporarily_unavailable" },
       { status: 503, headers: { "Cache-Control": "private, no-store" } },
     );
-  const at = searchParams.get("access_token");
-  const rt = searchParams.get("refresh_token");
+  // Sessions are never accepted from the URL: a link carrying someone else's
+  // tokens would sign this browser into their account (login CSRF).
+  if (searchParams.has("access_token") || searchParams.has("refresh_token")) {
+    const res = NextResponse.redirect(`${origin}/login?error=login_failed`);
+    res.headers.set("Cache-Control", "private, no-store");
+    res.headers.set("Referrer-Policy", "no-referrer");
+    return res;
+  }
   const nextPath = safeNextPath(searchParams.get("next"), origin);
 
   const cookieStore = cookies();
@@ -66,22 +72,7 @@ export async function GET(request: NextRequest) {
   if (code) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (error || !data.user) {
-      return redirect(
-        `${origin}/login?error=auth_callback_failed&msg=${encodeURIComponent(error?.message ?? "no_user")}`
-      );
-    }
-    analyticsMethod = data.user.app_metadata?.provider || "email";
-    userId = data.user.id;
-    userEmail = data.user.email ?? undefined;
-  } else if (at && rt) {
-    const { data, error } = await supabase.auth.setSession({
-      access_token: at,
-      refresh_token: rt,
-    });
-    if (error || !data.user) {
-      return redirect(
-        `${origin}/login?error=set_session_failed&msg=${encodeURIComponent(error?.message ?? "no_user")}`
-      );
+      return redirect(`${origin}/login?error=auth_callback_failed`);
     }
     analyticsMethod = data.user.app_metadata?.provider || "email";
     userId = data.user.id;
@@ -105,9 +96,7 @@ export async function GET(request: NextRequest) {
       { onConflict: "id" }
     );
     if (upsertError) {
-      return redirect(
-        `${origin}/login?error=auth_callback_failed&msg=${encodeURIComponent(upsertError.message)}`
-      );
+      return redirect(`${origin}/login?error=auth_callback_failed`);
     }
     const response = redirect(`${origin}/onboarding?next=${encodeURIComponent(nextPath)}`);
     attachAnalyticsAuthReceipt(request, response, analyticsMethod);

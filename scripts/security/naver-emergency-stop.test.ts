@@ -117,7 +117,7 @@ test("legacy Naver token callback is rejected before any Auth client, including 
   });
 });
 
-test("existing Google/Kakao PKCE callback and native session callback remain unchanged", async () => {
+test("existing Google/Kakao PKCE callback remains unchanged", async () => {
   for (const provider of ["google", "kakao"]) {
     const { api, state } = await route("apps/web/app/auth/callback/route.ts");
     const r = await api.GET(
@@ -130,19 +130,49 @@ test("existing Google/Kakao PKCE callback and native session callback remain unc
     assert.equal(state.writes, 0);
     assert.equal(state.cookies["provider-session"], "synthetic");
   }
-  const { api, state } = await route("apps/web/app/auth/callback/route.ts");
-  assert.equal(
-    (
-      await api.GET(
-        newAuthRequest(
-          origin +
-            "/auth/callback?access_token=synthetic&refresh_token=synthetic",
-        ),
-      )
-    ).status,
-    307,
+});
+
+// Login CSRF: a link carrying someone else's tokens must not sign this browser
+// into their account. Checked before any Auth client exists, even with a code.
+test("session tokens in the callback URL are rejected without any Auth client", async () => {
+  for (const q of [
+    "access_token=synthetic&refresh_token=synthetic",
+    "access_token=synthetic",
+    "refresh_token=synthetic",
+    "code=synthetic-google&access_token=synthetic&refresh_token=synthetic",
+    "access_token=synthetic&refresh_token=synthetic&next=/mypage",
+  ]) {
+    const { api, state } = await route("apps/web/app/auth/callback/route.ts");
+    const r = await api.GET(newAuthRequest(origin + "/auth/callback?" + q));
+    assert.equal(r.status, 307);
+    assert.equal(r.headers.get("location"), origin + "/login?error=login_failed");
+    assert.equal(r.headers.get("cache-control"), "private, no-store");
+    assert.equal(r.headers.get("referrer-policy"), "no-referrer");
+    assert.equal(r.headers.get("set-cookie"), null);
+    assert.deepEqual(state, {
+      clients: 0,
+      exchanges: 0,
+      sessions: 0,
+      writes: 0,
+      fetches: 0,
+      cookies: {},
+    });
+  }
+});
+
+test("web code never builds a session from URL tokens or echoes raw auth errors", () => {
+  const files = execFileSync("git", ["ls-files", "apps/web/app", "apps/web/lib"], {
+    encoding: "utf8",
+  })
+    .split(/\r?\n/)
+    .filter((f) => /\.(ts|tsx)$/.test(f) && !/\.test\.ts$/.test(f));
+  for (const file of files) {
+    const source = readFileSync(file, "utf8");
+    assert.ok(!source.includes(".setSession("), file);
+  }
+  assert.ok(
+    !readFileSync("apps/web/app/auth/callback/route.ts", "utf8").includes("msg="),
   );
-  assert.equal(state.sessions, 1);
 });
 
 test("GA integration preserves Production security, stats, SEO and migrations byte-for-byte", () => {
