@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { POSTER_VIEW_SOURCES, type PosterViewSource } from "../../../lib/productEventsCore";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -16,6 +17,7 @@ export async function POST(request: Request) {
     poster_id?: string;
     visitor_key?: string | null;
     referrer_path?: string | null;
+    source?: string | null;
   };
 
   try {
@@ -32,12 +34,20 @@ export async function POST(request: Request) {
   const visitorKey = typeof payload.visitor_key === "string"
     ? payload.visitor_key.slice(0, 120)
     : null;
-  const supabaseAdmin = createSupabaseAdmin();
-  const { error } = await supabaseAdmin.from("poster_view_logs").insert({
+  const source = POSTER_VIEW_SOURCES.has(payload.source as PosterViewSource)
+    ? payload.source
+    : null;
+  const record = {
     poster_id: payload.poster_id,
     visitor_key: visitorKey,
     referrer_path: payload.referrer_path ?? null,
-  });
+  };
+  const supabaseAdmin = createSupabaseAdmin();
+  let { error } = await supabaseAdmin.from("poster_view_logs").insert({ ...record, source });
+  // Until the source column migration is applied, keep logging the view itself.
+  if (error && (error.code === "42703" || error.code === "PGRST204")) {
+    ({ error } = await supabaseAdmin.from("poster_view_logs").insert(record));
+  }
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

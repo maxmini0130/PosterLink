@@ -10,6 +10,7 @@ import { PosterCard } from "../components/PosterCard";
 import { Heart, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { rememberSignupIntent } from "../../lib/productEvents";
 
 export default function FavoritesPage() {
   const [loading, setLoading] = useState(true);
@@ -22,7 +23,7 @@ export default function FavoritesPage() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const user = session?.user ?? null;
-        if (!user) { router.push("/login"); return; }
+        if (!user) { rememberSignupIntent("favorites", "favorite"); router.push("/login"); return; }
         if (user) {
           // Join favorites with posters and related info
           const { data, error } = await supabase
@@ -87,7 +88,8 @@ export default function FavoritesPage() {
         ) : favorites.length > 0 ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-x-5 gap-y-12">
             {favorites.map((poster) => (
-              <PosterCard 
+              <PosterCard
+                source="favorites"
                 key={poster.id} 
                 poster={{
                   id: poster.id,

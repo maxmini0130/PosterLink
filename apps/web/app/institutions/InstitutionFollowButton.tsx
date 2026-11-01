@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 
 import { trackAnalytics, setAnalyticsLoginStatus } from "../../lib/analytics";
+import { currentPageType, promptSignup, trackProductEvent } from "../../lib/productEvents";
 
 export function InstitutionFollowButton({ institutionId, returnPath }: { institutionId: string; returnPath: string }) {
   const router = useRouter();
@@ -40,6 +41,7 @@ export function InstitutionFollowButton({ institutionId, returnPath }: { institu
 
   const toggleFollow = async () => {
     if (!userId) {
+      promptSignup(currentPageType(), "follow", { institutionId });
       router.push(`/login?redirectTo=${encodeURIComponent(returnPath)}`);
       return;
     }
@@ -55,6 +57,10 @@ export function InstitutionFollowButton({ institutionId, returnPath }: { institu
       setFollowing((value) => !value);
       setAnalyticsLoginStatus(true);
       trackAnalytics(following ? "unfollow_institution" : "follow_institution", {institution_id:institutionId});
+      trackProductEvent(following ? "institution_unfollow" : "institution_follow", {
+        institutionId,
+        metadata: { screen: currentPageType() },
+      });
     }
     setLoading(false);
   };

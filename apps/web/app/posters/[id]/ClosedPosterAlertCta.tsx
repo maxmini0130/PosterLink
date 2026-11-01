@@ -7,6 +7,7 @@ import { trackAlertEvent } from "../../../lib/alertAnalytics";
 import { supabase } from "../../lib/supabase";
 
 import { trackAnalytics, setAnalyticsLoginStatus } from "../../../lib/analytics";
+import { rememberSignupIntent, trackSignupStart } from "../../../lib/productEvents";
 
 const CTA_VARIANT = "closed_poster_v1";
 
@@ -114,11 +115,13 @@ export function ClosedPosterAlertCta({
       return;
     }
     trackAlertEvent("auth_modal_view", baseProperties);
+    rememberSignupIntent("detail", "alert");
     setStep("auth");
   };
 
   const loginWithKakao = async () => {
     const next = safeReturnPath(posterId);
+    trackSignupStart("login", "kakao");
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "kakao",
       options: {

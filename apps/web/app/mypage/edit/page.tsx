@@ -9,6 +9,7 @@ import { ChevronLeft, Check, Loader2, MapPin, Calendar, Tag, User } from "lucide
 import { useRouter } from "next/navigation";
 import { Button } from "@posterlink/ui";
 import { getCityRegions, getDistrictRegions, getRegionLabel, getSelectedCityId, getSelectedDistrictId } from "../../lib/regionHelpers";
+import { trackProductEvent } from "../../../lib/productEvents";
 
 export default function ProfileEditPage() {
   const [loading, setLoading] = useState(true);
@@ -111,6 +112,14 @@ export default function ProfileEditPage() {
         if (catError) throw catError;
       }
 
+      trackProductEvent("interest_save", {
+        metadata: {
+          screen: "mypage",
+          logged_in: true,
+          region_id: formData.primaryRegionId || null,
+          category_count: formData.selectedCategoryIds.length,
+        },
+      });
       toast.success("프로필이 수정되었습니다.");
       router.push("/mypage");
     } catch (err: any) {

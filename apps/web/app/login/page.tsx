@@ -10,6 +10,7 @@ import toast from "react-hot-toast";
 import { supabase } from "../../lib/supabase";
 
 import { trackAnalytics, setAnalyticsLoginStatus } from "../../lib/analytics";
+import { trackSignupStart } from "../../lib/productEvents";
 
 const ERROR_MESSAGES: Record<string, string> = {
   naver_not_configured: "네이버 로그인이 설정되지 않았습니다.",
@@ -49,6 +50,7 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    trackSignupStart("login", "email");
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
@@ -64,6 +66,7 @@ export default function LoginPage() {
   };
 
   const handleSocialLogin = async (provider: "kakao" | "google") => {
+    trackSignupStart("login", provider);
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
