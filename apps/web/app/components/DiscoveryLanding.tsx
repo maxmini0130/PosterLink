@@ -186,6 +186,7 @@ export async function DiscoveryLanding({
                     applicationStartAt: poster.application_start_at,
                     deadline: poster.application_end_at || undefined,
                     deadlineType: poster.deadline_type,
+                    eventEndAt: poster.event_end_at,
                     tags: [poster.categoryName, poster.regionName].filter(
                       (value): value is string => Boolean(value),
                     ),

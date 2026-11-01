@@ -38,6 +38,7 @@ import {
   readUnavailableGuestFavorites,
 } from "../../lib/guestStore";
 import {
+  cardApplicationInput,
   createReadWriteGate,
   groupByReception,
   noDateNote,
@@ -73,13 +74,6 @@ function isMissingColumn(error: { code?: string; message?: string } | null) {
       /user_status/.test(error.message ?? "")),
   );
 }
-
-const applyInput = (card: PlPosterCardData) => ({
-  applicationStartAt: card.applicationStartAt,
-  applicationEndAt: card.deadline,
-  deadlineType: card.deadlineType,
-  posterStatus: card.posterStatus,
-});
 
 async function loadMember(userId: string): Promise<State> {
   let applySupported = true;
@@ -474,7 +468,9 @@ function MemberView({
   };
 
   const card = (entry: Favorite, showRecordNote = false) => {
-    const note = noDateNote(getDeadlineDisplay(applyInput(entry.card)));
+    const note = noDateNote(
+      getDeadlineDisplay(cardApplicationInput(entry.card)),
+    );
     return (
       <PosterListCard
         poster={entry.card}
@@ -597,7 +593,7 @@ function MemberView({
           </GuideCard>
         ) : (
           groupByReception(state.favorites, (entry) =>
-            applyInput(entry.card),
+            cardApplicationInput(entry.card),
           ).map((group) => (
             <section key={group.key} aria-labelledby={`group-${group.key}`}>
               <SectionHeader

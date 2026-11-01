@@ -11,8 +11,6 @@ import { RegionLabel, type RegionScope } from "./RegionLabel";
 
 export type PlPosterCardData = PosterCardData & {
   posterStatus?: string | null;
-  /** event_end_at: a finished event is shown as ended, not open. */
-  eventEndAt?: string | null;
 };
 
 /** Card data from a public discovery row (same organisation rule as institution pages). */

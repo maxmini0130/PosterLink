@@ -296,8 +296,7 @@ export default function Home({
                         onClick={() => setPages((value) => value + 1)}
                         className="mt-3 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg border border-pl-line bg-pl-card text-sm font-medium md:w-auto md:px-5"
                       >
-                        {interest.region ? "내 지역 공고" : kind} 더 보기 (
-                        {sections.primary.length - pages * HOME_PAGE_SIZE}건)
+                        {interest.region ? "내 지역 공고" : kind} 더 보기
                       </button>
                     ) : (
                       <Link

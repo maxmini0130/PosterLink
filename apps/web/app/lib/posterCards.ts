@@ -5,7 +5,7 @@ import { fetchCategoryRegionNames } from "./posterHelpers";
 import { supabase } from "./supabase";
 
 const CARD_SELECT =
-  "id,title,source_org_name,application_start_at,application_end_at,deadline_type,thumbnail_url,source_key,poster_status";
+  "id,title,source_org_name,application_start_at,application_end_at,deadline_type,event_end_at,thumbnail_url,source_key,poster_status";
 
 type CardRow = {
   id: string;
@@ -14,6 +14,7 @@ type CardRow = {
   application_start_at: string | null;
   application_end_at: string | null;
   deadline_type: string | null;
+  event_end_at: string | null;
   thumbnail_url: string | null;
   source_key: string | null;
   poster_status: string | null;
@@ -53,6 +54,7 @@ export async function loadPosterCards(
         applicationStartAt: row.application_start_at,
         deadline: row.application_end_at ?? undefined,
         deadlineType: row.deadline_type,
+        eventEndAt: row.event_end_at,
         tags: [names?.categoryName, names?.regionName].filter(
           (value): value is string => Boolean(value),
         ),

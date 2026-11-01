@@ -12,6 +12,8 @@ import {
   type DiscoveryTaxonomy,
 } from "./discoveryRoutes";
 import { isPosterAcceptingApplications } from "./posterApplication";
+import { categoryScopeIds } from "./categoryTaxonomy";
+import { searchPublicPostersInScope } from "./categoryScopedSearch";
 import { PUBLIC_POSTER_EXPOSURE_FILTER } from "./publicPosterVisibility";
 import {
   INFORMATION_CATEGORY_CODES,
@@ -133,22 +135,31 @@ export async function fetchPublicDiscovery(
       ? [selectedRegion.id]
       : Array.from(getRegionScopeIds(selectedRegion.id, regions) ?? [])
     : null;
-  const searchArgs = {
-    p_query: search || null,
-    p_category_id: selectedCategory?.id ?? null,
-    p_region_ids: regionIds,
-    p_include_closed: includeClosed,
-    p_sort: sort === "deadline" ? "deadline" : "latest",
-    p_limit: Math.min(Math.max(filters.limit ?? 240, 1), 500),
-  };
-  const [postersRes, countRes] = await Promise.all([
-    client
-      .rpc("search_public_posters", searchArgs)
-      .select(
-        filters.promotionOnly ? PROMOTION_POSTER_SELECT : PUBLIC_POSTER_SELECT,
-      )
-      .returns<Record<string, unknown>[]>(),
-    filters.promotionOnly
+  // A main category also covers the content types folded into it
+  // (교육/취업 -> 교육강좌, 채용), the same scope the client and home use.
+  const categoryScope = categoryScopeIds(
+    selectedCategory?.id ?? null,
+    categories,
+  );
+  const multiCategory = categoryScope.length > 1;
+  const searchSort = sort === "deadline" ? "deadline" : "latest";
+  const limit = Math.min(Math.max(filters.limit ?? 240, 1), 500);
+  const [scoped, countRes] = await Promise.all([
+    searchPublicPostersInScope<Record<string, unknown> & { id: string }>(
+      client,
+      {
+        categoryIds: categoryScope,
+        query: search || null,
+        regionIds,
+        includeClosed,
+        sort: searchSort,
+        limit,
+        select: filters.promotionOnly
+          ? PROMOTION_POSTER_SELECT
+          : PUBLIC_POSTER_SELECT,
+      },
+    ),
+    filters.promotionOnly || multiCategory
       ? Promise.resolve({ data: null, error: null })
       : client.rpc("count_public_posters", {
           p_query: search || null,
@@ -157,9 +168,12 @@ export async function fetchPublicDiscovery(
           p_include_closed: includeClosed,
         }),
   ]);
-  assertPublicDiscoveryQuery(postersRes, "search_public_posters");
+  assertPublicDiscoveryQuery(
+    { error: (scoped.error as { code?: string } | null) ?? undefined },
+    "search_public_posters",
+  );
   assertPublicDiscoveryQuery(countRes, "count_public_posters");
-  const rows = postersRes.data ?? [];
+  const rows: Record<string, unknown>[] = scoped.rows;
   const posters = await enrichPublicPosters(
     client,
     filters.promotionOnly ? rows.filter(isPosterEligibleForPromotion) : rows,
@@ -170,7 +184,9 @@ export async function fetchPublicDiscovery(
   const totalCount =
     !filters.promotionOnly && typeof countRes.data === "number"
       ? countRes.data
-      : filteredPosters.length;
+      : multiCategory && !filters.promotionOnly && includeClosed
+        ? scoped.total
+        : filteredPosters.length;
   return {
     posters: filteredPosters,
     totalCount,

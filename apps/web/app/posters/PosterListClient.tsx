@@ -45,6 +45,7 @@ import {
   categoryScopeIds,
   interestCategories,
 } from "../../lib/categoryTaxonomy";
+import { searchCategoryScope } from "../../lib/categoryScopedSearch";
 import {
   groupByRegionScope,
   isSavedSearch,
@@ -256,6 +257,7 @@ function PosterListPageContent({
         p_sort: sortBy === "deadline" ? "deadline" : "latest",
         p_limit: 240,
       };
+      let scopedTotal: number | null = null;
       const countPromise = multiCategory
         ? Promise.resolve({ data: null, error: null })
         : supabase.rpc("count_public_posters", {
@@ -291,31 +293,26 @@ function PosterListPageContent({
       }
 
       if (!semanticSearchUsed || includeClosed) {
-        const responses = await Promise.all(
-          (multiCategory ? categoryScope : [selectedCategoryId]).map(
-            (categoryId) =>
-              supabase
-                .rpc("search_public_posters", {
-                  ...searchArgs,
-                  p_category_id: categoryId,
-                })
-                .select(PUBLIC_POSTER_SELECT),
-          ),
-        );
-        const failedResponse = responses.find((response) => response.error);
-        if (failedResponse?.error) throw failedResponse.error;
-        const keywordData = responses.reduce<Row[]>(
-          (merged, { data: rpcData }) =>
-            mergeUniquePosters(
-              merged,
-              (Array.isArray(rpcData)
-                ? rpcData
-                : rpcData
-                  ? [rpcData]
-                  : []) as Row[],
-            ),
-          [],
-        );
+        const scoped = await searchCategoryScope<Row>({
+          categoryIds: categoryScope,
+          sort: searchArgs.p_sort === "deadline" ? "deadline" : "latest",
+          limit: searchArgs.p_limit,
+          search: (categoryId, limit) =>
+            supabase
+              .rpc("search_public_posters", {
+                ...searchArgs,
+                p_category_id: categoryId,
+                p_limit: limit,
+              })
+              .select(PUBLIC_POSTER_SELECT)
+              .then(({ data: rows, error }) => ({
+                data: (Array.isArray(rows) ? rows : []) as Row[],
+                error,
+              })),
+        });
+        if (scoped.error) throw scoped.error;
+        const keywordData = scoped.rows;
+        if (multiCategory && includeClosed) scopedTotal = scoped.total;
         data = semanticSearchUsed
           ? mergeUniquePosters(data, keywordData)
           : keywordData;
@@ -323,7 +320,7 @@ function PosterListPageContent({
       const { data: totalCountData, error: countError } = await countPromise;
       if (countError) throw countError;
       const serverTotalCount =
-        typeof totalCountData === "number" ? totalCountData : null;
+        typeof totalCountData === "number" ? totalCountData : scopedTotal;
 
       const dateFilteredData =
         !includeClosed && hideClosedPosters

@@ -47,6 +47,31 @@ export function noDateNote(display: DeadlineDisplay) {
     : null;
 }
 
+/** The fields of a saved card that decide its reception status. */
+export type ReceptionCard = {
+  applicationStartAt?: string | null;
+  deadline?: string;
+  deadlineType?: string | null;
+  posterStatus?: string | null;
+  eventEndAt?: string | null;
+};
+
+/**
+ * Status input for a saved card: the same fields every other screen passes,
+ * including the event end, so 내 공고 never calls an ended poster open.
+ */
+export function cardApplicationInput(
+  card: ReceptionCard,
+): PosterApplicationInput {
+  return {
+    applicationStartAt: card.applicationStartAt,
+    applicationEndAt: card.deadline,
+    deadlineType: card.deadlineType,
+    posterStatus: card.posterStatus,
+    eventEndAt: card.eventEndAt,
+  };
+}
+
 export type GroupedItem<T> = { item: T; display: DeadlineDisplay };
 
 /**

@@ -262,16 +262,21 @@ test("⑤ opening the home directly for the first time asks for conditions first
     "href",
     "/interests",
   );
-  // The home asks in each chosen category with the same region scope as
-  // 공고 찾기 (마포구 and 서울), plus the newest posters with no condition.
+  // The home asks in each chosen category for my area (마포구) and, apart,
+  // for the areas above it (서울), so newer 서울 posters never push 마포구 out;
+  // other districts of 서울 in the same categories; and the newest posters.
   await expect
     .poll(() =>
       searchCalls.map((call) => [call.p_region_ids, call.p_category_id]),
     )
     .toEqual(
       expect.arrayContaining([
-        [[MAPO, SEOUL], CULTURE],
-        [[MAPO, SEOUL], EDU],
+        [[MAPO], CULTURE],
+        [[MAPO], EDU],
+        [[SEOUL], CULTURE],
+        [[SEOUL], EDU],
+        [[EUNPYEONG], CULTURE],
+        [[EUNPYEONG], EDU],
         [null, null],
       ]),
     );
