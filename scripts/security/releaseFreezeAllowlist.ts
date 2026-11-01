@@ -23,6 +23,9 @@ const FINISHED_EVENTS_SEARCH = "b143a7694cbd729a979e9deee543ccea0fbe8924";
 /** Screen plan v1.0 (05): onboarding lists the main categories only; pending Codex review. */
 const PLAN_V1_ONBOARDING = "728901f148dee03e774219a3e88c22d76098951b";
 
+/** Optional poster-feed image metadata only; pending independent review, not production application approval. */
+const POSTER_FEED_METADATA = "b3ce4b4a5c9ea6128683de0daf50ca022dc5651f";
+
 /** New migration path -> commit holding its reviewed content. */
 export const APPROVED_MIGRATIONS: Readonly<Record<string, string>> = {
   "supabase/migrations/20261031010000_extend_product_events_for_retention.sql":
@@ -37,6 +40,8 @@ export const APPROVED_MIGRATIONS: Readonly<Record<string, string>> = {
     USER_VISIT_STATE,
   "supabase/migrations/20261102010000_exclude_finished_events_from_open_search.sql":
     FINISHED_EVENTS_SEARCH,
+  "supabase/migrations/20261102020000_add_poster_image_feed_metadata.sql":
+    POSTER_FEED_METADATA,
 };
 
 /** File path -> commit holding its reviewed content; replaces the base pin. */
