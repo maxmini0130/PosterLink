@@ -24,8 +24,13 @@ const SECRET = hex("a1");
 const OTHER_SECRET = hex("a2");
 const STATE = hex("b1");
 const TOKEN = hex("c1");
+const CLIENT = hex("e1");
 
-async function setup() {
+/**
+ * `defaultAcl` models a project whose default privileges give every API role
+ * everything on new tables, sequences and functions (as Supabase does).
+ */
+async function setup({ defaultAcl = false } = {}) {
   const db = new PGlite();
   await db.exec(`
     CREATE ROLE authenticated NOLOGIN;
@@ -46,6 +51,12 @@ async function setup() {
       ('${C}', 'c@example.com', now());
     INSERT INTO auth.identities (user_id) VALUES ('${A}'), ('${B}'), ('${C}');
   `);
+  if (defaultAcl)
+    await db.exec(`
+      ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+      ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+      ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role;
+    `);
   await db.exec(migration);
   await db.exec(
     `INSERT INTO naver_hash_keys (version, status) VALUES (1, 'active')`,
@@ -69,11 +80,13 @@ async function start(
   session: string | null = null,
   parent: string | null = null,
   secret = SECRET,
+  client = CLIENT,
 ) {
-  return (await val(db, "SELECT naver_tx_start($1, $2, $3, $4, $5)", [
+  return (await val(db, "SELECT naver_tx_start($1, $2, $3, $4, $5, $6)", [
     purpose,
     secret,
     STATE,
+    client,
     session,
     parent,
   ])) as string;
@@ -505,9 +518,10 @@ test("only service_role runs the functions; members read only their own link sta
     await assert.rejects(
       db.transaction(async (t) => {
         await t.query(`SET LOCAL ROLE ${role}`);
-        await t.query("SELECT naver_tx_start('login', $1, $2)", [
+        await t.query("SELECT naver_tx_start('login', $1, $2, $3)", [
           SECRET,
           STATE,
+          CLIENT,
         ]);
       }),
       /permission denied/,
@@ -523,7 +537,11 @@ test("only service_role runs the functions; members read only their own link sta
   await db.transaction(async (t) => {
     await t.query("SET LOCAL ROLE service_role");
     assert.ok(
-      await t.query("SELECT naver_tx_start('login', $1, $2)", [SECRET, STATE]),
+      await t.query("SELECT naver_tx_start('login', $1, $2, $3)", [
+        SECRET,
+        STATE,
+        CLIENT,
+      ]),
     );
   });
   const mine = await db.transaction(async (t) => {
@@ -582,5 +600,169 @@ test("unlink needs another sign-in method; old transactions are purged", async (
       ),
     ),
     0,
+  );
+});
+
+test("a login resolved before an unlink or a relink to another account cannot complete", async () => {
+  const db = await setup();
+  await linkSession(db, A, hashes(10, [1]));
+  // The login is resolved to A, then A unlinks before it completes.
+  const login = await start(db);
+  assert.equal((await callback(db, login, hashes(10, [1])))?.target_user_id, A);
+  assert.equal(await val(db, "SELECT naver_unlink($1)", [A]), true);
+  assert.equal(await state(db, login), "failed");
+  assert.equal(
+    await val(db, "SELECT naver_tx_complete_login($1, $2, $3)", [
+      login,
+      SECRET,
+      A,
+    ]),
+    false,
+  );
+
+  // Resolved to A again, then the same Naver ID moves to B (unlinked directly
+  // in the table so the pending login is not failed by naver_unlink).
+  await linkSession(db, A, hashes(10, [1]));
+  const second = await start(db);
+  assert.equal(
+    (await callback(db, second, hashes(10, [1])))?.target_user_id,
+    A,
+  );
+  await db.query("DELETE FROM naver_subjects WHERE user_id = $1", [A]);
+  assert.equal(await linkSession(db, B, hashes(10, [1])), B);
+  assert.equal(
+    await val(db, "SELECT naver_tx_complete_login($1, $2, $3)", [
+      second,
+      SECRET,
+      A,
+    ]),
+    false,
+  );
+  assert.equal(await state(db, second), "failed");
+
+  // B, still linked, completes; afterwards the link is checked once more.
+  const third = await start(db);
+  assert.equal((await callback(db, third, hashes(10, [1])))?.target_user_id, B);
+  assert.equal(
+    await val(db, "SELECT naver_tx_complete_login($1, $2, $3)", [
+      third,
+      SECRET,
+      B,
+    ]),
+    true,
+  );
+  assert.equal(
+    await val(db, "SELECT naver_tx_still_linked($1, $2, $3)", [
+      third,
+      SECRET,
+      B,
+    ]),
+    true,
+  );
+  // An unlink between completing and issuing the session is seen.
+  await db.query("DELETE FROM naver_subjects WHERE user_id = $1", [B]);
+  assert.equal(
+    await val(db, "SELECT naver_tx_still_linked($1, $2, $3)", [
+      third,
+      SECRET,
+      B,
+    ]),
+    false,
+  );
+});
+
+test("with default privileges for every API role, service_role still has only the listed functions", async () => {
+  const db = await setup({ defaultAcl: true });
+  const asRole = (role: string, sql: string, params: unknown[] = []) =>
+    db.transaction(async (t) => {
+      await t.query(`SET LOCAL ROLE ${role}`);
+      return (await t.query(sql, params)).rows;
+    });
+  for (const role of ["service_role", "authenticated", "anon"]) {
+    for (const sql of [
+      `INSERT INTO naver_subjects (user_id, linked_via) VALUES ('${A}', 'signup')`,
+      `INSERT INTO naver_auth_transactions (purpose, browser_secret_hash, oauth_state_hash, expires_at) VALUES ('login', '${SECRET}', '${STATE}', now())`,
+      "SELECT * FROM naver_subject_hashes",
+      "SELECT nextval('naver_identity_events_id_seq')",
+      `SELECT _naver_resolve('{}'::jsonb, '{1}'::smallint[])`,
+      "SELECT _naver_active_versions()",
+    ])
+      await assert.rejects(
+        asRole(role, sql),
+        /permission denied/,
+        `${role}: ${sql}`,
+      );
+  }
+  const rows = await asRole(
+    "service_role",
+    "SELECT naver_tx_start('login', $1, $2, $3) AS id",
+    [SECRET, STATE, CLIENT],
+  );
+  assert.match(String((rows[0] as { id: string }).id), /^[0-9a-f-]{36}$/);
+  await assert.rejects(
+    asRole("authenticated", "SELECT naver_tx_start('login', $1, $2, $3)", [
+      SECRET,
+      STATE,
+      CLIENT,
+    ]),
+    /permission denied/,
+  );
+});
+
+test("starting is rate limited per client and overall, and frees up after the window", async () => {
+  const db = await setup();
+  for (let i = 0; i < 20; i++) assert.ok(await start(db));
+  assert.equal(await start(db), null); // 21st from the same client
+  assert.ok(await start(db, "login", null, null, SECRET, hex("e2"))); // another client
+  await db.query(
+    "UPDATE naver_auth_transactions SET created_at = now() - interval '11 minutes' WHERE client_key = $1",
+    [CLIENT],
+  );
+  assert.ok(await start(db)); // window passed
+  // Overall cap: 600 starts in the last minute stop everyone.
+  await db.query(
+    `INSERT INTO naver_auth_transactions (purpose, browser_secret_hash, oauth_state_hash, expires_at)
+                  SELECT 'login', $1, $2, now() + interval '30 minutes' FROM generate_series(1, 600)`,
+    [SECRET, STATE],
+  );
+  assert.equal(await start(db, "login", null, null, SECRET, hex("e3")), null);
+  // Client keys are cleared by the purge after an hour.
+  await db.query(
+    "UPDATE naver_auth_transactions SET created_at = now() - interval '2 hours'",
+  );
+  await val(db, "SELECT naver_purge_transactions()");
+  assert.equal(
+    Number(
+      await val(
+        db,
+        "SELECT count(*) FROM naver_auth_transactions WHERE client_key IS NOT NULL",
+      ),
+    ),
+    0,
+  );
+});
+
+test("Naver is asked only for a live transaction, at most 3 times", async () => {
+  const db = await setup();
+  const tx = await start(db);
+  const begin = (secret: string, stateHash: string) =>
+    val(db, "SELECT naver_tx_begin_callback($1, $2, $3)", [
+      tx,
+      secret,
+      stateHash,
+    ]);
+  assert.equal(await begin(OTHER_SECRET, STATE), false);
+  assert.equal(await begin(SECRET, hex("b2")), false);
+  for (let i = 0; i < 3; i++) assert.equal(await begin(SECRET, STATE), true);
+  assert.equal(await begin(SECRET, STATE), false);
+  const done = await start(db);
+  await callback(db, done, hashes(1, [1]));
+  assert.equal(
+    await val(db, "SELECT naver_tx_begin_callback($1, $2, $3)", [
+      done,
+      SECRET,
+      STATE,
+    ]),
+    false,
   );
 });

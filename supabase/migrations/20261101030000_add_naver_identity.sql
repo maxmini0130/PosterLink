@@ -9,9 +9,17 @@
 -- conditional updates. Linking re-checks the account row under a lock and
 -- refuses when the lock cannot be taken (no after-the-fact compensation).
 --
--- Tables have RLS on and no grants: writes go only through the SECURITY
--- DEFINER functions below, executable by service_role (design 5-11). Members
--- read their own state through my_login_methods().
+-- Tables have RLS on and no grants for any API role, service_role included
+-- (default privileges are revoked explicitly): writes go only through the
+-- SECURITY DEFINER functions below, of which service_role may execute the
+-- listed ones (design 5-11). Members read their own state through
+-- my_login_methods(). Starting transactions is rate limited per client and
+-- overall.
+--
+-- Key rotation: change naver_hash_keys only in a transaction that first runs
+--   LOCK TABLE public.naver_hash_keys IN SHARE ROW EXCLUSIVE MODE;
+-- every function takes SHARE on the table, so a rotation waits for running
+-- calls and later calls see it.
 --
 -- Rollback (nothing else references these objects):
 --   DROP FUNCTION IF EXISTS public.my_login_methods(), public.naver_purge_transactions(),
@@ -23,7 +31,8 @@
 --     public.naver_tx_confirm_email(uuid, text, text, uuid),
 --     public.naver_tx_email_sent(uuid, text, text, text, text, uuid),
 --     public.naver_tx_callback(uuid, text, text, jsonb),
---     public.naver_tx_start(text, text, text, uuid, uuid),
+--     public.naver_tx_start(text, text, text, text, uuid, uuid), public.naver_tx_begin_callback(uuid, text, text),
+--     public.naver_tx_still_linked(uuid, text, uuid),
 --     public._naver_resolve(jsonb, smallint[]), public._naver_covers_active(jsonb, smallint[]),
 --     public._naver_active_versions();
 --   DROP TABLE IF EXISTS public.naver_auth_transactions, public.naver_identity_events,
@@ -78,6 +87,9 @@ CREATE TABLE public.naver_auth_transactions (
   session_user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
   parent_id uuid REFERENCES public.naver_auth_transactions(id) ON DELETE CASCADE,
   attempts smallint NOT NULL DEFAULT 0,
+  callback_attempts smallint NOT NULL DEFAULT 0,
+  -- Keyed hash of the client address, for the start rate limit; cleared after an hour.
+  client_key text CHECK (client_key ~ '^[0-9a-f]{64}$'),
   expires_at timestamptz NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
@@ -90,6 +102,10 @@ CREATE TABLE public.naver_auth_transactions (
   CHECK (state <> 'user_created' OR created_user_id IS NOT NULL)
 );
 CREATE INDEX naver_auth_transactions_expires_idx ON public.naver_auth_transactions (expires_at);
+CREATE INDEX naver_auth_transactions_client_idx ON public.naver_auth_transactions (client_key, created_at)
+  WHERE client_key IS NOT NULL;
+CREATE INDEX naver_auth_transactions_login_target_idx ON public.naver_auth_transactions (target_user_id)
+  WHERE flow = 'login' AND state = 'naver_verified';
 
 ALTER TABLE public.naver_hash_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.naver_subjects ENABLE ROW LEVEL SECURITY;
@@ -97,17 +113,21 @@ ALTER TABLE public.naver_subject_hashes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.naver_identity_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.naver_auth_transactions ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.naver_hash_keys, public.naver_subjects, public.naver_subject_hashes,
-  public.naver_identity_events, public.naver_auth_transactions FROM PUBLIC, anon, authenticated;
+  public.naver_identity_events, public.naver_auth_transactions
+  FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON SEQUENCE public.naver_identity_events_id_seq
+  FROM PUBLIC, anon, authenticated, service_role;
 
 -- ------------------------------------------------------------------ helpers
 
--- Active key versions, locked so a rotation waits for (and is seen by) this call.
+-- Active key versions. SHARE on the table conflicts with any insert or update
+-- of keys, so a rotation (or a new key) waits for this call and is seen by later ones.
 CREATE FUNCTION public._naver_active_versions()
 RETURNS smallint[] LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE
   v smallint[];
 BEGIN
-  PERFORM 1 FROM public.naver_hash_keys WHERE status = 'active' FOR SHARE;
+  LOCK TABLE public.naver_hash_keys IN SHARE MODE;
   SELECT array_agg(version ORDER BY version) INTO v
     FROM public.naver_hash_keys WHERE status = 'active';
   RETURN v;
@@ -162,21 +182,44 @@ END $$;
 
 -- ------------------------------------------------------------- transactions
 
+-- Starts a transaction, or returns null when the budget is used up: 20 starts
+-- per client key in 10 minutes, 600 overall per minute. The client key is a
+-- keyed hash of the address, made by the server.
 CREATE FUNCTION public.naver_tx_start(
-  p_purpose text, p_browser_secret_hash text, p_oauth_state_hash text,
+  p_purpose text, p_browser_secret_hash text, p_oauth_state_hash text, p_client_key text,
   p_session_user_id uuid DEFAULT NULL, p_parent_id uuid DEFAULT NULL)
 RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE
   v_id uuid;
 BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('naver_tx_start:' || coalesce(p_client_key, ''), 0));
+  IF (SELECT count(*) FROM public.naver_auth_transactions t
+       WHERE t.client_key = p_client_key AND t.created_at > now() - interval '10 minutes') >= 20
+     OR (SELECT count(*) FROM public.naver_auth_transactions t
+          WHERE t.created_at > now() - interval '1 minute') >= 600 THEN
+    RETURN NULL;
+  END IF;
   INSERT INTO public.naver_auth_transactions
-    (purpose, browser_secret_hash, oauth_state_hash, session_user_id, parent_id, expires_at)
-  VALUES (p_purpose, p_browser_secret_hash, p_oauth_state_hash,
+    (purpose, browser_secret_hash, oauth_state_hash, client_key, session_user_id, parent_id, expires_at)
+  VALUES (p_purpose, p_browser_secret_hash, p_oauth_state_hash, p_client_key,
           CASE WHEN p_purpose = 'link_session' THEN p_session_user_id END,
           CASE WHEN p_purpose = 'reauth' THEN p_parent_id END,
           now() + interval '30 minutes')
   RETURNING id INTO v_id;
   RETURN v_id;
+END $$;
+
+-- Before any request to Naver: the transaction exists for this browser and
+-- state, is unconsumed, and has had fewer than 3 callback attempts.
+CREATE FUNCTION public.naver_tx_begin_callback(p_id uuid, p_secret_hash text, p_state_hash text)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+BEGIN
+  UPDATE public.naver_auth_transactions t
+     SET callback_attempts = callback_attempts + 1, updated_at = now()
+   WHERE t.id = p_id AND t.state = 'started' AND t.expires_at > now()
+     AND t.browser_secret_hash = p_secret_hash AND t.oauth_state_hash = p_state_hash
+     AND t.callback_attempts < 3;
+  RETURN FOUND;
 END $$;
 
 -- started -> naver_verified (login, link_session). For a login, resolves the
@@ -348,16 +391,57 @@ RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path = '' AS $$
      AND t.state NOT IN ('completed', 'failed', 'expired');
 $$;
 
--- naver_verified -> completed after the session for target_user_id was issued.
+-- naver_verified -> completed, just before the session is issued, only while
+-- this Naver ID is still linked to the same account: the identity row is
+-- locked (unlink locks it for update) and found again from the hashes.
 CREATE FUNCTION public.naver_tx_complete_login(p_id uuid, p_secret_hash text, p_user_id uuid)
 RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE
+  v_active smallint[] := public._naver_active_versions();
+  tx public.naver_auth_transactions;
+  v_users uuid[];
 BEGIN
-  UPDATE public.naver_auth_transactions t SET state = 'completed', updated_at = now()
+  SELECT * INTO tx FROM public.naver_auth_transactions t
    WHERE t.id = p_id AND t.flow = 'login' AND t.state = 'naver_verified'
      AND t.target_user_id = p_user_id AND t.expires_at > now()
-     AND t.browser_secret_hash = p_secret_hash;
-  RETURN FOUND;
+     AND t.browser_secret_hash = p_secret_hash
+   FOR UPDATE;
+  IF NOT FOUND THEN RETURN false; END IF;
+  PERFORM 1 FROM public.naver_subjects s
+   WHERE s.id IN (
+     SELECT h.subject_id FROM public.naver_subject_hashes h
+      WHERE h.key_version = ANY (v_active)
+        AND h.hash = tx.naver_hashes ->> h.key_version::text)
+   FOR SHARE;
+  SELECT array_agg(DISTINCT s.user_id) INTO v_users
+    FROM public.naver_subjects s
+   WHERE s.id IN (
+     SELECT h.subject_id FROM public.naver_subject_hashes h
+      WHERE h.key_version = ANY (v_active)
+        AND h.hash = tx.naver_hashes ->> h.key_version::text);
+  IF v_users IS NULL OR cardinality(v_users) <> 1 OR v_users[1] <> p_user_id THEN
+    UPDATE public.naver_auth_transactions t SET state = 'failed', updated_at = now() WHERE t.id = tx.id;
+    RETURN false;
+  END IF;
+  UPDATE public.naver_auth_transactions t SET state = 'completed', updated_at = now() WHERE t.id = tx.id;
+  RETURN true;
 END $$;
+
+-- After the session was verified: is the completed login's Naver ID still
+-- linked to that account? The caller signs the new session out if not
+-- (an unlink between completing and issuing).
+CREATE FUNCTION public.naver_tx_still_linked(p_id uuid, p_secret_hash text, p_user_id uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.naver_auth_transactions t
+      JOIN public.naver_subject_hashes h
+        ON h.hash = t.naver_hashes ->> h.key_version::text
+      JOIN public.naver_hash_keys k ON k.version = h.key_version AND k.status = 'active'
+      JOIN public.naver_subjects s ON s.id = h.subject_id
+     WHERE t.id = p_id AND t.browser_secret_hash = p_secret_hash
+       AND t.flow = 'login' AND t.state = 'completed'
+       AND t.target_user_id = p_user_id AND s.user_id = p_user_id)
+$$;
 
 -- -------------------------------------------------------------- final link
 
@@ -469,8 +553,13 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM auth.identities i WHERE i.user_id = p_user_id) THEN
     RETURN false;
   END IF;
+  -- Waits for a login completing on this identity, then removes it.
+  PERFORM 1 FROM public.naver_subjects s WHERE s.user_id = p_user_id FOR UPDATE;
   DELETE FROM public.naver_subjects s WHERE s.user_id = p_user_id;
   IF NOT FOUND THEN RETURN false; END IF;
+  -- Logins already resolved to this account can no longer complete.
+  UPDATE public.naver_auth_transactions t SET state = 'failed', updated_at = now()
+   WHERE t.target_user_id = p_user_id AND t.flow = 'login' AND t.state = 'naver_verified';
   INSERT INTO public.naver_identity_events (user_id, event) VALUES (p_user_id, 'unlinked');
   RETURN true;
 END $$;
@@ -484,6 +573,8 @@ DECLARE
 BEGIN
   UPDATE public.naver_auth_transactions SET state = 'expired', updated_at = now()
    WHERE expires_at <= now() AND state NOT IN ('completed', 'failed', 'expired');
+  UPDATE public.naver_auth_transactions SET client_key = NULL
+   WHERE client_key IS NOT NULL AND created_at < now() - interval '1 hour';
   DELETE FROM public.naver_auth_transactions
    WHERE (state IN ('completed', 'failed') AND updated_at < now() - interval '7 days')
       OR (state = 'expired' AND updated_at < now() - interval '1 day');
@@ -509,7 +600,9 @@ $$;
 REVOKE ALL ON FUNCTION
   public._naver_active_versions(), public._naver_covers_active(jsonb, smallint[]),
   public._naver_resolve(jsonb, smallint[]),
-  public.naver_tx_start(text, text, text, uuid, uuid),
+  public.naver_tx_start(text, text, text, text, uuid, uuid),
+  public.naver_tx_begin_callback(uuid, text, text),
+  public.naver_tx_still_linked(uuid, text, uuid),
   public.naver_tx_callback(uuid, text, text, jsonb),
   public.naver_tx_email_sent(uuid, text, text, text, text, uuid),
   public.naver_tx_confirm_email(uuid, text, text, uuid),
@@ -523,10 +616,12 @@ REVOKE ALL ON FUNCTION
   public.naver_unlink(uuid),
   public.naver_purge_transactions(),
   public.my_login_methods()
-FROM PUBLIC, anon, authenticated;
+FROM PUBLIC, anon, authenticated, service_role;
 
 GRANT EXECUTE ON FUNCTION
-  public.naver_tx_start(text, text, text, uuid, uuid),
+  public.naver_tx_start(text, text, text, text, uuid, uuid),
+  public.naver_tx_begin_callback(uuid, text, text),
+  public.naver_tx_still_linked(uuid, text, uuid),
   public.naver_tx_callback(uuid, text, text, jsonb),
   public.naver_tx_email_sent(uuid, text, text, text, text, uuid),
   public.naver_tx_confirm_email(uuid, text, text, uuid),
