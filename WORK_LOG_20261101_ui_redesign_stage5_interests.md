@@ -1,6 +1,6 @@
 # UI 개편 5단계: 관심 지역·분야 고르기(⑤)와 전체 흐름 E2E (2026-11-01)
 
-상태: 검토 대기 (구현 Claude, 검토 Codex). 브랜치 `feat/ui-redesign-s5-interests-20261101`(4단계 `de7832c` 위). **새 마이그레이션 없음.** push·배포·운영 DB 없음.
+상태: 검토 완료·수정 필요 (구현 Claude, 검토 Codex; 0ebec60·c3748da, P2 1건·P3 1건, WORK_LOG_20261101_ui_redesign_stage5_review.md 참조). 브랜치 `feat/ui-redesign-s5-interests-20261101`(4단계 `de7832c` 위). **새 마이그레이션 없음.** push·배포·운영 DB 없음.
 
 기준: [UI 지시서](docs/UI_REDESIGN_PLAN_2026-10-31.md) ⑤·4단계·전체 흐름 E2E, [재방문 지시서](docs/RETENTION_PLAN_2026-10-31.md) 2-1·2-4, 시안 `docs/design/posterlink-mobile-v3/Onboarding.dc.html`.
 
