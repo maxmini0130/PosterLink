@@ -22,7 +22,7 @@ import {
 import { assertPublicDiscoveryQuery } from "./publicDiscoveryErrors";
 
 const PUBLIC_POSTER_SELECT =
-  "id,title,source_org_name,organizer_name,organizer_id,source_institution_id,application_institution_id,application_start_at,application_end_at,deadline_type,verification_status,verified_at,thumbnail_url,source_key,summary_short,created_at,updated_at,exposure_tier,primary_category_code:field_verification->classification->>primaryCategory";
+  "id,title,source_org_name,organizer_name,organizer_id,source_institution_id,application_institution_id,application_start_at,application_end_at,deadline_type,event_end_at,verification_status,verified_at,thumbnail_url,source_key,summary_short,created_at,updated_at,exposure_tier,primary_category_code:field_verification->classification->>primaryCategory";
 const PROMOTION_POSTER_SELECT = `${PUBLIC_POSTER_SELECT},deadline_review:field_verification->deadlineReview,date_quality_decision:field_verification->dateQuality->>decision,date_issues:field_verification->dateIssues`;
 
 export type PublicDiscoveryFilters = {
@@ -266,7 +266,9 @@ export async function fetchTopRegionCategoryCombinations(
       p_sort: "latest",
       p_limit: 500,
     })
-    .select("id,application_start_at,application_end_at,deadline_type");
+    .select(
+      "id,application_start_at,application_end_at,deadline_type,event_end_at",
+    );
 
   if (posterError) return [];
 
@@ -276,6 +278,7 @@ export async function fetchTopRegionCategoryCombinations(
       application_start_at: string | null;
       application_end_at: string | null;
       deadline_type: string | null;
+      event_end_at: string | null;
     }>
   )
     .filter(isAcceptingPoster)
@@ -375,7 +378,7 @@ export async function fetchPublicInstitutions(
       client
         .from("posters")
         .select(
-          "organizer_id,source_institution_id,application_start_at,application_end_at,deadline_type",
+          "organizer_id,source_institution_id,application_start_at,application_end_at,deadline_type,event_end_at",
         )
         .eq("poster_status", "published")
         .or(PUBLIC_POSTER_EXPOSURE_FILTER)
@@ -498,11 +501,13 @@ function isAcceptingPoster(poster: {
   application_start_at?: string | null;
   application_end_at?: string | null;
   deadline_type?: string | null;
+  event_end_at?: string | null;
 }) {
   return isPosterAcceptingApplications({
     applicationStartAt: poster.application_start_at,
     applicationEndAt: poster.application_end_at,
     deadlineType: poster.deadline_type,
+    eventEndAt: poster.event_end_at,
   });
 }
 

@@ -11,6 +11,8 @@ import { RegionLabel, type RegionScope } from "./RegionLabel";
 
 export type PlPosterCardData = PosterCardData & {
   posterStatus?: string | null;
+  /** event_end_at: a finished event is shown as ended, not open. */
+  eventEndAt?: string | null;
 };
 
 /** Card data from a public discovery row (same organisation rule as institution pages). */
@@ -27,6 +29,7 @@ export function discoveryPosterToCard(
     applicationStartAt: poster.application_start_at,
     deadline: poster.application_end_at || undefined,
     deadlineType: poster.deadline_type,
+    eventEndAt: poster.event_end_at,
     tags: [poster.categoryName, poster.regionName].filter(
       (value): value is string => Boolean(value),
     ),
@@ -41,6 +44,7 @@ function cardParts(poster: PlPosterCardData) {
     applicationStartAt: poster.applicationStartAt,
     applicationEndAt: poster.deadline,
     deadlineType: poster.deadlineType,
+    eventEndAt: poster.eventEndAt,
     posterStatus:
       poster.posterStatus ??
       (poster.contentState === "closed" ? "closed" : null),

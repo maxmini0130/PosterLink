@@ -4,6 +4,7 @@ type PromotionPoster = {
   application_start_at?: string | null;
   application_end_at?: string | null;
   deadline_type?: string | null;
+  event_end_at?: string | null;
   deadline_review?: {
     endAt?: string | null;
     decision?: string;
@@ -32,5 +33,6 @@ export function isPosterEligibleForPromotion(poster: PromotionPoster) {
     applicationStartAt: poster.application_start_at,
     applicationEndAt: poster.application_end_at,
     deadlineType: poster.deadline_type,
+    eventEndAt: poster.event_end_at,
   });
 }

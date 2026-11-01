@@ -27,7 +27,7 @@ export type HomeData = {
 };
 
 const SELECT =
-  "id,title,source_org_name,organizer_name,verification_status,verified_at,application_start_at,application_end_at,deadline_type,thumbnail_url,source_key,created_at,published_at,poster_status,source_institution_id,organizer_id";
+  "id,title,source_org_name,organizer_name,verification_status,verified_at,application_start_at,application_end_at,deadline_type,event_end_at,thumbnail_url,source_key,created_at,published_at,poster_status,source_institution_id,organizer_id";
 
 type Row = {
   id: string;
@@ -39,6 +39,7 @@ type Row = {
   application_start_at: string | null;
   application_end_at: string | null;
   deadline_type: string | null;
+  event_end_at: string | null;
   thumbnail_url: string | null;
   source_key: string | null;
   created_at: string | null;
@@ -68,6 +69,7 @@ async function toItems(rows: Row[]): Promise<HomeItem<PlPosterCardData>[]> {
       applicationEndAt: row.application_end_at,
       deadlineType: row.deadline_type,
       posterStatus: row.poster_status,
+      eventEndAt: row.event_end_at,
     },
     data: {
       id: row.id,
@@ -79,6 +81,7 @@ async function toItems(rows: Row[]): Promise<HomeItem<PlPosterCardData>[]> {
       applicationStartAt: row.application_start_at,
       deadline: row.application_end_at ?? undefined,
       deadlineType: row.deadline_type,
+      eventEndAt: row.event_end_at,
       tags: meta[row.id]?.categoryName ? [meta[row.id].categoryName!] : [],
       image: row.thumbnail_url ?? undefined,
       sourceUrl: row.source_key ?? undefined,

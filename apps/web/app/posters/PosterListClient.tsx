@@ -54,7 +54,7 @@ import { trackAnalytics } from "../../lib/analytics";
 const PAGE_SIZE = 12;
 const WIDER_FIRST = 6;
 const PUBLIC_POSTER_SELECT =
-  "id,title,source_org_name,organizer_name,verification_status,verified_at,application_start_at,application_end_at,deadline_type,poster_status,thumbnail_url,source_key,summary_short,created_at,exposure_tier";
+  "id,title,source_org_name,organizer_name,verification_status,verified_at,application_start_at,application_end_at,deadline_type,event_end_at,poster_status,thumbnail_url,source_key,summary_short,created_at,exposure_tier";
 
 const SORTS: Array<{ key: DiscoverySort; label: string }> = [
   { key: "latest", label: "최신 등록순" },
@@ -90,6 +90,7 @@ function toCard(poster: Row): PlPosterCardData {
     applicationStartAt: poster.application_start_at,
     deadline: poster.application_end_at ?? undefined,
     deadlineType: poster.deadline_type,
+    eventEndAt: poster.event_end_at,
     image: poster.thumbnail_url ?? undefined,
     images: poster.images,
     sourceUrl: poster.source_key ?? undefined,
@@ -302,6 +303,7 @@ function PosterListPageContent({
                 applicationStartAt: poster.application_start_at,
                 applicationEndAt: poster.application_end_at,
                 deadlineType: poster.deadline_type,
+                eventEndAt: poster.event_end_at,
               }),
             )
           : data;

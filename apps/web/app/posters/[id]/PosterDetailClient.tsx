@@ -808,6 +808,7 @@ export function PosterDetailClient({
     applicationEndAt: poster.application_end_at,
     deadlineType: poster.deadline_type,
     posterStatus: poster.poster_status,
+    eventEndAt: poster.event_end_at,
     now: clock
   });
   const closed = display.reception === "closed";

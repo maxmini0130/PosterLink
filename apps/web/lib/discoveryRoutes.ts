@@ -1,4 +1,9 @@
-export type DiscoverySort = "latest" | "deadline" | "popular" | "views" | "favorites";
+export type DiscoverySort =
+  | "latest"
+  | "deadline"
+  | "popular"
+  | "views"
+  | "favorites";
 
 export type DiscoveryTaxonomy = {
   id: string;
@@ -20,6 +25,7 @@ export type DiscoveryPoster = {
   application_start_at?: string | null;
   application_end_at: string | null;
   deadline_type?: string | null;
+  event_end_at?: string | null;
   verification_status?: string | null;
   verified_at?: string | null;
   thumbnail_url: string | null;
@@ -40,7 +46,13 @@ export type DiscoveryPoster = {
   semanticScore?: number | null;
 };
 
-const SORT_VALUES = new Set<DiscoverySort>(["latest", "deadline", "popular", "views", "favorites"]);
+const SORT_VALUES = new Set<DiscoverySort>([
+  "latest",
+  "deadline",
+  "popular",
+  "views",
+  "favorites",
+]);
 const INSTITUTION_TYPE_LABELS: Record<string, string> = {
   central_portal: "중앙 공공포털",
   local_government: "지방자치단체",
@@ -59,7 +71,9 @@ const INSTITUTION_TYPE_LABELS: Record<string, string> = {
 };
 
 export function readDiscoverySort(value?: string | null): DiscoverySort {
-  return value && SORT_VALUES.has(value as DiscoverySort) ? (value as DiscoverySort) : "latest";
+  return value && SORT_VALUES.has(value as DiscoverySort)
+    ? (value as DiscoverySort)
+    : "latest";
 }
 
 export function institutionTypeLabel(value?: string | null) {
@@ -68,7 +82,9 @@ export function institutionTypeLabel(value?: string | null) {
 }
 
 export function taxonomySlug(item: DiscoveryTaxonomy, prefix: "CAT" | "REG") {
-  const code = String(item.code ?? "").trim().toUpperCase();
+  const code = String(item.code ?? "")
+    .trim()
+    .toUpperCase();
   const codePrefix = `${prefix}_`;
   if (code.startsWith(codePrefix)) {
     return code.slice(codePrefix.length).toLowerCase().replace(/_/g, "-");
@@ -77,20 +93,30 @@ export function taxonomySlug(item: DiscoveryTaxonomy, prefix: "CAT" | "REG") {
   return encodeURIComponent(item.name.trim());
 }
 
-export function resolveTaxonomyByRouteValue<T extends DiscoveryTaxonomy>(items: T[], value?: string | null) {
+export function resolveTaxonomyByRouteValue<T extends DiscoveryTaxonomy>(
+  items: T[],
+  value?: string | null,
+) {
   const decoded = decodeRouteValue(value);
   if (!decoded) return null;
 
-  return items.find((item) => {
-    const candidates = [
-      item.id,
-      item.name,
-      item.full_name,
-      item.code,
-      taxonomySlug(item, item.code?.toUpperCase().startsWith("REG_") ? "REG" : "CAT"),
-    ];
-    return candidates.some((candidate) => normalizeLookup(candidate) === decoded);
-  }) ?? null;
+  return (
+    items.find((item) => {
+      const candidates = [
+        item.id,
+        item.name,
+        item.full_name,
+        item.code,
+        taxonomySlug(
+          item,
+          item.code?.toUpperCase().startsWith("REG_") ? "REG" : "CAT",
+        ),
+      ];
+      return candidates.some(
+        (candidate) => normalizeLookup(candidate) === decoded,
+      );
+    }) ?? null
+  );
 }
 
 export function buildPosterSearchPath(filters: {
@@ -103,9 +129,11 @@ export function buildPosterSearchPath(filters: {
   const params = new URLSearchParams();
   const query = filters.query?.trim();
   if (query) params.set("q", query);
-  if (filters.category) params.set("category", taxonomySlug(filters.category, "CAT"));
+  if (filters.category)
+    params.set("category", taxonomySlug(filters.category, "CAT"));
   if (filters.region) params.set("region", taxonomySlug(filters.region, "REG"));
-  if (filters.sort && filters.sort !== "latest") params.set("sort", filters.sort);
+  if (filters.sort && filters.sort !== "latest")
+    params.set("sort", filters.sort);
   if (filters.includeClosed) params.set("closed", "include");
   const queryString = params.toString();
   return queryString ? `/posters?${queryString}` : "/posters";
