@@ -1,6 +1,6 @@
 # 개인정보 고지·운영 읽기 전용 대조 SQL 검토 (2026-11-01)
 
-상태: b128aeb 재검토 수정 필요 — P2 3건. 공개 방침 수정은 해결, 대조 SQL에 통과 오판 경로가 남음. 원본 코드·SQL 수정 없이 검토 기록만 같은 브랜치에 커밋한다.
+상태: cc51e12 재검토 통과 — 이전 P2 3건 해결, 추가 차단 결함 없음. P3 표시 문제는 후속 유지. 운영 대조 실행 결과와 병합·배포 승인은 별도다.
 
 ## P2-1. 연결 기록을 생성 후 3개월 파기한다고 안내하지만 실제로는 활동에 따라 계속 남음
 
@@ -100,3 +100,26 @@ j.command LIKE '%public.run_usage_log_retention(50000)%'는 실행할 SQL이 아
 - 공개 방침·새 테스트·공통 준비 코드 Prettier PASS, 검토 기록 Prettier 및 git diff --check 확인. 관련 retention 테스트 31/31 PASS(product-events-migration, retention-metrics-sql, usage-log-retention, pre-merge-readonly-check). 구현을 고치지 않아 전체 웹 build/lint와 루트 전체 테스트는 반복하지 않았다.
 - 읽기 전용 트랜잭션과 SELECT 구성은 유지됐다. 운영 DB에 이 SQL을 실행하지 않았으며 실제 pg_cron·서버 버전별 정의 출력은 확인하지 않았다.
 - 코드·SQL 변경, push, 배포, 운영/원격 DB 접속·쓰기·마이그레이션 적용 없음. 검토 기록만 로컬 커밋한다. 방침 수정은 해결됐지만 b128aeb 묶음의 대조 SQL은 재검토 통과로 처리하지 않는다.
+
+## cc51e12 재검토
+
+판정: 검토 통과. 이전 P2-R1·R2·R3은 해결됐고 변경 범위에서 추가 차단 결함을 발견하지 않았다. 공개 방침의 보존 기준 수정 통과 판정도 유지한다. 이 판정은 코드·SQL 및 로컬 검증 결과이며 운영 DB의 일치 여부나 첫 파기 성공을 확인한 결과가 아니다.
+
+- P2-R1: 누락 주 생성 범위가 현재 저장된 최소 주가 아닌 collection_started_at의 KST 주부터 시작한다. 첫 저장 주도 그 시작 주와 비교하므로 맨 앞 집계가 지워져도 검사 범위가 줄지 않는다. 첫 주 삭제를 실제 판정 SQL이 실패로 보고하는 것을 확인했다.
+- P2-R2: 여섯 함수의 소유자를 actual에 출력하고 기대값 postgres와 비교한다. 기존 재현과 동일하게 record_product_event 소유자를 권한 없는 NOLOGIN 역할로 바꿔 해당 함수 검사가 실패함을 확인했다. 테스트에는 run_usage_log_retention 소유자 변경 사례도 있다.
+- P2-R3: 예약 명령 전체를 공백 정규화 후 정확히 비교하고 작업 수 1개와 실행 계정 postgres를 요구한다. 함수 이름만 담은 문자열 조회, 같은 이름의 작업 중복, 실행 계정 anon으로 변경한 경우 모두 실패한다. 정상 명령에 공백·개행만 바꾼 경우는 통과했다.
+- BEGIN TRANSACTION READ ONLY부터 ROLLBACK까지 조회만 수행하는 구성은 유지됐다. 새 쓰기 호출이나 파기 실행은 추가되지 않았다.
+
+검증:
+
+- 작업 전 origin fetch·status 확인: 원격 대비 13커밋 앞섬, 작업 트리 깨끗함. AGENTS·CLAUDE·README, 대상 diff와 작업/검토 기록, 예약·집계 마이그레이션을 대조했다.
+- 관련 retention 테스트 31/31 PASS(product-events-migration, retention-metrics-sql, usage-log-retention, pre-merge-readonly-check).
+- Git 제외 data/results/retention-premerge-review/repro-cc51.ts에서 실제 판정 SQL로 기존 세 재현과 추가 예약 중복·실행 계정 변경의 차단 및 공백만 다른 정상 명령의 통과를 독립적으로 확인했다. 가짜 cron 표를 둔 로컬 PGlite만 사용했다.
+- 변경 테스트 Prettier 및 검토 기록 Prettier·git diff --check 확인. 원본 구현 변경이 없어 전체 웹 build/lint·루트 전체 테스트는 반복하지 않았다.
+
+운영 실행 시 남는 확인:
+
+- collection_started_at은 전체 방문의 최소 시각이고 최초 집계 대상은 일반 회원/방문자 중 자동 방문을 제외한 시각이다. 최초 주가 자동·내부 방문뿐이면 시작 주 비교가 보수적으로 실패할 수 있다. SQL 안내대로 방문 근거를 확인해야 하며 단순히 실패 행을 무시하거나 집계 원본을 수정해 통과시키면 안 된다.
+- postgres 소유자 기대값과 정의 문자열 표기는 운영 서버에서 확인하지 않았다. 다른 소유자가 나오면 해당 역할의 실제 권한과 승인된 적용 이력을 확인한 뒤 판정한다. 표시 형식 차이도 의미상 동일 여부를 검토한다.
+- 실제 job 7 실행 결과, 운영 집계 범위·값·파기 잔량 확인이 여전히 필요하다. P3(90일/달력 3개월 및 링크 클릭 기간 라벨)는 기존 후속 항목으로 유지한다.
+- 원본 코드·SQL 변경, push, 배포, 운영/원격 DB 접속·쓰기·마이그레이션 적용 없음. 검토 기록만 같은 브랜치에 로컬 커밋한다.
