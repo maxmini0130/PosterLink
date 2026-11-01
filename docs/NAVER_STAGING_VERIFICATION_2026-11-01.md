@@ -55,7 +55,7 @@ SET ROLE service_role;
 
 `SET ROLE`이 거부되면 그 결과를 보고하고, `postgres`로 이어서 실행합니다. 그 경우 2장의 잠금 동작 확인은 유효하지만 1-3의 권한 결과는 별도로 봐야 합니다.
 
-같은 클라이언트 키(`cli`)로 10분에 20번 넘게 시작하면 `naver_tx_start`가 `NULL`을 돌려줍니다(시작 한도). 준비를 여러 번 반복하다 `NULL`이 나오면 `\set cli` 값을 바꾸거나 10분 기다립니다.
+같은 클라이언트 키(`cli`)로 10분에 20번 넘게 시작하면 `naver_tx_start`가 `NULL`을 돌려줍니다(시작 한도). 준비를 여러 번 반복하다 `NULL`이 나오면 `SELECT encode(sha256('stg-client-3'::bytea), 'hex') AS cli \gset`처럼 다른 키를 만들거나 10분 기다립니다.
 
 ## 1. 권한 확인
 
