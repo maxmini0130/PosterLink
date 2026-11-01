@@ -16,36 +16,23 @@ export default function ResetPasswordPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Supabase가 URL hash의 access_token을 자동으로 처리하지만,
-    // recovery 타입인지 확인하고 세션을 명시적으로 설정
-    const hash = window.location.hash.slice(1);
-    const params = new URLSearchParams(hash);
-    const accessToken = params.get("access_token");
-    const refreshToken = params.get("refresh_token");
-    const type = params.get("type");
-
-    if (type === "recovery" && accessToken && refreshToken) {
-      supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }).then(({ error }) => {
-        if (error) {
-          toast.error("링크가 만료되었습니다. 다시 요청해주세요.");
-          router.replace("/forgot-password");
-        } else {
-          // hash 제거 (토큰 노출 방지)
-          window.history.replaceState(null, "", window.location.pathname);
-          setReady(true);
-        }
-      });
-    } else {
-      // 이미 세션이 있는 경우 (Supabase가 자동 처리)
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) {
-          setReady(true);
-        } else {
-          toast.error("유효하지 않은 링크입니다. 다시 요청해주세요.");
-          router.replace("/forgot-password");
-        }
-      });
+    // Tokens in the URL hash are never turned into a session: a link carrying
+    // someone else's tokens would sign this browser into their account.
+    // Recovery links use the PKCE code, which the client exchanges on load.
+    if (new URLSearchParams(window.location.hash.slice(1)).has("access_token")) {
+      window.history.replaceState(null, "", window.location.pathname);
+      toast.error("유효하지 않은 링크입니다. 다시 요청해주세요.");
+      router.replace("/forgot-password");
+      return;
     }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setReady(true);
+      } else {
+        toast.error("유효하지 않은 링크입니다. 다시 요청해주세요.");
+        router.replace("/forgot-password");
+      }
+    });
   }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {

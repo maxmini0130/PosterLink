@@ -283,7 +283,7 @@ test("local staff profile save sends no role", async ({
   expect(payload).toHaveProperty("id", ids.super_admin);
 });
 
-test("local common OAuth callback preserves role-free profile upsert", async ({
+test("local common OAuth callback refuses URL session tokens", async ({
   request,
   baseURL,
 }) => {
@@ -299,10 +299,10 @@ test("local common OAuth callback preserves role-free profile upsert", async ({
     { maxRedirects: 0 },
   );
   expect(r.status()).toBe(307);
-  expect(r.headers().location).toContain("/onboarding");
+  expect(r.headers().location).toContain("/login?error=login_failed");
+  expect(r.headers()["set-cookie"]).toBeUndefined();
   const c = await (await request.get("http://127.0.0.1:4010/control")).json();
-  expect(c.profileWrites).toBe(1);
-  expect(c.lastProfileHasRole).toBe(false);
+  expect(c.profileWrites).toBe(0);
 });
 
 test("Preview compiled signup omits role with mocked Auth and profile requests", async ({
