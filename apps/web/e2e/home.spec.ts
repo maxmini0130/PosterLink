@@ -10,40 +10,26 @@ test.describe("메인 화면", () => {
   test("포스터 목록 표시", async ({ page }) => {
     await page.goto("/posters");
     await page.waitForLoadState("networkidle");
-    await expect(page.getByRole("heading", { name: "공공 공고 찾기" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "찾기", exact: true })).toBeVisible();
   });
 
   test("포스터 검색", async ({ page }) => {
     await page.goto("/posters");
     await page.waitForLoadState("networkidle");
-    await page.click("text=어떤 공고를 찾으시나요?");
-    await page.fill('input[placeholder="검색어를 입력하세요"]', "청년");
+    await page.getByLabel("공고, 기관 검색").fill("청년");
     await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/q=%EC%B2%AD%EB%85%84/);
     await page.waitForLoadState("networkidle");
   });
 });
 
-test.describe("home feed tabs", () => {
-  test("keep cards directly below controls after every feed tab click", async ({ page }) => {
-    await page.setViewportSize({ width: 770, height: 918 });
+test.describe("home first visit", () => {
+  test("a new browser sees open posters and the 찜 guide, not an empty screen", async ({ page }) => {
     await page.goto("/");
     await page.waitForLoadState("networkidle");
-
-    const feedGrid = page.getByTestId("home-feed-grid");
-    const categoryFilters = page.getByTestId("home-feed-category-filters");
-    const tabIds = ["home-feed-tab-urgent", "home-feed-tab-new", "home-feed-tab-popular"];
-
-    for (const tabId of tabIds) {
-      await page.getByTestId(tabId).click();
-      await expect(feedGrid).toBeVisible();
-
-      const filtersBox = await categoryFilters.boundingBox();
-      const firstCardBox = await feedGrid.locator("a[href^='/posters/']").first().boundingBox();
-
-      expect(filtersBox).toBeTruthy();
-      expect(firstCardBox).toBeTruthy();
-      expect(firstCardBox!.y - (filtersBox!.y + filtersBox!.height)).toBeLessThan(80);
-    }
+    await expect(page.getByRole("region", { name: "지금 접수 중인 공고" })).toBeVisible();
+    await expect(page.getByText("찜해 두면 다음에 모아 보여드려요")).toBeVisible();
+    await expect(page.getByText("방문 이후")).toHaveCount(0);
   });
 });
 

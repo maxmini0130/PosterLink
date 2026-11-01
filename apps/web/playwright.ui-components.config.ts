@@ -12,6 +12,7 @@ export default defineConfig({
     "ui-components.spec.ts",
     "poster-detail-guest.spec.ts",
     "my-posters.spec.ts",
+    "home-search.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,

@@ -1,24 +1,68 @@
 "use client";
 
-import { Suspense, useState, useEffect, useRef, type MutableRefObject } from "react";
+import {
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from "react";
+import { ChevronDown, Search, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
 import { Footer } from "../components/Footer";
-import { PosterCard } from "../components/PosterCard";
-import { fetchCategoryRegionNames, fetchPosterImages } from "../lib/posterHelpers";
+import { BottomSheet } from "../components/pl/BottomSheet";
+import { GuideCard } from "../components/pl/GuideCard";
+import {
+  PosterListCard,
+  type PlPosterCardData,
+} from "../components/pl/PosterListCard";
+import { SectionHeader } from "../components/pl/SectionHeader";
+import { guestLocal } from "../lib/guestSession";
+import {
+  fetchCategoryRegionNames,
+  fetchPosterImages,
+} from "../lib/posterHelpers";
 import { fetchPosterMetricCounts } from "../lib/posterMetrics";
-import { getCityRegions, getDistrictRegions, getRegionLabel, getRegionScopeIds, getSelectedCityId } from "../lib/regionHelpers";
-import { buildPosterSearchPath, type DiscoveryPoster, type DiscoverySort, type DiscoveryTaxonomy } from "../../lib/discoveryRoutes";
+import {
+  getCityRegions,
+  getDistrictRegions,
+  getRegionLabel,
+  getRegionScopeIds,
+  getSelectedCityId,
+} from "../lib/regionHelpers";
+import {
+  buildPosterSearchPath,
+  type DiscoveryPoster,
+  type DiscoverySort,
+  type DiscoveryTaxonomy,
+} from "../../lib/discoveryRoutes";
+import { readGuestFavorites } from "../../lib/guestStore";
 import { isPosterAcceptingApplications } from "../../lib/posterApplication";
-import { Search, X, History, TrendingUp, ArrowLeft, ChevronDown } from "lucide-react";
-
+import {
+  groupByRegionScope,
+  isSavedSearch,
+  readSavedSearches,
+  removeSavedSearch,
+  saveSearch,
+  type SavedSearch,
+} from "../../lib/searchGroups";
 import { trackAnalytics } from "../../lib/analytics";
 
 const PAGE_SIZE = 12;
+const WIDER_FIRST = 6;
 const PUBLIC_POSTER_SELECT =
-  "id,title,source_org_name,application_start_at,application_end_at,deadline_type,poster_status,thumbnail_url,source_key,summary_short,created_at,exposure_tier";
-const QUICK_SEARCH_TERMS = ["청년", "취업", "무료교육", "주거", "창업", "곧 마감"];
+  "id,title,source_org_name,organizer_name,verification_status,verified_at,application_start_at,application_end_at,deadline_type,poster_status,thumbnail_url,source_key,summary_short,created_at,exposure_tier";
+
+const SORTS: Array<{ key: DiscoverySort; label: string }> = [
+  { key: "latest", label: "최신 등록순" },
+  { key: "deadline", label: "마감 임박순" },
+  { key: "popular", label: "인기순" },
+  { key: "views", label: "조회순" },
+  { key: "favorites", label: "찜 많은순" },
+];
 
 type PosterListClientProps = {
   initialPosters: DiscoveryPoster[];
@@ -31,6 +75,28 @@ type PosterListClientProps = {
   initialSort: DiscoverySort;
   initialIncludeClosed: boolean;
 };
+
+// Rows from the search RPC, semantic search and enrichment (loosely typed as before).
+type Row = any;
+
+function toCard(poster: Row): PlPosterCardData {
+  return {
+    id: poster.id,
+    title: poster.title,
+    org:
+      (poster.verification_status === "verified" && poster.verified_at
+        ? poster.organizer_name || poster.source_org_name
+        : poster.source_org_name) ?? undefined,
+    applicationStartAt: poster.application_start_at,
+    deadline: poster.application_end_at ?? undefined,
+    deadlineType: poster.deadline_type,
+    image: poster.thumbnail_url ?? undefined,
+    images: poster.images,
+    sourceUrl: poster.source_key ?? undefined,
+    posterStatus: poster.poster_status,
+    tags: [poster.categoryName].filter((tag): tag is string => Boolean(tag)),
+  };
+}
 
 export function PosterListClient(props: PosterListClientProps) {
   return (
@@ -52,98 +118,130 @@ function PosterListPageContent({
   initialIncludeClosed,
 }: PosterListClientProps) {
   const [loading, setLoading] = useState(false);
-  const [posters, setPosters] = useState<any[]>(initialPosters);
+  const [failed, setFailed] = useState(false);
+  const [posters, setPosters] = useState<Row[]>(initialPosters);
   const [resultTotalCount, setResultTotalCount] = useState(initialTotalCount);
-  const [categories, setCategories] = useState<any[]>(initialCategories);
-  const [regions, setRegions] = useState<any[]>(initialRegions);
+  const [categories, setCategories] = useState<Row[]>(initialCategories);
+  const [regions, setRegions] = useState<Row[]>(initialRegions);
 
-  // Search & Filter States
+  const [queryInput, setQueryInput] = useState(initialQuery);
   const [searchQuery, setSearchQuery] = useState(initialQuery);
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
-  const [popularKeywords, setPopularKeywords] = useState<string[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(initialCategoryId);
-  const [selectedRegionId, setSelectedRegionId] = useState<string | null>(initialRegionId);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
+    initialCategoryId,
+  );
+  const [selectedRegionId, setSelectedRegionId] = useState<string | null>(
+    initialRegionId,
+  );
   const [sortBy, setSortBy] = useState<DiscoverySort>(initialSort);
-  const [hideClosedPosters, setHideClosedPosters] = useState(!initialIncludeClosed);
-  const [myMatchesOnly, setMyMatchesOnly] = useState(false);
+  const [hideClosedPosters, setHideClosedPosters] =
+    useState(!initialIncludeClosed);
   const [semanticSearchActive, setSemanticSearchActive] = useState(false);
+  const [saved, setSaved] = useState<SavedSearch[]>([]);
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
-  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [widerCount, setWiderCount] = useState(WIDER_FIRST);
   const pendingSearchLogRef = useRef<string | null>(null);
-  const lastLoggedSearchRef = useRef<{ key: string; loggedAt: number } | null>(null);
+  const lastLoggedSearchRef = useRef<{ key: string; loggedAt: number } | null>(
+    null,
+  );
   const skipInitialFetchRef = useRef(true);
   const skipInitialUrlSyncRef = useRef(true);
   const initialSearchLoggedRef = useRef(false);
 
-  const previousFilters = useRef(JSON.stringify([selectedCategoryId,selectedRegionId,sortBy,hideClosedPosters,myMatchesOnly]));
-  useEffect(()=>{
-    const key=JSON.stringify([selectedCategoryId,selectedRegionId,sortBy,hideClosedPosters,myMatchesOnly]);
+  const previousFilters = useRef(
+    JSON.stringify([
+      selectedCategoryId,
+      selectedRegionId,
+      sortBy,
+      hideClosedPosters,
+    ]),
+  );
+  useEffect(() => {
+    const key = JSON.stringify([
+      selectedCategoryId,
+      selectedRegionId,
+      sortBy,
+      hideClosedPosters,
+    ]);
     if (previousFilters.current === key) return;
-    previousFilters.current=key;
-    trackAnalytics("filter_poster", {search_category:selectedCategoryId || "all",search_region:selectedRegionId || "all",sort:sortBy,include_closed:!hideClosedPosters});
-  },[selectedCategoryId,selectedRegionId,sortBy,hideClosedPosters,myMatchesOnly]);
+    previousFilters.current = key;
+    trackAnalytics("filter_poster", {
+      search_category: selectedCategoryId || "all",
+      search_region: selectedRegionId || "all",
+      sort: sortBy,
+      include_closed: !hideClosedPosters,
+    });
+  }, [selectedCategoryId, selectedRegionId, sortBy, hideClosedPosters]);
 
-  // 1. Initial Data Load
+  // Taxonomies (when the server had none), recent searches, saved conditions
+  // and which posters are already 찜 (account or this browser).
   useEffect(() => {
     const fetchBase = async () => {
-      const { data: catData } = await supabase.from("categories").select("*").order("sort_order");
-      const { data: regData } = await supabase
-        .from("regions")
-        .select("*")
-        .in("level", ["nation", "sido", "sigungu"])
-        .order("level", { ascending: false })
-        .order("full_name", { ascending: true });
-      if (catData && initialCategories.length === 0) setCategories(catData);
-      if (regData && initialRegions.length === 0) setRegions(regData);
-      
-      // Load recent searches from localStorage
-      try {
-        const saved = localStorage.getItem("recent_searches");
-        if (saved) setRecentSearches(JSON.parse(saved));
-      } catch {
-        localStorage.removeItem("recent_searches");
+      if (initialCategories.length === 0) {
+        const { data } = await supabase
+          .from("categories")
+          .select("*")
+          .order("sort_order");
+        if (data) setCategories(data);
       }
-
-      // 인기 검색어 DB에서 로드
-      const { data: kwData } = await supabase.rpc("get_popular_keywords", { p_limit: 5 });
-      if (kwData && kwData.length > 0) {
-        setPopularKeywords(kwData.map((r: any) => r.keyword));
-      } else {
-        setPopularKeywords(["청년수당", "소상공인 지원", "내일배움카드", "디지털 교육", "창업 지원"]);
+      if (initialRegions.length === 0) {
+        const { data } = await supabase
+          .from("regions")
+          .select("*")
+          .in("level", ["nation", "sido", "sigungu"])
+          .order("level", { ascending: false })
+          .order("full_name", { ascending: true });
+        if (data) setRegions(data);
       }
     };
-    fetchBase();
+    void fetchBase();
+    try {
+      const stored = localStorage.getItem("recent_searches");
+      if (stored) setRecentSearches(JSON.parse(stored));
+    } catch {
+      /* ignore a broken record */
+    }
+    setSaved(readSavedSearches(guestLocal));
+    void (async () => {
+      const userId =
+        (await supabase.auth.getSession()).data.session?.user.id ?? null;
+      if (!userId) {
+        setFavoriteIds(
+          new Set(readGuestFavorites(guestLocal).map((item) => item.posterId)),
+        );
+        return;
+      }
+      const { data } = await supabase
+        .from("favorites")
+        .select("poster_id")
+        .eq("user_id", userId);
+      setFavoriteIds(
+        new Set((data ?? []).map((row) => row.poster_id as string)),
+      );
+    })();
   }, [initialCategories.length, initialRegions.length]);
 
-  // 2. Fetch Posters with Filters
   const fetchPosters = async (queryStr = searchQuery) => {
     setLoading(true);
+    setFailed(false);
     try {
       const normalizedQuery = queryStr.trim();
-      let data: any[] = [];
-      const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user ?? null;
-      let userPrimaryRegionId: string | null = null;
-      let userInterestCategoryIds: string[] = [];
-
-      if (user && myMatchesOnly) {
-        const [profileRes, interestRes] = await Promise.all([
-          supabase.from("profiles").select("primary_region_id").eq("id", user.id).maybeSingle(),
-          supabase.from("user_interest_categories").select("category_id").eq("user_id", user.id),
-        ]);
-        userPrimaryRegionId = profileRes.data?.primary_region_id ?? null;
-        userInterestCategoryIds = (interestRes.data ?? []).map((row: any) => row.category_id).filter(Boolean);
-      }
-
+      let data: Row[] = [];
       let semanticSearchUsed = false;
-      const selectedRegionScopeIds = getRegionScopeIds(selectedRegionId, regions);
+      const selectedRegionScopeIds = getRegionScopeIds(
+        selectedRegionId,
+        regions,
+      );
       const includeClosed = !hideClosedPosters || normalizedQuery.length > 0;
       const searchArgs = {
         p_query: normalizedQuery || null,
         p_category_id: selectedCategoryId,
-        p_region_ids: selectedRegionScopeIds ? Array.from(selectedRegionScopeIds) : null,
+        p_region_ids: selectedRegionScopeIds
+          ? Array.from(selectedRegionScopeIds)
+          : null,
         p_include_closed: includeClosed,
         p_sort: sortBy === "deadline" ? "deadline" : "latest",
         p_limit: 240,
@@ -163,13 +261,17 @@ function PosterListPageContent({
             query: normalizedQuery,
             limit: 80,
             categoryId: selectedCategoryId,
-            regionIds: selectedRegionScopeIds ? Array.from(selectedRegionScopeIds) : null,
+            regionIds: searchArgs.p_region_ids,
           }),
         }).catch(() => null);
 
         if (semanticResponse?.ok) {
           const payload = await semanticResponse.json().catch(() => null);
-          if (payload?.semantic && Array.isArray(payload.posters) && payload.posters.length > 0) {
+          if (
+            payload?.semantic &&
+            Array.isArray(payload.posters) &&
+            payload.posters.length > 0
+          ) {
             data = payload.posters;
             semanticSearchUsed = true;
           }
@@ -180,95 +282,105 @@ function PosterListPageContent({
         const { data: rpcData, error } = await supabase
           .rpc("search_public_posters", searchArgs)
           .select(PUBLIC_POSTER_SELECT);
-
         if (error) throw error;
-        const keywordData = (Array.isArray(rpcData) ? rpcData : rpcData ? [rpcData] : []) as any[];
-        data = semanticSearchUsed ? mergeUniquePosters(data, keywordData) : keywordData;
+        const keywordData = (
+          Array.isArray(rpcData) ? rpcData : rpcData ? [rpcData] : []
+        ) as Row[];
+        data = semanticSearchUsed
+          ? mergeUniquePosters(data, keywordData)
+          : keywordData;
       }
       const { data: totalCountData, error: countError } = await countPromise;
       if (countError) throw countError;
-      const serverTotalCount = typeof totalCountData === "number" ? totalCountData : null;
+      const serverTotalCount =
+        typeof totalCountData === "number" ? totalCountData : null;
 
-      let dateFilteredData = data;
-      if (!includeClosed && hideClosedPosters) {
-        dateFilteredData = data.filter((poster: any) => isPosterAcceptingApplications({
-            applicationStartAt: poster.application_start_at,
-            applicationEndAt: poster.application_end_at,
-            deadlineType: poster.deadline_type,
-          }));
-      }
+      const dateFilteredData =
+        !includeClosed && hideClosedPosters
+          ? data.filter((poster) =>
+              isPosterAcceptingApplications({
+                applicationStartAt: poster.application_start_at,
+                applicationEndAt: poster.application_end_at,
+                deadlineType: poster.deadline_type,
+              }),
+            )
+          : data;
 
-      const basePosterIds = dateFilteredData.map((poster: any) => poster.id);
-      const [baseMetaMap, baseMetricCounts, baseImageMap] = await Promise.all([
-        fetchCategoryRegionNames(basePosterIds),
-        fetchPosterMetricCounts(basePosterIds),
-        fetchPosterImages(basePosterIds),
+      const ids = dateFilteredData.map((poster) => poster.id);
+      const [metaMap, metricCounts, imageMap] = await Promise.all([
+        fetchCategoryRegionNames(ids),
+        fetchPosterMetricCounts(ids),
+        fetchPosterImages(ids),
       ]);
-
-      const enrichedData = dateFilteredData.map((poster: any) => ({
+      const enriched = dateFilteredData.map((poster) => ({
         ...poster,
-        ...baseMetaMap[poster.id],
-        images: baseImageMap[poster.id] ?? [],
-        viewCount: baseMetricCounts.viewCounts[poster.id] ?? 0,
-        linkClickCount: baseMetricCounts.linkClickCounts[poster.id] ?? 0,
-        favoriteCount: baseMetricCounts.favoriteCounts[poster.id] ?? 0,
+        ...metaMap[poster.id],
+        images: imageMap[poster.id] ?? [],
+        viewCount: metricCounts.viewCounts[poster.id] ?? 0,
+        linkClickCount: metricCounts.linkClickCounts[poster.id] ?? 0,
+        favoriteCount: metricCounts.favoriteCounts[poster.id] ?? 0,
         semanticScore: poster.semantic_score ?? null,
       }));
 
-      const userRegionScopeIds = getRegionScopeIds(userPrimaryRegionId, regions);
+      const filtered = enriched.filter(
+        (poster) =>
+          (!selectedCategoryId ||
+            poster.categoryIds?.includes(selectedCategoryId)) &&
+          (!selectedRegionScopeIds ||
+            poster.regionIds?.some((regionId: string) =>
+              selectedRegionScopeIds.has(regionId),
+            )),
+      );
 
-      const filteredData = enrichedData.filter((poster: any) => (
-        (!selectedCategoryId || poster.categoryIds?.includes(selectedCategoryId)) &&
-        (!selectedRegionScopeIds || poster.regionIds?.some((regionId: string) => selectedRegionScopeIds.has(regionId))) &&
-        (!myMatchesOnly || (user && (
-          (userRegionScopeIds && poster.regionIds?.some((regionId: string) => userRegionScopeIds.has(regionId))) ||
-          poster.categoryIds?.some((categoryId: string) => userInterestCategoryIds.includes(categoryId))
-        )))
-      ));
-
-      const sortedData = [...filteredData].sort((a: any, b: any) => {
-        if (semanticSearchUsed && normalizedQuery && sortBy === "latest") {
+      const sorted = [...filtered].sort((a, b) => {
+        if (semanticSearchUsed && normalizedQuery && sortBy === "latest")
           return (b.semanticScore ?? 0) - (a.semanticScore ?? 0);
-        }
         if (sortBy === "deadline") {
-          const deadlineRank = (poster: any) => {
-            if (!poster.application_end_at) return Number.MAX_SAFE_INTEGER;
-            const time = new Date(poster.application_end_at).getTime();
+          const rank = (poster: Row) => {
+            const time = poster.application_end_at
+              ? new Date(poster.application_end_at).getTime()
+              : Number.NaN;
             return Number.isNaN(time) ? Number.MAX_SAFE_INTEGER : time;
           };
-          const aTime = deadlineRank(a);
-          const bTime = deadlineRank(b);
-          return aTime - bTime;
+          return rank(a) - rank(b);
         }
         if (sortBy === "popular") {
-          const score = (poster: any) => (poster.viewCount ?? 0) + ((poster.linkClickCount ?? 0) * 2) + ((poster.favoriteCount ?? 0) * 3);
+          const score = (poster: Row) =>
+            (poster.viewCount ?? 0) +
+            (poster.linkClickCount ?? 0) * 2 +
+            (poster.favoriteCount ?? 0) * 3;
           return score(b) - score(a);
         }
-        if (sortBy === "views") {
-          return (b.viewCount ?? 0) - (a.viewCount ?? 0);
-        }
-        if (sortBy === "favorites") {
+        if (sortBy === "views") return (b.viewCount ?? 0) - (a.viewCount ?? 0);
+        if (sortBy === "favorites")
           return (b.favoriteCount ?? 0) - (a.favoriteCount ?? 0);
-        }
-        return new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime();
+        return (
+          new Date(b.created_at ?? 0).getTime() -
+          new Date(a.created_at ?? 0).getTime()
+        );
       });
 
-      setPosters(sortedData);
+      setPosters(sorted);
       setResultTotalCount(
-        myMatchesOnly || semanticSearchUsed
-          ? sortedData.length
-          : serverTotalCount ?? sortedData.length,
+        semanticSearchUsed
+          ? sorted.length
+          : (serverTotalCount ?? sorted.length),
       );
       setSemanticSearchActive(semanticSearchUsed);
       setDisplayCount(PAGE_SIZE);
+      setWiderCount(WIDER_FIRST);
 
-      if (normalizedQuery.length >= 2 && shouldRecordSearchLog(normalizedQuery, lastLoggedSearchRef)) {
+      if (
+        normalizedQuery.length >= 2 &&
+        shouldRecordSearchLog(normalizedQuery, lastLoggedSearchRef)
+      ) {
         pendingSearchLogRef.current = null;
-        void recordSearchLog(normalizedQuery, sortedData.length);
+        void recordSearchLog(normalizedQuery, sorted.length);
       }
     } catch (err) {
       console.error("Error fetching posters:", err);
       setPosters([]);
+      setFailed(true);
       setSemanticSearchActive(false);
     } finally {
       setLoading(false);
@@ -282,12 +394,19 @@ function PosterListPageContent({
     }
     const timer = setTimeout(() => fetchPosters(), 300);
     return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery, selectedCategoryId, selectedRegionId, sortBy, hideClosedPosters, myMatchesOnly]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    searchQuery,
+    selectedCategoryId,
+    selectedRegionId,
+    sortBy,
+    hideClosedPosters,
+  ]);
 
   useEffect(() => {
     const normalizedInitialQuery = initialQuery.trim();
-    if (initialSearchLoggedRef.current || normalizedInitialQuery.length < 2) return;
+    if (initialSearchLoggedRef.current || normalizedInitialQuery.length < 2)
+      return;
     initialSearchLoggedRef.current = true;
     if (shouldRecordSearchLog(normalizedInitialQuery, lastLoggedSearchRef)) {
       void recordSearchLog(normalizedInitialQuery, resultTotalCount);
@@ -299,7 +418,8 @@ function PosterListPageContent({
       skipInitialUrlSyncRef.current = false;
       return;
     }
-    const category = categories.find((item) => item.id === selectedCategoryId) ?? null;
+    const category =
+      categories.find((item) => item.id === selectedCategoryId) ?? null;
     const region = regions.find((item) => item.id === selectedRegionId) ?? null;
     const path = buildPosterSearchPath({
       query: searchQuery,
@@ -309,300 +429,638 @@ function PosterListPageContent({
       includeClosed: !hideClosedPosters,
     });
     window.history.replaceState(null, "", path);
-  }, [categories, hideClosedPosters, regions, searchQuery, selectedCategoryId, selectedRegionId, sortBy]);
+  }, [
+    categories,
+    hideClosedPosters,
+    regions,
+    searchQuery,
+    selectedCategoryId,
+    selectedRegionId,
+    sortBy,
+  ]);
 
-  // 3. Search Actions
-  const handleSearchSubmit = (e?: React.FormEvent, term?: string) => {
-    e?.preventDefault();
-    const finalTerm = term || searchQuery;
-    if (!finalTerm.trim()) return;
-
-    trackAnalytics("search_poster", {search_category:selectedCategoryId || "all",search_region:selectedRegionId || "all"});
-
-    // Save to recent searches
-    const updated = [finalTerm, ...recentSearches.filter(s => s !== finalTerm)].slice(0, 5);
-    setRecentSearches(updated);
-    localStorage.setItem("recent_searches", JSON.stringify(updated));
-
-    const normalizedTerm = finalTerm.trim();
-    pendingSearchLogRef.current = normalizedTerm;
-    const shouldFetchImmediately = normalizedTerm === searchQuery.trim();
-    setSearchQuery(normalizedTerm);
-    setIsSearchFocused(false);
-    searchInputRef.current?.blur();
-    if (shouldFetchImmediately) {
-      void fetchPosters(normalizedTerm);
+  const submitSearch = (term = queryInput) => {
+    const normalizedTerm = term.trim();
+    trackAnalytics("search_poster", {
+      search_category: selectedCategoryId || "all",
+      search_region: selectedRegionId || "all",
+    });
+    if (normalizedTerm) {
+      const updated = [
+        normalizedTerm,
+        ...recentSearches.filter((s) => s !== normalizedTerm),
+      ].slice(0, 5);
+      setRecentSearches(updated);
+      try {
+        localStorage.setItem("recent_searches", JSON.stringify(updated));
+      } catch {
+        /* storage blocked */
+      }
     }
+    pendingSearchLogRef.current = normalizedTerm || null;
+    setQueryInput(normalizedTerm);
+    if (normalizedTerm === searchQuery.trim())
+      void fetchPosters(normalizedTerm);
+    setSearchQuery(normalizedTerm);
   };
 
   const removeRecentSearch = (term: string) => {
-    const updated = recentSearches.filter(s => s !== term);
+    const updated = recentSearches.filter((s) => s !== term);
     setRecentSearches(updated);
-    localStorage.setItem("recent_searches", JSON.stringify(updated));
+    try {
+      localStorage.setItem("recent_searches", JSON.stringify(updated));
+    } catch {
+      /* storage blocked */
+    }
   };
+
+  const regionById = (id: string | null) =>
+    regions.find((region) => region.id === id) ?? null;
+  const categoryById = (id: string | null) =>
+    categories.find((category) => category.id === id) ?? null;
+  const conditionLabel = (condition: {
+    regionId: string | null;
+    categoryId: string | null;
+  }) =>
+    [
+      getRegionLabel(regionById(condition.regionId)) || null,
+      categoryById(condition.categoryId)?.name ?? null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+  const current = {
+    regionId: selectedRegionId,
+    categoryId: selectedCategoryId,
+  };
+  const currentSaved = isSavedSearch(saved, current);
+  const canSave = Boolean(selectedRegionId || selectedCategoryId);
+
+  const saveCurrent = () => {
+    if (!saveSearch(guestLocal, current, Date.now())) return;
+    // Not interest_save: that event counts 관심 조건 for active sign-ups, and
+    // this is only a browser-side search shortcut.
+    setSaved(readSavedSearches(guestLocal));
+  };
+
+  const applySaved = (condition: SavedSearch) => {
+    setSelectedRegionId(condition.regionId);
+    setSelectedCategoryId(condition.categoryId);
+  };
+
+  const selectedRegion = regionById(selectedRegionId);
+  const selectedCategory = categoryById(selectedCategoryId);
+  const groups = useMemo(
+    () =>
+      groupByRegionScope(
+        posters,
+        (poster: Row) => poster.regionIds,
+        selectedRegionId,
+        regions,
+      ),
+    [posters, selectedRegionId, regions],
+  );
+  const matchedCount = groups.wider.length
+    ? groups.matched.length
+    : resultTotalCount;
+  const statusLabel = hideClosedPosters && !searchQuery ? "접수 중" : "전체";
+  const matchedCondition = [
+    selectedRegion ? `${getRegionLabel(selectedRegion)} 대상` : null,
+    selectedCategory?.name ?? null,
+    searchQuery ? `"${searchQuery}"` : null,
+    statusLabel,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const widerCondition = [
+    selectedCategory?.name ?? null,
+    "연령·거주 등 참여 조건은 상세에서 확인하세요",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   const cityRegions = getCityRegions(regions);
   const selectedCityId = getSelectedCityId(selectedRegionId, regions);
   const districtRegions = getDistrictRegions(regions, selectedCityId || null);
 
+  const filters = (
+    <SearchFilters
+      idPrefix="filter"
+      cityRegions={cityRegions}
+      districtRegions={districtRegions}
+      categories={categories}
+      selectedRegionId={selectedRegionId}
+      selectedCityId={selectedCityId || null}
+      selectedCategoryId={selectedCategoryId}
+      hideClosed={hideClosedPosters}
+      onRegion={setSelectedRegionId}
+      onCategory={setSelectedCategoryId}
+      onHideClosed={setHideClosedPosters}
+    />
+  );
+
+  const sortSelect = (
+    <label className="inline-flex min-h-[44px] items-center gap-2 text-[13px] text-pl-sub">
+      <span className="sr-only xl:not-sr-only">정렬</span>
+      <span className="relative inline-flex items-center">
+        <select
+          value={sortBy}
+          onChange={(event) => setSortBy(event.target.value as DiscoverySort)}
+          className="min-h-[40px] appearance-none rounded-lg border border-pl-line bg-pl-card py-1 pl-3 pr-8 text-[13px] font-medium text-pl-ink"
+        >
+          {SORTS.map((sort) => (
+            <option key={sort.key} value={sort.key}>
+              {sort.label}
+            </option>
+          ))}
+        </select>
+        <ChevronDown
+          size={14}
+          aria-hidden="true"
+          className="pointer-events-none absolute right-2.5"
+        />
+      </span>
+    </label>
+  );
+
   return (
-    <div className="min-h-screen bg-white pb-24">
-      <Header />
-      
-      <main className="container mx-auto px-4 py-6 max-w-4xl">
-        {/* Search Section */}
-        <div className={`fixed inset-0 z-[60] bg-white transition-all duration-300 ${isSearchFocused ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}>
-          <div className="p-4 flex items-center gap-3 border-b">
-            <button onClick={() => setIsSearchFocused(false)} className="p-2 hover:bg-gray-100 rounded-full">
-              <ArrowLeft size={24} />
-            </button>
-            <form onSubmit={handleSearchSubmit} className="flex-1 relative">
-              <input 
-                ref={searchInputRef}
-                data-testid="poster-search-input"
-                type="text" 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="검색어를 입력하세요"
-                className="w-full py-3 px-4 bg-gray-50 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-100 text-gray-900 placeholder:text-gray-400"
-              />
-              {searchQuery && (
-                <button type="button" onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400">
-                  <X size={16} />
-                </button>
-              )}
-            </form>
+    <div className="min-h-screen bg-pl-paper pb-[calc(var(--mobile-nav-height)+32px)] font-pl-sans text-pl-ink md:pb-12">
+      <div className="hidden md:block">
+        <Header />
+      </div>
+      <main className="mx-auto w-full max-w-[1200px] px-5 py-5 xl:px-10 xl:py-8">
+        <h1 className="font-pl-serif text-[23px] font-bold xl:sr-only">찾기</h1>
+
+        <form
+          role="search"
+          onSubmit={(event) => {
+            event.preventDefault();
+            submitSearch();
+          }}
+          className="mt-3 flex gap-2 xl:mt-0"
+        >
+          <label htmlFor="poster-search" className="sr-only">
+            공고, 기관 검색
+          </label>
+          <div className="relative min-w-[240px] flex-1">
+            <Search
+              size={18}
+              aria-hidden="true"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-pl-meta"
+            />
+            <input
+              id="poster-search"
+              data-testid="poster-search-input"
+              type="search"
+              value={queryInput}
+              onChange={(event) => setQueryInput(event.target.value)}
+              placeholder="공고, 기관 검색"
+              className="min-h-[48px] w-full rounded-lg border border-pl-line bg-pl-card pl-10 pr-3 text-[15px] text-pl-ink placeholder:text-pl-meta xl:min-h-[52px]"
+            />
           </div>
-          
-          <div className="p-6">
-            {recentSearches.length > 0 && (
-              <section className="mb-10">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                    <History size={14} /> 최근 검색어
-                  </h3>
-                  <button onClick={() => {setRecentSearches([]); localStorage.removeItem("recent_searches");}} className="text-xs font-bold text-gray-300 hover:text-rose-500">모두 삭제</button>
+          <button
+            type="submit"
+            className="min-h-[48px] shrink-0 rounded-lg bg-pl-ink px-4 text-sm font-bold text-white xl:min-h-[52px] xl:px-6"
+          >
+            검색
+          </button>
+        </form>
+
+        {!searchQuery && recentSearches.length > 0 && (
+          <div className="mt-3 flex items-center gap-2 overflow-x-auto">
+            <span className="shrink-0 text-xs text-pl-meta">최근 검색</span>
+            <ul className="flex gap-1.5">
+              {recentSearches.map((term) => (
+                <li
+                  key={term}
+                  className="flex shrink-0 items-center rounded-full border border-pl-line bg-pl-card"
+                >
+                  <button
+                    type="button"
+                    onClick={() => submitSearch(term)}
+                    className="min-h-[36px] pl-3 pr-1 text-[13px]"
+                  >
+                    {term}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`최근 검색어 ${term} 지우기`}
+                    onClick={() => removeRecentSearch(term)}
+                    className="flex h-9 w-8 items-center justify-center text-pl-meta"
+                  >
+                    <X size={13} aria-hidden="true" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <section aria-labelledby="saved-searches" className="mt-4">
+          <h2 id="saved-searches" className="mb-1.5 text-xs text-pl-meta">
+            저장한 조건
+          </h2>
+          <div className="flex flex-wrap gap-1.5">
+            {saved.map((condition) => {
+              const label = conditionLabel(condition);
+              if (!label) return null;
+              const active =
+                condition.regionId === selectedRegionId &&
+                condition.categoryId === selectedCategoryId;
+              return (
+                <span
+                  key={`${condition.regionId}:${condition.categoryId}`}
+                  className={`inline-flex items-center rounded-full border ${
+                    active
+                      ? "border-pl-ink bg-pl-ink text-white"
+                      : "border-pl-line bg-pl-card text-pl-ink"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => applySaved(condition)}
+                    className="min-h-[36px] pl-3 pr-1 text-[13px] font-medium"
+                  >
+                    {label}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`저장한 조건 ${label} 삭제`}
+                    onClick={() => {
+                      removeSavedSearch(guestLocal, condition);
+                      setSaved(readSavedSearches(guestLocal));
+                    }}
+                    className="flex h-9 w-8 items-center justify-center opacity-70"
+                  >
+                    <X size={13} aria-hidden="true" />
+                  </button>
+                </span>
+              );
+            })}
+            <button
+              type="button"
+              onClick={saveCurrent}
+              disabled={!canSave || currentSaved}
+              className="min-h-[36px] rounded-full border border-dashed border-pl-ink px-3 text-[13px] font-medium disabled:border-pl-line disabled:text-pl-meta xl:hidden"
+            >
+              {currentSaved ? "저장된 조건" : "지금 조건 저장"}
+            </button>
+          </div>
+          <p className="mt-1 text-xs text-pl-meta">
+            저장한 조건은 이 기기의 브라우저에 보관돼요.
+          </p>
+        </section>
+
+        <div className="mt-4 flex flex-wrap gap-1.5 xl:hidden">
+          <button
+            type="button"
+            onClick={() => setFilterOpen(true)}
+            className="inline-flex min-h-[40px] items-center gap-1 rounded-lg border border-pl-line bg-pl-card px-3 text-[13px]"
+          >
+            지역: {getRegionLabel(selectedRegion) || "전체"}
+            <ChevronDown size={14} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterOpen(true)}
+            className="inline-flex min-h-[40px] items-center gap-1 rounded-lg border border-pl-line bg-pl-card px-3 text-[13px]"
+          >
+            분야: {selectedCategory?.name ?? "전체"}
+            <ChevronDown size={14} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            aria-pressed={hideClosedPosters}
+            onClick={() => setHideClosedPosters((value) => !value)}
+            className={`min-h-[40px] rounded-lg border px-3 text-[13px] ${
+              hideClosedPosters
+                ? "border-pl-ink bg-pl-ink font-bold text-white"
+                : "border-pl-line bg-pl-card"
+            }`}
+          >
+            접수 중만
+          </button>
+          {sortSelect}
+        </div>
+
+        <div className="mt-6 flex flex-wrap gap-x-10 gap-y-6">
+          <aside
+            aria-label="검색 조건"
+            className="hidden w-[250px] flex-none self-start rounded-xl border border-pl-line bg-pl-card p-4 xl:block"
+          >
+            {filters}
+            <button
+              type="button"
+              onClick={saveCurrent}
+              disabled={!canSave || currentSaved}
+              className="mt-5 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg border border-pl-ink text-sm font-bold disabled:border-pl-line disabled:text-pl-meta"
+            >
+              {currentSaved ? "저장된 조건" : "지금 조건 저장"}
+            </button>
+          </aside>
+
+          <div
+            className="min-w-0 flex-[1_1_480px] space-y-8"
+            aria-busy={loading}
+          >
+            {loading && (
+              <p className="text-sm text-pl-sub" role="status">
+                불러오는 중이에요…
+              </p>
+            )}
+            {!loading && failed && (
+              <GuideCard title="공고를 불러오지 못했어요">
+                잠시 후 다시 검색해 주세요.
+              </GuideCard>
+            )}
+            {!loading &&
+              !failed &&
+              groups.matched.length === 0 &&
+              groups.wider.length === 0 && (
+                <GuideCard title="조건에 맞는 공고가 없어요">
+                  다른 검색어나 조건으로 찾아보세요.
+                </GuideCard>
+              )}
+
+            {!loading && groups.matched.length > 0 && (
+              <section aria-labelledby="group-matched">
+                <div className="flex flex-wrap items-end justify-between gap-2">
+                  <SectionHeader
+                    id="group-matched"
+                    title={
+                      <>
+                        선택한 조건에 맞는 공고{" "}
+                        <span className="text-pl-accent">
+                          {matchedCount.toLocaleString()}
+                        </span>
+                      </>
+                    }
+                    condition={
+                      matchedCondition +
+                      (semanticSearchActive ? " · 뜻이 비슷한 순" : "")
+                    }
+                  />
+                  <div className="mb-3 hidden xl:block">{sortSelect}</div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {recentSearches.map(s => (
-                    <div key={s} className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
-                      <button onClick={() => handleSearchSubmit(undefined, s)} className="text-sm font-bold text-gray-700">{s}</button>
-                      <button onClick={() => removeRecentSearch(s)} className="text-gray-300 hover:text-gray-600"><X size={14} /></button>
-                    </div>
+                <ul className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-1">
+                  {groups.matched.slice(0, displayCount).map((poster) => (
+                    <li key={poster.id}>
+                      <PosterListCard
+                        poster={toCard(poster)}
+                        source="search"
+                        badge={favoriteIds.has(poster.id) ? "찜" : undefined}
+                      />
+                    </li>
                   ))}
-                </div>
+                </ul>
+                {displayCount < groups.matched.length && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDisplayCount((count) => count + PAGE_SIZE)
+                    }
+                    className="mt-3 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg border border-pl-line bg-pl-card text-sm font-medium"
+                  >
+                    더 보기 ({groups.matched.length - displayCount}건)
+                  </button>
+                )}
               </section>
             )}
 
-            <section>
-              <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-4">
-                <TrendingUp size={14} /> 인기 검색어
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {popularKeywords.map(k => (
-                  <button key={k} onClick={() => handleSearchSubmit(undefined, k)} className="px-4 py-2 border border-gray-100 rounded-xl text-sm font-bold text-gray-500 hover:border-blue-200 hover:text-blue-600 transition-all">
-                    {k}
-                  </button>
-                ))}
-              </div>
-            </section>
-          </div>
-        </div>
-
-        {/* Main List UI */}
-        <div className="flex flex-col gap-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-             <div>
-               <h1 className="text-2xl font-black text-gray-900">공공 공고 찾기</h1>
-               <p className="mt-1 max-w-2xl text-sm font-bold leading-6 text-gray-500">
-                 정부·지자체·공공기관의 지원사업, 교육, 행사, 채용·모집 공고와 공식 신청 링크를 찾아보세요.
-               </p>
-             </div>
-             <div className="flex flex-wrap items-center justify-end gap-2">
-             <button
-               type="button"
-               role="switch"
-               aria-checked={myMatchesOnly}
-               onClick={() => setMyMatchesOnly((value) => !value)}
-               className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-[11px] font-black transition-colors ${
-                 myMatchesOnly ? "bg-indigo-50 text-indigo-600" : "bg-gray-50 text-gray-400"
-               }`}
-             >
-                <span className={`flex h-5 w-9 items-center rounded-full p-0.5 transition-colors ${myMatchesOnly ? "bg-indigo-600" : "bg-gray-300"}`}>
-                  <span className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${myMatchesOnly ? "translate-x-4" : ""}`} />
-                </span>
-                내 맞춤
-             </button>
-             <button
-               type="button"
-               role="switch"
-               aria-checked={hideClosedPosters}
-               onClick={() => setHideClosedPosters((value) => !value)}
-               className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-[11px] font-black transition-colors ${
-                 hideClosedPosters ? "bg-blue-50 text-blue-600" : "bg-gray-50 text-gray-400"
-               }`}
-             >
-                <span className={`flex h-5 w-9 items-center rounded-full p-0.5 transition-colors ${hideClosedPosters ? "bg-blue-600" : "bg-gray-300"}`}>
-                  <span className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${hideClosedPosters ? "translate-x-4" : ""}`} />
-                </span>
-                접수 중인 공고만 보기
-             </button>
-             </div>
-          </div>
-          
-          {/* Main Search Bar (Trigger) */}
-          <div 
-            data-testid="poster-search-trigger"
-            onClick={() => {setIsSearchFocused(true); setTimeout(() => searchInputRef.current?.focus(), 100);}}
-            className="group flex items-center gap-3 px-5 py-4 bg-gray-50 rounded-[1.5rem] border border-transparent hover:border-blue-100 cursor-pointer transition-all"
-          >
-            <Search className="text-gray-300 group-hover:text-blue-500 transition-colors" size={20} />
-            <span className="text-sm font-bold text-gray-400">
-              {searchQuery || "어떤 공고를 찾으시나요?"}
-            </span>
-          </div>
-
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            {QUICK_SEARCH_TERMS.map((term) => (
-              <button
-                key={term}
-                type="button"
-                onClick={() => handleSearchSubmit(undefined, term)}
-                className={`whitespace-nowrap rounded-2xl px-4 py-2 text-xs font-black transition-colors ${
-                  searchQuery === term
-                    ? "bg-blue-600 text-white shadow-lg shadow-blue-100"
-                    : "bg-gray-50 text-gray-500 hover:bg-blue-50 hover:text-blue-600"
-                }`}
-              >
-                {term}
-              </button>
-            ))}
-          </div>
-
-          {/* Active Filter Badges */}
-          {(selectedCategoryId || selectedRegionId || searchQuery || myMatchesOnly) && (
-            <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-top-1">
-              {myMatchesOnly && (
-                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs font-black rounded-lg shadow-lg shadow-indigo-100">
-                  내 맞춤 <button onClick={() => setMyMatchesOnly(false)}><X size={12}/></button>
-                </span>
-              )}
-              {searchQuery && (
-                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-black rounded-lg shadow-lg shadow-blue-100">
-                  &ldquo;{searchQuery}&rdquo; <button onClick={() => setSearchQuery("")}><X size={12}/></button>
-                </span>
-              )}
-              {selectedRegionId && (
-                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 text-xs font-black rounded-lg border border-indigo-100">
-                  {getRegionLabel(regions.find(r => r.id === selectedRegionId))} <button onClick={() => setSelectedRegionId(null)}><X size={12}/></button>
-                </span>
-              )}
-              {selectedCategoryId && (
-                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 text-xs font-black rounded-lg border border-emerald-100">
-                  {categories.find(c => c.id === selectedCategoryId)?.name} <button onClick={() => setSelectedCategoryId(null)}><X size={12}/></button>
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Quick Filters */}
-          <div className="space-y-3">
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-              <button onClick={() => setSelectedCategoryId(null)} className={`px-5 py-2.5 rounded-2xl text-[13px] font-black whitespace-nowrap transition-all ${!selectedCategoryId ? 'bg-gray-900 text-white shadow-xl shadow-gray-200' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>전체 분야</button>
-              {categories.map(cat => (
-                <button key={cat.id} onClick={() => setSelectedCategoryId(cat.id)} className={`px-5 py-2.5 rounded-2xl text-[13px] font-black whitespace-nowrap transition-all ${selectedCategoryId === cat.id ? 'bg-gray-900 text-white shadow-xl shadow-gray-200' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>{cat.name}</button>
-              ))}
-            </div>
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-              <button onClick={() => setSelectedRegionId(null)} className={`px-5 py-2.5 rounded-2xl text-[13px] font-black whitespace-nowrap transition-all ${!selectedRegionId ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : 'bg-blue-50 text-blue-400 hover:bg-blue-100'}`}>전체 지역</button>
-              {cityRegions.map(region => (
-                <button key={region.id} onClick={() => setSelectedRegionId(region.id)} className={`px-5 py-2.5 rounded-2xl text-[13px] font-black whitespace-nowrap transition-all ${selectedCityId === region.id && selectedRegionId === region.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : selectedCityId === region.id ? 'bg-blue-100 text-blue-700' : 'bg-blue-50 text-blue-400 hover:bg-blue-100'}`}>{getRegionLabel(region)}</button>
-              ))}
-            </div>
-            {districtRegions.length > 0 && (
-              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                <button onClick={() => setSelectedRegionId(selectedCityId)} className={`px-4 py-2 rounded-2xl text-xs font-black whitespace-nowrap transition-all ${selectedRegionId === selectedCityId ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-indigo-50 text-indigo-400 hover:bg-indigo-100'}`}>
-                  {getRegionLabel(regions.find((region) => region.id === selectedCityId))} 전체
-                </button>
-                {districtRegions.map(region => (
-                  <button key={region.id} onClick={() => setSelectedRegionId(region.id)} className={`px-4 py-2 rounded-2xl text-xs font-black whitespace-nowrap transition-all ${selectedRegionId === region.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-indigo-50 text-indigo-400 hover:bg-indigo-100'}`}>{region.name}</button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Sort & Result Count */}
-          <div className="flex items-center justify-between border-b border-gray-50 pb-4">
-             <span className="text-[11px] font-black text-gray-300 uppercase tracking-widest">
-               총 {resultTotalCount.toLocaleString()}건 {posters.length < resultTotalCount ? `· 현재 ${posters.length.toLocaleString()}건 표시` : ""} {hideClosedPosters ? "· 접수 중" : "· 전체"} {myMatchesOnly ? "· 내 맞춤" : ""}
-               {semanticSearchActive ? " · 의미순" : ""}
-             </span>
-
-             <div className="flex flex-wrap justify-end gap-3">
-               <button onClick={() => setSortBy("latest")} className={`text-xs font-black transition-colors ${sortBy === 'latest' ? 'text-blue-600' : 'text-gray-300'}`}>최신</button>
-               <button onClick={() => setSortBy("deadline")} className={`text-xs font-black transition-colors ${sortBy === 'deadline' ? 'text-blue-600' : 'text-gray-300'}`}>마감임박</button>
-               <button onClick={() => setSortBy("popular")} className={`text-xs font-black transition-colors ${sortBy === 'popular' ? 'text-blue-600' : 'text-gray-300'}`}>인기</button>
-               <button onClick={() => setSortBy("views")} className={`text-xs font-black transition-colors ${sortBy === 'views' ? 'text-blue-600' : 'text-gray-300'}`}>조회</button>
-               <button onClick={() => setSortBy("favorites")} className={`text-xs font-black transition-colors ${sortBy === 'favorites' ? 'text-blue-600' : 'text-gray-300'}`}>찜</button>
-             </div>
-          </div>
-        </div>
-
-        {/* Results Grid */}
-        {loading ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-8">
-            {[1,2,3,4].map(i => <div key={i} className="aspect-[3/4] bg-gray-50 rounded-3xl animate-pulse" />)}
-          </div>
-        ) : posters.length > 0 ? (
-          <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-5 gap-y-10 mt-8">
-              {posters.slice(0, displayCount).map((poster) => (
-                <PosterCard
-                  source="search"
-                  key={poster.id}
-                  poster={{
-                    id: poster.id,
-                    title: poster.title,
-                    org: poster.verification_status === "verified" && poster.verified_at
-                      ? poster.organizer_name || poster.source_org_name
-                      : poster.source_org_name,
-                    applicationStartAt: poster.application_start_at,
-                    deadline: poster.application_end_at,
-                    deadlineType: poster.deadline_type,
-                    image: poster.thumbnail_url,
-                    images: poster.images,
-                    sourceUrl: poster.source_key,
-                    viewCount: poster.viewCount,
-                    linkClickCount: poster.linkClickCount,
-                    favoriteCount: poster.favoriteCount,
-                    similarityScore: poster.semanticScore,
-                    tags: [poster.categoryName, poster.regionName].filter((tag): tag is string => Boolean(tag))
-                  }}
+            {!loading && groups.wider.length > 0 && (
+              <section aria-labelledby="group-wider">
+                <SectionHeader
+                  id="group-wider"
+                  title="서울·전국 대상 공고"
+                  condition={widerCondition}
                 />
-              ))}
-            </div>
-            {displayCount < posters.length && (
-              <div className="flex justify-center mt-10">
-                <button
-                  onClick={() => setDisplayCount(prev => prev + PAGE_SIZE)}
-                  className="flex items-center gap-2 px-8 py-4 bg-gray-50 hover:bg-blue-50 text-gray-500 hover:text-blue-600 font-black text-sm rounded-[1.5rem] transition-all border border-gray-100 hover:border-blue-100"
-                >
-                  <ChevronDown size={18} /> 불러온 목록 더 보기 ({posters.length - displayCount}개)
-                </button>
-              </div>
+                <ul className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-1">
+                  {groups.wider.slice(0, widerCount).map(({ item, scope }) => (
+                    <li key={item.id}>
+                      <PosterListCard
+                        poster={toCard(item)}
+                        source="search"
+                        region={scope.nation ? "nation" : "seoul"}
+                        regionLabel={scope.label}
+                        badge={favoriteIds.has(item.id) ? "찜" : undefined}
+                      />
+                    </li>
+                  ))}
+                </ul>
+                {widerCount < groups.wider.length && (
+                  <button
+                    type="button"
+                    onClick={() => setWiderCount((count) => count + PAGE_SIZE)}
+                    className="mt-3 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg border border-pl-line bg-pl-card text-sm font-medium"
+                  >
+                    더 보기 ({groups.wider.length - widerCount}건)
+                  </button>
+                )}
+              </section>
             )}
-          </>
-        ) : (
-          <div className="py-32 text-center bg-gray-50/50 rounded-[3rem] border border-dashed border-gray-100 mt-8">
-            <Search className="mx-auto text-gray-200 mb-4" size={48} />
-            <p className="text-gray-400 font-black">검색 결과가 없습니다.</p>
-            <p className="text-gray-300 text-xs font-bold mt-1">다른 검색어나 필터를 시도해보세요.</p>
           </div>
-        )}
+        </div>
       </main>
+
+      <BottomSheet
+        open={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        title="검색 조건"
+        dismissLabel="닫기"
+        primary={
+          <button
+            type="button"
+            onClick={() => setFilterOpen(false)}
+            className="min-h-[48px] w-full rounded-lg bg-pl-ink font-bold text-white"
+          >
+            {resultTotalCount.toLocaleString()}건 보기
+          </button>
+        }
+      >
+        <SearchFilters
+          idPrefix="sheet"
+          cityRegions={cityRegions}
+          districtRegions={districtRegions}
+          categories={categories}
+          selectedRegionId={selectedRegionId}
+          selectedCityId={selectedCityId || null}
+          selectedCategoryId={selectedCategoryId}
+          hideClosed={hideClosedPosters}
+          onRegion={setSelectedRegionId}
+          onCategory={setSelectedCategoryId}
+          onHideClosed={setHideClosedPosters}
+        />
+      </BottomSheet>
 
       <Footer />
       <BottomNav />
+    </div>
+  );
+}
+
+/** Region, category and status as real fieldsets (PC sidebar and mobile sheet). */
+function SearchFilters({
+  idPrefix,
+  cityRegions,
+  districtRegions,
+  categories,
+  selectedRegionId,
+  selectedCityId,
+  selectedCategoryId,
+  hideClosed,
+  onRegion,
+  onCategory,
+  onHideClosed,
+}: {
+  idPrefix: string;
+  cityRegions: Row[];
+  districtRegions: Row[];
+  categories: Row[];
+  selectedRegionId: string | null;
+  selectedCityId: string | null;
+  selectedCategoryId: string | null;
+  hideClosed: boolean;
+  onRegion: (id: string | null) => void;
+  onCategory: (id: string | null) => void;
+  onHideClosed: (value: boolean) => void;
+}) {
+  // Short by default: the chosen district and its city (mockup PcSearch).
+  const [showAllRegions, setShowAllRegions] = useState(false);
+  const selectedRegion =
+    [...cityRegions, ...districtRegions].find(
+      (region) => region.id === selectedRegionId,
+    ) ?? null;
+  const city = cityRegions.find((region) => region.id === selectedCityId);
+  const shortList = [
+    selectedRegion?.level === "sigungu" ? selectedRegion : null,
+    city ?? null,
+  ].filter(Boolean);
+  const regionOptionLabel = (region: Row) =>
+    region.level === "sido"
+      ? `${getRegionLabel(region)} 전체`
+      : getRegionLabel(region);
+  const radio = (
+    name: string,
+    id: string,
+    checked: boolean,
+    onChange: () => void,
+    label: string,
+  ) => (
+    <label
+      key={id}
+      htmlFor={id}
+      className="flex min-h-[40px] cursor-pointer items-center gap-2 text-sm"
+    >
+      <input
+        id={id}
+        type="radio"
+        name={name}
+        checked={checked}
+        onChange={onChange}
+        className="h-4 w-4 accent-pl-ink"
+      />
+      {label}
+    </label>
+  );
+  return (
+    <div className="space-y-5">
+      <fieldset>
+        <legend className="mb-1 text-sm font-bold">지역</legend>
+        {radio(
+          `${idPrefix}-region`,
+          `${idPrefix}-region-all`,
+          !selectedRegionId,
+          () => onRegion(null),
+          "전체 지역",
+        )}
+        {!showAllRegions &&
+          shortList.map((region) =>
+            radio(
+              `${idPrefix}-region`,
+              `${idPrefix}-region-${region.id}`,
+              selectedRegionId === region.id,
+              () => onRegion(region.id),
+              regionOptionLabel(region),
+            ),
+          )}
+        <button
+          type="button"
+          aria-expanded={showAllRegions}
+          aria-controls={`${idPrefix}-region-list`}
+          onClick={() => setShowAllRegions((value) => !value)}
+          className="mt-1 inline-flex min-h-[40px] items-center text-sm font-medium underline underline-offset-2"
+        >
+          {showAllRegions ? "지역 목록 접기" : "다른 지역 선택"}
+        </button>
+        {showAllRegions && (
+          <div id={`${idPrefix}-region-list`}>
+            {cityRegions.map((region) =>
+              radio(
+                `${idPrefix}-region`,
+                `${idPrefix}-region-${region.id}`,
+                selectedRegionId === region.id,
+                () => onRegion(region.id),
+                regionOptionLabel(region),
+              ),
+            )}
+            {districtRegions.length > 0 && (
+              <fieldset className="mt-1 border-l border-pl-line pl-3">
+                <legend className="sr-only">
+                  {getRegionLabel(
+                    cityRegions.find((r) => r.id === selectedCityId),
+                  )}{" "}
+                  구·군
+                </legend>
+                {districtRegions.map((region) =>
+                  radio(
+                    `${idPrefix}-region`,
+                    `${idPrefix}-region-${region.id}`,
+                    selectedRegionId === region.id,
+                    () => onRegion(region.id),
+                    region.name,
+                  ),
+                )}
+              </fieldset>
+            )}
+          </div>
+        )}
+      </fieldset>
+      <fieldset>
+        <legend className="mb-1 text-sm font-bold">분야</legend>
+        {radio(
+          `${idPrefix}-category`,
+          `${idPrefix}-category-all`,
+          !selectedCategoryId,
+          () => onCategory(null),
+          "전체 분야",
+        )}
+        {categories.map((category) =>
+          radio(
+            `${idPrefix}-category`,
+            `${idPrefix}-category-${category.id}`,
+            selectedCategoryId === category.id,
+            () => onCategory(category.id),
+            category.name,
+          ),
+        )}
+      </fieldset>
+      <fieldset>
+        <legend className="mb-1 text-sm font-bold">접수 상태</legend>
+        <label
+          htmlFor={`${idPrefix}-open-only`}
+          className="flex min-h-[40px] cursor-pointer items-center gap-2 text-sm"
+        >
+          <input
+            id={`${idPrefix}-open-only`}
+            type="checkbox"
+            checked={hideClosed}
+            onChange={(event) => onHideClosed(event.target.checked)}
+            className="h-4 w-4 accent-pl-ink"
+          />
+          접수 중만 보기
+        </label>
+      </fieldset>
     </div>
   );
 }
@@ -619,7 +1077,7 @@ function shouldRecordSearchLog(
   return true;
 }
 
-function mergeUniquePosters(primary: any[], secondary: any[]) {
+function mergeUniquePosters(primary: Row[], secondary: Row[]) {
   const seen = new Set(primary.map((poster) => poster.id).filter(Boolean));
   return [
     ...primary,
@@ -632,12 +1090,16 @@ function mergeUniquePosters(primary: any[], secondary: any[]) {
 }
 
 async function recordSearchLog(query: string, resultCount: number) {
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   await fetch("/api/search-logs", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      ...(session?.access_token
+        ? { Authorization: `Bearer ${session.access_token}` }
+        : {}),
     },
     body: JSON.stringify({ query, result_count: resultCount }),
   }).catch(() => null);

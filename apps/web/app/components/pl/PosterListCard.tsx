@@ -66,6 +66,7 @@ export function PosterListCard({
   poster,
   source,
   region,
+  regionLabel,
   badge,
   footer,
 }: {
@@ -73,6 +74,8 @@ export function PosterListCard({
   /** Recorded as the poster_view source when the card is clicked. */
   source?: PosterViewSource;
   region?: RegionScope;
+  /** Overrides the region label wording, e.g. "경기 전체". */
+  regionLabel?: string;
   /** Small text after the deadline, e.g. "찜" or "이 기기에 저장됨". */
   badge?: ReactNode;
   footer?: ReactNode;
@@ -89,7 +92,7 @@ export function PosterListCard({
         <div className="min-w-0 flex-1">
           {(meta || region) && (
             <p className="flex items-center gap-1.5 text-xs text-pl-meta">
-              {region && <RegionLabel scope={region} />}
+              {region && <RegionLabel scope={region} label={regionLabel} />}
               <span className="truncate">{meta}</span>
             </p>
           )}
@@ -167,5 +170,37 @@ export function PosterMiniRail({
         ) : null,
       )}
     </div>
+  );
+}
+
+/** Vertical card with the poster on top, for the PC home grid. */
+export function PosterTileCard({
+  poster,
+  source,
+  badge,
+}: {
+  poster: PlPosterCardData;
+  source?: PosterViewSource;
+  badge?: ReactNode;
+}) {
+  const { display, thumb, meta } = cardParts(poster);
+  return (
+    <Link
+      href={`/posters/${poster.id}`}
+      data-poster-source={source}
+      className="flex h-full flex-col overflow-hidden rounded-xl border border-pl-line bg-pl-card outline-offset-2 hover:bg-pl-paper/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pl-ink"
+    >
+      <PosterThumb src={thumb} className="h-36 w-full rounded-none" />
+      <div className="flex flex-1 flex-col gap-1 p-3">
+        {meta && <p className="truncate text-xs text-pl-meta">{meta}</p>}
+        <h3 className="line-clamp-2 font-pl-serif text-[15px] font-bold leading-[1.38] text-pl-ink">
+          {poster.title}
+        </h3>
+        <p className="mt-auto flex items-center gap-2 pt-1">
+          <DeadlineLabel display={display} />
+          {badge && <span className="text-xs text-pl-meta">{badge}</span>}
+        </p>
+      </div>
+    </Link>
   );
 }

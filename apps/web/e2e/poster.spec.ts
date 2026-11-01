@@ -4,7 +4,7 @@ test.describe.configure({ timeout: 60_000 });
 
 async function gotoPosters(page: Page) {
   await page.goto("/posters", { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { name: "공공 공고 찾기" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "찾기", exact: true })).toBeVisible();
 }
 
 async function posterHrefs(page: Page) {
@@ -61,14 +61,14 @@ test.describe("포스터 목록", () => {
 
     if (await categoryBtn.count() > 0) {
       await categoryBtn.click();
-      await expect(page.getByRole("heading", { name: "공공 공고 찾기" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "찾기", exact: true })).toBeVisible();
     }
   });
 
   test("정렬 변경 (마감임박)", async ({ page }) => {
     await gotoPosters(page);
-    await page.getByRole("button", { name: "마감임박" }).click();
-    await expect(page.getByRole("button", { name: "마감임박" })).toBeVisible();
+    await page.getByRole("combobox", { name: "정렬" }).first().selectOption("deadline");
+    await expect(page).toHaveURL(/sort=deadline/);
   });
 
   test("포스터 카드 렌더링 확인", async ({ page }) => {
@@ -134,7 +134,7 @@ test.describe("검색", () => {
     const quickSearch = page.getByRole("button", { name: "청년" }).first();
     if (await quickSearch.count() > 0) {
       await quickSearch.click();
-      await expect(page.getByRole("heading", { name: "공공 공고 찾기" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "찾기", exact: true })).toBeVisible();
       expect(page.url()).toMatch(/posters/);
     }
   });

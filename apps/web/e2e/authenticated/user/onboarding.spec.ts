@@ -84,7 +84,7 @@ test.describe("포스터 등록 요청", () => {
 test.describe("포스터 찜하기", () => {
   test("포스터 상세에서 찜 버튼 표시 (로그인 상태)", async ({ page }) => {
     await page.goto("/posters", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "공공 공고 찾기" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "찾기", exact: true })).toBeVisible();
 
     const firstCard = page.locator("a[href^='/posters/']").first();
     if (await firstCard.count() === 0) { test.skip(); return; }
@@ -107,7 +107,7 @@ test.describe("포스터 찜하기", () => {
 test.describe("내 맞춤 필터 (로그인)", () => {
   test("포스터 목록에서 내 맞춤 토글 표시", async ({ page }) => {
     await page.goto("/posters", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "공공 공고 찾기" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "찾기", exact: true })).toBeVisible();
     const toggle = page.locator("text=내 맞춤").first();
     if (await toggle.count() > 0) {
       await expect(toggle).toBeVisible();
@@ -116,7 +116,7 @@ test.describe("내 맞춤 필터 (로그인)", () => {
 
   test("내 맞춤 토글 클릭 후 오류 없음", async ({ page }) => {
     await page.goto("/posters", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "공공 공고 찾기" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "찾기", exact: true })).toBeVisible();
 
     const toggle = page.locator('[role="switch"]:has-text("내 맞춤"), button:has-text("내 맞춤")').first();
     if (await toggle.count() === 0) { test.skip(); return; }

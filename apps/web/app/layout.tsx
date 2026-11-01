@@ -8,6 +8,7 @@ import GaAnalytics from "./components/GaAnalytics";
 import SiteVisitTracker from "./components/SiteVisitTracker";
 import ProductEventsTracker from "./components/ProductEventsTracker";
 import PendingActionRunner from "./components/PendingActionRunner";
+import VisitClock from "./components/VisitClock";
 import { SeoStructuredData } from "./components/SeoStructuredData";
 import { getAppOrigin } from "../lib/siteUrl";
 import ExistingWebAnalytics from "./components/ExistingWebAnalytics";
@@ -101,6 +102,7 @@ export default function RootLayout({
             <GaAnalytics />
             <ProductEventsTracker />
             <PendingActionRunner />
+            <VisitClock />
           </Suspense>
           {children}
           <ToastProvider />

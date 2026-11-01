@@ -1,82 +1,44 @@
 import { test, expect } from "@playwright/test";
 
-const activeOnlyToggleName = "접수 중인 공고만 보기";
-
-test.describe("포스터 목록 - 접수 중 토글", () => {
-  test("접수 중 토글 존재", async ({ page }) => {
+// Desktop viewport: the filters are in the sidebar (UI redesign PcSearch).
+test.describe("포스터 목록 - 접수 중 필터", () => {
+  test("접수 중만 보기 체크 상태가 주소에 반영", async ({ page }) => {
     await page.goto("/posters");
     await page.waitForLoadState("networkidle");
-    const toggle = page.getByRole("switch", { name: activeOnlyToggleName });
-    await expect(toggle).toBeVisible();
-  });
-
-  test("접수 중 토글 클릭 후 aria-checked 변경", async ({ page }) => {
-    await page.goto("/posters");
-    await page.waitForLoadState("networkidle");
-
-    const toggle = page.getByRole("switch", { name: activeOnlyToggleName });
-    if (await toggle.count() === 0) { test.skip(); return; }
-
-    const before = await toggle.getAttribute("aria-checked");
-    await toggle.click();
-    await page.waitForLoadState("networkidle");
-    const after = await toggle.getAttribute("aria-checked");
-    expect(before).not.toEqual(after);
+    const openOnly = page.getByRole("checkbox", { name: "접수 중만 보기" }).first();
+    await expect(openOnly).toBeChecked();
+    await openOnly.uncheck();
+    await expect(page).toHaveURL(/closed=include/);
   });
 });
 
 test.describe("포스터 목록 - 정렬", () => {
-  const sortButtons = ["최신", "마감임박", "인기", "조회", "찜"];
-
-  for (const name of sortButtons) {
-    test(`정렬 버튼 표시: ${name}`, async ({ page }) => {
+  for (const [value, label] of [
+    ["deadline", "마감 임박순"],
+    ["popular", "인기순"],
+    ["views", "조회순"],
+    ["favorites", "찜 많은순"],
+  ]) {
+    test(`정렬 선택: ${label}`, async ({ page }) => {
       await page.goto("/posters");
       await page.waitForLoadState("networkidle");
-      const btn = page.getByRole("button", { name }).first();
-      await expect(btn).toBeVisible();
+      await page.getByRole("combobox", { name: "정렬" }).first().selectOption(value);
+      await expect(page).toHaveURL(new RegExp(`sort=${value}`));
     });
   }
-
-  test("마감임박 정렬 클릭 후 페이지 유지", async ({ page }) => {
-    await page.goto("/posters");
-    await page.waitForLoadState("networkidle");
-    await page.getByRole("button", { name: "마감임박" }).click();
-    await page.waitForLoadState("networkidle");
-    expect(page.url()).toMatch(/posters/);
-  });
-
-  test("인기 정렬 클릭 후 페이지 유지", async ({ page }) => {
-    await page.goto("/posters");
-    await page.waitForLoadState("networkidle");
-    await page.getByRole("button", { name: "인기" }).click();
-    await page.waitForLoadState("networkidle");
-    expect(page.url()).toMatch(/posters/);
-  });
-
-  test("조회 정렬 클릭 후 페이지 유지", async ({ page }) => {
-    await page.goto("/posters");
-    await page.waitForLoadState("networkidle");
-    await page.getByRole("button", { name: "조회" }).click();
-    await page.waitForLoadState("networkidle");
-    expect(page.url()).toMatch(/posters/);
-  });
 });
 
-test.describe("포스터 목록 - 개인화 필터", () => {
-  test("비로그인 - 내 맞춤 토글 없음 또는 클릭 시 로그인 유도", async ({ page }) => {
+test.describe("포스터 목록 - 저장한 조건", () => {
+  test("조건이 없으면 저장할 수 없고, 고르면 이 브라우저에 저장", async ({ page }) => {
     await page.goto("/posters");
     await page.waitForLoadState("networkidle");
-
-    const toggle = page.getByRole("button", { name: /내 맞춤/ }).first();
-    if (await toggle.count() === 0) {
-      // 비로그인에서 아예 숨기는 경우
-      return;
-    }
-    await toggle.click();
-    await page.waitForLoadState("networkidle");
-    const url = page.url();
-    const hasLoginText = await page.locator("text=로그인").count() > 0;
-    expect(url.includes("login") || hasLoginText).toBeTruthy();
+    const save = page.getByRole("button", { name: "지금 조건 저장" }).last();
+    await expect(save).toBeDisabled();
+    await page.getByRole("button", { name: "다른 지역 선택" }).first().click();
+    await page.getByRole("radio", { name: "서울특별시 전체" }).first().check();
+    await expect(save).toBeEnabled();
+    await save.click();
+    await expect(page.getByRole("button", { name: "서울특별시", pressed: true })).toBeVisible();
   });
 });
 
@@ -131,21 +93,4 @@ test.describe("메인 화면 - 포스터 카운트", () => {
     }
   });
 
-  test("메인 마감 토글 상태에 따라 카운트 변화", async ({ page }) => {
-    await page.goto("/");
-    await page.waitForLoadState("networkidle");
-
-    const toggle = page.getByRole("switch", { name: activeOnlyToggleName });
-    if (await toggle.count() === 0) { test.skip(); return; }
-
-    await toggle.click();
-    await page.waitForLoadState("networkidle");
-
-    // 토글 후 에러 없이 페이지 정상 표시 확인
-    await expect(page.locator("body")).toBeVisible();
-    // 다시 토글 원복
-    await toggle.click();
-    await page.waitForLoadState("networkidle");
-    await expect(page.locator("body")).toBeVisible();
-  });
 });
