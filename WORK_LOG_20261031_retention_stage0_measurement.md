@@ -205,3 +205,14 @@
 - P2 예약 명령을 부분 문자열로 검사: 공백만 정리한 명령 전체가 `select * from public.run_usage_log_retention(50000);`와 같아야 하고, 작업이 하나뿐이며 실행 계정이 `postgres`여야 한다.
 - 테스트 추가: 첫 주 삭제, 함수 소유자 변경, 함수 이름만 문자열로 조회하는 명령. 세 경우 모두 해당 행의 실패로 나오며, 고치기 전 SQL에서는 이 테스트가 실패함을 확인했다.
 - 검증: `scripts/retention/*` 31/31, `git diff --check` 통과.
+
+## 운영 읽기 전용 대조 결과 (2026-11-01 17:20 KST 무렵, Claude)
+
+- 방법: `scripts/retention/pre-merge-readonly-check.sql`을 psql 17.11로 Session pooler에 접속해 실행했다. 세션 첫 명령 `SET default_transaction_read_only = on`(확인값 `on`), 스크립트 자체도 `BEGIN TRANSACTION READ ONLY` … `ROLLBACK`. 쓰기 없음. 접속 정보는 출력·기록하지 않았다.
+- 대상 확인: 접속 사용자 `postgres.<앱과 같은 ref>`, PostgreSQL 17.6.
+- **⑤ job 7 첫 실행**: `usage-log-retention-daily`(job 7, `30 18 * * *`, 활성) 실행 1건, runid 390, 2026-10-31 18:30:00 UTC(= 11/01 03:30 KST) **succeeded**, `8 rows`(단계별 결과 8행).
+- 상태: 수집 시작 2026-07-18 15:34 UTC(= 07/19 00:34 KST), `raw_purged_before` 2026-07-31 18:30 UTC.
+- 주별 집계: 2026-07-13 주 ~ 2026-09-21 주, 11주(lookback 불완전 8주: 수집 초기 주라 정상). 마지막 실행 기준 닫힌 주가 모두 저장됨(빠진 주 0).
+- 삭제 예정(미리보기): 모두 0, URL 쿼리 비우기 2건(첫 실행 뒤 새로 30일이 지난 행).
+- **판정 62행 전부 일치**(실패 0): 예약 작업, 함수 6개(본문 md5·언어·보안 모드·search_path·소유자 `postgres`, 다른 오버로드 없음), 제약 13개, 인덱스 4개(가입 완료 1회 유일 인덱스 포함), 함수·테이블 권한, RLS, 컬럼, 집계.
+- 참고: CLI 이력 표 `supabase_migrations.schema_migrations`의 마지막 기록은 `20260924030000`(89건). `20261023010000` 이후 마이그레이션은 SQL로 직접 적용돼 이력에 없다. 이 상태에서 `supabase db push`를 쓰면 이미 적용된 파일을 다시 적용하려 할 수 있으므로, 앞으로도 적용은 SQL 직접 실행 + 이번 같은 대조로 한다(또는 이력 정리를 별도 승인 작업으로).
