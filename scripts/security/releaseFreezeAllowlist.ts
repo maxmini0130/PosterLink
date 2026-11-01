@@ -14,6 +14,9 @@ const RETENTION_PURGE = "1e6917574e8b8c682d2c189f34c8511f5053b605";
 /** UI redesign stage 3 favorites.user_status; pending Codex review. */
 const FAVORITE_USER_STATUS = "72a05ab93ea353381446cdf85d8fe578a2afb755";
 
+/** UI redesign stage 4 user_visit_state; pending Codex review. */
+const USER_VISIT_STATE = "f2465edd7c309050562c4dba80f60f26aecf1283";
+
 /** New migration path -> commit holding its reviewed content. */
 export const APPROVED_MIGRATIONS: Readonly<Record<string, string>> = {
   "supabase/migrations/20261031010000_extend_product_events_for_retention.sql":
@@ -24,6 +27,8 @@ export const APPROVED_MIGRATIONS: Readonly<Record<string, string>> = {
     RETENTION_PURGE,
   "supabase/migrations/20261101010000_add_favorite_user_status.sql":
     FAVORITE_USER_STATUS,
+  "supabase/migrations/20261101020000_add_user_visit_state.sql":
+    USER_VISIT_STATE,
 };
 
 /** File path -> commit holding its reviewed content; replaces the base pin. */
