@@ -38,75 +38,102 @@ async function as(db: PGlite, role: string, sub: string | null, sql: string) {
   });
 }
 
-const upsert = (user: string, started: string, active: string, base: string) =>
-  `INSERT INTO user_visit_state (user_id, visit_started_at, last_active_at, baseline_at)
-   VALUES ('${user}', '${started}', '${active}', ${base})
-   ON CONFLICT (user_id) DO UPDATE SET visit_started_at = EXCLUDED.visit_started_at,
-     last_active_at = EXCLUDED.last_active_at, baseline_at = EXCLUDED.baseline_at,
-     updated_at = now()`;
+const at = (minutes: number) =>
+  new Date(Date.UTC(2026, 10, 1, 0, minutes)).toISOString();
+const record = (started: number, active: number, baseline: number | null) =>
+  `SELECT * FROM record_user_visit('${at(started)}', '${at(active)}', ${
+    baseline === null ? "NULL" : `'${at(baseline)}'`
+  })`;
+const iso = (value: unknown) => new Date(value as string).toISOString();
+const stored = async (db: PGlite, user = OWNER) =>
+  (
+    await db.query<Record<string, unknown>>(
+      `SELECT visit_started_at, last_active_at, baseline_at FROM user_visit_state WHERE user_id = '${user}'`,
+    )
+  ).rows.map((row) => ({
+    started: iso(row.visit_started_at),
+    active: iso(row.last_active_at),
+    baseline: row.baseline_at === null ? null : iso(row.baseline_at),
+  }));
 
-test("a member reads and writes only their own visit row", async () => {
+test("a delayed write from another device never moves the visit back", async () => {
+  // Both devices read the same row; B (00:10) is stored first, A (00:05) arrives late.
+  const late = await setup();
+  await as(late, "authenticated", OWNER, record(0, 10, null));
+  const returned = await as(late, "authenticated", OWNER, record(0, 5, null));
+  assert.deepEqual(await stored(late), [
+    { started: at(0), active: at(10), baseline: null },
+  ]);
+  // The caller gets the record that is kept, to adopt it.
+  assert.equal(iso(returned[0].last_active_at), at(10));
+
+  // A new visit from one device replaces all three times together.
+  await as(late, "authenticated", OWNER, record(50, 55, 10));
+  await as(late, "authenticated", OWNER, record(0, 12, null)); // old visit, late
+  assert.deepEqual(await stored(late), [
+    { started: at(50), active: at(55), baseline: at(10) },
+  ]);
+
+  // Same pair in arrival order: the later activity wins either way.
+  const ordered = await setup();
+  await as(ordered, "authenticated", OWNER, record(0, 5, null));
+  await as(ordered, "authenticated", OWNER, record(0, 10, null));
+  assert.deepEqual(await stored(ordered), [
+    { started: at(0), active: at(10), baseline: null },
+  ]);
+});
+
+test("only the signed-in member's own row, read-only table, no signed-out access", async () => {
   const db = await setup();
-  const t = "2026-11-01T00:00:00Z";
-  await as(db, "authenticated", OWNER, upsert(OWNER, t, t, "NULL"));
-  await as(
-    db,
-    "authenticated",
-    OWNER,
-    upsert(OWNER, "2026-11-02T00:00:00Z", "2026-11-02T00:05:00Z", `'${t}'`),
-  );
-  const own = await as(
-    db,
-    "authenticated",
-    OWNER,
-    "SELECT baseline_at FROM user_visit_state",
-  );
-  assert.equal(own.length, 1);
-  assert.equal(
-    new Date(own[0].baseline_at as string).toISOString(),
-    "2026-11-01T00:00:00.000Z",
-  );
-  // Someone else cannot read it or write a row for another account.
+  await as(db, "authenticated", OWNER, record(0, 1, null));
   assert.deepEqual(
     await as(db, "authenticated", OTHER, "SELECT * FROM user_visit_state"),
     [],
   );
+  // Direct writes are not granted; the function is the only way in.
   await assert.rejects(
-    as(db, "authenticated", OTHER, upsert(OWNER, t, t, "NULL")),
-    /row-level security|violates/,
+    as(
+      db,
+      "authenticated",
+      OWNER,
+      `UPDATE user_visit_state SET last_active_at = '${at(99)}'`,
+    ),
+    /permission denied/,
   );
-  // Signed-out requests have no access at all.
   await assert.rejects(
     as(db, "anon", null, "SELECT * FROM user_visit_state"),
     /permission denied/,
   );
+  await assert.rejects(
+    as(db, "anon", null, record(0, 1, null)),
+    /permission denied/,
+  );
+  await assert.rejects(
+    as(db, "authenticated", null, record(0, 1, null)),
+    /not signed in/,
+  );
 });
 
-test("times must be in order, the row goes with the account, re-running is harmless", async () => {
+test("times must be in order, far-future clocks are ignored, the row goes with the account", async () => {
   const db = await setup();
   await assert.rejects(
-    db.query(
-      upsert(OWNER, "2026-11-02T00:00:00Z", "2026-11-01T00:00:00Z", "NULL"),
-    ),
+    as(db, "authenticated", OWNER, record(10, 5, null)),
     /user_visit_state_order_check/,
   );
   await assert.rejects(
-    db.query(
-      upsert(
-        OWNER,
-        "2026-11-01T00:00:00Z",
-        "2026-11-01T00:00:00Z",
-        "'2026-11-03T00:00:00Z'",
-      ),
-    ),
+    as(db, "authenticated", OWNER, record(0, 1, 5)),
     /user_visit_state_order_check/,
   );
-  const t = "2026-11-01T00:00:00Z";
-  await db.query(upsert(OWNER, t, t, "NULL"));
-  await db.query(`DELETE FROM profiles WHERE id = '${OWNER}'`);
-  assert.equal(
-    (await db.query("SELECT * FROM user_visit_state")).rows.length,
-    0,
+  await as(db, "authenticated", OWNER, record(0, 1, null));
+  const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  await as(
+    db,
+    "authenticated",
+    OWNER,
+    `SELECT * FROM record_user_visit('${future}', '${future}', NULL)`,
   );
+  assert.equal((await stored(db))[0].active, at(1));
+  await db.query(`DELETE FROM profiles WHERE id = '${OWNER}'`);
+  assert.deepEqual(await stored(db), []);
   await db.exec(migration);
 });

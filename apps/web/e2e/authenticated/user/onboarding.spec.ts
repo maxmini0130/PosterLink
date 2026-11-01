@@ -104,25 +104,26 @@ test.describe("포스터 찜하기", () => {
   });
 });
 
-test.describe("내 맞춤 필터 (로그인)", () => {
-  test("포스터 목록에서 내 맞춤 토글 표시", async ({ page }) => {
-    await page.goto("/posters", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "찾기", exact: true })).toBeVisible();
-    const toggle = page.locator("text=내 맞춤").first();
-    if (await toggle.count() > 0) {
-      await expect(toggle).toBeVisible();
-    }
+// The search "내 맞춤" switch was replaced (UI redesign 4): the account's
+// interest conditions now drive the member home, edited from its button.
+test.describe("회원 홈 관심 조건 (로그인)", () => {
+  test("홈의 관심 조건 버튼이 관심 조건 수정으로 이어짐", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    const button = page.locator("header").getByRole("link", {
+      name: /관심 조건/,
+    });
+    await expect(button.first()).toBeVisible();
+    await expect(button.first()).toHaveAttribute("href", "/mypage/edit");
+    // Never the guest wording or an empty screen.
+    await expect(page.getByText("불러오는 중이에요")).toHaveCount(0, { timeout: 15_000 });
+    await expect(page.getByText("공고를 불러오지 못했어요")).toHaveCount(0);
   });
 
-  test("내 맞춤 토글 클릭 후 오류 없음", async ({ page }) => {
+  test("찾기의 저장한 조건은 이 브라우저에 보관된다고 안내", async ({ page }) => {
     await page.goto("/posters", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "찾기", exact: true })).toBeVisible();
-
-    const toggle = page.locator('[role="switch"]:has-text("내 맞춤"), button:has-text("내 맞춤")').first();
-    if (await toggle.count() === 0) { test.skip(); return; }
-
-    await toggle.click();
-    expect(page.url()).not.toContain("/login");
-    await expect(page.locator("body")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "저장한 조건" })).toBeVisible();
+    await expect(page.getByText("저장한 조건은 이 기기의 브라우저에 보관돼요.")).toBeVisible();
+    await expect(page.getByText("내 맞춤")).toHaveCount(0);
   });
 });

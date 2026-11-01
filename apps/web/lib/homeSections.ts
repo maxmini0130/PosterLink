@@ -43,6 +43,14 @@ export type HomeSections<T> = {
   followGuide: boolean;
 };
 
+/** A start date without a time begins at 00:00 in Asia/Seoul. */
+function startTime(value?: string | null) {
+  if (!value) return Number.NaN;
+  return Date.parse(
+    /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00+09:00` : value,
+  );
+}
+
 /** Open now: dated, 상시 or 소진 시. Unconfirmed schedules are not claimed open. */
 const isOpen = (display: DeadlineDisplay) =>
   display.reception === "open" ||
@@ -96,7 +104,7 @@ export function buildHomeSections<T>(input: {
     baseline === null
       ? []
       : favorites.filter((item) => {
-          const start = Date.parse(item.application.applicationStartAt ?? "");
+          const start = startTime(item.application.applicationStartAt);
           return (
             !Number.isNaN(start) &&
             start > baseline &&

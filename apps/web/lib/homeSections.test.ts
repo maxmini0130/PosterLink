@@ -181,3 +181,17 @@ test("the visit date is written in Korean for Asia/Seoul", () => {
   // 23:30 UTC is already the next day in Seoul.
   assert.equal(visitDateLabel(at("2026-10-28T23:30:00Z")), "10월 29일(목)");
 });
+
+test("a date-only start counts from midnight in Seoul", () => {
+  // 2026-11-03 08:00 KST: a start of "2026-11-03" has already begun.
+  const early = new Date("2026-11-02T23:00:00.000Z");
+  const home = buildHomeSections({
+    ...base,
+    now: early,
+    baselineAt: BASE,
+    favorites: [
+      item("today", { start: "2026-11-03", end: "2026-11-20T23:59:59+09:00" }),
+    ],
+  });
+  assert.deepEqual(ids(home.startedFavorites), ["today"]);
+});

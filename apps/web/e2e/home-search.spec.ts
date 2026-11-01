@@ -390,8 +390,8 @@ test("member home on PC: conditions, 2 columns, follows, started 찜, server vis
   expect(side!.x).toBeGreaterThan(main!.x + main!.width - 1);
   // No bottom tab bar or floating report button on PC.
   await expect(page.locator(".pl-report-fab")).toBeHidden();
-  // The new visit was written to the account (fake response).
-  expect(writes).toContain("POST /rest/v1/user_visit_state");
+  // The new visit was sent through record_user_visit (fake response).
+  expect(writes).toContain("POST /rest/v1/rpc/record_user_visit");
   // No horizontal scroll.
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),

@@ -7,6 +7,7 @@ import {
   VISIT_GAP_MS,
   laterVisit,
   parseVisitState,
+  shouldSyncVisit,
   touchVisit,
   type VisitState,
 } from "./visitBaseline";
@@ -15,26 +16,24 @@ const MIN = 60 * 1000;
 const DAY = 24 * 60 * MIN;
 const T0 = Date.parse("2026-11-01T09:00:00+09:00");
 
-/** Replays activity at the given times, keeping only written states. */
+/** Replays activity at the given times; the browser keeps every state. */
 function replay(times: number[], start: VisitState | null = null) {
   let stored = start;
   const baselines: Array<number | null> = [];
   for (const now of times) {
-    const { state, write } = touchVisit(stored, now);
-    if (write) stored = state;
-    baselines.push(state.baselineAt);
+    stored = touchVisit(stored, now).state;
+    baselines.push(stored.baselineAt);
   }
   return { stored, baselines };
 }
 
 test("the first visit has no baseline", () => {
-  const { state, write, newVisit } = touchVisit(null, T0);
+  const { state, newVisit } = touchVisit(null, T0);
   assert.deepEqual(state, {
     visitStartedAt: T0,
     lastActiveAt: T0,
     baselineAt: null,
   });
-  assert.equal(write, true);
   assert.equal(newVisit, true);
 });
 
@@ -67,13 +66,29 @@ test("30 minutes without activity starts a new visit from the last activity", ()
   assert.equal(next.state.baselineAt, T0 + 10 * MIN);
 });
 
-test("activity is written at most once per interval within a visit", () => {
-  const start = touchVisit(null, T0).state;
-  assert.equal(touchVisit(start, T0 + 1 * MIN).write, false);
-  const later = touchVisit(start, T0 + ACTIVITY_WRITE_INTERVAL_MS);
-  assert.equal(later.write, true);
-  assert.equal(later.state.lastActiveAt, T0 + ACTIVITY_WRITE_INTERVAL_MS);
-  assert.equal(later.state.baselineAt, null);
+test("activity inside the write interval still counts (00:00 → 00:04 → 00:30)", () => {
+  const { stored, baselines } = replay([T0, T0 + 4 * MIN, T0 + 30 * MIN]);
+  // 26 minutes after the last real activity: still the same visit.
+  assert.deepEqual(baselines, [null, null, null]);
+  assert.equal(stored!.visitStartedAt, T0);
+  assert.equal(stored!.lastActiveAt, T0 + 30 * MIN);
+  // 30 minutes after the real last activity (00:30) starts a new visit from it.
+  const next = touchVisit(stored, T0 + 60 * MIN);
+  assert.equal(next.newVisit, true);
+  assert.equal(next.state.baselineAt, T0 + 30 * MIN);
+  assert.equal(touchVisit(stored, T0 + 60 * MIN - 1).newVisit, false);
+});
+
+test("the server is written when a visit starts, then at most once per interval", () => {
+  assert.equal(shouldSyncVisit(true, T0, T0 + MIN), true);
+  assert.equal(shouldSyncVisit(false, null, T0), true);
+  assert.equal(shouldSyncVisit(false, T0, T0 + 4 * MIN), false);
+  assert.equal(
+    shouldSyncVisit(false, T0, T0 + ACTIVITY_WRITE_INTERVAL_MS),
+    true,
+  );
+  // A clock moved backwards does not block writes until it catches up.
+  assert.equal(shouldSyncVisit(false, T0, T0 - MIN), true);
 });
 
 test("a baseline older than 30 days is clamped to 30 days", () => {
@@ -89,7 +104,7 @@ test("a clock moved backwards stays in the same visit", () => {
   const start = touchVisit(null, T0).state;
   const back = touchVisit(start, T0 - 2 * 60 * MIN);
   assert.equal(back.newVisit, false);
-  assert.equal(back.state, start);
+  assert.equal(back.state, start); // last activity never moves back
 });
 
 test("stored values are read defensively and the later device wins", () => {
