@@ -8,6 +8,8 @@ import { getAppOrigin } from "../../../lib/siteUrl";
 import { resolvePosterImageGallery } from "../../../lib/posterImage";
 import { hasVerifiedPosterStructuredData } from "../../../lib/posterStructuredTrust";
 import { buildPosterStructuredSeoData } from "../../../lib/posterStructuredSeo";
+import { fetchInstitutionRelatedPosters } from "../../../lib/publicDiscovery";
+import { discoveryPosterToCard } from "../../components/pl/PosterListCard";
 import { PosterDetailClient, type PosterDetailLink, type PosterDetailPoster } from "./PosterDetailClient";
 import type { AlertDefaults } from "./ClosedPosterAlertCta";
 
@@ -42,6 +44,7 @@ type PosterRow = {
   data_confidence?: number | null;
   thumbnail_url: string | null;
   source_key: string | null;
+  organizer_id?: string | null;
   field_verification: Record<string, any> | null;
   published_at: string | null;
   created_at: string | null;
@@ -50,7 +53,7 @@ type PosterRow = {
 
 const LEGACY_POSTER_SELECT =
   "id, title, source_org_name, summary_short, summary_long, poster_status, application_start_at, application_end_at, thumbnail_url, source_key, field_verification, published_at, created_at, updated_at";
-const STRUCTURED_POSTER_SELECT = `${LEGACY_POSTER_SELECT}, organizer_name, application_organization_name, deadline_type, event_start_at, event_end_at, eligibility_summary, target_age_min, target_age_max, participation_fee, benefits_summary, recruitment_count, application_method, required_documents, contact_info, event_location, verified_at, verification_status, data_confidence`;
+const STRUCTURED_POSTER_SELECT = `${LEGACY_POSTER_SELECT}, organizer_name, application_organization_name, deadline_type, event_start_at, event_end_at, eligibility_summary, target_age_min, target_age_max, participation_fee, benefits_summary, recruitment_count, application_method, required_documents, contact_info, event_location, verified_at, verification_status, data_confidence, organizer_id`;
 
 function isMissingStructuredPosterColumn(error: { code?: string; message?: string } | null) {
   if (!error) return false;
@@ -58,7 +61,7 @@ function isMissingStructuredPosterColumn(error: { code?: string; message?: strin
   return (
     error.code === "42703" ||
     error.code === "PGRST204" ||
-    /organizer_name|deadline_type|verification_status/.test(message)
+    /organizer_name|organizer_id|deadline_type|verification_status/.test(message)
   );
 }
 
@@ -324,11 +327,21 @@ export default async function PosterDetailPage({ params }: { params: { id: strin
   }
 
   const structuredData = buildPosterStructuredData(detail.poster, detail.links);
+  // Other accepting posters of the same organiser; the page renders without them.
+  const related = detail.poster.organizer_id
+    ? await fetchInstitutionRelatedPosters(detail.poster.organizer_id, detail.poster.id).catch(() => null)
+    : null;
 
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }} />
-      <PosterDetailClient poster={detail.poster} links={detail.links} alertDefaults={detail.alertDefaults} />
+      <PosterDetailClient
+        poster={detail.poster}
+        links={detail.links}
+        alertDefaults={detail.alertDefaults}
+        institution={related?.institution ?? null}
+        relatedPosters={(related?.posters ?? []).map(discoveryPosterToCard)}
+      />
     </>
   );
 }

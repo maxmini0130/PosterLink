@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>PC 찾기</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&amp;family=Noto+Serif+KR:wght@600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F1EEE4}
+a{color:#1C2D4F}a:hover{color:#0F1A30}
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #F1EEE4; font-family: 'Noto Sans KR', system-ui, sans-serif; color: #1C2D4F">
+
+  <header style="background: #FFFFFF; border-bottom: 1px solid #D9D3C3">
+    <div style="max-width: 1200px; margin: 0 auto; padding: 0 40px; box-sizing: border-box; min-height: 64px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 32px">
+      <a href="PcHome.dc.html" style="font-family: 'Noto Serif KR', serif; font-size: 20px; font-weight: 700; text-decoration: none">PosterLink</a>
+      <nav aria-label="주 메뉴" style="display: flex; gap: 4px; flex: 1 1 auto">
+        <a href="PcHome.dc.html" style="padding: 10px 12px; font-size: 15px; text-decoration: none; color: #4A4E59">홈</a>
+        <a href="PcSearch.dc.html" aria-current="page" style="padding: 10px 12px; font-size: 15px; font-weight: 700; text-decoration: none; color: #1C2D4F; box-shadow: inset 0 -2px 0 #1C2D4F">찾기</a>
+        <a href="PcMyPosts.dc.html" style="padding: 10px 12px; font-size: 15px; text-decoration: none; color: #4A4E59">내 공고</a>
+      </nav>
+      <div style="display: flex; gap: 8px; align-items: center">
+        <a href="#" style="height: 40px; padding: 0 14px; border-radius: 20px; border: 1px solid {{accent}}; color: {{accent}}; text-decoration: none; font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 6px">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+          포스터 제보
+        </a>
+        <a href="PcMyPosts.dc.html" style="height: 40px; padding: 0 12px 0 6px; border-radius: 20px; border: 1px solid #D9D3C3; color: #1C2D4F; text-decoration: none; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 6px">
+          <span aria-hidden="true" style="width: 28px; height: 28px; border-radius: 14px; background: #1C2D4F; color: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"></path></svg></span>
+          마이
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main style="max-width: 1200px; margin: 0 auto; padding: 28px 40px 64px; box-sizing: border-box">
+    <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center">
+      <label for="pq" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">공고, 기관 검색</label>
+      <div style="flex: 1 1 420px; height: 52px; box-sizing: border-box; border: 1px solid #D9D3C3; border-radius: 10px; background: #FFFFFF; display: flex; align-items: center; gap: 10px; padding: 0 16px">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5B5F6B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+        <input id="pq" type="search" placeholder="공고, 기관 이름으로 찾기" style="flex: 1 1 auto; min-width: 0; border: 0; outline: none; background: transparent; font-family: inherit; font-size: 16px; color: #1C2D4F">
+      </div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center">
+        <span style="font-size: 13px; font-weight: 700; color: #4A4E59">저장한 조건</span>
+        <button aria-pressed="true" style="height: 38px; padding: 0 14px; border-radius: 19px; border: 1px solid #1C2D4F; background: #1C2D4F; color: #FFFFFF; font-family: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer">마포구 · 문화/행사</button>
+        <button aria-pressed="false" style="height: 38px; padding: 0 14px; border-radius: 19px; border: 1px solid #D9D3C3; background: #FFFFFF; color: #1C2D4F; font-family: inherit; font-size: 13.5px; cursor: pointer">서울 · 교육/취업</button>
+      </div>
+    </div>
+
+    <div style="margin-top: 24px; display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start">
+
+      <aside aria-label="필터" style="flex: 1 1 240px; max-width: 260px; background: #FFFFFF; border: 1px solid #D9D3C3; border-radius: 12px; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 22px">
+        <fieldset style="margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 10px">
+          <legend style="padding: 0; margin-bottom: 10px; font-size: 14px; font-weight: 700">지역</legend>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 14.5px; min-height: 32px"><input type="radio" name="region" checked style="width: 18px; height: 18px; accent-color: #1C2D4F"> 서울 마포구</label>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 14.5px; min-height: 32px"><input type="radio" name="region" style="width: 18px; height: 18px; accent-color: #1C2D4F"> 서울 전체</label>
+          <button style="align-self: flex-start; height: 32px; padding: 0; border: 0; background: transparent; color: #1C2D4F; font-family: inherit; font-size: 13.5px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer">다른 지역 선택</button>
+        </fieldset>
+        <fieldset style="margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 6px">
+          <legend style="padding: 0; margin-bottom: 10px; font-size: 14px; font-weight: 700">분야</legend>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 14.5px; min-height: 32px"><input type="checkbox" style="width: 18px; height: 18px; accent-color: #1C2D4F"> 지원금/복지</label>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 14.5px; min-height: 32px"><input type="checkbox" style="width: 18px; height: 18px; accent-color: #1C2D4F"> 교육/취업</label>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 14.5px; min-height: 32px"><input type="checkbox" checked style="width: 18px; height: 18px; accent-color: #1C2D4F"> 문화/행사</label>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 14.5px; min-height: 32px"><input type="checkbox" style="width: 18px; height: 18px; accent-color: #1C2D4F"> 주거/금융</label>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 14.5px; min-height: 32px"><input type="checkbox" style="width: 18px; height: 18px; accent-color: #1C2D4F"> 소상공인</label>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 14.5px; min-height: 32px"><input type="checkbox" style="width: 18px; height: 18px; accent-color: #1C2D4F"> 육아/가족</label>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 14.5px; min-height: 32px"><input type="checkbox" style="width: 18px; height: 18px; accent-color: #1C2D4F"> 건강/의료</label>
+        </fieldset>
+        <fieldset style="margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 6px">
+          <legend style="padding: 0; margin-bottom: 10px; font-size: 14px; font-weight: 700">접수 상태</legend>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 14.5px; min-height: 32px"><input type="checkbox" checked style="width: 18px; height: 18px; accent-color: #1C2D4F"> 접수 중만 보기</label>
+        </fieldset>
+        <button style="height: 44px; border-radius: 10px; border: 1px dashed #8A8F9C; background: transparent; color: #1C2D4F; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer">지금 조건 저장</button>
+      </aside>
+
+      <div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 32px">
+
+        <section>
+          <div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px">
+            <div>
+              <h2 style="margin: 0; font-size: 20px; font-weight: 700">선택한 조건에 맞는 공고 <span style="color: {{accent}}">3</span></h2>
+              <p style="margin: 4px 0 0; font-size: 13.5px; color: #4A4E59">마포구 대상 · 문화/행사 · 접수 중</p>
+            </div>
+            <label style="font-size: 13.5px; color: #4A4E59; display: flex; align-items: center; gap: 6px">정렬
+              <select style="height: 36px; border: 1px solid #D9D3C3; border-radius: 8px; background: #FFFFFF; font-family: inherit; font-size: 13.5px; color: #1C2D4F; padding: 0 8px"><option>마감 임박순</option><option>최신 등록순</option></select>
+            </label>
+          </div>
+          <div style="margin-top: 12px; background: #FFFFFF; border: 1px solid #D9D3C3; border-radius: 12px">
+            <a href="PcDetail.dc.html" style="text-decoration: none; color: #1C2D4F; padding: 16px 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; border-bottom: 1px solid #ECE7DA">
+              <div aria-hidden="true" style="flex: 0 0 auto; width: 48px; height: 62px; background: #E2DCCB; border-radius: 4px"></div>
+              <div style="flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+                <span style="font-size: 15.5px; font-weight: 700; line-height: 1.4">2026년 10월 D-day 콘서트 참가자 모집</span>
+                <span style="font-size: 13px; color: #5B5F6B">구립도화청소년문화의집</span>
+              </div>
+              <span style="flex: 0 0 auto; font-size: 12.5px; font-weight: 700; color: #FFFFFF; background: {{accent}}; padding: 3px 8px; border-radius: 4px">오늘 마감</span>
+            </a>
+            <a href="PcDetail.dc.html" style="text-decoration: none; color: #1C2D4F; padding: 16px 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; border-bottom: 1px solid #ECE7DA">
+              <div aria-hidden="true" style="flex: 0 0 auto; width: 48px; height: 62px; background: #E2DCCB; border-radius: 4px"></div>
+              <div style="flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+                <span style="font-size: 15.5px; font-weight: 700; line-height: 1.4">KBS 전국노래자랑 마포구편 참가자 모집 안내</span>
+                <span style="font-size: 13px; color: #5B5F6B">마포문화재단 · 찜</span>
+              </div>
+              <span style="flex: 0 0 auto; font-size: 13.5px; font-weight: 700; color: {{accent}}">11.05 마감 · D-5</span>
+            </a>
+            <a href="PcDetail.dc.html" style="text-decoration: none; color: #1C2D4F; padding: 16px 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px">
+              <div aria-hidden="true" style="flex: 0 0 auto; width: 48px; height: 62px; background: #E2DCCB; border-radius: 4px"></div>
+              <div style="flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+                <span style="font-size: 15.5px; font-weight: 700; line-height: 1.4">「제2회 마포구민 체육대회」 참여자(선수) 모집</span>
+                <span style="font-size: 13px; color: #5B5F6B">마포구 상암동 주민센터</span>
+              </div>
+              <span style="flex: 0 0 auto; font-size: 13.5px; font-weight: 700; color: {{accent}}">11.07 마감 · D-7</span>
+            </a>
+          </div>
+        </section>
+
+        <section>
+          <h2 style="margin: 0; font-size: 20px; font-weight: 700">함께 살펴볼 주변 지역 공고</h2>
+          <p style="margin: 4px 0 0; font-size: 13.5px; color: #4A4E59">마포구 주변 · 문화/행사 · 거주 조건을 꼭 확인하세요</p>
+          <div aria-hidden="true" style="margin-top: 12px; background: #FFFFFF; border: 1px solid #D9D3C3; border-radius: 12px; padding: 16px 20px; display: flex; align-items: center; gap: 20px">
+            <div style="flex: 0 0 auto; width: 48px; height: 62px; background: #E2DCCB; border-radius: 4px"></div>
+            <div style="flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px">
+              <span style="align-self: flex-start; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 4px; background: #F1EEE4; color: #4A4E59">주변 지역</span>
+              <div style="height: 12px; width: 60%; background: #ECE7DA; border-radius: 3px"></div>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2 style="margin: 0; font-size: 20px; font-weight: 700">서울·전국 대상 공고</h2>
+          <p style="margin: 4px 0 0; font-size: 13.5px; color: #4A4E59">문화/행사 · 연령·거주 등 참여 조건은 상세에서 확인하세요</p>
+          <div style="margin-top: 12px; background: #FFFFFF; border: 1px solid #D9D3C3; border-radius: 12px">
+            <a href="PcDetail.dc.html" style="text-decoration: none; color: #1C2D4F; padding: 16px 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; border-bottom: 1px solid #ECE7DA">
+              <span style="flex: 0 0 auto; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 4px; background: #F1EEE4; color: #4A4E59">서울 전체</span>
+              <span style="flex: 1 1 280px; font-size: 15px; font-weight: 500">미세먼지, 오존 예·경보 알림 신청하고 기프티콘 받기</span>
+              <span style="flex: 0 0 auto; font-size: 13.5px; font-weight: 700; color: {{accent}}">11.18 마감 · D-18</span>
+            </a>
+            <div aria-hidden="true" style="padding: 16px 20px; display: flex; align-items: center; gap: 16px">
+              <span style="flex: 0 0 auto; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 4px; background: #F1EEE4; color: #4A4E59">전국</span>
+              <div style="height: 12px; width: 50%; background: #ECE7DA; border-radius: 3px"></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#BE3A2B","options":["#BE3A2B","#1C2D4F","#2F6B4F"]},"$preview":{"width":1280,"height":1260}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#BE3A2B' };
+  }
+}
+</script>
+</body>
+</html>

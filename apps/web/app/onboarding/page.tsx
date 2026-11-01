@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -10,6 +10,12 @@ import { MapPin, Star, ChevronRight, Check, Shield, User } from "lucide-react";
 import toast from "react-hot-toast";
 import { getCityRegions, getDistrictRegions, getRegionLabel, getSelectedCityId, getSelectedDistrictId } from "../../lib/regionHelpers";
 import { syncVisitorIdentity, trackProductEvent } from "../../lib/productEvents";
+import {
+  clearGuestInterestIf,
+  readGuestInterest,
+  type GuestInterest,
+} from "../../lib/guestInterest";
+import { guestLocal } from "../lib/guestSession";
 
 const TOTAL_STEPS = 6;
 
@@ -29,6 +35,8 @@ export default function OnboardingPage() {
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
 
   const router = useRouter();
+  // The guest conditions used to prefill this form, cleared after saving.
+  const carriedInterest = useRef<GuestInterest | null>(null);
 
   const ageBands = [
     { label: "청소년", value: "teen",    desc: "13~18세" },
@@ -50,7 +58,7 @@ export default function OnboardingPage() {
       setLoading(true);
       const { data: regionData } = await supabase
         .from("regions")
-        .select("id, name, full_name, level")
+        .select("id, name, full_name, level, parent_id")
         .in("level", ["nation", "sido", "sigungu"])
         .order("level", { ascending: false })
         .order("full_name", { ascending: true });
@@ -62,6 +70,18 @@ export default function OnboardingPage() {
 
       if (regionData) setRegions(regionData);
       if (categoryData) setCategories(categoryData);
+      // Conditions chosen before signing up carry over (UI plan ⑤).
+      const guest = readGuestInterest(guestLocal);
+      carriedInterest.current = guest;
+      if (guest) {
+        if (guest.regionId && regionData?.some((r) => r.id === guest.regionId))
+          setSelectedRegionId((current) => current || guest.regionId!);
+        const known = guest.categoryIds.filter((id) =>
+          categoryData?.some((c) => c.id === id),
+        );
+        if (known.length)
+          setSelectedCategoryIds((current) => (current.length ? current : known));
+      }
       setLoading(false);
     };
     fetchData();
@@ -93,6 +113,10 @@ export default function OnboardingPage() {
         throw new Error(data.error ?? "프로필 저장 실패");
       }
 
+      // Saved to the account: this browser's copy is no longer needed, unless
+      // it was changed meanwhile (another tab), which is kept.
+      if (carriedInterest.current)
+        clearGuestInterestIf(guestLocal, carriedInterest.current);
       void syncVisitorIdentity(currentUser.id);
       trackProductEvent("interest_save", {
         metadata: {

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>찜 직후 · 가벼운 안내</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&amp;family=Noto+Serif+KR:wght@600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F1EEE4}
+a{color:#1C2D4F}a:hover{color:#0F1A30}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; position: relative; background: #F1EEE4; font-family: 'Noto Sans KR', system-ui, sans-serif; color: #1C2D4F; overflow: hidden">
+
+  <div aria-hidden="true">
+    <div style="height: 56px; border-bottom: 1px solid #D9D3C3; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700">공고 상세</div>
+    <div style="padding: 20px 20px 0">
+      <div style="display: flex; gap: 6px">
+        <span style="font-size: 12px; padding: 4px 8px; border-radius: 4px; background: #1C2D4F; color: #FFFFFF">행사모집</span>
+        <span style="font-size: 12px; padding: 4px 8px; border-radius: 4px; background: #FFFFFF; border: 1px solid #D9D3C3">서울 마포구 대상</span>
+      </div>
+      <div style="margin-top: 10px; width: 270px; font-family: 'Noto Serif KR', serif; font-size: 22px; font-weight: 700; line-height: 1.38">KBS 전국노래자랑 마포구편 참가자 모집 안내 (선착순 300명)</div>
+      <div style="margin-top: 10px; font-size: 13px; color: #5B5F6B">마포문화재단</div>
+    </div>
+    <div style="margin: 18px 20px 0; height: 300px; background: #FFFFFF; border: 1px solid #D9D3C3; border-radius: 12px; padding: 18px; box-sizing: border-box">
+      <div style="font-size: 15px; font-weight: 700">신청 핵심 정보</div>
+      <div style="margin-top: 14px; font-size: 14px; line-height: 2; color: #5B5F6B">접수 기간 · 대상 지역 · 모집 인원 …</div>
+    </div>
+  </div>
+
+  <div role="status" style="position: absolute; left: 16px; right: 16px; bottom: 100px; box-sizing: border-box; background: #1C2D4F; color: #FFFFFF; border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; box-shadow: 0 6px 20px rgba(15,26,48,0.22)">
+    <span style="font-size: 14px">이 기기에 저장됐어요</span>
+    <a href="SaveSheet.dc.html" style="flex: 0 0 auto; color: #FFFFFF; font-size: 14px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; padding: 6px 0">계정에 보관하기</a>
+  </div>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; box-sizing: border-box; padding: 12px 16px 20px; background: #F1EEE4; border-top: 1px solid #D9D3C3; display: flex; gap: 10px">
+    <button aria-pressed="true" style="flex: 0 0 auto; height: 52px; padding: 0 16px; border-radius: 10px; border: 1px solid {{accent}}; background: #FFFFFF; color: {{accent}}; font-family: inherit; font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 6px; cursor: pointer">
+      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"></path></svg>
+      찜함
+    </button>
+    <a href="#" style="flex: 1 1 auto; height: 52px; border-radius: 10px; background: {{accent}}; color: #FFFFFF; text-decoration: none; font-size: 16px; font-weight: 700; display: flex; align-items: center; justify-content: center">공식 공고 확인하기</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#BE3A2B","options":["#BE3A2B","#1C2D4F","#2F6B4F"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#BE3A2B' };
+  }
+}
+</script>
+</body>
+</html>

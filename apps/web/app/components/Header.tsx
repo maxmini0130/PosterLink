@@ -3,14 +3,18 @@
 import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Bell, ClipboardList, Heart, Search, ShieldCheck, User } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { Bell, ClipboardList, Plus, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import { AccountMenu } from "./AccountMenu";
 
 export function Header() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
   const [hasUnread, setHasUnread] = useState(false);
   const [role, setRole] = useState<string | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
+  const pathname = usePathname() ?? "";
 
   const checkUserInfo = async (userId: string) => {
     const [notifResult, profileResult] = await Promise.all([
@@ -25,6 +29,7 @@ export function Header() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       setIsLoggedIn(Boolean(user));
+      setEmail(user?.email ?? null);
       if (user) checkUserInfo(user.id);
     });
 
@@ -32,6 +37,7 @@ export function Header() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsLoggedIn(Boolean(session));
+      setEmail(session?.user.email ?? null);
       if (session?.user) {
         checkUserInfo(session.user.id);
       } else {
@@ -51,14 +57,26 @@ export function Header() {
           <span className="hidden sm:inline">PosterLink</span>
         </Link>
 
-        <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1 md:flex">
-          <HeaderNavLink href="/posters" icon={<Search size={15} />} label="공고 찾기" />
-          <HeaderNavLink href="/institutions" icon={<ClipboardList size={15} />} label="기관 찾기" />
-          <HeaderNavLink href="/favorites" icon={<Heart size={15} />} label="저장한 공고" />
-          <HeaderNavLink href="/#about" icon={<ShieldCheck size={15} />} label="서비스 소개" />
+        {/* PC menu (UI redesign 3-1); mobile uses the bottom tab bar. */}
+        <nav aria-label="주요 메뉴" className="hidden min-w-0 flex-1 items-center justify-center gap-1 md:flex">
+          <HeaderNavLink href="/" label="홈" current={pathname === "/"} />
+          <HeaderNavLink href="/posters" label="찾기" current={pathname === "/posters"} />
+          <HeaderNavLink
+            href="/my-posters"
+            label="내 공고"
+            current={pathname.startsWith("/my-posters") || pathname.startsWith("/favorites")}
+          />
+          <HeaderNavLink href="/institutions" label="기관 찾기" current={pathname.startsWith("/institutions")} />
         </nav>
 
         <div className="flex shrink-0 items-center gap-1">
+          <Link
+            href="/posters/request"
+            className="mr-1 hidden min-h-[36px] items-center gap-1 rounded-full border border-slate-300 px-3 text-xs font-bold text-slate-700 hover:border-slate-500 md:inline-flex"
+          >
+            <Plus size={14} aria-hidden="true" />
+            포스터 제보
+          </Link>
           {isLoggedIn === false && (
             <>
               <Link
@@ -83,25 +101,33 @@ export function Header() {
           {isLoggedIn === true && (
             <>
               {(role === "admin" || role === "super_admin") && (
-                <Link href="/admin" className="p-2 text-blue-700 transition-colors hover:text-blue-900" title="관리자">
-                  <ShieldCheck size={22} />
+                <Link href="/admin" aria-label="관리자" className="p-2 text-blue-700 transition-colors hover:text-blue-900" title="관리자">
+                  <ShieldCheck size={22} aria-hidden="true" />
                 </Link>
               )}
               {role === "operator" && (
                 <Link
                   href="/operator/posters"
+                  aria-label="운영자"
                   className="p-2 text-emerald-600 transition-colors hover:text-emerald-800"
                   title="운영자"
                 >
-                  <ClipboardList size={22} />
+                  <ClipboardList size={22} aria-hidden="true" />
                 </Link>
               )}
-              <Link href="/notifications" className="relative p-2 text-slate-500 transition-colors hover:text-blue-700">
-                <Bell size={22} />
-                {hasUnread && <span className="absolute right-2 top-2 h-2 w-2 rounded-full border-2 border-white bg-rose-500" />}
+              <Link
+                href="/notifications"
+                aria-label={hasUnread ? "알림, 읽지 않은 알림 있음" : "알림"}
+                className="relative p-2 text-slate-500 transition-colors hover:text-blue-700"
+              >
+                <Bell size={22} aria-hidden="true" />
+                {hasUnread && <span aria-hidden="true" className="absolute right-2 top-2 h-2 w-2 rounded-full border-2 border-white bg-rose-500" />}
               </Link>
-              <Link href="/mypage" className="p-2 text-slate-500 transition-colors hover:text-blue-700">
-                <User size={22} />
+              <div className="hidden md:block">
+                <AccountMenu email={email} />
+              </div>
+              <Link href="/mypage" aria-label="마이" className="p-2 text-slate-500 transition-colors hover:text-blue-700 md:hidden">
+                마이
               </Link>
             </>
           )}
@@ -111,13 +137,15 @@ export function Header() {
   );
 }
 
-function HeaderNavLink({ href, icon, label }: { href: string; icon: ReactNode; label: string }) {
+function HeaderNavLink({ href, label, current }: { href: string; label: ReactNode; current: boolean }) {
   return (
     <Link
       href={href}
-      className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-black text-slate-600 transition-colors hover:text-blue-700"
+      aria-current={current ? "page" : undefined}
+      className={`inline-flex min-h-[44px] items-center px-3 text-sm transition-colors hover:text-slate-950 ${
+        current ? "font-black text-slate-950 underline decoration-2 underline-offset-8" : "font-bold text-slate-600"
+      }`}
     >
-      {icon}
       {label}
     </Link>
   );

@@ -136,7 +136,7 @@ export default function MyPage() {
         {/* Menu Grid */}
         <div className="grid grid-cols-1 gap-3">
           <Link
-            href="/favorites"
+            href="/my-posters"
             className="flex items-center justify-between p-6 bg-white rounded-3xl border border-gray-100 hover:border-blue-100 transition-all group shadow-sm"
           >
             <div className="flex items-center gap-4">
@@ -193,6 +193,7 @@ export default function MyPage() {
 
           {/* 알림 설정 토글 */}
           <button
+            id="notification-settings"
             onClick={handleToggleNotification}
             disabled={togglingNotif}
             className="flex items-center justify-between p-6 bg-white rounded-3xl border border-gray-100 hover:border-blue-100 transition-all group shadow-sm disabled:opacity-60"

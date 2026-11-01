@@ -1,635 +1,550 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
 import Link from "next/link";
-import { AnimatePresence, motion } from "framer-motion";
-import {
-  ArrowRight,
-  Bell,
-  Building2,
-  CalendarClock,
-  CheckCircle2,
-  Filter,
-  Heart,
-  MapPin,
-  PlusCircle,
-  Search,
-  ShieldCheck,
-  Sparkles,
-} from "lucide-react";
-import { supabase } from "../lib/supabase";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { SlidersHorizontal } from "lucide-react";
 import { BottomNav } from "./components/BottomNav";
 import { Footer } from "./components/Footer";
 import { Header } from "./components/Header";
-import { PosterCard } from "./components/PosterCard";
-import { fetchCategoryRegionNames, fetchPosterImages } from "./lib/posterHelpers";
-import { fetchPosterMetricCounts } from "./lib/posterMetrics";
-import { getPosterApplicationState, isPosterAcceptingApplications } from "../lib/posterApplication";
-import { PUBLIC_POSTER_EXPOSURE_FILTER } from "../lib/publicPosterVisibility";
+import { GuideCard } from "./components/pl/GuideCard";
+import {
+  PosterListCard,
+  PosterMiniCard,
+  PosterMiniRail,
+  PosterTileCard,
+  type PlPosterCardData,
+} from "./components/pl/PosterListCard";
+import { ReportFab } from "./components/pl/ReportFab";
+import { SectionHeader } from "./components/pl/SectionHeader";
+import { guestLocal, guestTab } from "./lib/guestSession";
+import { loadHomeData, type HomeData, type HomeInterest } from "./lib/homeData";
+import { recordVisitActivity } from "./lib/visitClock";
+import {
+  buildHomeSections,
+  visitDateLabel,
+  type HomeEntry,
+} from "../lib/homeSections";
+import {
+  readEntry,
+  readGuestInterest,
+  shouldOfferInterestPicker,
+  wasInterestOffered,
+} from "../lib/guestInterest";
 import type { TopDiscoveryCombination } from "../lib/publicDiscovery";
 
-const categories = ["전체", "청년", "소상공인", "창업", "교육", "문화·행사", "복지", "채용", "주거"] as const;
-const feedTabs = [
-  { key: "urgent", label: "마감 임박" },
-  { key: "new", label: "새로 등록" },
-  { key: "popular", label: "많이 본 공고" },
-] as const;
-type FeedTabKey = (typeof feedTabs)[number]["key"];
+type Entry = HomeEntry<PlPosterCardData>;
 
-const regionShortcuts = [
-  { name: "마포구", slug: "seoul-mapo" },
-  { name: "은평구", slug: "seoul-eunpyeong" },
-  { name: "서대문구", slug: "seoul-seodaemun" },
-  { name: "영등포구", slug: "seoul-yeongdeungpo" },
-  { name: "강서구", slug: "seoul-gangseo" },
-];
-const organizationHighlights = ["마포구청", "마포문화재단", "서울청년센터", "서울경제진흥원", "소상공인시장진흥공단"];
-const serviceCategories = ["청년", "소상공인", "창업", "교육", "문화·행사", "복지", "채용", "주거"];
+type State =
+  | { phase: "loading" }
+  | { phase: "error" }
+  | { phase: "ready"; data: HomeData; baselineAt: number | null };
 
-// "문화·행사"의 가운데점(·)은 실제 공고 텍스트에 그대로 나타나지 않아 검색어로 보내면 0건이 나온다.
-// 라벨은 그대로 두고 실제 검색에 보내는 값만 "행사"로 대체한다.
-function categorySearchTerm(category: string) {
-  return category === "문화·행사" ? "행사" : category;
+const FRESH_FIRST = 3;
+
+/** "마포구 · 관심 분야 3" for the button; the full list on PC. */
+function interestSummary(interest: HomeInterest) {
+  const parts = [
+    interest.region?.name,
+    interest.categories.length
+      ? `관심 분야 ${interest.categories.length}`
+      : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : null;
 }
 
-type HomeSummary = {
-  todayNew: number | null;
-  activePosters: number | null;
-  dueThisWeek: number | null;
-  collectionSources: number | null;
-};
+function interestFull(interest: HomeInterest) {
+  return [
+    interest.region?.name,
+    ...interest.categories.map((category) => category.name),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** Search path for "모두 보기": region and the first interest category. */
+function interestSearchPath(interest: HomeInterest) {
+  const params = new URLSearchParams();
+  if (interest.region) params.set("region", interest.region.id);
+  if (interest.categories.length === 1)
+    params.set("category", interest.categories[0].id);
+  const query = params.toString();
+  return query ? `/posters?${query}` : "/posters";
+}
+
+/** Condition line under a section title: "마포구 대상 · 문화/행사 외 2 · 접수 중". */
+function conditionLine(interest: HomeInterest, status = "접수 중") {
+  const [first, ...rest] = interest.categories;
+  return [
+    interest.region ? `${interest.region.name} 대상` : null,
+    first ? `${first.name}${rest.length ? ` 외 ${rest.length}` : ""}` : null,
+    status,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
 
 export default function Home({
   topCombinations,
-  initialSummary,
 }: {
   topCombinations: TopDiscoveryCombination[];
-  initialSummary: HomeSummary;
 }) {
-  const [loading, setLoading] = useState(false);
-  const [userProfile, setUserProfile] = useState<any>(null);
-  const [posters, setPosters] = useState<any[]>([]);
-  const [urgentPosters, setUrgentPosters] = useState<any[]>([]);
-  const [homeSummary, setHomeSummary] = useState<HomeSummary>(initialSummary);
-  const [hideClosedPosters, setHideClosedPosters] = useState(true);
-  const [activeFeed, setActiveFeed] = useState<FeedTabKey>("urgent");
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [state, setState] = useState<State>({ phase: "loading" });
+  const [showAllFresh, setShowAllFresh] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
-    const fetchHomeData = async () => {
-      setLoading(true);
-      setLoadError(null);
-      try {
-        const attachPosterMeta = async (items: any[]) => {
-          const posterIds = items.map((poster: any) => poster.id);
-          const [metaMap, metricCounts, imageMap] = await Promise.all([
-            fetchCategoryRegionNames(posterIds),
-            fetchPosterMetricCounts(posterIds),
-            fetchPosterImages(posterIds),
-          ]);
-
-          return items.map((poster: any) => ({
-            ...poster,
-            ...metaMap[poster.id],
-            images: imageMap[poster.id] ?? [],
-            viewCount: metricCounts.viewCounts[poster.id] ?? 0,
-            linkClickCount: metricCounts.linkClickCounts[poster.id] ?? 0,
-            favoriteCount: metricCounts.favoriteCounts[poster.id] ?? 0,
-            // get_recommended_posters_v2가 주는 순수 코사인 유사도(0~1). 공개 목록
-            // 조회(fetchPublicPosters)에는 이 컬럼이 없어 undefined로 남고, PosterCard는
-            // null/undefined일 땐 배지를 표시하지 않는다.
-            similarityScore: poster.similarity_score ?? null,
-          }));
-        };
-
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const user = session?.user ?? null;
-        const nowIso = new Date().toISOString();
-
-        // 메인 공고 목록 / 마감임박 목록 / 홈 요약 통계는 서로 의존관계가 없으므로
-        // 순차 await 대신 Promise.all로 동시에 실행한다(순차 실행 시 각 단계가
-        // 이전 단계를 기다리면서 전체 로딩 시간이 누적됨 — 홈페이지 체감 속도 저하 원인).
-        const fetchMainPosters = async () => {
-          if (user && hideClosedPosters) {
-            const { data: profile } = await supabase
-              .from("profiles")
-              .select("*, regions(name, full_name, level)")
-              .eq("id", user.id)
-              .single();
-
-            const { data: recommendedData, error: rpcError } = await supabase.rpc("get_recommended_posters_v2", {
-              p_user_id: user.id,
-              p_limit: 12,
-            });
-
-            if (!rpcError && recommendedData && recommendedData.length > 0) {
-              return { profileFetched: true as const, profile, posters: await attachPosterMeta(recommendedData) };
-            }
-            // 추천 결과가 없으면 아래 공개 목록으로 폴백(profile은 이미 조회함)
-            const publicDataForUser = await fetchPublicPosters();
-            return { profileFetched: true as const, profile, posters: await attachPosterMeta(publicDataForUser) };
-          }
-
-          // 원본 로직: user가 없거나 hideClosedPosters가 꺼져 있으면 profile을 조회하지
-          // 않았고 userProfile 기존 값도 건드리지 않았다 — profileFetched=false로 표시해
-          // 아래에서 setUserProfile을 스킵한다(null로 덮어써서 지역 표시가 "전국"으로
-          // 바뀌는 걸 방지).
-          return { profileFetched: false as const, profile: null, posters: await attachPosterMeta(await fetchPublicPosters()) };
-        };
-
-        const fetchPublicPosters = async () => {
-          let publicQuery = supabase
-            .from("posters")
-            .select("id, title, source_org_name, application_start_at, application_end_at, deadline_type, created_at, poster_status, thumbnail_url, source_key, summary_short")
-            .eq("poster_status", "published")
-            .or(PUBLIC_POSTER_EXPOSURE_FILTER);
-
-          if (hideClosedPosters) {
-            publicQuery = publicQuery
-              .or(`application_start_at.is.null,application_start_at.lte.${nowIso}`)
-              .or(`application_end_at.gte.${nowIso},and(application_end_at.is.null,deadline_type.in.(ongoing,until_exhausted))`);
-          }
-
-          const { data: publicData, error: publicError } = await publicQuery
-            .order("created_at", { ascending: false })
-            .limit(36);
-
-          if (publicError) throw publicError;
-          const posters = publicData ?? [];
-          return hideClosedPosters
-            ? posters.filter((poster) => isPosterAcceptingApplications({
-                applicationStartAt: poster.application_start_at,
-                applicationEndAt: poster.application_end_at,
-                deadlineType: poster.deadline_type,
-              })).slice(0, 36)
-            : posters;
-        };
-
-        const fetchUrgentPosters = async () => {
-          const sevenDaysLater = new Date();
-          sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
-
-          const { data: urgentData } = await supabase
-            .from("posters")
-            .select("id, title, source_org_name, application_start_at, application_end_at, deadline_type, created_at, poster_status, thumbnail_url, source_key, summary_short")
-            .eq("poster_status", "published")
-            .or(PUBLIC_POSTER_EXPOSURE_FILTER)
-            .gte("application_end_at", nowIso)
-            .lte("application_end_at", sevenDaysLater.toISOString())
-            .order("application_end_at", { ascending: true })
-            .limit(8);
-
-          const acceptingUrgentData = (urgentData ?? []).filter((poster) => isPosterAcceptingApplications({
-            applicationStartAt: poster.application_start_at,
-            applicationEndAt: poster.application_end_at,
-            deadlineType: poster.deadline_type,
-          }));
-
-          if (acceptingUrgentData.length > 0) {
-            return { urgentData: acceptingUrgentData, urgentPosters: await attachPosterMeta(acceptingUrgentData) };
-          }
-          return { urgentData: [] as any[], urgentPosters: [] as any[] };
-        };
-
-        const fetchSummary = fetch("/api/home/summary", { cache: "no-store" })
-          .then(async (res) => {
-            if (!res.ok) throw new Error("summary request failed");
-            return (await res.json()) as HomeSummary;
+    let active = true;
+    Promise.all([loadHomeData(), recordVisitActivity()])
+      .then(([data, visit]) => {
+        if (!active) return;
+        // Opening the service for the first time: choose conditions first
+        // (UI plan ⑤). Shared links and searches never get here by themselves.
+        if (
+          shouldOfferInterestPicker({
+            signedIn: data.signedIn,
+            interest: readGuestInterest(guestLocal),
+            offered: wasInterestOffered(guestLocal),
+            firstVisit: visit.baselineAt === null,
+            entry: readEntry(guestTab),
           })
-          .catch(() => null);
-
-        const [mainResult, urgentResult, summaryResult] = await Promise.all([
-          fetchMainPosters(),
-          fetchUrgentPosters(),
-          fetchSummary,
-        ]);
-
-        if (mainResult.profileFetched) {
-          setUserProfile(mainResult.profile);
+        ) {
+          router.replace("/interests");
+          return;
         }
-        setPosters(mainResult.posters);
-        setUrgentPosters(urgentResult.urgentPosters);
-        if (summaryResult) setHomeSummary(summaryResult);
-      } catch (error) {
-        console.error("Failed to load home data", error);
-        setLoadError("공고 데이터를 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.");
-      } finally {
-        setLoading(false);
-      }
+        setState({ phase: "ready", data, baselineAt: visit.baselineAt });
+      })
+      .catch(() => {
+        if (active) setState({ phase: "error" });
+      });
+    return () => {
+      active = false;
     };
+  }, [router]);
 
-    fetchHomeData();
-  }, [hideClosedPosters]);
+  const sections = useMemo(
+    () =>
+      state.phase === "ready"
+        ? buildHomeSections({
+            interest: state.data.interestItems,
+            favorites: state.data.favoriteItems,
+            followed: state.data.followedItems,
+            followedInstitutionIds: state.data.institutions.map(
+              (institution) => institution.id,
+            ),
+            baselineAt: state.baselineAt,
+            now: new Date(),
+          })
+        : null,
+    [state],
+  );
 
-  const isClosed = (poster: any) => {
-    return !isPosterAcceptingApplications({
-      applicationStartAt: poster.application_start_at,
-      applicationEndAt: poster.application_end_at,
-      deadlineType: poster.deadline_type,
-    });
-  };
+  const interest =
+    state.phase === "ready"
+      ? state.data.interest
+      : { region: null, categories: [] };
+  const hasInterest = Boolean(interest.region || interest.categories.length);
+  const summary = interestSummary(interest);
+  const signedIn = state.phase === "ready" && state.data.signedIn;
 
-  const availablePosters = useMemo(() => {
-    return posters.filter((poster) => !hideClosedPosters || !isClosed(poster));
-  }, [hideClosedPosters, posters]);
-
-  const feedPosters = useMemo(() => {
-    if (activeFeed === "urgent") {
-      const urgent = urgentPosters.length > 0 ? urgentPosters : availablePosters;
-      return urgent
-        .filter((poster) => isPosterAcceptingApplications({
-          applicationStartAt: poster.application_start_at,
-          applicationEndAt: poster.application_end_at,
-          deadlineType: poster.deadline_type,
-        }))
-        .sort((a, b) => {
-          const aTime = a.application_end_at ? new Date(a.application_end_at).getTime() : Number.MAX_SAFE_INTEGER;
-          const bTime = b.application_end_at ? new Date(b.application_end_at).getTime() : Number.MAX_SAFE_INTEGER;
-          return aTime - bTime;
-        })
-        .slice(0, 8);
-    }
-
-    if (activeFeed === "popular") {
-      return [...availablePosters].sort((a, b) => (b.viewCount ?? 0) - (a.viewCount ?? 0)).slice(0, 8);
-    }
-
-    return availablePosters.slice(0, 8);
-  }, [activeFeed, availablePosters, urgentPosters]);
-
-  const regionLabel =
-    userProfile?.regions?.level === "sigungu"
-      ? userProfile?.regions?.full_name || userProfile?.regions?.name
-      : userProfile?.regions?.name || "전국";
+  // Members edit the account's conditions; guests those kept in this browser.
+  const interestButton =
+    state.phase === "ready" ? (
+      <Link
+        href={signedIn ? "/mypage/edit" : "/interests"}
+        className="inline-flex min-h-[44px] max-w-full items-center gap-1.5 rounded-lg border border-pl-line bg-pl-card px-3 text-[13px] font-medium text-pl-ink"
+      >
+        <SlidersHorizontal size={15} aria-hidden="true" />
+        <span className="truncate">
+          <span className="xl:hidden">{summary ?? "관심 조건 정하기"}</span>
+          <span className="hidden xl:inline">
+            {hasInterest ? interestFull(interest) : "관심 조건 정하기"}
+          </span>
+        </span>
+        {hasInterest && <span className="sr-only">(관심 조건 바꾸기)</span>}
+      </Link>
+    ) : null;
 
   return (
-    <div className="min-h-screen bg-[#f6f8fb] pb-24 text-slate-950">
-      <Header />
+    <div className="pl-home min-h-screen bg-pl-paper pb-[calc(var(--mobile-nav-height)+32px)] font-pl-sans text-pl-ink md:pb-12">
+      <div className="hidden md:block">
+        <Header />
+      </div>
+      <header className="flex items-center justify-between gap-3 px-5 pt-4 md:hidden">
+        <p className="font-pl-serif text-xl font-bold">PosterLink</p>
+        {interestButton}
+      </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-10">
-        <motion.section
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="border-y-2 border-slate-950 py-6"
-        >
-          <div className="max-w-4xl">
-            <div className="mb-4 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-600">
-              <span className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1">
-                <ShieldCheck size={14} />
-                정부·지자체·공공기관 공고
-              </span>
-              <span className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1">
-                <Building2 size={14} />
-                {regionLabel} 기준 탐색
-              </span>
-            </div>
-            <h1 className="max-w-none text-[clamp(1.55rem,7vw,3rem)] font-black leading-tight tracking-normal text-slate-950 sm:whitespace-nowrap sm:text-[clamp(1rem,4.2vw,3rem)]">
-              <span className="block sm:inline">나에게 맞는 공공 공고,</span>
-              <span className="block sm:inline sm:pl-2">흩어져 찾지 마세요</span>
-            </h1>
-            <p className="mt-4 max-w-none text-[0.98rem] font-medium leading-relaxed text-slate-600 sm:whitespace-nowrap sm:text-[clamp(0.42rem,1.72vw,1rem)] sm:leading-normal">
-              <span className="block sm:inline">정부·지자체·공공기관의</span>
-              <span className="block sm:inline sm:pl-1">지원사업, 교육, 행사, 채용·모집 정보를</span>
-              <span className="block sm:inline sm:pl-1">지역과 관심분야에 맞춰 한곳에서 찾아보세요.</span>
-            </p>
-          </div>
-
-          <form action="/posters" className="mt-7 flex flex-col gap-3 border border-slate-300 bg-white p-3 sm:flex-row">
-            <label className="flex min-h-12 flex-1 items-center gap-3 px-2">
-              <Search size={20} className="shrink-0 text-slate-500" />
-              <input
-                name="q"
-                type="search"
-                placeholder="지원사업, 교육, 행사, 기관명 검색"
-                className="w-full bg-transparent text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400"
+      <main className="mx-auto w-full max-w-[1200px] px-5 py-5 xl:px-10 xl:py-8">
+        <h1 className="sr-only">PosterLink 홈</h1>
+        {state.phase === "loading" && (
+          <p className="text-sm text-pl-sub" role="status">
+            불러오는 중이에요…
+          </p>
+        )}
+        {state.phase === "error" && (
+          <GuideCard
+            title="공고를 불러오지 못했어요"
+            action={{ href: "/posters", label: "공고 찾기로 가기" }}
+          >
+            잠시 후 다시 열어 주세요.
+          </GuideCard>
+        )}
+        {state.phase === "ready" && sections && (
+          <div className="flex flex-wrap gap-x-10 gap-y-7">
+            <div className="min-w-0 flex-[1_1_560px] space-y-7">
+              <TopLine
+                state={sections.state}
+                baselineAt={state.baselineAt}
+                freshCount={sections.fresh.length}
+                hasInterest={hasInterest}
+                interestButton={interestButton}
               />
-            </label>
-            <button
-              type="submit"
-              className="inline-flex min-h-12 items-center justify-center gap-2 bg-slate-950 px-5 text-sm font-black text-white transition-colors hover:bg-blue-800"
+
+              {!signedIn && !hasInterest && (
+                <GuideCard
+                  title="관심 지역·분야를 골라 보세요"
+                  action={{ href: "/interests", label: "관심 조건 고르기" }}
+                >
+                  고른 조건에 맞는 공고를 홈에 먼저 보여드려요. 가입 없이 이
+                  기기에 저장돼요.
+                </GuideCard>
+              )}
+
+              {sections.state === "first" && (
+                <>
+                  <EntryList
+                    title={
+                      hasInterest
+                        ? "지금 접수 중인 관심 공고"
+                        : "지금 접수 중인 공고"
+                    }
+                    condition={
+                      hasInterest ? conditionLine(interest) : undefined
+                    }
+                    entries={sections.openInterest.slice(0, 4)}
+                    action={{
+                      href: interestSearchPath(interest),
+                      label: hasInterest ? "관심 공고 모두 보기" : "모두 보기",
+                    }}
+                  />
+                  <GuideCard title="찜해 두면 다음에 모아 보여드려요">
+                    마음에 드는 공고를 찜해 두면, 다음에 오셨을 때 새 공고와
+                    함께 모아 보여드려요.
+                  </GuideCard>
+                </>
+              )}
+
+              {sections.fresh.length > 0 && (
+                <section aria-labelledby="home-fresh">
+                  <h2 id="home-fresh" className="sr-only">
+                    새로 올라온 {hasInterest ? "관심 " : ""}공고
+                  </h2>
+                  <EntryGrid
+                    entries={
+                      showAllFresh
+                        ? sections.fresh
+                        : sections.fresh.slice(0, FRESH_FIRST)
+                    }
+                  />
+                  {!showAllFresh && sections.fresh.length > FRESH_FIRST && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllFresh(true)}
+                      className="mt-3 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg border border-pl-line bg-pl-card text-sm font-medium xl:w-auto xl:px-5"
+                    >
+                      새 공고 {sections.fresh.length - FRESH_FIRST}건 더 보기
+                    </button>
+                  )}
+                </section>
+              )}
+
+              {sections.openInterest.length > 0 &&
+                sections.state !== "first" && (
+                  <EntryList
+                    title={
+                      hasInterest ? "접수 중인 관심 공고" : "접수 중인 공고"
+                    }
+                    condition={
+                      hasInterest ? conditionLine(interest) : undefined
+                    }
+                    entries={sections.openInterest.slice(0, 4)}
+                    action={{
+                      href: interestSearchPath(interest),
+                      label: "모두 보기",
+                    }}
+                  />
+                )}
+            </div>
+
+            <aside
+              aria-label="마감과 구독 소식"
+              className="w-full min-w-0 space-y-7 xl:w-[340px] xl:flex-none"
             >
-              공고 찾기
-              <ArrowRight size={16} />
-            </button>
-          </form>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {serviceCategories.map((category) => (
-              <Link
-                key={category}
-                href={`/posters?q=${encodeURIComponent(categorySearchTerm(category))}`}
-                className="rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-black text-slate-700 transition-colors hover:border-blue-500 hover:text-blue-700"
-              >
-                {category}
-              </Link>
-            ))}
-          </div>
-
-          <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-300 pt-4 text-xs font-black text-slate-600">
-            <span>오늘 새 공고 {homeSummary.todayNew == null ? "확인 중" : `${homeSummary.todayNew.toLocaleString()}건`}</span>
-            <span>신청 가능한 공고 {homeSummary.activePosters == null ? "확인 중" : `${homeSummary.activePosters.toLocaleString()}건`}</span>
-            <span>이번 주 마감 {homeSummary.dueThisWeek == null ? "확인 중" : `${homeSummary.dueThisWeek.toLocaleString()}건`}</span>
-            {(homeSummary.collectionSources ?? 0) > 0 && <span>공개 기관 {homeSummary.collectionSources?.toLocaleString()}개</span>}
-          </div>
-        </motion.section>
-
-        {loadError && (
-          <div className="mt-4 border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-800">
-            {loadError}
+              {sections.closingSoon.length > 0 && (
+                <ClosingSoon
+                  entries={sections.closingSoon}
+                  quiet={sections.state === "quiet"}
+                  hasInterest={hasInterest}
+                  moreHref={interestSearchPath(interest)}
+                />
+              )}
+              {sections.followedNews.length > 0 && (
+                <section aria-labelledby="home-follows">
+                  <SectionHeader id="home-follows" title="구독 기관 소식" />
+                  <ul className="divide-y divide-pl-divider rounded-xl border border-pl-line bg-pl-card">
+                    {sections.followedNews.map((group) => {
+                      const institution = state.data.institutions.find(
+                        (item) => item.id === group.institutionId,
+                      );
+                      const [latest] = group.items;
+                      return (
+                        <li key={group.institutionId} className="p-3">
+                          <p className="flex items-center justify-between gap-2 text-xs text-pl-meta">
+                            <Link
+                              href={`/institutions/${institution?.slug ?? ""}`}
+                              className="truncate font-bold text-pl-ink underline-offset-2 hover:underline"
+                            >
+                              {institution?.name}
+                            </Link>
+                            <span className="shrink-0">
+                              새 공고 {group.items.length}
+                            </span>
+                          </p>
+                          <Link
+                            href={`/posters/${latest.id}`}
+                            data-poster-source="home"
+                            className="mt-1 line-clamp-2 min-h-[24px] text-sm font-medium leading-snug text-pl-ink underline-offset-2 hover:underline"
+                          >
+                            {latest.data.title}
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              )}
+              {sections.startedFavorites.length > 0 && (
+                <EntryList
+                  title="접수를 시작한 찜 공고"
+                  entries={sections.startedFavorites}
+                />
+              )}
+              {sections.followGuide && (
+                <GuideCard
+                  title="자주 보는 기관을 구독해 보세요"
+                  action={{ href: "/institutions", label: "기관 둘러보기" }}
+                >
+                  구독한 기관에 새 공고가 올라오면 홈에 먼저 보여드려요.
+                </GuideCard>
+              )}
+            </aside>
           </div>
         )}
-
-        <section className="mt-10">
-          <SectionTitle eyebrow="Notice Feed" title="지금 확인해야 할 공고" actionHref="/posters" actionLabel="전체 보기" />
-
-          <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {feedTabs.map((tab) => (
-                <button
-                  key={tab.key}
-                  type="button"
-                  data-testid={`home-feed-tab-${tab.key}`}
-                  aria-pressed={activeFeed === tab.key}
-                  onClick={() => setActiveFeed(tab.key)}
-                  className={`shrink-0 border px-3 py-2 text-xs font-black transition-colors ${
-                    activeFeed === tab.key
-                      ? "border-slate-950 bg-slate-950 text-white"
-                      : "border-slate-300 bg-white text-slate-600 hover:border-slate-500"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              role="switch"
-              aria-checked={hideClosedPosters}
-              onClick={() => setHideClosedPosters((value) => !value)}
-              className="inline-flex items-center justify-center gap-2 border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 transition-colors hover:border-slate-500"
-            >
-              <Filter size={15} />
-              접수 중인 공고만 보기
-              <span className={`h-2.5 w-2.5 rounded-full ${hideClosedPosters ? "bg-blue-700" : "bg-slate-300"}`} />
-            </button>
-          </div>
-
-          <div data-testid="home-feed-category-filters" className="mb-5 flex gap-2 overflow-x-auto pb-1">
-            {categories.map((category) => (
-              <Link
-                key={category}
-                href={category === "전체" ? "/posters" : `/posters?q=${encodeURIComponent(categorySearchTerm(category))}`}
-                className="shrink-0 border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-600 transition-colors hover:border-blue-500 hover:text-blue-700"
-              >
-                {category}
-              </Link>
-            ))}
-          </div>
-
-          <div data-testid="home-feed-results">
-            {loading && feedPosters.length === 0 ? (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {[1, 2, 3, 4].map((item) => (
-                  <div key={item} className="h-80 animate-pulse border border-slate-200 bg-white" />
-                ))}
-              </div>
-            ) : feedPosters.length > 0 ? (
-              <div
-                data-testid="home-feed-grid"
-                className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
-              >
-                {feedPosters.map((poster) => (
-                  <div key={poster.id}>
-                    <PosterCard
-                      source="home"
-                      poster={{
-                        id: poster.id,
-                        title: poster.title,
-                        org: poster.source_org_name,
-                        applicationStartAt: poster.application_start_at,
-                        deadline: poster.application_end_at,
-                        deadlineType: poster.deadline_type,
-                        image: poster.thumbnail_url,
-                        images: poster.images,
-                        sourceUrl: poster.source_key,
-                        viewCount: poster.viewCount,
-                        linkClickCount: poster.linkClickCount,
-                        favoriteCount: poster.favoriteCount,
-                        similarityScore: poster.similarityScore,
-                        tags: [poster.categoryName, poster.regionName].filter((tag): tag is string => Boolean(tag)),
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="border border-dashed border-slate-300 bg-white py-16 text-center text-sm font-bold text-slate-500">
-                조건에 맞는 진행 중 공고가 없습니다.
-              </div>
-            )}
-          </div>
-        </section>
-
-        <AnimatePresence>
-          {urgentPosters.length > 0 && (
-            <motion.section
-              initial={{ opacity: 0, y: 12 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="mt-12 border border-rose-200 bg-white"
-            >
-              <div className="flex items-center justify-between border-b border-rose-100 bg-rose-50 px-4 py-3">
-                <h2 className="inline-flex items-center gap-2 text-base font-black text-rose-800">
-                  <CalendarClock size={18} />
-                  이번 주 마감 공고
-                </h2>
-                <Link href="/posters" className="text-xs font-black text-rose-700 hover:text-rose-900">
-                  더 보기
-                </Link>
-              </div>
-              <div className="grid gap-0 divide-y divide-slate-200 md:grid-cols-2 md:divide-x md:divide-y-0">
-                {urgentPosters.slice(0, 4).map((poster) => {
-                  const applicationState = getPosterApplicationState({
-                    applicationStartAt: poster.application_start_at,
-                    applicationEndAt: poster.application_end_at,
-                    deadlineType: poster.deadline_type,
-                  });
-                  const daysLeft = applicationState.daysLeft ?? 0;
-                  return (
-                    <Link
-                      key={`urgent-${poster.id}`}
-                      href={`/posters/${poster.id}`}
-                      data-poster-source="home"
-                      className="flex gap-4 p-4 transition-colors hover:bg-slate-50"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <span className="inline-flex items-center gap-1 text-xs font-black text-rose-700">
-                          <Bell size={13} />
-                          {daysLeft <= 0 ? "오늘 마감" : `D-${daysLeft}`}
-                        </span>
-                        <h3 className="mt-2 line-clamp-2 text-sm font-black leading-6 text-slate-950">{poster.title}</h3>
-                        <p className="mt-1 truncate text-xs font-bold text-slate-500">{poster.source_org_name}</p>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            </motion.section>
-          )}
-        </AnimatePresence>
-
-        <section className="mt-12">
-          <SectionTitle eyebrow="Local Search" title="내 지역 공고를 찾아보세요" />
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-            <Link href="/regions/seoul" className="flex items-center justify-between border border-slate-300 bg-white px-4 py-4 text-sm font-black text-slate-900 transition-colors hover:border-blue-500 hover:text-blue-700 lg:col-span-2">
-              <span className="inline-flex items-center gap-2">
-                <MapPin size={17} />
-                서울특별시
-              </span>
-              <ArrowRight size={15} />
-            </Link>
-            {regionShortcuts.map((region) => (
-              <Link
-                key={region.slug}
-                href={`/regions/${region.slug}`}
-                className="border border-slate-300 bg-white px-4 py-4 text-sm font-black text-slate-700 transition-colors hover:border-blue-500 hover:text-blue-700"
-              >
-                {region.name}
-              </Link>
-            ))}
-          </div>
-        </section>
 
         {topCombinations.length > 0 && (
-          <section className="mt-12" aria-label="지역별 공고 모아보기">
-            <SectionTitle eyebrow="Popular Local Topics" title="지역별 공고 모아보기" />
-            <div
-              className="grid gap-x-6 gap-y-3 border-y border-slate-300 bg-white px-5 py-6 sm:grid-cols-2 lg:grid-cols-4"
-            >
-              {topCombinations.map((combination) => (
-                <a
+          <nav aria-labelledby="home-browse" className="mt-12">
+            <h2 id="home-browse" className="mb-3 text-base font-bold">
+              지역별로 찾아보기
+            </h2>
+            <ul className="grid grid-cols-2 gap-x-4 gap-y-1 xl:grid-cols-4">
+              {topCombinations.slice(0, 12).map((combination) => (
+                <li
                   key={`${combination.regionSlug}:${combination.categorySlug}`}
-                  href={`/regions/${combination.regionSlug}/${combination.categorySlug}`}
-                  className="text-sm font-bold leading-6 text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-blue-700 hover:decoration-blue-500"
                 >
-                  {combination.regionName} {combination.categoryName} 공고 {combination.count.toLocaleString()}건
-                </a>
+                  <a
+                    href={`/regions/${combination.regionSlug}/${combination.categorySlug}`}
+                    className="inline-flex min-h-[36px] items-center text-sm text-pl-sub underline-offset-2 hover:underline"
+                  >
+                    {combination.regionName} {combination.categoryName} 공고{" "}
+                    {combination.count.toLocaleString()}건
+                  </a>
+                </li>
               ))}
-            </div>
-          </section>
+            </ul>
+          </nav>
         )}
-
-        <section className="mt-12">
-          <SectionTitle eyebrow="Categories" title="관심분야별 공고" />
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {serviceCategories.map((category) => (
-              <ServiceLink key={category} href={`/posters?q=${encodeURIComponent(categorySearchTerm(category))}`} icon={<Sparkles size={17} />} title={category} />
-            ))}
-          </div>
-        </section>
-
-        <section id="organizations" className="mt-12 scroll-mt-20">
-          <SectionTitle eyebrow="Organizations" title="관심 기관의 새 공고를 놓치지 마세요" />
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            {organizationHighlights.map((org) => (
-              <Link
-                key={org}
-                href={`/institutions?q=${encodeURIComponent(org)}`}
-                className="border border-slate-300 bg-white p-4 transition-colors hover:border-blue-500"
-              >
-                <p className="text-sm font-black text-slate-950">{org}</p>
-                <p className="mt-2 text-xs font-bold text-slate-500">진행 중 공고 보기</p>
-              </Link>
-            ))}
-          </div>
-        </section>
-
-        <section id="about" className="mt-12 scroll-mt-20 border-y border-slate-300 py-8">
-          <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
-            <div>
-              <p className="text-xs font-black uppercase text-blue-700">About PosterLink</p>
-              <h2 className="mt-2 text-2xl font-black leading-tight text-slate-950">당신에게 필요한 공공의 기회를 연결합니다</h2>
-            </div>
-            <div className="space-y-4 text-sm font-medium leading-7 text-slate-600">
-              <p>
-                PosterLink는 정부, 지자체, 공공기관과 공익기관에 흩어진 지원사업·교육·행사·채용·모집 정보를 한곳에 모읍니다.
-              </p>
-              <p>
-                복잡한 공고문에서 신청기간, 지원대상, 주요내용과 신청방법을 정리해 필요한 정보를 더 빠르게 확인할 수 있도록 돕습니다.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section className="mt-12 border border-blue-200 bg-blue-50 p-5 text-blue-950">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="text-lg font-black">빠진 공고나 기관을 알고 계신가요?</h2>
-              <p className="mt-2 text-sm font-bold leading-6 text-blue-900">
-                PosterLink에 아직 등록되지 않은 공고와 기관을 알려주세요. 확인 후 더 많은 사람이 볼 수 있도록 등록하겠습니다.
-              </p>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Link href="/posters/request" className="inline-flex items-center justify-center gap-2 bg-blue-700 px-4 py-3 text-sm font-black text-white transition-colors hover:bg-blue-800">
-                <PlusCircle size={17} />
-                공고 제보하기
-              </Link>
-              <Link href="/posters/request?type=organization" className="inline-flex items-center justify-center gap-2 border border-blue-300 bg-white px-4 py-3 text-sm font-black text-blue-900 transition-colors hover:border-blue-600">
-                기관 등록 요청
-              </Link>
-            </div>
-          </div>
-        </section>
       </main>
-
+      <ReportFab />
       <Footer />
       <BottomNav />
     </div>
   );
 }
 
-function SectionTitle({
-  eyebrow,
-  title,
-  actionHref,
-  actionLabel,
+function TopLine({
+  state,
+  baselineAt,
+  freshCount,
+  hasInterest,
+  interestButton,
 }: {
-  eyebrow: string;
-  title: string;
-  actionHref?: string;
-  actionLabel?: string;
+  state: "first" | "new" | "quiet";
+  baselineAt: number | null;
+  freshCount: number;
+  hasInterest: boolean;
+  interestButton: ReactNode;
 }) {
+  const kind = hasInterest ? "관심 공고" : "공고";
+  if (state === "first" || baselineAt === null)
+    return interestButton ? (
+      <div className="hidden justify-end xl:flex">{interestButton}</div>
+    ) : null;
+  const since = `${visitDateLabel(baselineAt)} 방문 이후`;
   return (
-    <div className="mb-5 flex items-end justify-between border-b border-slate-300 pb-3">
-      <div>
-        <p className="text-xs font-black uppercase text-blue-700">{eyebrow}</p>
-        <h2 className="mt-1 text-2xl font-black text-slate-950">{title}</h2>
-      </div>
-      {actionHref && actionLabel && (
-        <Link href={actionHref} className="hidden items-center gap-1 text-xs font-black text-slate-500 hover:text-blue-700 sm:inline-flex">
-          {actionLabel}
-          <ArrowRight size={14} />
-        </Link>
+    <div className="flex flex-wrap items-end justify-between gap-3">
+      {state === "new" ? (
+        <div>
+          <p className="text-xs text-pl-meta">{since}</p>
+          <p className="font-pl-serif text-[22px] font-bold leading-snug xl:text-[28px]">
+            새로 올라온 {kind}{" "}
+            <span className="text-pl-accent">{freshCount}건</span>
+          </p>
+        </div>
+      ) : (
+        <p className="text-sm text-pl-sub">
+          {since} 새 {kind}는 아직 없어요
+        </p>
+      )}
+      {interestButton && (
+        <div className="hidden xl:block">{interestButton}</div>
       )}
     </div>
   );
 }
 
-function ServiceLink({ href, icon, title }: { href: string; icon: ReactNode; title: string }) {
+function EntryList({
+  title,
+  condition,
+  entries,
+  action,
+}: {
+  title: string;
+  condition?: string;
+  entries: Entry[];
+  action?: { href: string; label: string };
+}) {
+  if (entries.length === 0) return null;
   return (
-    <Link
-      href={href}
-      className="flex items-center justify-between border border-slate-300 bg-white px-4 py-4 text-sm font-black text-slate-800 transition-colors hover:border-blue-500 hover:text-blue-700"
-    >
-      <span className="inline-flex items-center gap-2">
-        {icon}
-        {title}
-      </span>
-      <ArrowRight size={16} />
-    </Link>
+    <section aria-label={title}>
+      <SectionHeader title={title} condition={condition} />
+      <ul className="grid gap-2.5 md:grid-cols-[repeat(auto-fill,minmax(340px,1fr))]">
+        {entries.map((entry) => (
+          <li key={entry.id}>
+            <PosterListCard
+              poster={entry.data}
+              source="home"
+              badge={entry.favorite ? "찜" : undefined}
+            />
+          </li>
+        ))}
+      </ul>
+      {action && (
+        <Link
+          href={action.href}
+          className="mt-3 inline-flex min-h-[44px] items-center text-sm font-medium text-pl-sub underline underline-offset-2"
+        >
+          {action.label}
+        </Link>
+      )}
+    </section>
+  );
+}
+
+/** List cards on mobile, poster tiles on PC. */
+function EntryGrid({ entries }: { entries: Entry[] }) {
+  return (
+    <>
+      <ul className="grid gap-2.5 xl:hidden">
+        {entries.map((entry) => (
+          <li key={entry.id}>
+            <PosterListCard
+              poster={entry.data}
+              source="home"
+              badge={entry.favorite ? "찜" : undefined}
+            />
+          </li>
+        ))}
+      </ul>
+      <ul className="hidden gap-4 xl:grid xl:grid-cols-[repeat(auto-fill,minmax(220px,1fr))]">
+        {entries.map((entry) => (
+          <li key={entry.id}>
+            <PosterTileCard
+              poster={entry.data}
+              source="home"
+              badge={entry.favorite ? "찜" : undefined}
+            />
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+function ClosingSoon({
+  entries,
+  quiet,
+  hasInterest,
+  moreHref,
+}: {
+  entries: Entry[];
+  quiet: boolean;
+  hasInterest: boolean;
+  moreHref: string;
+}) {
+  const title = quiet
+    ? `7일 안에 마감되는 ${hasInterest ? "관심 " : ""}공고`
+    : "7일 안에 마감";
+  return (
+    <section aria-labelledby="home-closing">
+      <SectionHeader id="home-closing" title={title} />
+      {quiet ? (
+        <ul className="grid gap-2.5">
+          {entries.map((entry) => (
+            <li key={entry.id}>
+              <PosterListCard
+                poster={entry.data}
+                source="home"
+                badge={entry.favorite ? "찜" : undefined}
+              />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <>
+          <div className="xl:hidden">
+            <PosterMiniRail label={title}>
+              {entries.map((entry) => (
+                <PosterMiniCard
+                  key={entry.id}
+                  poster={entry.data}
+                  source="home"
+                  badge={entry.favorite ? "찜" : undefined}
+                />
+              ))}
+            </PosterMiniRail>
+          </div>
+          <ul className="hidden gap-2.5 xl:grid">
+            {entries.map((entry) => (
+              <li key={entry.id}>
+                <PosterListCard
+                  poster={entry.data}
+                  source="home"
+                  badge={entry.favorite ? "찜" : undefined}
+                />
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {quiet && (
+        <Link
+          href={moreHref}
+          className="mt-3 inline-flex min-h-[44px] items-center text-sm font-medium text-pl-sub underline underline-offset-2"
+        >
+          접수 중인 {hasInterest ? "관심 " : ""}공고 모두 보기
+        </Link>
+      )}
+    </section>
   );
 }

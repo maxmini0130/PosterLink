@@ -27,6 +27,7 @@ test("page type comes from the public route", () => {
   assert.equal(pageTypeFromPath("/regions/seoul/mapo"), "region");
   assert.equal(pageTypeFromPath("/institutions/abc"), "institution");
   assert.equal(pageTypeFromPath("/favorites"), "favorites");
+  assert.equal(pageTypeFromPath("/my-posters"), "favorites");
 });
 
 test("metadata keeps only RPC-allowed keys and safe values", () => {

@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>PC 내 공고</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&amp;family=Noto+Serif+KR:wght@600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F1EEE4}
+a{color:#1C2D4F}a:hover{color:#0F1A30}
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #F1EEE4; font-family: 'Noto Sans KR', system-ui, sans-serif; color: #1C2D4F">
+
+  <header style="background: #FFFFFF; border-bottom: 1px solid #D9D3C3; position: relative">
+    <div style="max-width: 1200px; margin: 0 auto; padding: 0 40px; box-sizing: border-box; min-height: 64px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 32px">
+      <a href="PcHome.dc.html" style="font-family: 'Noto Serif KR', serif; font-size: 20px; font-weight: 700; text-decoration: none">PosterLink</a>
+      <nav aria-label="주 메뉴" style="display: flex; gap: 4px; flex: 1 1 auto">
+        <a href="PcHome.dc.html" style="padding: 10px 12px; font-size: 15px; text-decoration: none; color: #4A4E59">홈</a>
+        <a href="PcSearch.dc.html" style="padding: 10px 12px; font-size: 15px; text-decoration: none; color: #4A4E59">찾기</a>
+        <a href="PcMyPosts.dc.html" aria-current="page" style="padding: 10px 12px; font-size: 15px; font-weight: 700; text-decoration: none; color: #1C2D4F; box-shadow: inset 0 -2px 0 #1C2D4F">내 공고</a>
+      </nav>
+      <div style="display: flex; gap: 8px; align-items: center; position: relative">
+        <a href="#" style="height: 40px; padding: 0 14px; border-radius: 20px; border: 1px solid {{accent}}; color: {{accent}}; text-decoration: none; font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 6px">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+          포스터 제보
+        </a>
+        <button aria-expanded="true" aria-controls="account-menu" style="height: 40px; padding: 0 12px 0 6px; border-radius: 20px; border: 1px solid #1C2D4F; background: #FFFFFF; color: #1C2D4F; font-family: inherit; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 6px; cursor: pointer">
+          <span aria-hidden="true" style="width: 28px; height: 28px; border-radius: 14px; background: #1C2D4F; color: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"></path></svg></span>
+          마이
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"></path></svg>
+        </button>
+        <div id="account-menu" style="position: absolute; right: 0; top: 50px; width: 240px; background: #FFFFFF; border: 1px solid #D9D3C3; border-radius: 12px; box-shadow: 0 10px 28px rgba(15,26,48,0.16); padding: 8px; z-index: 2">
+          <p style="margin: 0; padding: 10px 12px 12px; font-size: 13px; color: #4A4E59; border-bottom: 1px solid #ECE7DA">카카오 계정으로 로그인 중<br><span style="font-size: 12px">로그인한 서비스(카카오·네이버·Apple)를 표시</span></p>
+          <a href="PcMyPosts.dc.html" style="display: flex; align-items: center; height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; font-size: 14.5px; font-weight: 700; background: #F1EEE4">내 공고</a>
+          <a href="#" style="display: flex; align-items: center; height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; font-size: 14.5px">관심 조건 수정</a>
+          <a href="#" style="display: flex; align-items: center; height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; font-size: 14.5px">알림 설정</a>
+          <a href="#" style="display: flex; align-items: center; height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; font-size: 14.5px">계정 관리</a>
+          <button style="width: 100%; display: flex; align-items: center; height: 44px; padding: 0 12px; border: 0; border-top: 1px solid #ECE7DA; border-radius: 0; background: transparent; color: #4A4E59; font-family: inherit; font-size: 14px; cursor: pointer">로그아웃</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main style="max-width: 1200px; margin: 0 auto; padding: 32px 40px 64px; box-sizing: border-box">
+    <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px">
+      <h1 style="margin: 0; font-family: 'Noto Serif KR', serif; font-size: 30px; font-weight: 700">내 공고</h1>
+      <div role="tablist" aria-label="내 공고 구분" style="padding: 4px; background: #E2DCCB; border-radius: 10px; display: flex; gap: 4px">
+        <button role="tab" aria-selected="true" style="height: 40px; padding: 0 20px; border: 0; border-radius: 8px; background: #FFFFFF; color: #1C2D4F; font-family: inherit; font-size: 14.5px; font-weight: 700; cursor: pointer">찜 4</button>
+        <button role="tab" aria-selected="false" style="height: 40px; padding: 0 20px; border: 0; border-radius: 8px; background: transparent; color: #4A4E59; font-family: inherit; font-size: 14.5px; cursor: pointer">신청 표시 2</button>
+        <button role="tab" aria-selected="false" style="height: 40px; padding: 0 20px; border: 0; border-radius: 8px; background: transparent; color: #4A4E59; font-family: inherit; font-size: 14.5px; cursor: pointer">구독 기관 2</button>
+      </div>
+    </div>
+
+    <div role="status" style="margin-top: 20px; background: #1C2D4F; color: #FFFFFF; border-radius: 10px; padding: 12px 8px 12px 16px; display: flex; align-items: center; gap: 10px">
+      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: 0 0 auto"><path d="M20 6L9 17l-5-5"></path></svg>
+      <span style="flex: 1 1 auto; font-size: 14px">이 기기에 찜한 공고 1개를 계정으로 옮겼어요</span>
+      <button aria-label="안내 닫기" style="flex: 0 0 auto; width: 40px; height: 40px; border: 0; background: transparent; color: #FFFFFF; display: flex; align-items: center; justify-content: center; cursor: pointer">
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18"></path><path d="M6 6l12 12"></path></svg>
+      </button>
+    </div>
+
+    <section style="margin-top: 28px">
+      <h2 style="margin: 0 0 12px; font-size: 15px; font-weight: 700; color: #4A4E59">접수 중 · 3</h2>
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px">
+
+        <div style="background: #FFFFFF; border: 1px solid #D9D3C3; border-radius: 12px; padding: 18px; display: flex; flex-direction: column">
+          <a href="PcDetail.dc.html" style="text-decoration: none; color: #1C2D4F; display: flex; flex-direction: column; gap: 4px">
+            <span style="font-size: 12.5px; color: #5B5F6B">문화/행사 · 마포문화재단</span>
+            <span style="font-size: 16px; font-weight: 700; line-height: 1.4">KBS 전국노래자랑 마포구편 참가자 모집 안내</span>
+            <span style="font-size: 13.5px; font-weight: 700; color: {{accent}}">11.05 마감 · D-5</span>
+          </a>
+          <div style="margin-top: auto; padding-top: 14px; display: flex; gap: 8px; flex-wrap: wrap">
+            <button style="height: 36px; padding: 0 12px; border-radius: 18px; border: 1px solid #1C2D4F; background: #FFFFFF; color: #1C2D4F; font-family: inherit; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px; cursor: pointer">
+              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.7 21a2 2 0 0 1-3.4 0"></path></svg>
+              마감 알림 받기
+            </button>
+            <button style="height: 36px; padding: 0 12px; border-radius: 18px; border: 1px solid #D9D3C3; background: #FFFFFF; color: #1C2D4F; font-family: inherit; font-size: 13px; cursor: pointer">신청했어요</button>
+          </div>
+        </div>
+
+        <div style="background: #FFFFFF; border: 1px solid #D9D3C3; border-radius: 12px; padding: 18px; display: flex; flex-direction: column">
+          <a href="PcDetail.dc.html" style="text-decoration: none; color: #1C2D4F; display: flex; flex-direction: column; gap: 4px">
+            <span style="font-size: 12.5px; color: #5B5F6B">교육/취업 · 서울청년센터 마포</span>
+            <span style="font-size: 16px; font-weight: 700; line-height: 1.4">마포러닝메이트 참여자 모집</span>
+            <span style="font-size: 13.5px; font-weight: 700; color: {{accent}}">11.04 마감 · D-4</span>
+          </a>
+          <div style="margin-top: auto; padding-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center">
+            <span style="height: 32px; padding: 0 12px; border-radius: 16px; background: #1C2D4F; color: #FFFFFF; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 4px">
+              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+              신청 표시됨
+            </span>
+            <button style="height: 36px; padding: 0 8px; border: 0; background: transparent; color: #4A4E59; font-family: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer">표시 취소</button>
+          </div>
+        </div>
+
+        <div style="background: #FFFFFF; border: 1px solid #D9D3C3; border-radius: 12px; padding: 18px; display: flex; flex-direction: column">
+          <a href="PcDetail.dc.html" style="text-decoration: none; color: #1C2D4F; display: flex; flex-direction: column; gap: 4px">
+            <span style="font-size: 12.5px; color: #5B5F6B">육아/가족 · 마포구민체육센터</span>
+            <span style="font-size: 16px; font-weight: 700; line-height: 1.4">어린이 실내 축구, 농구 프로그램 안내</span>
+            <span style="font-size: 13.5px; font-weight: 700; color: #1C2D4F">상시 모집</span>
+          </a>
+          <div style="margin-top: auto; padding-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: space-between">
+            <span style="font-size: 12.5px; color: #4A4E59">마감일이 없어 날짜 알림은 없어요</span>
+            <button style="height: 36px; padding: 0 12px; border-radius: 18px; border: 1px solid #D9D3C3; background: #FFFFFF; color: #1C2D4F; font-family: inherit; font-size: 13px; cursor: pointer">신청했어요</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section style="margin-top: 32px">
+      <h2 style="margin: 0 0 12px; font-size: 15px; font-weight: 700; color: #4A4E59">접수 종료 · 1</h2>
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px">
+        <div style="background: #FFFFFF; border: 1px solid #D9D3C3; border-radius: 12px; padding: 18px; display: flex; flex-direction: column">
+          <a href="#" style="text-decoration: none; color: #1C2D4F; display: flex; flex-direction: column; gap: 4px">
+            <span style="font-size: 12.5px; color: #5B5F6B">교육/취업 · 숭실대학교산학협력단</span>
+            <span style="font-size: 16px; font-weight: 700; line-height: 1.4; color: #4A4E59">숭실대 캠퍼스타운 x 에네이 클라우드 AX전환 PBL과정 참여자 모집</span>
+            <span style="font-size: 13.5px; color: #5B5F6B">09.20 접수 종료</span>
+          </a>
+          <div style="margin-top: auto; padding-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: space-between">
+            <span style="font-size: 12.5px; color: #4A4E59">공고에 적힌 결과 안내일 9.22</span>
+            <span style="height: 32px; padding: 0 12px; border-radius: 16px; background: #1C2D4F; color: #FFFFFF; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 4px">
+              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+              신청 표시됨
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#BE3A2B","options":["#BE3A2B","#1C2D4F","#2F6B4F"]},"$preview":{"width":1280,"height":1180}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#BE3A2B' };
+  }
+}
+</script>
+</body>
+</html>

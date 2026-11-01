@@ -37,6 +37,9 @@ interface PosterCardProps {
   source?: PosterViewSource;
 }
 
+/** Card data shared with the redesigned cards in ./pl. */
+export type PosterCardData = PosterCardProps["poster"];
+
 export function PosterCard({ poster, source }: PosterCardProps) {
   const applicationState = getPosterApplicationState({
     applicationStartAt: poster.applicationStartAt,
