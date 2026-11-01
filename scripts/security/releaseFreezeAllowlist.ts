@@ -23,8 +23,8 @@ const USER_VISIT_STATE = "98145cf4e64a02e8b6fa0eba3ebbc4da960f9b3d";
  */
 const STAGE5_ONBOARDING = "ac2d35526fffc016de48cd5f59e06a6010706f9d";
 
-/** Naver identity (security design option B) with the a6d6ec5 review fixes; not applied, pending Codex re-review. */
-const NAVER_IDENTITY = "7e7a478d2e846abf751a529b9abfd4f00742b612";
+/** Naver identity (security design option B) with the a6d6ec5 and 78aeebc review fixes; not applied, pending Codex re-review. */
+const NAVER_IDENTITY = "a87cb401513ed8d9fd8bb1bbc60e485c897f15eb";
 
 /** New migration path -> commit holding its reviewed content. */
 export const APPROVED_MIGRATIONS: Readonly<Record<string, string>> = {
