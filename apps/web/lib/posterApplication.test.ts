@@ -298,3 +298,49 @@ test("same-day opening and explicit closing times match database discovery", () 
     );
   }
 });
+
+test("an event that already ended is not open without a later fixed deadline", () => {
+  // now = 2026-08-04 12:00 KST
+  const ended = "2026-08-03T14:59:59.000Z"; // 08-03 23:59 KST
+  for (const deadlineType of ["until_exhausted", "ongoing", "unknown", null]) {
+    const state = getPosterApplicationState({
+      deadlineType,
+      eventEndAt: ended,
+      now,
+    });
+    assert.equal(state.status, "closed", String(deadlineType));
+    assert.equal(state.label, "운영 종료");
+    assert.equal(
+      isPosterAcceptingApplications({ deadlineType, eventEndAt: ended, now }),
+      false,
+    );
+  }
+  // The event's last day is still open on that day in Seoul.
+  assert.equal(
+    getPosterApplicationState({
+      deadlineType: "until_exhausted",
+      eventEndAt: "2026-08-04",
+      now,
+    }).status,
+    "until_exhausted",
+  );
+  // A verified fixed deadline ahead (a later session) is kept.
+  assert.equal(
+    getPosterApplicationState({
+      deadlineType: "fixed",
+      applicationEndAt: "2026-08-10",
+      eventEndAt: ended,
+      now,
+    }).status,
+    "open",
+  );
+  // An unparseable event date is ignored rather than closing the poster.
+  assert.equal(
+    getPosterApplicationState({
+      deadlineType: "ongoing",
+      eventEndAt: "not a date",
+      now,
+    }).status,
+    "ongoing",
+  );
+});

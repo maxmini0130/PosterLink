@@ -28,6 +28,12 @@ export type PosterApplicationInput = {
   deadlineType?: string | null;
   now?: Date;
   posterStatus?: string | null;
+  /**
+   * Last day the event or course runs (event_end_at). Without a fixed
+   * application deadline, a finished event is no longer open (screen plan
+   * v1.0 section 09: 운영 종료).
+   */
+  eventEndAt?: string | null;
 };
 
 const datePartsFormatter = new Intl.DateTimeFormat("en-CA", {
@@ -123,6 +129,17 @@ export function getPosterApplicationState(
 
   if (endTime !== null && endTime < nowTime) {
     return { status: "closed", label: "마감됨", daysLeft: endDay! - today };
+  }
+
+  // A fixed deadline still ahead is trusted as given (a verified later
+  // session); otherwise an event that already ended is not open.
+  const eventEndTime = parseTime(input.eventEndAt, true);
+  if (
+    eventEndTime !== null &&
+    dateOrdinal(eventEndTime) < today &&
+    !(deadlineType === "fixed" && endDay !== null)
+  ) {
+    return { status: "closed", label: "운영 종료", daysLeft: null };
   }
 
   if (deadlineType === "ongoing") {

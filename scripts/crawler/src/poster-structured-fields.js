@@ -386,7 +386,7 @@ function extractRecruitmentCount(text) {
   if (!source) return null;
 
   const labeled = source.match(
-    /(?:모집\s*(?:대상|인원)|선발\s*인원|모집정원|정원|대상)\s*[:：]?\s*.{0,80}?(\d{1,4})\s*(명|팀|가구|개사|기관|명\s*내외)/,
+    /(?:(?:모집|참가|참여|교육|신청|선발|수강)\s*(?:대상|인원|정원)|모집정원|정원|대상)\s*[:：]?\s*.{0,80}?(\d{1,4})\s*(명|팀|가구|가족|개사|기관|명\s*내외)/,
   );
   if (labeled) return `${labeled[1]}${labeled[2].replace(/\s+/g, "")}`;
 
@@ -396,10 +396,42 @@ function extractRecruitmentCount(text) {
   return null;
 }
 
+/** "참가인원: 서울시민 20명" -> "서울시민": who may join, stated next to the count. */
+const AUDIENCE_WORD_RE =
+  /(?:시민|구민|주민|도민|군민|거주자|청년|청소년|어린이|아동|학생|성인|어르신|노인|가족|부모|여성|남성|장애인|누구나|직장인|소상공인|대학생|초등학생|중학생|고등학생)/u;
+
+const PARTICIPANT_LINE_RE =
+  /(?:참가|참여|모집|교육|신청|선발|수강)\s*(?:인원|정원)\s*[:：]\s*([^\d:：]{0,30}?)\s*(\d{1,4})\s*(명|팀|가구|가족|쌍)/u;
+
+/**
+ * Who and how many from one labeled line ("참가인원: 서울시민 20명"), or nulls.
+ * Stricter than the general extractors: used to backfill stored posters.
+ */
+export function extractStatedParticipants(text) {
+  const source = compactText(text, 12000) ?? "";
+  const match = source.match(PARTICIPANT_LINE_RE);
+  if (!match) return { eligibility: null, count: null };
+  const audience = match[1].replace(/[()（）\[\]·,\s]+$/u, "").trim();
+  return {
+    eligibility: AUDIENCE_WORD_RE.test(audience) ? audience : null,
+    count: `${match[2]}${match[3]}`,
+  };
+}
+
+function extractAudienceBeforeCount(source) {
+  return extractStatedParticipants(source).eligibility;
+}
+
 function extractEligibilitySummary(text) {
   const source = compactText(text, 12000) ?? "";
   if (!source) return null;
 
+  const labeledTarget = matchLabeledTarget(source);
+  if (labeledTarget) return labeledTarget;
+  return extractAudienceBeforeCount(source);
+}
+
+function matchLabeledTarget(source) {
   const match = source.match(
     /(?:모집\s*)?대상\s*[:：]?\s*(.{1,180}?)(?=\s*(?:🎯|📢|🔗|📆|🚩|모집\s*기간|신청|일정|장소|문의|$))/,
   );
@@ -506,16 +538,36 @@ export function normalizeStructuredDeadlineType(value) {
   }
 }
 
+const ONGOING_EVIDENCE_RE = /(?:상시|수시|연중)\s*(?:모집|접수|신청|운영)/u;
+const UNTIL_EXHAUSTED_EVIDENCE_RE =
+  /소진|선착순|선착\s*\d|(?:정원|인원|모집|예약|접수)\s*(?:이\s*)?(?:마감|완료|충족|초과|도달)\s*(?:시|되면|될\s*때)|(?:마감|모집|접수)\s*시\s*까지|조기\s*(?:마감|종료)|(?:정원|인원)\s*(?:이\s*)?(?:차면|채워지면)/u;
+
+/**
+ * Screen plan v1.0 section 09: 상시 and 소진 시 마감 are shown only when the
+ * notice says so. A model's or reviewer's open-ended type without that wording
+ * in the text becomes unknown (접수 상태 확인 필요), never a guess.
+ */
+export function hasOpenEndedDeadlineEvidence(type, text) {
+  const source = String(text ?? "").normalize("NFKC");
+  if (type === "ongoing") return ONGOING_EVIDENCE_RE.test(source);
+  if (type === "until_exhausted") return UNTIL_EXHAUSTED_EVIDENCE_RE.test(source);
+  return true;
+}
+
 export function inferStructuredDeadlineType({
   deadlineType,
   applicationEndAt,
   periodText,
   sourceText,
 } = {}) {
-  const explicit = normalizeStructuredDeadlineType(deadlineType);
-  if (explicit !== "unknown") return explicit;
-
   const text = `${periodText ?? ""} ${sourceText ?? ""}`;
+  const explicit = normalizeStructuredDeadlineType(deadlineType);
+  if (explicit !== "unknown") {
+    if (hasOpenEndedDeadlineEvidence(explicit, text)) return explicit;
+    // Fall through: an unsupported open-ended type is re-read from the text,
+    // so a stated fixed end date still wins and nothing is invented.
+  }
+
   const hasFirstCome = /(?:선착순|선착)\s*(?:모집|접수|신청|마감)?/.test(text);
   if (/(?:상시|수시)\s*(?:모집|접수|신청|운영)/.test(text)) return "ongoing";
   if (/(?:예산|재원|인원)?\s*소진\s*시/.test(text)) return "until_exhausted";

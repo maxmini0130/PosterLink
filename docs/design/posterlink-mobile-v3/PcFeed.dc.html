@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>PC 홈 (포스터 피드)</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&amp;family=Noto+Serif+KR:wght@600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F1EEE4}
+a{color:#1C2D4F}a:hover{color:#0F1A30}
+</style>
+</helmet>
+<div style="min-height:100vh;background:#F1EEE4;font-family:'Noto Sans KR',system-ui,sans-serif;color:#1C2D4F">
+  <header style="background:#FFFFFF;border-bottom:1px solid #D9D3C3">
+    <div style="max-width:1200px;margin:0 auto;padding:0 40px;box-sizing:border-box;min-height:64px;display:flex;flex-wrap:wrap;align-items:center;gap:12px 28px">
+      <a href="#" style="font-family:'Noto Serif KR',serif;font-size:20px;font-weight:700;text-decoration:none">PosterLink</a>
+      <nav aria-label="주 메뉴" style="display:flex;gap:4px">
+        <a href="#" aria-current="page" style="padding:10px 12px;font-size:15px;font-weight:700;text-decoration:none;color:#1C2D4F;box-shadow:inset 0 -2px 0 #1C2D4F">홈</a>
+        <a href="PcSearch.dc.html" style="padding:10px 12px;font-size:15px;text-decoration:none;color:#4A4E59">찾기</a>
+        <a href="PcMyPosts.dc.html" style="padding:10px 12px;font-size:15px;text-decoration:none;color:#4A4E59">내 공고</a>
+      </nav>
+      <form role="search" style="flex:1 1 280px;min-width:240px;height:42px;border:1px solid #D9D3C3;border-radius:21px;background:#F1EEE4;display:flex;align-items:center;gap:8px;padding:0 14px;box-sizing:border-box">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5B5F6B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-3.5-3.5"></path></svg><label style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)" for="q">공고 검색</label>
+        <input id="q" placeholder="공고명, 기관명으로 검색" style="flex:1 1 auto;min-width:0;border:0;background:transparent;font-family:inherit;font-size:15px;color:#1C2D4F;outline-offset:4px">
+      </form>
+      <div style="display:flex;gap:8px;align-items:center">
+        <a href="#" style="height:40px;padding:0 14px;border-radius:20px;border:1px solid #BE3A2B;color:#BE3A2B;text-decoration:none;font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"></path></svg>포스터 제보</a>
+        <a href="PcMyPosts.dc.html" style="height:40px;padding:0 12px;border-radius:20px;border:1px solid #D9D3C3;color:#1C2D4F;text-decoration:none;font-size:14px;font-weight:500;display:flex;align-items:center;gap:6px">마이<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg></a>
+      </div>
+    </div>
+  </header>
+  <main style="max-width:1200px;margin:0 auto;padding:24px 40px 64px;box-sizing:border-box">
+    <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px">
+      <div role="tablist" aria-label="홈 보기" style="display:flex;gap:6px"><button role="tab" aria-selected="true" style="flex:0 0 auto;height:36px;padding:0 14px;border-radius:18px;background:#1C2D4F;color:#FFFFFF;border:1px solid #1C2D4F;font-family:inherit;font-size:14.5px;font-weight:700;cursor:pointer;white-space:nowrap">새 공고 <span style="font-weight:700;color:#FFD9D3">4</span></button><button role="tab" aria-selected="false" style="flex:0 0 auto;height:36px;padding:0 14px;border-radius:18px;background:#FFFFFF;color:#1C2D4F;border:1px solid #D9D3C3;font-family:inherit;font-size:14.5px;font-weight:500;cursor:pointer;white-space:nowrap">7일 안에 마감 <span style="font-weight:700;color:#BE3A2B">6</span></button><button role="tab" aria-selected="false" style="flex:0 0 auto;height:36px;padding:0 14px;border-radius:18px;background:#FFFFFF;color:#1C2D4F;border:1px solid #D9D3C3;font-family:inherit;font-size:14.5px;font-weight:500;cursor:pointer;white-space:nowrap">전체</button></div>
+      <button style="height:38px;padding:0 12px 0 14px;border-radius:19px;border:1px solid #D9D3C3;background:#FFFFFF;color:#1C2D4F;font-family:inherit;font-size:14px;font-weight:500;display:flex;align-items:center;gap:6px;cursor:pointer">마포구 · 문화/행사 · 교육/취업 · 육아/가족<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg></button>
+    </div>
+    <p style="margin:12px 0 0;font-size:13.5px;color:#4A4E59">10월 28일(수) 방문 이후 올라온 공고 4건 · 이어서 접수 중인 관심 공고</p>
+    <div style="margin-top:20px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:32px 20px"><article style="min-width:0;display:flex;flex-direction:column;gap:8px">
+      <div style="position:relative;aspect-ratio:3/4;border-radius:8px;overflow:hidden;border:1px solid #D9D3C3;background:#ECE7DA">
+        <a href="PcDetail.dc.html" aria-label="「제2회 마포구민 체육대회」 참여자(선수) 모집" style="position:absolute;inset:0;display:block"><div style="position:absolute;inset:0;background:#F6C744;overflow:hidden;font-family:'Noto Sans KR',sans-serif;color:#1A1A1A">
+          <div style="position:absolute;left:-25px;top:88px;width:150px;height:150px;border-radius:50%;background:#E8552D"></div>
+          <div style="position:absolute;right:-20px;top:138px;width:112px;height:112px;border-radius:50%;background:#2B6CB0"></div>
+          <div style="position:absolute;left:15px;top:15px;font-size:12px;font-weight:700">2026 마포구</div>
+          <div style="position:absolute;left:15px;top:32px;right:15px;font-size:29px;font-weight:900;line-height:1.1;letter-spacing:-1px">제2회<br>구민<br>체육대회</div>
+          <div style="position:absolute;left:0;right:0;bottom:0;height:42px;background:#1A1A1A;color:#F6C744;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">11.15 SAT · 마포구민체육센터</div></div></a>
+        <span style="position:absolute;left:10px;top:10px;font-size:15.0px;font-weight:700;color:#FFFFFF;background:#BE3A2B;padding:4px 10px;border-radius:4px">D-7</span>
+        <button aria-label="찜하기" aria-pressed="false" style="position:absolute;right:8px;top:8px;width:45px;height:45px;border-radius:50%;border:0;background:rgba(255,255,255,0.92);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 1px 4px rgba(15,26,48,0.18)"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1C2D4F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"></path></svg></button>
+      </div>
+      <a href="PcDetail.dc.html" style="text-decoration:none;color:#1C2D4F;display:flex;flex-direction:column;gap:3px;padding:0 2px">
+        <span style="font-size:15px;font-weight:700;line-height:1.4;word-break:keep-all;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">「제2회 마포구민 체육대회」 참여자(선수) 모집</span>
+        <span style="font-size:13.5px;color:#5B5F6B;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">마포구 · 상암동 주민센터</span>
+      </a>
+    </article><article style="min-width:0;display:flex;flex-direction:column;gap:8px">
+      <div style="position:relative;aspect-ratio:3/4;border-radius:8px;overflow:hidden;border:1px solid #D9D3C3;background:#ECE7DA">
+        <a href="PcDetail.dc.html" aria-label="KBS 전국노래자랑 마포구편 참가자 모집" style="position:absolute;inset:0;display:block"><div style="position:absolute;inset:0;background:linear-gradient(180deg,#1E4FA8,#0E2A5C);overflow:hidden;color:#FFFFFF;text-align:center">
+          <div style="position:absolute;inset:22px 22px auto;height:138px;border-radius:50%;background:radial-gradient(circle,#FFD84D 0 30%,transparent 31%)"></div>
+          <div style="position:absolute;left:0;right:0;top:150px;font-family:'Noto Serif KR',serif;font-size:26px;font-weight:700;line-height:1.25">전국<br>노래자랑</div>
+          <div style="position:absolute;left:0;right:0;top:222px;font-size:14px;font-weight:700;color:#FFD84D">마포구편 참가자 모집</div>
+          <div style="position:absolute;left:18px;right:18px;bottom:12px;font-size:10px;opacity:0.8">예심 11.08 · 마포아트센터</div></div></a>
+        <span style="position:absolute;left:10px;top:10px;font-size:15.0px;font-weight:700;color:#FFFFFF;background:#BE3A2B;padding:4px 10px;border-radius:4px">D-5</span>
+        <button aria-label="찜 취소" aria-pressed="true" style="position:absolute;right:8px;top:8px;width:45px;height:45px;border-radius:50%;border:0;background:rgba(255,255,255,0.92);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 1px 4px rgba(15,26,48,0.18)"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="#BE3A2B" stroke="#BE3A2B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"></path></svg></button>
+      </div>
+      <a href="PcDetail.dc.html" style="text-decoration:none;color:#1C2D4F;display:flex;flex-direction:column;gap:3px;padding:0 2px">
+        <span style="font-size:15px;font-weight:700;line-height:1.4;word-break:keep-all;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">KBS 전국노래자랑 마포구편 참가자 모집</span>
+        <span style="font-size:13.5px;color:#5B5F6B;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">마포구 · 마포문화재단</span>
+      </a>
+    </article><article style="min-width:0;display:flex;flex-direction:column;gap:8px">
+      <div style="position:relative;aspect-ratio:3/4;border-radius:8px;overflow:hidden;border:1px solid #D9D3C3;background:#ECE7DA">
+        <a href="PcDetail.dc.html" aria-label="이머시브 미디어아트 &amp; 테크 전문가 교육생 과정 5기" style="position:absolute;inset:0;display:block"><div style="position:absolute;inset:0;background:#160F2E;overflow:hidden;color:#FFFFFF">
+          <div style="position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(130,90,255,0.18) 0 1px,transparent 1px 20px),repeating-linear-gradient(90deg,rgba(130,90,255,0.18) 0 1px,transparent 1px 20px)"></div>
+          <div style="position:absolute;left:25px;top:50px;width:150px;height:150px;border-radius:50%;background:radial-gradient(circle,#FF4FD8,#6A3BFF 55%,transparent 70%);filter:blur(2px)"></div>
+          <div style="position:absolute;left:18px;bottom:58px;right:18px;font-size:21px;font-weight:900;line-height:1.15;letter-spacing:-0.5px">IMMERSIVE<br>MEDIA ART<br>&amp; TECH</div>
+          <div style="position:absolute;left:18px;bottom:18px;font-size:11px;color:#C8B8FF">전문가 교육생 5기 모집</div></div></a>
+        <span style="position:absolute;left:10px;top:10px;font-size:15.0px;font-weight:700;color:#FFFFFF;background:#BE3A2B;padding:4px 10px;border-radius:4px">D-4</span>
+        <button aria-label="찜하기" aria-pressed="false" style="position:absolute;right:8px;top:8px;width:45px;height:45px;border-radius:50%;border:0;background:rgba(255,255,255,0.92);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 1px 4px rgba(15,26,48,0.18)"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1C2D4F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"></path></svg></button>
+      </div>
+      <a href="PcDetail.dc.html" style="text-decoration:none;color:#1C2D4F;display:flex;flex-direction:column;gap:3px;padding:0 2px">
+        <span style="font-size:15px;font-weight:700;line-height:1.4;word-break:keep-all;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">이머시브 미디어아트 &amp; 테크 전문가 교육생 과정 5기</span>
+        <span style="font-size:13.5px;color:#5B5F6B;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">서울 전체 · SBS A&amp;T</span>
+      </a>
+    </article><article style="min-width:0;display:flex;flex-direction:column;gap:8px">
+      <div style="position:relative;aspect-ratio:3/4;border-radius:8px;overflow:hidden;border:1px solid #D9D3C3;background:#ECE7DA">
+        <a href="PcDetail.dc.html" aria-label="2026 마포구 소상공인 온라인 판로 지원사업 참여 업체 모집" style="position:absolute;inset:0;display:block"><div style="position:absolute;inset:0;background:#7A5310;color:#FFFFFF;display:flex;flex-direction:column;padding:18px;box-sizing:border-box;overflow:hidden">
+      <div aria-hidden="true" style="position:absolute;right:-38px;bottom:-38px;width:175px;height:175px;border-radius:50%;border:22px solid rgba(255,255,255,0.10)"></div>
+      <div aria-hidden="true" style="position:absolute;left:0;right:0;top:0;height:8px;background:repeating-linear-gradient(90deg,rgba(255,255,255,0.35) 0 12px,transparent 12px 20px)"></div>
+      <span style="display:flex;align-items:center;gap:6px;font-size:14.4px;font-weight:700;margin-top:auto;margin-bottom:10px;opacity:0.92"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1.5-5h15L21 9M3 9h18v2a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0zM5 13v8h14v-8"></path></svg>소상공인</span>
+      <span style="font-family:'Noto Serif KR',serif;font-weight:700;font-size:21.2px;line-height:1.38;word-break:keep-all;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden">2026 마포구 소상공인 온라인 판로 지원사업 참여 업체 모집</span>
+      <span style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.35);font-size:13.8px;opacity:0.9;display:flex;justify-content:space-between;gap:6px"><span style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">마포구청 지역경제과</span><span style="flex:0 0 auto;font-family:'Noto Serif KR',serif;font-weight:700">PosterLink</span></span>
+    </div></a>
+        <span style="position:absolute;left:10px;top:10px;font-size:15.0px;font-weight:700;color:#FFFFFF;background:#BE3A2B;padding:4px 10px;border-radius:4px">D-12</span>
+        <button aria-label="찜하기" aria-pressed="false" style="position:absolute;right:8px;top:8px;width:45px;height:45px;border-radius:50%;border:0;background:rgba(255,255,255,0.92);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 1px 4px rgba(15,26,48,0.18)"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1C2D4F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"></path></svg></button>
+      </div>
+      <a href="PcDetail.dc.html" style="text-decoration:none;color:#1C2D4F;display:flex;flex-direction:column;gap:3px;padding:0 2px">
+        <span style="font-size:15px;font-weight:700;line-height:1.4;word-break:keep-all;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">2026 마포구 소상공인 온라인 판로 지원사업 참여 업체 모집</span>
+        <span style="font-size:13.5px;color:#5B5F6B;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">마포구 · 마포구청 지역경제과</span>
+      </a>
+    </article><article style="min-width:0;display:flex;flex-direction:column;gap:8px">
+      <div style="position:relative;aspect-ratio:3/4;border-radius:8px;overflow:hidden;border:1px solid #D9D3C3;background:#ECE7DA">
+        <a href="PcDetail.dc.html" aria-label="11월 '이달의 진로' 반려동물 매개 심리상담사 참가자 모집" style="position:absolute;inset:0;display:block"><div style="position:absolute;inset:0;background:#E7F1E4;overflow:hidden;color:#24452C">
+          <div style="position:absolute;right:12px;top:20px;width:88px;height:88px;border-radius:50%;background:#B9D8B0"></div>
+          <div style="position:absolute;right:35px;top:42px;width:42px;height:42px;border-radius:50%;background:#6FA66A"></div>
+          <div style="position:absolute;left:18px;top:25px;font-size:12px;font-weight:700;background:#24452C;color:#fff;padding:2px 8px;border-radius:3px">11월</div>
+          <div style="position:absolute;left:18px;top:120px;right:18px;font-size:25px;font-weight:900;line-height:1.2">이달의<br>진로</div>
+          <div style="position:absolute;left:18px;top:188px;right:18px;font-size:13px;line-height:1.5">반려동물 매개<br>심리상담사 체험</div>
+          <div style="position:absolute;left:18px;bottom:15px;font-size:11px">구립도화청소년문화의집</div></div></a>
+        <span style="position:absolute;left:10px;top:10px;font-size:15.0px;font-weight:700;color:#FFFFFF;background:rgba(28,45,79,0.88);padding:4px 10px;border-radius:4px">소진 시 마감</span>
+        <button aria-label="찜하기" aria-pressed="false" style="position:absolute;right:8px;top:8px;width:45px;height:45px;border-radius:50%;border:0;background:rgba(255,255,255,0.92);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 1px 4px rgba(15,26,48,0.18)"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1C2D4F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"></path></svg></button>
+      </div>
+      <a href="PcDetail.dc.html" style="text-decoration:none;color:#1C2D4F;display:flex;flex-direction:column;gap:3px;padding:0 2px">
+        <span style="font-size:15px;font-weight:700;line-height:1.4;word-break:keep-all;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">11월 '이달의 진로' 반려동물 매개 심리상담사 참가자 모집</span>
+        <span style="font-size:13.5px;color:#5B5F6B;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">마포구 · 구립도화청소년문화의집</span>
+      </a>
+    </article><article style="min-width:0;display:flex;flex-direction:column;gap:8px">
+      <div style="position:relative;aspect-ratio:3/4;border-radius:8px;overflow:hidden;border:1px solid #D9D3C3;background:#ECE7DA">
+        <a href="PcDetail.dc.html" aria-label="2026 하반기 청년 월세 지원 추가 모집" style="position:absolute;inset:0;display:block"><div style="position:absolute;inset:0;background:#FFFFFF;overflow:hidden;color:#1C2D4F">
+          <div style="background:#2F6B4F;color:#fff;padding:18px 15px;font-size:19px;font-weight:900;line-height:1.25">2026 하반기<br>청년 월세 지원<br>추가 모집</div>
+          <div style="padding:12px 15px;font-size:11px;line-height:1.7;color:#4A4E59">■ 지원대상 만 19~39세 무주택 청년<br>■ 지원내용 월 최대 20만원 × 12개월<br>■ 신청기간 11.03 ~ 11.21<br>■ 신청방법 서울주거포털 온라인 신청<br>■ 제출서류 임대차계약서, 소득 증빙</div>
+          <div style="position:absolute;left:0;right:0;bottom:0;height:75px;background:linear-gradient(180deg,rgba(255,255,255,0),#FFFFFF 70%)"></div>
+          <span style="position:absolute;right:10px;bottom:10px;font-size:13px;font-weight:700;background:rgba(28,45,79,0.88);color:#fff;padding:4px 10px;border-radius:10px">세로로 긴 이미지 · 전체 보기</span></div></a>
+        <span style="position:absolute;left:10px;top:10px;font-size:15.0px;font-weight:700;color:#FFFFFF;background:rgba(28,45,79,0.88);padding:4px 10px;border-radius:4px">11.21 마감</span>
+        <button aria-label="찜하기" aria-pressed="false" style="position:absolute;right:8px;top:8px;width:45px;height:45px;border-radius:50%;border:0;background:rgba(255,255,255,0.92);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 1px 4px rgba(15,26,48,0.18)"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1C2D4F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"></path></svg></button>
+      </div>
+      <a href="PcDetail.dc.html" style="text-decoration:none;color:#1C2D4F;display:flex;flex-direction:column;gap:3px;padding:0 2px">
+        <span style="font-size:15px;font-weight:700;line-height:1.4;word-break:keep-all;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">2026 하반기 청년 월세 지원 추가 모집</span>
+        <span style="font-size:13.5px;color:#5B5F6B;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">서울 전체 · 서울특별시</span>
+      </a>
+    </article><article style="min-width:0;display:flex;flex-direction:column;gap:8px">
+      <div style="position:relative;aspect-ratio:3/4;border-radius:8px;overflow:hidden;border:1px solid #D9D3C3;background:#ECE7DA">
+        <a href="PcDetail.dc.html" aria-label="마포러닝메이트 참여자 모집" style="position:absolute;inset:0;display:block"><div style="position:absolute;inset:0;background:#FF7A2F;overflow:hidden;color:#FFFFFF">
+          <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,0.16) 0 18px,transparent 18px 35px)"></div>
+          <div style="position:absolute;left:18px;top:20px;font-size:35px;font-weight:900;line-height:1;font-style:italic">RUN<br>MATE</div>
+          <div style="position:absolute;left:18px;bottom:50px;right:18px;font-size:18px;font-weight:700;line-height:1.3">마포러닝메이트<br>참여자 모집</div>
+          <div style="position:absolute;left:18px;bottom:18px;font-size:11px">서울청년센터 마포 · 매주 목 19:30</div></div></a>
+        <span style="position:absolute;left:10px;top:10px;font-size:15.0px;font-weight:700;color:#FFFFFF;background:#BE3A2B;padding:4px 10px;border-radius:4px">D-4</span>
+        <button aria-label="찜하기" aria-pressed="false" style="position:absolute;right:8px;top:8px;width:45px;height:45px;border-radius:50%;border:0;background:rgba(255,255,255,0.92);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 1px 4px rgba(15,26,48,0.18)"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1C2D4F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"></path></svg></button>
+      </div>
+      <a href="PcDetail.dc.html" style="text-decoration:none;color:#1C2D4F;display:flex;flex-direction:column;gap:3px;padding:0 2px">
+        <span style="font-size:15px;font-weight:700;line-height:1.4;word-break:keep-all;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">마포러닝메이트 참여자 모집</span>
+        <span style="font-size:13.5px;color:#5B5F6B;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">마포구 · 서울청년센터 마포</span>
+      </a>
+    </article><article style="min-width:0;display:flex;flex-direction:column;gap:8px">
+      <div style="position:relative;aspect-ratio:3/4;border-radius:8px;overflow:hidden;border:1px solid #D9D3C3;background:#ECE7DA">
+        <a href="PcDetail.dc.html" aria-label="자전거타기 좋은 서울 영상 공모전" style="position:absolute;inset:0;display:block"><div style="position:absolute;inset:0;background:#ECE7DA;display:flex;align-items:center;justify-content:center">
+          <div style="width:100%;aspect-ratio:16/9;background:linear-gradient(90deg,#0B6E99,#43B0C9);color:#fff;position:relative;overflow:hidden">
+            <div style="position:absolute;left:12px;top:15px;font-size:18px;font-weight:900;line-height:1.2">자전거타기 좋은 서울<br>영상 공모전</div>
+            <div style="position:absolute;right:12px;bottom:10px;width:50px;height:50px;border-radius:50%;border:5px solid #fff"></div>
+            <div style="position:absolute;left:12px;bottom:10px;font-size:11px">총상금 500만원</div></div></div></a>
+        <span style="position:absolute;left:10px;top:10px;font-size:15.0px;font-weight:700;color:#FFFFFF;background:#BE3A2B;padding:4px 10px;border-radius:4px">D-9</span>
+        <button aria-label="찜하기" aria-pressed="false" style="position:absolute;right:8px;top:8px;width:45px;height:45px;border-radius:50%;border:0;background:rgba(255,255,255,0.92);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 1px 4px rgba(15,26,48,0.18)"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1C2D4F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"></path></svg></button>
+      </div>
+      <a href="PcDetail.dc.html" style="text-decoration:none;color:#1C2D4F;display:flex;flex-direction:column;gap:3px;padding:0 2px">
+        <span style="font-size:15px;font-weight:700;line-height:1.4;word-break:keep-all;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">자전거타기 좋은 서울 영상 공모전</span>
+        <span style="font-size:13.5px;color:#5B5F6B;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">서울 전체 · 서울특별시 교통정책과</span>
+      </a>
+    </article></div>
+    <div style="margin-top:32px;display:flex;justify-content:center"><button style="height:46px;padding:0 28px;border-radius:23px;border:1px solid #1C2D4F;background:#FFFFFF;color:#1C2D4F;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer">공고 더 보기</button></div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview": {"width": 1280}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

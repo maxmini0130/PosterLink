@@ -1,4 +1,6 @@
 import "server-only";
+import { imageMetadata } from "./feedImages";
+import { resolvePosterImageGallery } from "./posterImage";
 import { getRegionScopeIds } from "./regionHelpers";
 import { isPosterEligibleForPromotion } from "./promotionEligibility";
 
@@ -12,6 +14,8 @@ import {
   type DiscoveryTaxonomy,
 } from "./discoveryRoutes";
 import { isPosterAcceptingApplications } from "./posterApplication";
+import { categoryScopeIds } from "./categoryTaxonomy";
+import { searchPublicPostersInScope } from "./categoryScopedSearch";
 import { PUBLIC_POSTER_EXPOSURE_FILTER } from "./publicPosterVisibility";
 import {
   INFORMATION_CATEGORY_CODES,
@@ -22,7 +26,7 @@ import {
 import { assertPublicDiscoveryQuery } from "./publicDiscoveryErrors";
 
 const PUBLIC_POSTER_SELECT =
-  "id,title,source_org_name,organizer_name,organizer_id,source_institution_id,application_institution_id,application_start_at,application_end_at,deadline_type,verification_status,verified_at,thumbnail_url,source_key,summary_short,created_at,updated_at,exposure_tier,primary_category_code:field_verification->classification->>primaryCategory";
+  "id,title,source_org_name,organizer_name,organizer_id,source_institution_id,application_institution_id,application_start_at,application_end_at,deadline_type,event_end_at,verification_status,verified_at,thumbnail_url,source_key,summary_short,created_at,updated_at,exposure_tier,primary_category_code:field_verification->classification->>primaryCategory";
 const PROMOTION_POSTER_SELECT = `${PUBLIC_POSTER_SELECT},deadline_review:field_verification->deadlineReview,date_quality_decision:field_verification->dateQuality->>decision,date_issues:field_verification->dateIssues`;
 
 export type PublicDiscoveryFilters = {
@@ -39,6 +43,8 @@ export type PublicDiscoveryFilters = {
 export type PublicDiscoveryResult = {
   posters: DiscoveryPoster[];
   totalCount: number;
+  /** The category calls hit their limit; there are at least `totalCount`. */
+  totalIsMinimum: boolean;
   categories: DiscoveryTaxonomy[];
   regions: DiscoveryTaxonomy[];
   selectedCategory: DiscoveryTaxonomy | null;
@@ -133,22 +139,40 @@ export async function fetchPublicDiscovery(
       ? [selectedRegion.id]
       : Array.from(getRegionScopeIds(selectedRegion.id, regions) ?? [])
     : null;
-  const searchArgs = {
-    p_query: search || null,
-    p_category_id: selectedCategory?.id ?? null,
-    p_region_ids: regionIds,
-    p_include_closed: includeClosed,
-    p_sort: sort === "deadline" ? "deadline" : "latest",
-    p_limit: Math.min(Math.max(filters.limit ?? 240, 1), 500),
-  };
-  const [postersRes, countRes] = await Promise.all([
-    client
-      .rpc("search_public_posters", searchArgs)
-      .select(
-        filters.promotionOnly ? PROMOTION_POSTER_SELECT : PUBLIC_POSTER_SELECT,
-      )
-      .returns<Record<string, unknown>[]>(),
-    filters.promotionOnly
+  // A main category also covers the content types folded into it
+  // (교육/취업 -> 교육강좌, 채용), the same scope the client and home use.
+  const categoryScope = categoryScopeIds(
+    selectedCategory?.id ?? null,
+    categories,
+  );
+  const multiCategory = categoryScope.length > 1;
+  const searchSort = sort === "deadline" ? "deadline" : "latest";
+  const limit = Math.min(Math.max(filters.limit ?? 240, 1), 500);
+  const [scoped, countRes] = await Promise.all([
+    searchPublicPostersInScope<Record<string, unknown> & { id: string }>(
+      client,
+      {
+        categoryIds: categoryScope,
+        query: search || null,
+        regionIds,
+        includeClosed,
+        sort: searchSort,
+        limit,
+        select: filters.promotionOnly
+          ? PROMOTION_POSTER_SELECT
+          : PUBLIC_POSTER_SELECT,
+        countable: includeClosed
+          ? undefined
+          : (row) =>
+              isAcceptingPoster({
+                application_start_at: row.application_start_at,
+                application_end_at: row.application_end_at,
+                deadline_type: row.deadline_type,
+                event_end_at: row.event_end_at,
+              }),
+      },
+    ),
+    filters.promotionOnly || multiCategory
       ? Promise.resolve({ data: null, error: null })
       : client.rpc("count_public_posters", {
           p_query: search || null,
@@ -157,9 +181,12 @@ export async function fetchPublicDiscovery(
           p_include_closed: includeClosed,
         }),
   ]);
-  assertPublicDiscoveryQuery(postersRes, "search_public_posters");
+  assertPublicDiscoveryQuery(
+    { error: (scoped.error as { code?: string } | null) ?? undefined },
+    "search_public_posters",
+  );
   assertPublicDiscoveryQuery(countRes, "count_public_posters");
-  const rows = postersRes.data ?? [];
+  const rows: Record<string, unknown>[] = scoped.rows;
   const posters = await enrichPublicPosters(
     client,
     filters.promotionOnly ? rows.filter(isPosterEligibleForPromotion) : rows,
@@ -170,10 +197,13 @@ export async function fetchPublicDiscovery(
   const totalCount =
     !filters.promotionOnly && typeof countRes.data === "number"
       ? countRes.data
-      : filteredPosters.length;
+      : multiCategory && !filters.promotionOnly
+        ? scoped.total
+        : filteredPosters.length;
   return {
     posters: filteredPosters,
     totalCount,
+    totalIsMinimum: multiCategory && !filters.promotionOnly && !scoped.exact,
     categories,
     regions,
     selectedCategory,
@@ -266,7 +296,9 @@ export async function fetchTopRegionCategoryCombinations(
       p_sort: "latest",
       p_limit: 500,
     })
-    .select("id,application_start_at,application_end_at,deadline_type");
+    .select(
+      "id,application_start_at,application_end_at,deadline_type,event_end_at",
+    );
 
   if (posterError) return [];
 
@@ -276,6 +308,7 @@ export async function fetchTopRegionCategoryCombinations(
       application_start_at: string | null;
       application_end_at: string | null;
       deadline_type: string | null;
+      event_end_at: string | null;
     }>
   )
     .filter(isAcceptingPoster)
@@ -375,7 +408,7 @@ export async function fetchPublicInstitutions(
       client
         .from("posters")
         .select(
-          "organizer_id,source_institution_id,application_start_at,application_end_at,deadline_type",
+          "organizer_id,source_institution_id,application_start_at,application_end_at,deadline_type,event_end_at",
         )
         .eq("poster_status", "published")
         .or(PUBLIC_POSTER_EXPOSURE_FILTER)
@@ -494,15 +527,19 @@ export async function fetchInstitutionRelatedPosters(
   };
 }
 
+/** Takes enriched posters and the raw search rows alike. */
 function isAcceptingPoster(poster: {
-  application_start_at?: string | null;
-  application_end_at?: string | null;
-  deadline_type?: string | null;
+  application_start_at?: unknown;
+  application_end_at?: unknown;
+  deadline_type?: unknown;
+  event_end_at?: unknown;
 }) {
+  const text = (value: unknown) => (typeof value === "string" ? value : null);
   return isPosterAcceptingApplications({
-    applicationStartAt: poster.application_start_at,
-    applicationEndAt: poster.application_end_at,
-    deadlineType: poster.deadline_type,
+    applicationStartAt: text(poster.application_start_at),
+    applicationEndAt: text(poster.application_end_at),
+    deadlineType: text(poster.deadline_type),
+    eventEndAt: text(poster.event_end_at),
   });
 }
 
@@ -529,7 +566,7 @@ async function enrichPublicPosters(
     imageIds.length
       ? client
           .from("poster_images")
-          .select("poster_id,storage_path,image_type,created_at")
+          .select("*")
           .in("poster_id", imageIds)
           .order("created_at", { ascending: true })
       : Promise.resolve({ data: [], error: null }),
@@ -605,8 +642,20 @@ async function enrichPublicPosters(
       primaryCategoryCode,
     );
     const regionId = regionIdsForPoster[0] ?? null;
+    const selectedImage = resolvePosterImageGallery(
+      imagesByPoster.get(id) ?? [],
+      String(poster.thumbnail_url ?? ""),
+      String(poster.source_key ?? ""),
+    )[0];
+    const imageMeta = imageMetadata(
+      (imagesRes.data ?? []).find(
+        (image: any) =>
+          image.poster_id === id && image.storage_path === selectedImage,
+      ),
+    );
     return {
       ...poster,
+      ...imageMeta,
       id,
       categoryId,
       regionId,

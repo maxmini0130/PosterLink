@@ -225,4 +225,14 @@ test("region scope includes nationwide eligibility without sibling districts", a
     ["mapo", "seoul", "nation"],
   );
   assert.equal(getRegionScopeIds("nation", regions), null);
+  // Production 시·도 rows have no parent link to 전국; it is still in scope.
+  const unlinked = [
+    { id: "nation", level: "nation" },
+    { id: "seoul", level: "sido", parent_id: null },
+    { id: "mapo", level: "sigungu", parent_id: "seoul" },
+  ];
+  assert.deepEqual(
+    [...getRegionScopeIds("seoul", unlinked)!],
+    ["seoul", "mapo", "nation"],
+  );
 });

@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   buildStructuredPosterFields,
+  hasOpenEndedDeadlineEvidence,
   inferStructuredDeadlineType,
   normalizeStructuredDeadlineType,
 } from "./poster-structured-fields.js";
@@ -271,4 +272,71 @@ test("LLM-filled facts remain review suggestions instead of public fields", () =
   assert.equal(fields.benefits_summary, null);
   assert.equal(fields.application_method, null);
   assert.equal(fields.contact_info, "02-1234-5678");
+});
+
+test("an open-ended type without wording in the notice is not kept (screen plan 09)", () => {
+  const goesan =
+    "신청기간: 2026. 10. 12.(월) 10:00~ 신청방법: 서울시 공공서비스예약시스템에서 신청 여행기간: 2026. 10. 24.(토)~10. 25.(일) 참가인원: 서울시민 20명";
+  // A reviewer's "until filled" with no such wording becomes unknown.
+  assert.equal(
+    inferStructuredDeadlineType({
+      deadlineType: "until_exhausted",
+      sourceText: goesan,
+    }),
+    "unknown",
+  );
+  // ...and a stated end date still wins over the unsupported type.
+  assert.equal(
+    inferStructuredDeadlineType({
+      deadlineType: "until_exhausted",
+      applicationEndAt: "2026-10-20",
+      sourceText: "접수기간: 10.12 ~ 10.20",
+    }),
+    "fixed",
+  );
+  assert.equal(
+    inferStructuredDeadlineType({ deadlineType: "ongoing", sourceText: "신청: 온라인" }),
+    "unknown",
+  );
+  // Stated wording keeps the type.
+  for (const text of [
+    "선착순 20명 모집",
+    "정원 마감 시 조기 종료",
+    "예산 소진 시까지",
+    "모집 완료 시 마감",
+    "인원이 차면 마감됩니다",
+  ]) {
+    assert.equal(
+      inferStructuredDeadlineType({ deadlineType: "until_exhausted", sourceText: text }),
+      "until_exhausted",
+      text,
+    );
+  }
+  assert.equal(
+    inferStructuredDeadlineType({ deadlineType: "ongoing", sourceText: "연중 상시 모집" }),
+    "ongoing",
+  );
+  assert.equal(hasOpenEndedDeadlineEvidence("fixed", ""), true);
+});
+
+test("a labeled participant line fills target and count only from the notice", () => {
+  const fields = buildStructuredPosterFields({
+    sourceText:
+      "행사유형: 농촌체험 신청방법: 서울시 공공서비스예약시스템에서 신청 참가인원: 서울시민 20명 참가비용: 50,000원",
+  });
+  assert.equal(fields.recruitment_count, "20명");
+  assert.equal(fields.eligibility_summary, "서울시민");
+
+  // A count with no audience word gives no target.
+  const countOnly = buildStructuredPosterFields({
+    sourceText: "참여인원: 선착순 15명",
+  });
+  assert.equal(countOnly.recruitment_count, "15명");
+  assert.equal(countOnly.eligibility_summary, null);
+
+  // An explicit 대상 line still comes first.
+  const labeled = buildStructuredPosterFields({
+    sourceText: "모집대상: 관내 거주 청년 신청방법: 온라인 참가인원: 서울시민 20명",
+  });
+  assert.equal(labeled.eligibility_summary, "관내 거주 청년");
 });

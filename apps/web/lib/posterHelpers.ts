@@ -9,27 +9,42 @@ export interface PosterWithMeta {
   regionName: string | null;
 }
 
+// Ids per `in` filter: 150 UUIDs keep the request URL well under the 16KB
+// header limit (a whole operator list of ~1000 ids failed with 400).
+const IN_CHUNK = 150;
+
+/** Runs `query` for each chunk of `ids` and joins the rows. */
+async function selectInChunks<T>(
+  ids: string[],
+  query: (chunk: string[]) => PromiseLike<{ data: T[] | null }>,
+): Promise<{ data: T[] }> {
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += IN_CHUNK) chunks.push(ids.slice(i, i + IN_CHUNK));
+  const results = await Promise.all(chunks.map((chunk) => query(chunk)));
+  return { data: results.flatMap((result) => result.data ?? []) };
+}
+
 export async function fetchCategoryRegionNames(posterIds: string[]): Promise<Record<string, PosterWithMeta>> {
   const ids = [...new Set(posterIds.filter(Boolean))];
   if (ids.length === 0) return {};
 
   const [categoryLinksRes, regionLinksRes, postersRes] = await Promise.all([
-    supabase
-      .from("poster_categories")
-      .select("poster_id, category_id")
-      .in("poster_id", ids),
-    supabase
-      .from("poster_regions")
-      .select("poster_id, region_id")
-      .in("poster_id", ids),
-    supabase
-      .from("posters")
-      .select("id, field_verification")
-      .in("id", ids),
+    selectInChunks<any>(ids, (chunk) =>
+      supabase.from("poster_categories").select("poster_id, category_id").in("poster_id", chunk),
+    ),
+    selectInChunks<any>(ids, (chunk) =>
+      supabase.from("poster_regions").select("poster_id, region_id").in("poster_id", chunk),
+    ),
+    selectInChunks<any>(ids, (chunk) =>
+      supabase
+        .from("posters")
+        .select("id, primary_category_code:field_verification->classification->>primaryCategory")
+        .in("id", chunk),
+    ),
   ]);
 
-  const categoryLinks = categoryLinksRes.data ?? [];
-  const regionLinks = regionLinksRes.data ?? [];
+  const categoryLinks = categoryLinksRes.data;
+  const regionLinks = regionLinksRes.data;
 
   const categoryIds = [...new Set(categoryLinks.map((link: any) => link.category_id).filter(Boolean))];
   const regionIds = [...new Set(regionLinks.map((link: any) => link.region_id).filter(Boolean))];
@@ -62,8 +77,8 @@ export async function fetchCategoryRegionNames(posterIds: string[]): Promise<Rec
     ]);
   }
 
-  for (const poster of postersRes.data ?? []) {
-    primaryCategoryCodeByPoster.set(poster.id, readPrimaryCategoryCode(poster.field_verification));
+  for (const poster of postersRes.data) {
+    primaryCategoryCodeByPoster.set(poster.id, readPrimaryCategoryCode({classification:{primaryCategory:poster.primary_category_code}}));
   }
 
   const result: Record<string, PosterWithMeta> = {};

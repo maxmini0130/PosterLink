@@ -14,6 +14,7 @@ export default defineConfig({
     "my-posters.spec.ts",
     "home-search.spec.ts",
     "interests.spec.ts",
+    "poster-feed.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,

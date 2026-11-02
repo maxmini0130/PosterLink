@@ -9,6 +9,7 @@ import SiteVisitTracker from "./components/SiteVisitTracker";
 import ProductEventsTracker from "./components/ProductEventsTracker";
 import PendingActionRunner from "./components/PendingActionRunner";
 import VisitClock from "./components/VisitClock";
+import InSiteHistoryTracker from "./components/InSiteHistoryTracker";
 import { SeoStructuredData } from "./components/SeoStructuredData";
 import { getAppOrigin } from "../lib/siteUrl";
 import ExistingWebAnalytics from "./components/ExistingWebAnalytics";
@@ -77,7 +78,14 @@ export const metadata: Metadata = {
     url: appOrigin,
     title: "공공 공고·지원사업·교육·행사 검색 | PosterLink",
     description: siteDescription,
-    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "포스터링크 공공기관 공고 탐색" }],
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "포스터링크 공공기관 공고 탐색",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
@@ -92,21 +100,36 @@ export default function RootLayout({
 }: Readonly<{
   children: ReactNode;
 }>) {
+  const localReadOnly = process.env.NEXT_PUBLIC_LOCAL_READ_ONLY === "1";
   return (
     <html lang="ko" className={`${plSerif.variable} ${plSans.variable}`}>
+      <head>
+        {localReadOnly && (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `(()=>{const original=window.fetch.bind(window);const reads=new Set(['search_public_posters','count_public_posters','get_popular_keywords','resolve_closed_poster_alert_default']);window.fetch=(input,init)=>{const url=new URL(typeof input==='string'?input:input instanceof Request?input.url:String(input),location.origin);const method=(init?.method||(input instanceof Request?input.method:'GET')).toUpperCase();const protectedTarget=url.hostname.endsWith('.supabase.co')||(url.origin===location.origin&&url.pathname.startsWith('/api/'));if(protectedTarget&&!['GET','HEAD'].includes(method)&&!reads.has(url.pathname.split('/').pop())&&url.pathname!=='/api/posters/semantic-search')return Promise.resolve(new Response(JSON.stringify({error:'Local preview is read only'}),{status:403,headers:{'Content-Type':'application/json'}}));return original(input,init);};})();`,
+            }}
+          />
+        )}
+      </head>
       <body>
         <ErrorBoundary>
           <SeoStructuredData />
           <Suspense fallback={null}>
-            <SiteVisitTracker />
-            <GaAnalytics />
-            <ProductEventsTracker />
-            <PendingActionRunner />
+            {!localReadOnly && (
+              <>
+                <SiteVisitTracker />
+                <GaAnalytics />
+                <ProductEventsTracker />
+                <PendingActionRunner />
+              </>
+            )}
             <VisitClock />
+            <InSiteHistoryTracker />
           </Suspense>
           {children}
           <ToastProvider />
-          <ExistingWebAnalytics />
+          {!localReadOnly && <ExistingWebAnalytics />}
         </ErrorBoundary>
       </body>
     </html>

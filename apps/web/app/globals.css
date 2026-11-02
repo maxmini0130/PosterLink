@@ -2,6 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+.feed-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 10px;
+  row-gap: 18px;
+}
+@media (min-width: 768px) {
+  .feed-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 22px 16px;
+  }
+}
+@media (min-width: 1200px) {
+  .feed-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 26px 20px;
+  }
+}
+
 :root {
   --background: #ffffff;
   --foreground: #0f172a;
@@ -78,6 +97,19 @@
 .pl-action-bar-open {
   --pl-bottom-extra: 72px;
 }
+/* Screen plan v1.0 (06): on a phone the detail's 찜·신청 bar replaces the tab
+   bar, so two fixed bars never cover the text. The bar takes the tab bar's
+   place, including the home-indicator area. */
+html.pl-action-bar-open {
+  --mobile-nav-height: env(safe-area-inset-bottom, 0px);
+}
+.pl-action-bar-open .mobile-bottom-nav {
+  display: none;
+}
+.pl-action-bar-open .pl-action-bar {
+  bottom: 0;
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+}
 @media (min-width: 768px) {
   .pl-has-action-bar {
     padding-bottom: 104px;
@@ -107,8 +139,21 @@
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  font-family:
+    "Pretendard",
+    -apple-system,
+    BlinkMacSystemFont,
+    system-ui,
+    Roboto,
+    "Helvetica Neue",
+    "Segoe UI",
+    "Apple SD Gothic Neo",
+    "Noto Sans KR",
+    "Malgun Gothic",
+    sans-serif;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
 }
 
 .admin-light-surface {

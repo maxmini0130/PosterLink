@@ -42,6 +42,16 @@ import {
 import { readGuestFavorites } from "../../lib/guestStore";
 import { isPosterAcceptingApplications } from "../../lib/posterApplication";
 import {
+  categoryScopeIds,
+  interestCategories,
+} from "../../lib/categoryTaxonomy";
+import { searchCategoryScope } from "../../lib/categoryScopedSearch";
+import {
+  loadPosterImageMetadata,
+  metadataForUrl,
+} from "../../lib/posterImageMetadata";
+import { resolvePosterImageGallery } from "../../lib/posterImage";
+import {
   groupByRegionScope,
   isSavedSearch,
   readSavedSearches,
@@ -54,7 +64,7 @@ import { trackAnalytics } from "../../lib/analytics";
 const PAGE_SIZE = 12;
 const WIDER_FIRST = 6;
 const PUBLIC_POSTER_SELECT =
-  "id,title,source_org_name,organizer_name,verification_status,verified_at,application_start_at,application_end_at,deadline_type,poster_status,thumbnail_url,source_key,summary_short,created_at,exposure_tier";
+  "id,title,source_org_name,organizer_name,verification_status,verified_at,application_start_at,application_end_at,deadline_type,event_end_at,poster_status,thumbnail_url,source_key,summary_short,created_at,exposure_tier";
 
 const SORTS: Array<{ key: DiscoverySort; label: string }> = [
   { key: "latest", label: "최신 등록순" },
@@ -67,6 +77,7 @@ const SORTS: Array<{ key: DiscoverySort; label: string }> = [
 type PosterListClientProps = {
   initialPosters: DiscoveryPoster[];
   initialTotalCount: number;
+  initialTotalIsMinimum: boolean;
   initialCategories: DiscoveryTaxonomy[];
   initialRegions: DiscoveryTaxonomy[];
   initialQuery: string;
@@ -83,13 +94,15 @@ function toCard(poster: Row): PlPosterCardData {
   return {
     id: poster.id,
     title: poster.title,
-    org:
-      (poster.verification_status === "verified" && poster.verified_at
-        ? poster.organizer_name || poster.source_org_name
-        : poster.source_org_name) ?? undefined,
+    org: poster.organizer_name || undefined,
     applicationStartAt: poster.application_start_at,
     deadline: poster.application_end_at ?? undefined,
     deadlineType: poster.deadline_type,
+    eventEndAt: poster.event_end_at,
+    imageWidth: poster.imageWidth,
+    imageHeight: poster.imageHeight,
+    imageStatus: poster.imageStatus,
+    regionLabel: poster.regionName,
     image: poster.thumbnail_url ?? undefined,
     images: poster.images,
     sourceUrl: poster.source_key ?? undefined,
@@ -109,6 +122,7 @@ export function PosterListClient(props: PosterListClientProps) {
 function PosterListPageContent({
   initialPosters,
   initialTotalCount,
+  initialTotalIsMinimum,
   initialCategories,
   initialRegions,
   initialQuery,
@@ -121,6 +135,7 @@ function PosterListPageContent({
   const [failed, setFailed] = useState(false);
   const [posters, setPosters] = useState<Row[]>(initialPosters);
   const [resultTotalCount, setResultTotalCount] = useState(initialTotalCount);
+  const [totalIsMinimum, setTotalIsMinimum] = useState(initialTotalIsMinimum);
   const [categories, setCategories] = useState<Row[]>(initialCategories);
   const [regions, setRegions] = useState<Row[]>(initialRegions);
 
@@ -236,6 +251,11 @@ function PosterListPageContent({
         regions,
       );
       const includeClosed = !hideClosedPosters || normalizedQuery.length > 0;
+      // A main category also covers the content types folded into it
+      // (교육/취업 -> 교육강좌, 채용); each is searched and the results merged.
+      const categoryScope = categoryScopeIds(selectedCategoryId, categories);
+      const multiCategory = categoryScope.length > 1;
+      const categoryScopeSet = new Set(categoryScope);
       const searchArgs = {
         p_query: normalizedQuery || null,
         p_category_id: selectedCategoryId,
@@ -246,12 +266,16 @@ function PosterListPageContent({
         p_sort: sortBy === "deadline" ? "deadline" : "latest",
         p_limit: 240,
       };
-      const countPromise = supabase.rpc("count_public_posters", {
-        p_query: searchArgs.p_query,
-        p_category_id: searchArgs.p_category_id,
-        p_region_ids: searchArgs.p_region_ids,
-        p_include_closed: includeClosed,
-      });
+      let scopedTotal: number | null = null;
+      let scopedExact = true;
+      const countPromise = multiCategory
+        ? Promise.resolve({ data: null, error: null })
+        : supabase.rpc("count_public_posters", {
+            p_query: searchArgs.p_query,
+            p_category_id: searchArgs.p_category_id,
+            p_region_ids: searchArgs.p_region_ids,
+            p_include_closed: includeClosed,
+          });
 
       if (hideClosedPosters && normalizedQuery.length >= 2) {
         const semanticResponse = await fetch("/api/posters/semantic-search", {
@@ -260,7 +284,7 @@ function PosterListPageContent({
           body: JSON.stringify({
             query: normalizedQuery,
             limit: 80,
-            categoryId: selectedCategoryId,
+            categoryId: multiCategory ? null : selectedCategoryId,
             regionIds: searchArgs.p_region_ids,
           }),
         }).catch(() => null);
@@ -279,13 +303,39 @@ function PosterListPageContent({
       }
 
       if (!semanticSearchUsed || includeClosed) {
-        const { data: rpcData, error } = await supabase
-          .rpc("search_public_posters", searchArgs)
-          .select(PUBLIC_POSTER_SELECT);
-        if (error) throw error;
-        const keywordData = (
-          Array.isArray(rpcData) ? rpcData : rpcData ? [rpcData] : []
-        ) as Row[];
+        const scoped = await searchCategoryScope<Row>({
+          categoryIds: categoryScope,
+          sort: searchArgs.p_sort === "deadline" ? "deadline" : "latest",
+          limit: searchArgs.p_limit,
+          countable:
+            !includeClosed && hideClosedPosters
+              ? (poster) =>
+                  isPosterAcceptingApplications({
+                    applicationStartAt: poster.application_start_at,
+                    applicationEndAt: poster.application_end_at,
+                    deadlineType: poster.deadline_type,
+                    eventEndAt: poster.event_end_at,
+                  })
+              : undefined,
+          search: (categoryId, limit) =>
+            supabase
+              .rpc("search_public_posters", {
+                ...searchArgs,
+                p_category_id: categoryId,
+                p_limit: limit,
+              })
+              .select(PUBLIC_POSTER_SELECT)
+              .then(({ data: rows, error }) => ({
+                data: (Array.isArray(rows) ? rows : []) as Row[],
+                error,
+              })),
+        });
+        if (scoped.error) throw scoped.error;
+        const keywordData = scoped.rows;
+        if (multiCategory) {
+          scopedTotal = scoped.total;
+          scopedExact = scoped.exact;
+        }
         data = semanticSearchUsed
           ? mergeUniquePosters(data, keywordData)
           : keywordData;
@@ -293,7 +343,7 @@ function PosterListPageContent({
       const { data: totalCountData, error: countError } = await countPromise;
       if (countError) throw countError;
       const serverTotalCount =
-        typeof totalCountData === "number" ? totalCountData : null;
+        typeof totalCountData === "number" ? totalCountData : scopedTotal;
 
       const dateFilteredData =
         !includeClosed && hideClosedPosters
@@ -302,18 +352,28 @@ function PosterListPageContent({
                 applicationStartAt: poster.application_start_at,
                 applicationEndAt: poster.application_end_at,
                 deadlineType: poster.deadline_type,
+                eventEndAt: poster.event_end_at,
               }),
             )
           : data;
 
       const ids = dateFilteredData.map((poster) => poster.id);
-      const [metaMap, metricCounts, imageMap] = await Promise.all([
+      const [metaMap, metricCounts, imageMap, imageMeta] = await Promise.all([
         fetchCategoryRegionNames(ids),
         fetchPosterMetricCounts(ids),
         fetchPosterImages(ids),
+        loadPosterImageMetadata(supabase, ids),
       ]);
       const enriched = dateFilteredData.map((poster) => ({
         ...poster,
+        ...metadataForUrl(
+          imageMeta.get(poster.id),
+          resolvePosterImageGallery(
+            imageMap[poster.id] ?? [],
+            poster.thumbnail_url,
+            poster.source_key,
+          )[0],
+        ),
         ...metaMap[poster.id],
         images: imageMap[poster.id] ?? [],
         viewCount: metricCounts.viewCounts[poster.id] ?? 0,
@@ -325,7 +385,9 @@ function PosterListPageContent({
       const filtered = enriched.filter(
         (poster) =>
           (!selectedCategoryId ||
-            poster.categoryIds?.includes(selectedCategoryId)) &&
+            poster.categoryIds?.some((categoryId: string) =>
+              categoryScopeSet.has(categoryId),
+            )) &&
           (!selectedRegionScopeIds ||
             poster.regionIds?.some((regionId: string) =>
               selectedRegionScopeIds.has(regionId),
@@ -366,6 +428,7 @@ function PosterListPageContent({
           ? sorted.length
           : (serverTotalCount ?? sorted.length),
       );
+      setTotalIsMinimum(!semanticSearchUsed && !scopedExact);
       setSemanticSearchActive(semanticSearchUsed);
       setDisplayCount(PAGE_SIZE);
       setWiderCount(WIDER_FIRST);
@@ -510,6 +573,12 @@ function PosterListPageContent({
 
   const selectedRegion = regionById(selectedRegionId);
   const selectedCategory = categoryById(selectedCategoryId);
+  // Seven main categories and 기타 as filters (screen plan v1.0, 05); content
+  // types are searched through them, never listed beside them.
+  const filterCategories = useMemo(
+    () => interestCategories(categories),
+    [categories],
+  );
   const groups = useMemo(
     () =>
       groupByRegionScope(
@@ -548,7 +617,7 @@ function PosterListPageContent({
       idPrefix="filter"
       cityRegions={cityRegions}
       districtRegions={districtRegions}
-      categories={categories}
+      categories={filterCategories}
       selectedRegionId={selectedRegionId}
       selectedCityId={selectedCityId || null}
       selectedCategoryId={selectedCategoryId}
@@ -793,6 +862,9 @@ function PosterListPageContent({
                         선택한 조건에 맞는 공고{" "}
                         <span className="text-pl-accent">
                           {matchedCount.toLocaleString()}
+                          {totalIsMinimum && !groups.wider.length
+                            ? "건 이상"
+                            : null}
                         </span>
                       </>
                     }
@@ -803,7 +875,7 @@ function PosterListPageContent({
                   />
                   <div className="mb-3 hidden xl:block">{sortSelect}</div>
                 </div>
-                <ul className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-1">
+                <ul className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-1">
                   {groups.matched.slice(0, displayCount).map((poster) => (
                     <li key={poster.id}>
                       <PosterListCard
@@ -835,7 +907,7 @@ function PosterListPageContent({
                   title="서울·전국 대상 공고"
                   condition={widerCondition}
                 />
-                <ul className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-1">
+                <ul className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-1">
                   {groups.wider.slice(0, widerCount).map(({ item, scope }) => (
                     <li key={item.id}>
                       <PosterListCard
@@ -874,7 +946,8 @@ function PosterListPageContent({
             onClick={() => setFilterOpen(false)}
             className="min-h-[48px] w-full rounded-lg bg-pl-ink font-bold text-white"
           >
-            {resultTotalCount.toLocaleString()}건 보기
+            {resultTotalCount.toLocaleString()}건{totalIsMinimum ? " 이상" : ""}{" "}
+            보기
           </button>
         }
       >
@@ -882,7 +955,7 @@ function PosterListPageContent({
           idPrefix="sheet"
           cityRegions={cityRegions}
           districtRegions={districtRegions}
-          categories={categories}
+          categories={filterCategories}
           selectedRegionId={selectedRegionId}
           selectedCityId={selectedCityId || null}
           selectedCategoryId={selectedCategoryId}

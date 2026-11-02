@@ -28,13 +28,16 @@ import {
   continueWithKakao,
   forgetGuestFavorite,
   guestLocal,
+  guestTab,
   isGuestFavorite,
   rememberActionForLogin,
   saveGuestFavorite,
   type PendingActionDoneDetail,
 } from "../../lib/guestSession";
 import { getDeadlineDisplay, receptionEndedOn } from "../../../lib/deadlineDisplay";
-import { readGuestInterest } from "../../../lib/guestInterest";
+import { readEntry, readGuestInterest } from "../../../lib/guestInterest";
+import { canGoBackInSite } from "../../../lib/backTarget";
+import { currentArrival } from "../../lib/inSiteHistory";
 import type { UserStatus } from "../../../lib/myPosters";
 import {
   formatApplicationPeriod,
@@ -84,6 +87,9 @@ export type PosterDetailPoster = {
   verified_at?: string | null;
   verification_status?: string | null;
   data_confidence?: number | null;
+  imageWidth?: number | null;
+  imageHeight?: number | null;
+  imageStatus?: "ok" | "missing" | "unsuitable" | "broken" | null;
   thumbnail_url: string | null;
   source_key: string | null;
   organizer_id?: string | null;
@@ -538,10 +544,10 @@ function FactsList({
       {facts.map((fact) => (
         <div
           key={fact.fieldKey}
-          className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3 border-t border-pl-divider py-2.5 first:border-t-0 xl:[&:nth-child(2)]:border-t-0"
+          className="flex flex-wrap gap-x-3 gap-y-1 border-t border-pl-divider py-2.5 first:border-t-0 xl:[&:nth-child(2)]:border-t-0"
         >
-          <dt className="text-[13px] text-pl-sub">{fact.label}</dt>
-          <dd className="flex min-w-0 items-start justify-between gap-2 text-sm font-medium leading-6 text-pl-ink">
+          <dt className="w-[5.5rem] shrink-0 text-[13px] text-pl-sub">{fact.label}</dt>
+          <dd className="flex min-w-[min(100%,9rem)] flex-1 items-start justify-between gap-2 text-sm font-medium leading-6 text-pl-ink">
             <FactValue
               value={fact.value}
               noticeLink={noticeLink}
@@ -803,11 +809,27 @@ export function PosterDetailClient({
     }
   };
 
+  // The tab bar is hidden here on a phone, so 뒤로 가기 must never leave the
+  // site: it goes back only to a page of PosterLink, otherwise to the home
+  // (lib/backTarget.ts).
+  const goBack = () => {
+    const back = canGoBackInSite({
+      ...currentArrival(),
+      historyLength: window.history.length,
+      referrer: document.referrer,
+      origin: window.location.origin,
+      firstPageOfTab: readEntry(guestTab)?.path === window.location.pathname,
+    });
+    if (back) router.back();
+    else router.push("/");
+  };
+
   const display = getDeadlineDisplay({
     applicationStartAt: poster.application_start_at,
     applicationEndAt: poster.application_end_at,
     deadlineType: poster.deadline_type,
     posterStatus: poster.poster_status,
+    eventEndAt: poster.event_end_at,
     now: clock
   });
   const closed = display.reception === "closed";
@@ -863,30 +885,34 @@ export function PosterDetailClient({
   const deadlinePassed = closedOn !== null;
   const logNotice = () => void logOfficialLinkClick(noticeLink);
 
-  // Plan ①-3 and ④-4: the facts a person needs to decide and apply.
+  const fee = poster.participation_fee || summaryFallbackFacts.participationFee || null;
+  // Screen plan v1.0 (06) "핵심 정보": 접수기간·신청대상·비용·인원·운영기간·
+  // 장소·신청방법 first. A missing value is never guessed; it points to the
+  // original instead (FactValue). Keys are the field-report keys.
   const coreFacts: Fact[] = closed
     ? [
         { fieldKey: "deadline_date", label: "접수 기간", value: period ? (deadlinePassed ? `${period} (종료)` : period) : null },
         { fieldKey: "target_desc", label: "신청 대상", value: eligibility },
-        { fieldKey: "recruitment_count", label: "모집 인원", value: poster.recruitment_count || null },
+        { fieldKey: "capacity", label: "모집 인원", value: poster.recruitment_count || null },
         ...(eventPeriod ? [{ fieldKey: "event_period", label: "교육/운영 기간", value: eventPeriod }] : []),
-        ...(poster.event_location ? [{ fieldKey: "event_location", label: "장소", value: poster.event_location }] : [])
+        ...(poster.event_location ? [{ fieldKey: "venue", label: "장소", value: poster.event_location }] : [])
       ]
     : [
         { fieldKey: "deadline_date", label: "접수 기간", value: period },
-        { fieldKey: "region", label: "대상 지역", value: poster.regionName || null },
-        { fieldKey: "recruitment_count", label: "모집 인원", value: poster.recruitment_count || null },
         { fieldKey: "target_desc", label: "신청 대상", value: eligibility },
+        { fieldKey: "cost", label: "비용", value: fee },
+        { fieldKey: "capacity", label: "모집 인원", value: poster.recruitment_count || null },
+        { fieldKey: "event_period", label: "교육/운영 기간", value: eventPeriod },
+        { fieldKey: "venue", label: "장소", value: poster.event_location || null },
         { fieldKey: "apply_method", label: "신청 방법", value: method }
       ];
   // Everything else stays inside "공고 원문 전체 보기".
   const moreFacts = [
     { label: "연령", value: targetAgeMin != null || targetAgeMax != null ? formatTargetAge(targetAgeMin, targetAgeMax) : null },
-    { label: "비용", value: poster.participation_fee || summaryFallbackFacts.participationFee || null },
+    ...(closed ? [{ label: "비용", value: fee }] : []),
     { label: "혜택", value: poster.benefits_summary || summaryFallbackFacts.benefitsSummary || null },
     { label: "준비 서류", value: poster.required_documents || null },
     { label: "문의", value: poster.contact_info || null },
-    ...(closed ? [] : [{ label: "교육/운영 기간", value: eventPeriod }, { label: "장소", value: poster.event_location || null }]),
     { label: "주최/주관", value: organizerName },
     { label: "신청 접수기관", value: poster.application_organization_name || null },
     { label: "정보 확인", value: publicInformationCheckLabel(poster) }
@@ -960,9 +986,9 @@ export function PosterDetailClient({
         {moreFacts.length > 0 && (
           <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
             {moreFacts.map((fact) => (
-              <div key={fact.label} className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3">
-                <dt className="text-[13px] text-pl-sub">{fact.label}</dt>
-                <dd className="min-w-0 break-words font-medium">{fact.value}</dd>
+              <div key={fact.label} className="flex flex-wrap gap-x-3 gap-y-1">
+                <dt className="w-[5.5rem] shrink-0 text-[13px] text-pl-sub">{fact.label}</dt>
+                <dd className="min-w-[min(100%,9rem)] flex-1 break-words font-medium">{fact.value}</dd>
               </div>
             ))}
           </dl>
@@ -1091,7 +1117,8 @@ export function PosterDetailClient({
       {institution && relatedPosters.length > 0 && (
         <div className="mt-3 space-y-2">
           <p className="text-[13px] text-white/80">{institution.name}에서 지금 접수 중인 공고</p>
-          {relatedPosters.map((related) => (
+          {/* Up to three open alternatives (screen plan v1.0, 06 종료 화면). */}
+          {relatedPosters.slice(0, 3).map((related) => (
             <PosterListCard key={related.id} poster={related} source="related" />
           ))}
         </div>
@@ -1149,7 +1176,7 @@ export function PosterDetailClient({
         <button
           type="button"
           aria-label="뒤로 가기"
-          onClick={() => (window.history.length > 1 ? router.back() : router.push("/posters"))}
+          onClick={goBack}
           className="flex h-11 w-11 items-center justify-center rounded-lg"
         >
           <ChevronLeft size={22} aria-hidden="true" />
@@ -1216,30 +1243,40 @@ export function PosterDetailClient({
 
             {!closed && posterFigure("h-[240px] xl:hidden")}
             {originalSection}
-            {!closed && institutionCard}
+            {/* On PC the institution sits in the side column. */}
+            {!closed && institutionCard && <div className="xl:hidden">{institutionCard}</div>}
             {!closed && relatedSection}
-            {closed && institutionCard}
+            {closed && institutionCard && <div className="xl:hidden">{institutionCard}</div>}
             {sourceNote}
             {alertCta}
             <CommentSection posterId={poster.id} />
           </div>
 
-          {/* PC right column: poster and actions, kept in view while scrolling. */}
-          <aside aria-label="공고 행동" className="hidden xl:sticky xl:top-6 xl:block">
-            {posterFigure("aspect-[3/4] w-full")}
-            <div className="mt-4 space-y-3 rounded-xl border border-pl-line bg-pl-card p-4">
+          {/* PC right column (screen plan v1.0, 06): actions first, so a long
+              poster never pushes the 신청 button down; then the institution and
+              the poster. Kept in view while scrolling. */}
+          <aside aria-label="공고 행동" className="hidden space-y-4 xl:sticky xl:top-6 xl:block">
+            <div className="space-y-3 rounded-xl border border-pl-line bg-pl-card p-4">
               {closed ? (
-                noticeLink && (
-                  <a
-                    href={noticeLink.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={logNotice}
-                    className="flex min-h-[44px] w-full items-center justify-center rounded-lg border border-pl-ink px-4 text-sm font-bold text-pl-ink"
+                <>
+                  <p
+                    aria-disabled="true"
+                    className="flex min-h-[44px] w-full items-center justify-center rounded-lg bg-pl-divider px-4 text-sm font-bold text-pl-sub"
                   >
-                    공식 공고 확인하기<span className="sr-only"> (새 창)</span>
-                  </a>
-                )
+                    접수가 끝났어요
+                  </p>
+                  {noticeLink && (
+                    <a
+                      href={noticeLink.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={logNotice}
+                      className="flex min-h-[44px] w-full items-center justify-center rounded-lg border border-pl-ink px-4 text-sm font-bold text-pl-ink"
+                    >
+                      공식 공고 확인하기<span className="sr-only"> (새 창)</span>
+                    </a>
+                  )}
+                </>
               ) : (
                 <>
                   <div className="flex items-center justify-between text-sm">
@@ -1257,6 +1294,8 @@ export function PosterDetailClient({
                 </>
               )}
             </div>
+            {institutionCard}
+            {posterFigure("aspect-[3/4] w-full")}
           </aside>
         </div>
       </main>

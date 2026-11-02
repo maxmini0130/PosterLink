@@ -7,26 +7,29 @@ import type { DiscoveryPoster } from "../../../lib/discoveryRoutes";
 import type { PosterCardData } from "../PosterCard";
 import { DeadlineLabel } from "./DeadlineLabel";
 import { PosterThumb } from "./PosterThumb";
+import { PosterArt } from "./PosterArt";
 import { RegionLabel, type RegionScope } from "./RegionLabel";
 
 export type PlPosterCardData = PosterCardData & {
   posterStatus?: string | null;
 };
 
-/** Card data from a public discovery row (same organisation rule as institution pages). */
+/** The collection portal is never substituted for the actual organizer. */
 export function discoveryPosterToCard(
   poster: DiscoveryPoster,
 ): PlPosterCardData {
   return {
     id: poster.id,
     title: poster.title,
-    org:
-      poster.verification_status === "verified" && poster.verified_at
-        ? poster.organizer_name || poster.source_org_name || undefined
-        : poster.source_org_name || undefined,
+    org: poster.organizer_name || undefined,
     applicationStartAt: poster.application_start_at,
     deadline: poster.application_end_at || undefined,
     deadlineType: poster.deadline_type,
+    eventEndAt: poster.event_end_at,
+    imageWidth: poster.imageWidth,
+    imageHeight: poster.imageHeight,
+    imageStatus: poster.imageStatus,
+    regionLabel: poster.regionName,
     tags: [poster.categoryName, poster.regionName].filter(
       (value): value is string => Boolean(value),
     ),
@@ -41,6 +44,7 @@ function cardParts(poster: PlPosterCardData) {
     applicationStartAt: poster.applicationStartAt,
     applicationEndAt: poster.deadline,
     deadlineType: poster.deadlineType,
+    eventEndAt: poster.eventEndAt,
     posterStatus:
       poster.posterStatus ??
       (poster.contentState === "closed" ? "closed" : null),
@@ -88,7 +92,18 @@ export function PosterListCard({
         data-poster-source={source}
         className="flex min-h-[44px] gap-3 rounded-xl p-3 outline-offset-2 hover:bg-pl-paper/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pl-ink"
       >
-        <PosterThumb src={thumb} />
+        <div className="h-[80px] w-[60px] shrink-0 overflow-hidden rounded-md">
+          <PosterArt
+            id={poster.id}
+            src={thumb}
+            title={poster.title}
+            category={poster.tags?.[0]}
+            organization={poster.org}
+            imageWidth={poster.imageWidth}
+            imageHeight={poster.imageHeight}
+            imageStatus={poster.imageStatus}
+          />
+        </div>
         <div className="min-w-0 flex-1">
           {(meta || region) && (
             <p className="flex items-center gap-1.5 text-xs text-pl-meta">
@@ -136,7 +151,18 @@ export function PosterMiniCard({
         )}
       </div>
       <div className="flex gap-2">
-        <PosterThumb src={thumb} className="h-12 w-9" />
+        <div className="h-12 w-9 shrink-0 overflow-hidden rounded">
+          <PosterArt
+            id={poster.id}
+            src={thumb}
+            title={poster.title}
+            category={poster.tags?.[0]}
+            organization={poster.org}
+            imageWidth={poster.imageWidth}
+            imageHeight={poster.imageHeight}
+            imageStatus={poster.imageStatus}
+          />
+        </div>
         <h3 className="line-clamp-3 text-[13px] font-bold leading-[1.38] text-pl-ink">
           {poster.title}
         </h3>
@@ -173,15 +199,23 @@ export function PosterMiniRail({
   );
 }
 
-/** Vertical card with the poster on top, for the PC home grid. */
+/**
+ * Vertical card with the poster on top, for the home grid (screen plan v1.0,
+ * 02: 80~100px thumbnail on phones, 90~110px on PC; 2 columns on phones).
+ */
 export function PosterTileCard({
   poster,
   source,
   badge,
+  region,
+  regionLabel,
 }: {
   poster: PlPosterCardData;
   source?: PosterViewSource;
   badge?: ReactNode;
+  region?: RegionScope;
+  /** Overrides the region label wording, e.g. "서울 전체". */
+  regionLabel?: string;
 }) {
   const { display, thumb, meta } = cardParts(poster);
   return (
@@ -190,13 +224,21 @@ export function PosterTileCard({
       data-poster-source={source}
       className="flex h-full flex-col overflow-hidden rounded-xl border border-pl-line bg-pl-card outline-offset-2 hover:bg-pl-paper/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pl-ink"
     >
-      <PosterThumb src={thumb} className="h-36 w-full rounded-none" />
-      <div className="flex flex-1 flex-col gap-1 p-3">
-        {meta && <p className="truncate text-xs text-pl-meta">{meta}</p>}
-        <h3 className="line-clamp-2 font-pl-serif text-[15px] font-bold leading-[1.38] text-pl-ink">
+      <PosterThumb
+        src={thumb}
+        className="h-[92px] w-full rounded-none md:h-[104px]"
+      />
+      <div className="flex flex-1 flex-col gap-1 p-2.5 md:p-3">
+        {(meta || region) && (
+          <p className="flex min-w-0 items-center gap-1.5 text-xs text-pl-meta">
+            {region && <RegionLabel scope={region} label={regionLabel} />}
+            <span className="truncate">{meta}</span>
+          </p>
+        )}
+        <h3 className="line-clamp-2 font-pl-serif text-[14px] font-bold leading-[1.4] text-pl-ink md:text-[15px] min-[1200px]:text-[16px]">
           {poster.title}
         </h3>
-        <p className="mt-auto flex items-center gap-2 pt-1">
+        <p className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-0.5 pt-1">
           <DeadlineLabel display={display} />
           {badge && <span className="text-xs text-pl-meta">{badge}</span>}
         </p>

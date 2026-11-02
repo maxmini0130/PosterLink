@@ -211,8 +211,8 @@ export function CommentSection({ posterId }: CommentSectionProps) {
       <div className="space-y-6">
         {filteredComments.slice(0, displayCount).map((comment) => (
           <div key={comment.id} className="group relative bg-white p-6 rounded-[2rem] border border-gray-50 hover:border-blue-50 transition-all">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-y-1 mb-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <span className={`px-2 py-1 text-[10px] font-black rounded-lg ${COMMENT_TYPE_META[comment.comment_type as CommentType].badgeClass}`}>
                   {COMMENT_TYPE_META[comment.comment_type as CommentType].label}
                 </span>
@@ -228,13 +228,13 @@ export function CommentSection({ posterId }: CommentSectionProps) {
                 </span>
               </div>
               
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex items-center gap-1 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100">
                 {user?.id === comment.user_id ? (
-                  <button onClick={() => setDeletingCommentId(comment.id)} className="p-2 text-gray-300 hover:text-rose-500 transition-colors">
+                  <button onClick={() => setDeletingCommentId(comment.id)} aria-label="댓글 삭제" className="p-2 text-gray-300 hover:text-rose-500 transition-colors">
                     <Trash2 size={16} />
                   </button>
                 ) : (
-                  <button onClick={() => user ? setReportingCommentId(comment.id) : toast.error("로그인이 필요합니다.")} className="p-2 text-gray-300 hover:text-orange-500 transition-colors">
+                  <button onClick={() => user ? setReportingCommentId(comment.id) : toast.error("로그인이 필요합니다.")} aria-label="댓글 신고" className="p-2 text-gray-300 hover:text-orange-500 transition-colors">
                     <AlertTriangle size={16} />
                   </button>
                 )}
