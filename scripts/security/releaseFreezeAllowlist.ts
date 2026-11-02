@@ -25,6 +25,8 @@ const PLAN_V1_ONBOARDING = "728901f148dee03e774219a3e88c22d76098951b";
 
 /** Optional poster-feed image metadata only; pending independent review, not production application approval. */
 const POSTER_FEED_METADATA = "b3ce4b4a5c9ea6128683de0daf50ca022dc5651f";
+/** Admin UPDATE policy on comments (hide reported comments); full test 2026-11-02, pending review and production approval. */
+const ADMIN_COMMENT_MODERATION = "c87927ba8cad60cb075ad1f3aa9a4da6b5f12ec2";
 
 /** New migration path -> commit holding its reviewed content. */
 export const APPROVED_MIGRATIONS: Readonly<Record<string, string>> = {
@@ -42,6 +44,8 @@ export const APPROVED_MIGRATIONS: Readonly<Record<string, string>> = {
     FINISHED_EVENTS_SEARCH,
   "supabase/migrations/20261102020000_add_poster_image_feed_metadata.sql":
     POSTER_FEED_METADATA,
+  "supabase/migrations/20261102030000_allow_admin_comment_moderation.sql":
+    ADMIN_COMMENT_MODERATION,
 };
 
 /** File path -> commit holding its reviewed content; replaces the base pin. */
