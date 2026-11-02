@@ -544,10 +544,10 @@ function FactsList({
       {facts.map((fact) => (
         <div
           key={fact.fieldKey}
-          className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3 border-t border-pl-divider py-2.5 first:border-t-0 xl:[&:nth-child(2)]:border-t-0"
+          className="flex flex-wrap gap-x-3 gap-y-1 border-t border-pl-divider py-2.5 first:border-t-0 xl:[&:nth-child(2)]:border-t-0"
         >
-          <dt className="text-[13px] text-pl-sub">{fact.label}</dt>
-          <dd className="flex min-w-0 items-start justify-between gap-2 text-sm font-medium leading-6 text-pl-ink">
+          <dt className="w-[5.5rem] shrink-0 text-[13px] text-pl-sub">{fact.label}</dt>
+          <dd className="flex min-w-[min(100%,9rem)] flex-1 items-start justify-between gap-2 text-sm font-medium leading-6 text-pl-ink">
             <FactValue
               value={fact.value}
               noticeLink={noticeLink}
@@ -986,9 +986,9 @@ export function PosterDetailClient({
         {moreFacts.length > 0 && (
           <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
             {moreFacts.map((fact) => (
-              <div key={fact.label} className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3">
-                <dt className="text-[13px] text-pl-sub">{fact.label}</dt>
-                <dd className="min-w-0 break-words font-medium">{fact.value}</dd>
+              <div key={fact.label} className="flex flex-wrap gap-x-3 gap-y-1">
+                <dt className="w-[5.5rem] shrink-0 text-[13px] text-pl-sub">{fact.label}</dt>
+                <dd className="min-w-[min(100%,9rem)] flex-1 break-words font-medium">{fact.value}</dd>
               </div>
             ))}
           </dl>

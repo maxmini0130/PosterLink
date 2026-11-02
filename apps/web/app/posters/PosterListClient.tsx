@@ -875,7 +875,7 @@ function PosterListPageContent({
                   />
                   <div className="mb-3 hidden xl:block">{sortSelect}</div>
                 </div>
-                <ul className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-1">
+                <ul className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-1">
                   {groups.matched.slice(0, displayCount).map((poster) => (
                     <li key={poster.id}>
                       <PosterListCard
@@ -907,7 +907,7 @@ function PosterListPageContent({
                   title="서울·전국 대상 공고"
                   condition={widerCondition}
                 />
-                <ul className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-1">
+                <ul className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-1">
                   {groups.wider.slice(0, widerCount).map(({ item, scope }) => (
                     <li key={item.id}>
                       <PosterListCard

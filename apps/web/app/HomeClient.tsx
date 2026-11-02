@@ -39,8 +39,11 @@ import type { TopDiscoveryCombination } from "../lib/publicDiscovery";
 type Tab = "fresh" | "closing" | "all";
 export default function Home({
   topCombinations,
+  summary = null,
 }: {
   topCombinations: TopDiscoveryCombination[];
+  /** Server counts, so the first HTML says how many posters are open. */
+  summary?: { activePosters: number; dueThisWeek: number } | null;
 }) {
   const router = useRouter(),
     sequence = useRef(0),
@@ -469,9 +472,17 @@ export default function Home({
           aria-label="지역별 공고"
           className="mt-12 border-t border-pl-line pt-6"
         >
-          <p className="mb-3 text-sm font-bold">지역별 공고 둘러보기</p>
+          <p className="mb-3 text-sm font-bold">지역별 공고 모아보기</p>
+          {summary && summary.activePosters > 0 && (
+            <p className="mb-3 text-xs text-pl-meta">
+              지금 신청할 수 있는 공고 {summary.activePosters.toLocaleString()}
+              건
+              {summary.dueThisWeek > 0 &&
+                ` · 7일 안에 마감 ${summary.dueThisWeek.toLocaleString()}건`}
+            </p>
+          )}
           <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-pl-meta">
-            {topCombinations.slice(0, 12).map((c) => (
+            {topCombinations.map((c) => (
               <Link
                 key={`${c.regionSlug}:${c.categorySlug}`}
                 href={`/regions/${c.regionSlug}/${c.categorySlug}`}
