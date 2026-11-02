@@ -13,6 +13,8 @@ const nextConfig = {
     outputFileTracingRoot: path.join(__dirname, "../.."),
     outputFileTracingIncludes: {
       "/api/admin/crawler/run": ["./.generated/crawler/**/*"],
+      // The default poster image reads its font from disk at runtime.
+      "/posters/[id]/poster-image": ["./public/fonts/NotoSerifKR-Bold.woff"],
     },
     serverActions: {
       bodySizeLimit: "10mb",
