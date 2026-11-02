@@ -85,3 +85,11 @@
 
 - 방문 기록(`site_visit_logs`)은 앱이 이미 `is_automated`로 표시해 통계에서 빠지므로 남겼다. 테스트 중 관리 처리 이력(`admin_actions`)은 감사 기록으로 남겼다.
 - 확인: 표시 레코드 0건, 테스트 사용자 찜·구독·알림 조건 0건, 닉네임·알림 설정 원래 값.
+
+## Vercel Preview 빌드 실패와 수정 (d5d3276)
+
+- PR #20의 첫 Preview(`d76f875`)가 약 2분 빌드 후 실패했다. 로컬·GitHub Actions 빌드는 통과했다. Vercel CLI 토큰이 만료돼 로그는 읽지 못했다.
+- 직전 성공 Preview(`ebf5aae`) 이후 Vercel에서만 갈리는 변경을 찾았다. 포스터 피드의 기본 포스터 이미지 라우트(`/posters/[id]/poster-image`)가 Edge 런타임에 2.8MB Noto Serif KR 글꼴을 묶어 Edge 함수 크기 제한을 넘는 구조였다.
+- Node.js 런타임으로 바꾸고 글꼴을 디스크에서 읽으며 `outputFileTracingIncludes`에 추가했다. 다음 Preview(`d5d3276`)는 성공했다.
+- 로컬 Windows에서는 Next 14.2 `@vercel/og`의 Node 런타임 기본 글꼴 경로 버그(`.\file:\C:\…`)로 이 라우트를 렌더링할 수 없어, 이미지 결과는 Preview에서 확인해야 한다.
+- Preview는 Vercel 로그인 보호(SSO) 상태라 자동 테스트를 실행하지 못했다. 사용자가 Vercel CLI에 다시 로그인하거나 자동화 우회 토큰을 주면 공개 화면 묶음을 Preview에서 읽기 전용으로 재실행한다.
