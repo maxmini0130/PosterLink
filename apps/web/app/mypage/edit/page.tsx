@@ -1,7 +1,7 @@
 "use client";
 import toast from "react-hot-toast";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { Header } from "../../components/Header";
 import { BottomNav } from "../../components/BottomNav";
@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@posterlink/ui";
 import { getCityRegions, getDistrictRegions, getRegionLabel, getSelectedCityId, getSelectedDistrictId } from "../../lib/regionHelpers";
 import { trackProductEvent } from "../../../lib/productEvents";
+import { NaverLoginLink } from "./NaverLoginLink";
 
 export default function ProfileEditPage() {
   const [loading, setLoading] = useState(true);
@@ -267,6 +268,10 @@ export default function ProfileEditPage() {
               })}
             </div>
           </section>
+
+          <Suspense fallback={null}>
+            <NaverLoginLink />
+          </Suspense>
         </div>
       </main>
 

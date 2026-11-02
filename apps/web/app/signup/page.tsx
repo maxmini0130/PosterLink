@@ -183,7 +183,9 @@ export default function SignupPage() {
           네이버 로그인 일시 중단
         </button>
         <p id="naver-unavailable" role="status" className="text-sm leading-relaxed text-gray-600">
-          {NAVER_UNAVAILABLE_MESSAGE}
+          {process.env.NEXT_PUBLIC_NAVER_LOGIN_ENABLED === "true"
+            ? "네이버로 새로 가입하는 기능은 준비 중이에요. 다른 방법으로 가입한 뒤 프로필 수정에서 네이버 로그인을 연결할 수 있어요."
+            : NAVER_UNAVAILABLE_MESSAGE}
         </p>
       </div>
 
