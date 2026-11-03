@@ -232,7 +232,7 @@ test("member: merge notice, tabs, reception groups and the apply mark", async ({
     page.getByText("이 기기에 찜한 공고 2개를 계정으로 옮겼어요"),
   ).toBeVisible();
   expect((await page.getByRole("tab").allTextContents()).join("|")).toBe(
-    "찜 3|신청 표시 2|구독 기관 1",
+    "찜 3|신청 표시 2|팔로우 기관 1",
   );
   expect(
     (await page.locator("#my-panel-favorites h2").allTextContents()).join(
@@ -264,7 +264,7 @@ test("member before the user_status migration: no apply mark or 신청 표시 ta
 }) => {
   await open(page, 390, { member: true, applySupported: false });
   expect((await page.getByRole("tab").allTextContents()).join("|")).toBe(
-    "찜 3|구독 기관 1",
+    "찜 3|팔로우 기관 1",
   );
   await expect(page.getByRole("button", { name: "신청했어요" })).toHaveCount(0);
 });

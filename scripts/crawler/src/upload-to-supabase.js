@@ -64,6 +64,13 @@ import {
   sanitizeKnownShortUrl,
 } from "./source-link-rules.js";
 import { buildStructuredPosterFields } from "./poster-structured-fields.js";
+import {
+  buildCardFacts,
+  buildCardFactsInputFromUpload,
+  isMissingCardFactColumnError,
+  isMissingRegionBasisColumnError,
+  withoutCardFactFields,
+} from "./poster-card-facts.js";
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)?.trim();
 const SUPABASE_KEY = (process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)?.trim();
@@ -442,15 +449,31 @@ async function assignPosterCategories(posterId, post, categoryMap, classificatio
   }
 }
 
-async function assignPosterRegions(posterId, post, regionMap, classification = null) {
+// poster_regions.basis comes from 20261103010000_add_home_v5_card_facts.sql. Until that
+// migration is applied, the first missing-column error switches basis off for the run.
+let supportsPosterRegionBasis = true;
+
+async function assignPosterRegions(posterId, post, regionMap, classification = null, regionBasis = []) {
   const regionCodes = classification?.regionCodes ?? inferPosterClassification(post).regionCodes;
+  const basisByCode = new Map((regionBasis ?? []).map((item) => [item.code, item.basis]));
   for (const regionCode of regionCodes) {
     const regionId = regionMap[regionCode];
     if (!regionId) continue;
-    await supabase.from("poster_regions").upsert({
-      poster_id: posterId,
-      region_id: regionId,
-    }, { onConflict: "poster_id,region_id", ignoreDuplicates: true });
+    const row = { poster_id: posterId, region_id: regionId };
+    const basis = basisByCode.get(regionCode);
+    if (supportsPosterRegionBasis && basis) row.basis = basis;
+    const { error } = await supabase.from("poster_regions").upsert(row, {
+      onConflict: "poster_id,region_id",
+      ignoreDuplicates: true,
+    });
+    if (error && "basis" in row && isMissingRegionBasisColumnError(error)) {
+      supportsPosterRegionBasis = false;
+      console.warn("\n  poster_regions.basis migration 미적용: basis 없이 지역을 저장합니다.");
+      await supabase.from("poster_regions").upsert(
+        { poster_id: posterId, region_id: regionId },
+        { onConflict: "poster_id,region_id", ignoreDuplicates: true },
+      );
+    }
   }
 }
 
@@ -2222,6 +2245,19 @@ async function uploadToSupabase(filePath) {
       fallbackOrganizerName: verifiedOrgName,
     });
     const sourceOrgName = posterFieldVerification?.organization?.sourceOrgName || post.site || null;
+    // Home v5 card facts: candidates only (card_facts_status='needs_review'); evidence in field_verification.cardFacts.
+    const cardFacts = buildCardFacts(buildCardFactsInputFromUpload({
+      post,
+      title: readableInfo.title,
+      summaryShort,
+      summaryLong,
+      structuredFields,
+      readableFacts: readableInfo.facts,
+      fieldVerification: posterFieldVerification,
+      classification,
+      collectionSourceSlug: posterFieldVerification?.organization?.collectionSourceSlug ?? null,
+      sourceOrgName,
+    }));
 
     const posterRecord = sanitizeForPostgrest({
       title: readableInfo.title,
@@ -2232,8 +2268,9 @@ async function uploadToSupabase(filePath) {
       source_key: sourceKey,           // 중복 방지 키
       created_by: CRAWLER_USER_ID,     // 크롤러 봇 계정 (null 가능)
       ...structuredFields,
+      ...cardFacts.columns,
       thumbnail_url: storedImages[0] ?? null,
-      field_verification: posterFieldVerification,
+      field_verification: { ...posterFieldVerification, cardFacts: cardFacts.evidence },
       embedding: embeddingToPgVector(embedding),
     });
     if (isInvalidCrawlerTitle(posterRecord.title)) {
@@ -2363,7 +2400,7 @@ async function uploadToSupabase(filePath) {
       }
       await syncPosterImages(existingPoster.id, postWithStoredImages, sourceUrl, posterRecord.field_verification?.posterImageOcr?.imageClassification);
       await assignPosterCategories(existingPoster.id, post, categoryMap, classification);
-      await assignPosterRegions(existingPoster.id, post, regionMap, classification);
+      await assignPosterRegions(existingPoster.id, post, regionMap, classification, cardFacts.regionBasis);
       await assignPosterAudiences(existingPoster.id, classification, audienceMap);
       await upsertBoardNoticeSighting(post, sourceUrl, { posterId: existingPoster.id, precomputedImagePhash: currentImagePhash?.phash ?? null });
       await logCrawlerAiUsageEvents({
@@ -2377,11 +2414,18 @@ async function uploadToSupabase(filePath) {
     }
 
     let posterInsert = await supabase.from("posters").insert(posterRecord).select("id").single();
+    let insertRecord = posterRecord;
+    if (isMissingCardFactColumnError(posterInsert.error)) {
+      // Card fact columns not migrated yet: keep evidence in field_verification.cardFacts only.
+      console.warn("\n  home v5 card facts migration 미적용: 카드 요약 컬럼 없이 저장합니다.");
+      insertRecord = withoutCardFactFields(posterRecord);
+      posterInsert = await supabase.from("posters").insert(insertRecord).select("id").single();
+    }
     if (isMissingStructuredPosterColumnError(posterInsert.error)) {
       console.warn("\n  구조화 공고 migration 미적용: 기존 컬럼 형식으로 저장합니다.");
       posterInsert = await supabase
         .from("posters")
-        .insert(withoutStructuredPosterFields(posterRecord))
+        .insert(withoutStructuredPosterFields(withoutCardFactFields(insertRecord)))
         .select("id")
         .single();
     }
@@ -2407,7 +2451,7 @@ async function uploadToSupabase(filePath) {
 
     // ── 3. poster_categories 저장 ───────────────────────────
     await assignPosterCategories(posterId, post, categoryMap, classification);
-    await assignPosterRegions(posterId, post, regionMap, classification);
+    await assignPosterRegions(posterId, post, regionMap, classification, cardFacts.regionBasis);
     await assignPosterAudiences(posterId, classification, audienceMap);
     addDuplicateCandidate(duplicateCandidates, posterId, posterRecord, post, sourceUrl, storedImages, linkEntries, currentImagePhash?.phash ?? null);
     await upsertBoardNoticeSighting(post, sourceUrl, { posterId, precomputedImagePhash: currentImagePhash?.phash ?? null });

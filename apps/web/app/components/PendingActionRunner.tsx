@@ -81,7 +81,7 @@ async function mergeIntoAccount(userId: string) {
 }
 
 /**
- * Finishes what a signed-out person started (찜, 기관 구독) once they are signed
+ * Finishes what a signed-out person started (찜, 기관 팔로우) once they are signed
  * in, then returns them to that screen (retention plan 2-3). See
  * completePendingActions: an action is cleared only after its own server write
  * succeeds and only while it is still the stored one. Then moves the
@@ -125,9 +125,13 @@ export default function PendingActionRunner() {
         } else {
           trackProductEvent("institution_follow", {
             institutionId: action.targetId,
-            metadata: { logged_in: true, feature: "follow" },
+            metadata: {
+              logged_in: true,
+              feature: "follow",
+              prompt_id: action.promptId,
+            },
           });
-          toast.success("기관을 구독했어요");
+          toast.success("기관을 팔로우했어요");
         }
         returnTo = action.returnTo;
       },

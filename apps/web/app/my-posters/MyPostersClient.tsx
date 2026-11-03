@@ -447,7 +447,7 @@ function MemberView({
     ...(state.applySupported
       ? [{ key: "applied" as const, label: "신청 표시", count: applied.length }]
       : []),
-    { key: "following", label: "구독 기관", count: state.institutions.length },
+    { key: "following", label: "팔로우 기관", count: state.institutions.length },
   ];
   const visible = tabs.some((entry) => entry.key === tab) ? tab : "favorites";
 
@@ -642,10 +642,10 @@ function MemberView({
       >
         {state.institutions.length === 0 ? (
           <GuideCard
-            title="자주 보는 기관을 구독해 보세요"
+            title="자주 보는 기관을 팔로우해 보세요"
             action={{ href: "/institutions", label: "기관 둘러보기" }}
           >
-            구독한 기관의 새 공고를 모아 볼 수 있어요.
+            팔로우한 기관의 새 공고를 모아 볼 수 있어요.
           </GuideCard>
         ) : (
           <ul className="grid gap-2.5 md:grid-cols-[repeat(auto-fill,minmax(340px,1fr))]">

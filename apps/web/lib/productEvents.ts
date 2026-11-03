@@ -62,11 +62,15 @@ export function currentPageType(): PageType {
 }
 
 /** Called where a feature asks the visitor to log in, before navigating to auth. */
-export function rememberSignupIntent(screen: PageType, feature: SignupFeature) {
+export function rememberSignupIntent(
+  screen: PageType,
+  feature: SignupFeature,
+  promptId?: string,
+) {
   try {
     localStorage.setItem(
       SIGNUP_INTENT_KEY,
-      JSON.stringify({ screen, feature, at: Date.now() }),
+      JSON.stringify({ screen, feature, at: Date.now(), promptId }),
     );
   } catch {
     /* storage blocked */
@@ -114,7 +118,12 @@ export function trackSignupStart(
     /* storage blocked */
   }
   trackProductEvent("signup_start", {
-    metadata: { screen: intent.screen, feature: intent.feature, method },
+    metadata: {
+      screen: intent.screen,
+      feature: intent.feature,
+      method,
+      prompt_id: intent.promptId,
+    },
   });
 }
 

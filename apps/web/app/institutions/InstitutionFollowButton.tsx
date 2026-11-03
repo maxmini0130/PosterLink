@@ -22,7 +22,7 @@ export function InstitutionFollowButton({
 }: {
   institutionId: string;
   returnPath: string;
-  /** "pl": redesigned screens (구독 / 구독 중). */
+  /** "pl": redesigned screens (팔로우 / 팔로우 중). */
   variant?: "default" | "pl";
 }) {
   const router = useRouter();
@@ -114,7 +114,7 @@ export function InstitutionFollowButton({
           following ? "border border-pl-line bg-pl-card text-pl-ink" : "bg-pl-ink text-white"
         }`}
       >
-        {loading ? "확인 중" : following ? "구독 중" : "구독"}
+        {loading ? "확인 중" : following ? "팔로우 중" : "팔로우"}
       </button>
     );
   }

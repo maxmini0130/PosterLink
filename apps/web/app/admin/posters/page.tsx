@@ -16,6 +16,7 @@ import {
   PencilLine,
   Search,
   Square,
+  Star,
   Trash2,
   X,
 } from "lucide-react";
@@ -37,6 +38,7 @@ import {
   type AdminPosterVerificationFilter,
 } from "../../../lib/adminPosterFilters";
 import { PosterImageFallback } from "../../components/PosterImageFallback";
+import { kstWeekMonday } from "../../../lib/homeFeed";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const PAGE_SIZE = 24;
@@ -1412,6 +1414,37 @@ export default function AdminPostersPage() {
     void fetchPosters(currentFilter, page, appliedFilters);
   };
 
+  // 홈 "이번 주 눈여겨볼 공고" pick (instruction 12). Needs migration
+  // 20261103010000 (posters.featured_week); without it the write is refused.
+  const handleFeaturedToggle = async (poster: any) => {
+    const week = kstWeekMonday(new Date());
+    const next = poster.featured_week === week ? null : week;
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase
+      .from("posters")
+      .update({ featured_week: next })
+      .eq("id", poster.id);
+    if (error) {
+      toast.error(
+        /featured_week/.test(error.message)
+          ? "이번 주 선정 기능은 DB 마이그레이션 적용 후 사용할 수 있습니다."
+          : error.message,
+      );
+      return;
+    }
+    await supabase.from("admin_actions").insert({
+      actor_user_id: user?.id ?? null,
+      target_type: "poster",
+      target_id: poster.id,
+      action_type: "update",
+      metadata_json: { featured_week: next, previous: poster.featured_week ?? null },
+    });
+    setPosters((current: any[]) =>
+      current.map((item) => (item.id === poster.id ? { ...item, featured_week: next } : item)),
+    );
+    toast.success(next ? "이번 주 눈여겨볼 공고로 선정했습니다." : "이번 주 선정을 해제했습니다.");
+  };
+
   const handleDeleteRejected = async (poster: any) => {
     if (poster.poster_status !== "rejected") {
       toast.error("반려된 포스터만 완전 삭제할 수 있습니다.");
@@ -2042,6 +2075,23 @@ export default function AdminPostersPage() {
                 >
                   <PencilLine size={20} />
                 </Link>
+
+                {poster.poster_status === "published" && (
+                  <button
+                    type="button"
+                    onClick={() => void handleFeaturedToggle(poster)}
+                    title="이번 주 선정"
+                    aria-label="이번 주 선정"
+                    aria-pressed={poster.featured_week === kstWeekMonday(new Date())}
+                    className={`rounded-2xl p-4 transition-all ${
+                      poster.featured_week === kstWeekMonday(new Date())
+                        ? "bg-amber-400 text-white hover:bg-amber-500"
+                        : "bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/10 dark:text-amber-400"
+                    }`}
+                  >
+                    <Star size={20} fill={poster.featured_week === kstWeekMonday(new Date()) ? "currentColor" : "none"} />
+                  </button>
+                )}
 
                 {poster.poster_status !== "rejected" && (
                   <button

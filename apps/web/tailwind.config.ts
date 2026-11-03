@@ -36,6 +36,8 @@ const config: Config = {
           meta: "#5B5F6B",
           accent: "#BE3A2B",
           poster: "#E2DCCB",
+          green: "#2F6B4F",
+          band: "#E9E4D6",
         },
         kakao: {
           DEFAULT: "#FEE500",

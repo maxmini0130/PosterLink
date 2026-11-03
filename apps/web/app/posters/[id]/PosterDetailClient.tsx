@@ -20,6 +20,7 @@ import { PosterThumb } from "../../components/pl/PosterThumb";
 import { SectionHeader } from "../../components/pl/SectionHeader";
 import { showActionToast } from "../../components/pl/actionToast";
 import { InstitutionFollowButton } from "../../institutions/InstitutionFollowButton";
+import { FollowPrompt, useFollowPromptOffer } from "../../components/pl/FollowPrompt";
 import { supabase } from "../../lib/supabase";
 import { logPosterView } from "../../lib/posterMetrics";
 import {
@@ -599,6 +600,58 @@ export function PosterDetailClient({
   const [imageExpanded, setImageExpanded] = useState(false);
   const [expandedImageIndex, setExpandedImageIndex] = useState(0);
   const clock = usePosterClock();
+  // Organiser follow prompt (instruction 9): after a favorite, 20s on the
+  // page or reading to the end; once per visit, never for a followed or
+  // refused institution, never for a poster without an organiser.
+  const [followedSet, setFollowedSet] = useState<ReadonlySet<string> | null>(null);
+  const followPrompt = useFollowPromptOffer(followedSet ?? undefined);
+  const offerFollow = followPrompt.offer;
+  const [signedIn, setSignedIn] = useState(false);
+
+  useEffect(() => {
+    if (!institution) return;
+    let active = true;
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      const user = session?.user;
+      if (!active) return;
+      setSignedIn(Boolean(user));
+      if (!user) {
+        setFollowedSet(new Set());
+        return;
+      }
+      const { data, error } = await supabase
+        .from("institution_follows")
+        .select("institution_id")
+        .eq("user_id", user.id)
+        .eq("institution_id", institution.id)
+        .maybeSingle();
+      // Unknown follow state: do not prompt (it may already be followed).
+      if (active && !error) setFollowedSet(new Set(data ? [institution.id] : []));
+    });
+    return () => {
+      active = false;
+    };
+  }, [institution]);
+
+  useEffect(() => {
+    if (!institution || followedSet === null) return;
+    const target = { id: institution.id, name: institution.name };
+    const timer = window.setTimeout(() => {
+      if (document.visibilityState === "visible") offerFollow(target, "dwell");
+    }, 20000);
+    const onScroll = () => {
+      const end = document.documentElement.scrollHeight - 120;
+      if (window.innerHeight + window.scrollY >= end) {
+        window.removeEventListener("scroll", onScroll);
+        offerFollow(target, "scroll_end");
+      }
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, [institution, followedSet, offerFollow]);
 
   useEffect(() => {
     let cancelled = false;
@@ -686,6 +739,7 @@ export function PosterDetailClient({
         }
         setIsFavorited(true);
         trackProductEvent("favorite_add", { posterId: poster.id, metadata: { screen: "detail", logged_in: false } });
+        if (followedSet && institution && offerFollow({ id: institution.id, name: institution.name }, "favorite")) return;
         promptSignup("detail", "favorite", { posterId: poster.id });
         showActionToast(
           "이 기기에 저장됐어요",
@@ -721,7 +775,8 @@ export function PosterDetailClient({
           setAnalyticsLoginStatus(true);
           trackAnalytics("save_poster", {poster_id:poster.id,poster_category:poster.categoryId,poster_region:poster.regionId});
           trackProductEvent("favorite_add", { posterId: poster.id, metadata: { screen: "detail", logged_in: true } });
-          toast.success("찜했어요");
+          if (!(followedSet && institution && offerFollow({ id: institution.id, name: institution.name }, "favorite")))
+            toast.success("찜했어요");
         } else {
           toast.error("찜하지 못했어요. 잠시 후 다시 시도해 주세요.");
         }
@@ -1045,7 +1100,7 @@ export function PosterDetailClient({
         <Link href={`/institutions/${institution.slug}`} className="block truncate text-[15px] font-bold text-pl-ink underline-offset-2 hover:underline">
           {institution.name}
         </Link>
-        <p className="text-[13px] leading-5 text-pl-sub">구독하면 이 기관의 새 공고를 모아 보여드려요</p>
+        <p className="text-[13px] leading-5 text-pl-sub">팔로우하면 홈의 &lsquo;팔로우 기관 소식&rsquo;에 새 공고가 모여요</p>
       </div>
       <InstitutionFollowButton institutionId={institution.id} returnPath={pathname} variant="pl" />
     </section>
@@ -1397,6 +1452,18 @@ export function PosterDetailClient({
             onClick={(event) => event.stopPropagation()}
           />
         </div>
+      )}
+      {followPrompt.request && (
+        <FollowPrompt
+          request={followPrompt.request}
+          screen="detail"
+          signedIn={signedIn}
+          returnTo={pathname}
+          raised
+          headline={followPrompt.request.trigger === "favorite" ? "찜했어요 · 내 공고에 담겼어요" : undefined}
+          onClose={followPrompt.close}
+          onFollowed={(id) => setFollowedSet(new Set([id]))}
+        />
       )}
       <Footer />
       <BottomNav />

@@ -1,140 +1,334 @@
 "use client";
 import Link from "next/link";
-import {
-  Fragment,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, X, MapPin } from "lucide-react";
+import { Search, MapPin, ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
 import { Header } from "./components/Header";
 import { BottomNav } from "./components/BottomNav";
 import { Footer } from "./components/Footer";
-import { FeedCard } from "./components/pl/FeedCard";
 import { BottomSheet } from "./components/pl/BottomSheet";
 import {
-  guestLocal,
+  CategoryShortcuts,
+  OrgSuggestions,
+  PosterGrid,
+  PosterRow,
+  type CardHandlers,
+} from "./components/pl/HomeSections";
+import {
+  FollowPrompt,
+  useFollowPromptOffer,
+} from "./components/pl/FollowPrompt";
+import {
   saveGuestFavorite,
   forgetGuestFavorite,
   rememberActionForLogin,
   PENDING_NOT_STORED_MESSAGE,
 } from "./lib/guestSession";
-import { loadHomeData, type HomeData } from "./lib/homeData";
+import { loadHomeConditions, type HomeConditions } from "./lib/homeData";
 import { recordVisitActivity } from "./lib/visitClock";
 import { supabase } from "./lib/supabase";
-import {
-  buildPosterFeed,
-  FEED_DISMISS_KEY,
-  interestPromptVisible,
-} from "../lib/posterFeed";
-import { saveGuestInterest } from "../lib/guestInterest";
 import { visitDateLabel } from "../lib/homeSections";
 import { trackProductEvent } from "../lib/productEvents";
+import type { HomeBlock, HomeCard, HomeSectionId } from "../lib/homeFeed";
+import type { HomeFeedResult } from "../lib/homeFeedServer";
 import type { TopDiscoveryCombination } from "../lib/publicDiscovery";
 
-type Tab = "fresh" | "closing" | "all";
+const RESTORE_KEY = "pl.home_restore.v1";
+
+type Restore = { key: string; pages: number; y: number; at: number };
+
+function conditionQuery(
+  conditions: HomeConditions | null,
+  baseline: number | null,
+) {
+  const params = new URLSearchParams();
+  if (conditions?.interest.region)
+    params.set("region", conditions.interest.region.id);
+  if (conditions?.interest.categories.length)
+    params.set(
+      "categories",
+      conditions.interest.categories.map((c) => c.id).join(","),
+    );
+  if (conditions?.institutions.length)
+    params.set("follows", conditions.institutions.map((i) => i.id).join(","));
+  // "방문 이후" is shown to members with conditions only.
+  if (
+    conditions?.signedIn &&
+    (conditions.interest.region || conditions.interest.categories.length) &&
+    baseline !== null
+  )
+    params.set("since", String(baseline));
+  return params;
+}
+
+function readRestore(): Restore | null {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(RESTORE_KEY) || "null");
+    if (
+      value &&
+      typeof value.key === "string" &&
+      Number.isInteger(value.pages) &&
+      typeof value.y === "number" &&
+      Date.now() - value.at < 30 * 60000
+    )
+      return value as Restore;
+  } catch {
+    /* storage blocked */
+  }
+  return null;
+}
+
+/** Fires feed_card_impression once per card when ≥50% is visible for 1s. */
+function useCardImpressions(
+  root: React.RefObject<HTMLElement>,
+  active: boolean,
+) {
+  const seen = useRef(new Set<string>());
+  useEffect(() => {
+    const container = root.current;
+    if (!active || !container || typeof IntersectionObserver === "undefined")
+      return;
+    const timers = new Map<Element, number>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const el = entry.target as HTMLElement;
+          if (entry.isIntersecting) {
+            if (timers.has(el)) continue;
+            timers.set(
+              el,
+              window.setTimeout(() => {
+                timers.delete(el);
+                const id = el.dataset.feedCard;
+                const section = el.dataset.section;
+                if (!id || !section || seen.current.has(`${section}:${id}`))
+                  return;
+                seen.current.add(`${section}:${id}`);
+                trackProductEvent("feed_card_impression", {
+                  posterId: id,
+                  metadata: {
+                    screen: "home",
+                    section_id: section,
+                    position: Number(el.dataset.position) || null,
+                    image_kind: el.querySelector("[data-default-poster]")
+                      ? "default"
+                      : "original",
+                  },
+                });
+              }, 1000),
+            );
+          } else {
+            window.clearTimeout(timers.get(el));
+            timers.delete(el);
+          }
+        }
+      },
+      { threshold: 0.5 },
+    );
+    const observeAll = () =>
+      container
+        .querySelectorAll("[data-feed-card][data-section]")
+        .forEach((el) => observer.observe(el));
+    observeAll();
+    const mutations = new MutationObserver(observeAll);
+    mutations.observe(container, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      mutations.disconnect();
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [root, active]);
+}
+
 export default function Home({
+  initial,
+  initialPages = 1,
   topCombinations,
   summary = null,
 }: {
+  /** Server-rendered default home (서울 전체, no conditions). */
+  initial: HomeFeedResult | null;
+  initialPages?: number;
   topCombinations: TopDiscoveryCombination[];
-  /** Server counts, so the first HTML says how many posters are open. */
-  summary?: { activePosters: number; dueThisWeek: number } | null;
+  summary?: { activePosters: number | null; dueThisWeek: number | null } | null;
 }) {
-  const router = useRouter(),
-    sequence = useRef(0),
-    inFlight = useRef(new Set<string>());
-  const [data, setData] = useState<HomeData | null>(null),
-    [error, setError] = useState(false),
-    [baseline, setBaseline] = useState<number | null>(null);
-  const [favorites, setFavorites] = useState(new Set<string>()),
-    [busy, setBusy] = useState(new Set<string>());
-  const [tab, setTab] = useState<Tab | null>(null),
-    [page, setPage] = useState(1),
-    [query, setQuery] = useState("");
-  const [prompt, setPrompt] = useState(false),
-    [sheet, setSheet] = useState<string | null>(null);
-  const reload = useCallback(async () => {
-    const seq = ++sequence.current;
-    setError(false);
-    try {
-      const next = await loadHomeData();
-      if (seq !== sequence.current) return;
-      setData(next);
-      setFavorites(new Set(next.favoriteItems.map((i) => i.id)));
-      setPage(1);
-    } catch {
-      if (seq === sequence.current) setError(true);
-    }
-  }, []);
-  const invalidate = useCallback(() => {
-    sequence.current++;
-  }, []);
-  useEffect(() => {
-    void reload();
-    void recordVisitActivity()
-      .then((v) => setBaseline(v.baselineAt))
-      .catch(() => {});
-    setPrompt(interestPromptVisible(guestLocal, Date.now()));
-    return invalidate;
-  }, [reload, invalidate]);
-  const hasInterest = Boolean(
-      data?.interest.region || data?.interest.categories.length,
-    ),
-    memberInterest = Boolean(data?.signedIn && hasInterest);
-  const feed = useMemo(
-    () =>
-      data
-        ? buildPosterFeed({
-            items: data.interestItems,
-            favoriteIds: favorites,
-            regionId: data.interest.region?.id ?? null,
-            regions: data.regions,
-            baselineAt: baseline,
-            memberInterest,
-            now: new Date(),
-          })
-        : null,
-    [data, favorites, baseline, memberInterest],
+  const router = useRouter();
+  const [feed, setFeed] = useState<HomeFeedResult | null>(initial);
+  const [pages, setPages] = useState<HomeBlock[][]>(
+    initial?.layout.pages ?? [],
   );
-  const selected: Tab =
-    tab === "fresh" && !feed?.fresh.length
-      ? "closing"
-      : (tab ??
-        (memberInterest ? (feed?.fresh.length ? "fresh" : "closing") : "all"));
-  const fresh = feed?.fresh ?? [],
-    closing = feed?.closing ?? [],
-    own = feed?.own ?? [];
-  const first =
-    selected === "fresh" ? fresh : selected === "closing" ? closing : own;
-  const appendOpen =
-    memberInterest &&
-    (selected === "fresh" || (selected === "closing" && fresh.length === 0));
-  const rest = appendOpen
-    ? own.filter((i) => !first.some((h) => h.id === i.id))
-    : [];
-  const combined = [...first, ...rest],
-    shown = combined.slice(0, page * 8);
-  const changeHref = data?.signedIn ? "/mypage/edit" : "/interests";
-  async function toggle(id: string) {
+  const [hasMore, setHasMore] = useState(initial?.layout.hasMore ?? false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState(!initial);
+  const [conditions, setConditions] = useState<HomeConditions | null>(null);
+  const [favorites, setFavorites] = useState(new Set<string>());
+  const [busy, setBusy] = useState(new Set<string>());
+  const [baseline, setBaseline] = useState<number | null>(null);
+  const [query, setQuery] = useState("");
+  const [sheet, setSheet] = useState<string | null>(null);
+  const inFlight = useRef(new Set<string>());
+  const sequence = useRef(0);
+  const main = useRef<HTMLElement>(null);
+  const sentinel = useRef<HTMLDivElement>(null);
+  const followedIds = useMemo(
+    () => new Set(conditions?.institutions.map((i) => i.id) ?? []),
+    [conditions],
+  );
+  const prompt = useFollowPromptOffer(followedIds);
+
+  const queryKey = conditionQuery(conditions, baseline).toString();
+  const fetchPages = useCallback(
+    async (count: number, from: number) => {
+      const params = conditionQuery(conditions, baseline);
+      params.set("pages", String(count));
+      params.set("from", String(from));
+      const response = await fetch(`/api/home?${params}`, {
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error("home");
+      return (await response.json()) as HomeFeedResult & { from: number };
+    },
+    [conditions, baseline],
+  );
+
+  // Who is looking, with which conditions; then the matching sections.
+  useEffect(() => {
+    let active = true;
+    void recordVisitActivity()
+      .then((visit) => active && setBaseline(visit.baselineAt))
+      .catch(() => {});
+    loadHomeConditions()
+      .then((next) => {
+        if (!active) return;
+        setConditions(next);
+        setFavorites(new Set(next.favoriteIds));
+      })
+      .catch(() => {
+        if (active)
+          setConditions({
+            signedIn: false,
+            interest: { region: null, categories: [] },
+            favoriteIds: [],
+            institutions: [],
+          });
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Conditions or a restored scroll position need a fresh server layout.
+  useEffect(() => {
+    if (!conditions) return;
+    const restore = readRestore();
+    const back =
+      restore?.key === queryKey &&
+      (
+        performance.getEntriesByType?.("navigation")[0] as
+          | PerformanceNavigationTiming
+          | undefined
+      )?.type === "back_forward";
+    const personal = queryKey.length > 0;
+    if (!personal && !back && initial) return;
+    const count = back
+      ? Math.max(restore!.pages, 1)
+      : Math.max(initialPages, 1);
+    const seq = ++sequence.current;
+    fetchPages(count, 1)
+      .then((next) => {
+        if (seq !== sequence.current) return;
+        setFeed(next);
+        setPages(next.layout.pages);
+        setHasMore(next.layout.hasMore);
+        setError(false);
+        if (back) requestAnimationFrame(() => window.scrollTo(0, restore!.y));
+      })
+      .catch(() => {
+        if (seq === sequence.current && !initial) setError(true);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conditions, queryKey]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const seq = sequence.current;
+    try {
+      const next = await fetchPages(pages.length + 1, pages.length + 1);
+      if (seq !== sequence.current) return;
+      setPages((current) => [...current, ...next.layout.pages]);
+      setHasMore(next.layout.hasMore);
+    } catch {
+      toast.error("공고를 더 불러오지 못했어요");
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [fetchPages, hasMore, loadingMore, pages.length]);
+
+  // Next 12 when the end of the page is 600px away. The large top margin
+  // also counts a sentinel already scrolled past (a jump to the bottom).
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el || !hasMore || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => entries.some((e) => e.isIntersecting) && void loadMore(),
+      { rootMargin: "100000px 0px 600px 0px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, loadMore]);
+
+  // Remember how far the visitor got, for the back button.
+  useEffect(() => {
+    const save = () => {
+      try {
+        sessionStorage.setItem(
+          RESTORE_KEY,
+          JSON.stringify({
+            key: queryKey,
+            pages: pages.length,
+            y: window.scrollY,
+            at: Date.now(),
+          }),
+        );
+      } catch {
+        /* storage blocked */
+      }
+    };
+    window.addEventListener("pagehide", save);
+    document.addEventListener("click", save, true);
+    return () => {
+      window.removeEventListener("pagehide", save);
+      document.removeEventListener("click", save, true);
+    };
+  }, [pages.length, queryKey]);
+
+  useCardImpressions(main, Boolean(feed));
+
+  const signedIn = Boolean(conditions?.signedIn);
+  const interest = conditions?.interest;
+  const hasInterest = Boolean(interest?.region || interest?.categories.length);
+  const conditionText =
+    [interest?.region?.name, ...(interest?.categories.map((c) => c.name) ?? [])]
+      .filter(Boolean)
+      .join(" · ") ||
+    feed?.scopeLabel ||
+    "서울 전체";
+  const changeHref = signedIn ? "/mypage/edit" : "/interests";
+
+  async function toggle(card: HomeCard, sectionId: HomeSectionId) {
+    const id = card.id;
     if (inFlight.current.has(id)) return;
     inFlight.current.add(id);
     setBusy(new Set(inFlight.current));
     const saved = favorites.has(id);
     try {
-      if (!data?.signedIn) {
+      if (!signedIn) {
         const ok = saved ? forgetGuestFavorite(id) : saveGuestFavorite(id);
         if (!ok) {
           toast.error("이 기기에 저장하지 못했어요");
           return;
-        }
-        if (!saved) {
-          toast.success("이 기기에 저장됐어요");
-          setSheet(id);
         }
       } else {
         const user = (await supabase.auth.getSession()).data.session?.user;
@@ -161,8 +355,25 @@ export default function Home({
       });
       trackProductEvent(saved ? "favorite_remove" : "favorite_add", {
         posterId: id,
-        metadata: { screen: "home" },
+        metadata: {
+          screen: "home",
+          section_id: sectionId,
+          logged_in: signedIn,
+        },
       });
+      if (!saved) {
+        // The organiser follow prompt wins; otherwise guests get the save sheet.
+        const offered = prompt.offer(
+          card.card.organizerId && card.card.org
+            ? { id: card.card.organizerId, name: card.card.org }
+            : null,
+          "favorite",
+        );
+        if (!offered && !signedIn) {
+          toast.success("이 기기에 저장됐어요");
+          setSheet(id);
+        } else if (!offered) toast.success("찜했어요");
+      }
     } catch {
       toast.error("저장하지 못했어요. 다시 시도해 주세요.");
     } finally {
@@ -170,317 +381,250 @@ export default function Home({
       setBusy(new Set(inFlight.current));
     }
   }
-  async function choose(categoryId: string) {
-    if (
-      !saveGuestInterest(
-        guestLocal,
-        {
-          regionId: data?.interest.region?.id ?? null,
-          categoryIds: [categoryId],
-        },
-        Date.now(),
-      )
-    ) {
-      toast.error("조건을 저장하지 못했어요");
-      return;
-    }
-    setTab(null);
-    await reload();
-  }
-  const showPrompt = prompt && !data?.signedIn && !hasInterest;
-  const promptCard = (
-    <li
-      className="col-span-full rounded-xl border border-pl-line bg-pl-card p-4"
-      data-interest-prompt
-    >
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-bold">
-          관심 분야를 고르면 맞춰서 보여드려요
-        </p>
-        <button
-          type="button"
-          aria-label="관심 분야 안내 닫기"
-          className="-mr-2 -mt-2 flex h-11 w-11 items-center justify-center"
-          onClick={() => {
-            try {
-              guestLocal.setItem(FEED_DISMISS_KEY, String(Date.now()));
-              setPrompt(false);
-            } catch {
-              toast.error("닫기 설정을 저장하지 못했어요");
-            }
-          }}
-        >
-          <X size={18} />
-        </button>
-      </div>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {data?.availableCategories?.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            onClick={() => void choose(c.id)}
-            className="min-h-11 rounded-full border border-pl-line bg-pl-paper px-3 text-[13px]"
-          >
-            {c.name}
-          </button>
-        ))}
-      </div>
-    </li>
-  );
-  const tabs: Array<[Tab, string]> = memberInterest
-    ? [
-        ...(fresh.length
-          ? [["fresh", `새 공고 ${fresh.length}`] as [Tab, string]]
-          : []),
-        ["closing", `7일 안에 마감 ${closing.length}`],
-        ["all", "전체"],
-      ]
-    : [
-        ["all", "지금 접수 중"],
-        ["closing", "7일 안에 마감"],
-      ];
+
+  const handlers: CardHandlers = {
+    favorites,
+    busy,
+    onFavorite: (card, sectionId) => void toggle(card, sectionId),
+    onOpen: (card, sectionId, position) =>
+      trackProductEvent("feed_card_click", {
+        posterId: card.id,
+        metadata: { screen: "home", section_id: sectionId, position },
+      }),
+  };
+
+  const layout = feed?.layout;
+  // Same number as "새로 올라온 공고 · 접수 중 N" (서울·전국 or the 시·도).
+  const intro = layout?.openTotal ?? summary?.activePosters ?? null;
+  let position = 1;
+  const freshSince = signedIn && hasInterest ? (layout?.freshSince ?? 0) : 0;
+
   return (
     <div className="min-h-screen bg-pl-paper pb-[calc(var(--mobile-nav-height)+24px)] font-pl-sans text-pl-ink md:pb-8">
       <div className="hidden md:block">
         <Header />
       </div>
-      <header className="mx-auto flex max-w-[1200px] items-center justify-between gap-3 px-4 pt-4 md:hidden">
-        <Link href="/" className="font-pl-serif text-xl font-bold">
+      <header className="mx-auto flex max-w-[1200px] items-center justify-between gap-2 px-4 pt-3 md:hidden">
+        <Link href="/" className="font-pl-serif text-lg font-bold">
           PosterLink
         </Link>
         <Link
           href={changeHref}
-          className="flex min-h-11 max-w-[65%] items-center gap-1 rounded-full border border-pl-line px-3 text-sm"
+          aria-label={`적용 조건: ${conditionText}. 변경`}
+          className="flex min-h-11 max-w-[68%] items-center gap-1 rounded-full border border-pl-line bg-pl-card px-3 text-[13.5px] font-medium"
         >
-          <MapPin size={15} />
-          <span className="truncate">
-            {data?.interest.region?.name ?? "지역·관심 조건"}
-          </span>
+          <MapPin size={15} aria-hidden="true" />
+          <span className="truncate">{conditionText}</span>
+          <ChevronDown size={14} aria-hidden="true" />
         </Link>
       </header>
-      <main className="mx-auto max-w-[1280px] px-4 pt-4 md:px-6 md:pt-7 min-[1200px]:px-10">
-        <h1 className="sr-only">공공 공고 포스터 피드</h1>
-        <div className="mb-3 hidden items-center justify-between md:flex">
+      <main
+        ref={main}
+        className="mx-auto max-w-[1280px] px-4 pt-2 md:px-6 md:pt-7 min-[1200px]:px-10"
+      >
+        <h1 className="sr-only">공공기관 포스터 모아 보기</h1>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center">
           <Link
             href={changeHref}
-            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-pl-line px-4 text-sm"
+            className="hidden min-h-11 shrink-0 items-center gap-2 rounded-full border border-pl-line bg-pl-card px-4 text-sm md:inline-flex"
           >
-            <MapPin size={15} />
-            {[
-              data?.interest.region?.name,
-              ...(data?.interest.categories.map((c) => c.name) ?? []),
-            ]
-              .filter(Boolean)
-              .join(" · ") || "지역·관심 조건"}
+            <MapPin size={15} aria-hidden="true" />
+            <span className="max-w-[420px] truncate">{conditionText}</span>
             <span className="text-pl-meta">변경</span>
           </Link>
-        </div>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            router.push(
-              query.trim()
-                ? `/posters?q=${encodeURIComponent(query.trim())}`
-                : "/posters",
-            );
-          }}
-          role="search"
-          className="mb-4 flex min-h-11 items-center gap-2 rounded-xl border border-pl-line bg-pl-card px-3"
-        >
-          <Search
-            size={19}
-            className="shrink-0 text-pl-meta"
-            aria-hidden="true"
-          />
-          <label htmlFor="feed-search" className="sr-only">
-            공고·기관·주제 검색
-          </label>
-          <input
-            id="feed-search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="공고·기관·주제 검색"
-            maxLength={80}
-            className="min-w-0 flex-1 bg-transparent py-3 text-base outline-none"
-          />
-          <button
-            type="submit"
-            className="min-h-11 shrink-0 px-2 text-sm font-bold"
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              router.push(
+                query.trim()
+                  ? `/posters?q=${encodeURIComponent(query.trim())}`
+                  : "/posters",
+              );
+            }}
+            role="search"
+            className="flex min-h-[46px] flex-1 items-center gap-2 rounded-full border border-pl-line bg-pl-card px-4"
           >
-            검색
-          </button>
-        </form>
-        <div
-          role="tablist"
-          aria-label="공고 보기"
-          className="mb-4 flex gap-1 border-b border-pl-line"
-        >
-          {tabs.map(([id, label]) => (
+            <Search
+              size={18}
+              className="shrink-0 text-pl-meta"
+              aria-hidden="true"
+            />
+            <label htmlFor="feed-search" className="sr-only">
+              공고·기관·주제 검색
+            </label>
+            <input
+              id="feed-search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="공고·기관·주제 검색"
+              maxLength={80}
+              className="min-w-0 flex-1 bg-transparent py-2.5 text-base outline-none"
+            />
             <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={selected === id}
-              tabIndex={selected === id ? 0 : -1}
-              aria-controls="poster-feed"
-              id={`tab-${id}`}
-              onClick={() => {
-                setTab(id);
-                setPage(1);
-              }}
-              onKeyDown={(event) => {
-                const index = tabs.findIndex(([key]) => key === id);
-                const next =
-                  event.key === "ArrowRight"
-                    ? (index + 1) % tabs.length
-                    : event.key === "ArrowLeft"
-                      ? (index + tabs.length - 1) % tabs.length
-                      : event.key === "Home"
-                        ? 0
-                        : event.key === "End"
-                          ? tabs.length - 1
-                          : null;
-                if (next === null) return;
-                event.preventDefault();
-                setTab(tabs[next][0]);
-                setPage(1);
-                document.getElementById(`tab-${tabs[next][0]}`)?.focus();
-              }}
-              className={`min-h-11 border-b-2 px-3 pb-2 text-sm font-bold ${selected === id ? "border-pl-ink text-pl-ink" : "border-transparent text-pl-meta"}`}
+              type="submit"
+              className="min-h-11 shrink-0 px-1 text-sm font-bold"
             >
-              {label}
+              검색
             </button>
-          ))}
+          </form>
         </div>
-        {memberInterest && baseline !== null && (
-          <p className="mb-4 text-xs text-pl-meta">
-            {visitDateLabel(baseline)} 방문 이후 올라온 공고
-          </p>
-        )}
-        {error ? (
+        <p className="mt-2.5 px-0.5 text-[12.5px] text-pl-meta md:text-[13px]">
+          공공기관 포스터를 모아 보는 곳
+          {intro ? ` · 지금 접수 중 ${intro.toLocaleString()}건` : ""}
+        </p>
+        <CategoryShortcuts items={feed?.shortcuts ?? []} />
+
+        {error && !layout ? (
           <div role="alert" className="py-10 text-center">
             <p>공고를 불러오지 못했어요.</p>
             <button
               type="button"
-              onClick={() => void reload()}
+              onClick={() => router.refresh()}
               className="mt-3 min-h-11 underline"
             >
               다시 불러오기
             </button>
           </div>
-        ) : !feed ? (
-          <div aria-label="공고 불러오는 중" className="feed-grid">
-            {Array.from({ length: 8 }, (_, i) => (
-              <div
-                key={i}
-                className="aspect-[3/4] animate-pulse rounded-lg bg-pl-poster"
+        ) : !layout ? null : (
+          <>
+            {layout.picks.length > 0 && (
+              <PosterRow
+                sectionId="pick"
+                title="이번 주 눈여겨볼 공고"
+                items={layout.picks}
+                handlers={handlers}
+                priorityCount={2}
               />
-            ))}
-          </div>
-        ) : (
-          <section
-            role="tabpanel"
-            id="poster-feed"
-            aria-labelledby={`tab-${selected}`}
-          >
-            {shown.length === 0 && (
-              <div className="py-6 text-sm text-pl-meta">
-                {selected === "closing"
-                  ? "7일 안에 마감하는 공고가 없어요."
-                  : "조건에 맞는 접수 중 공고가 없어요."}{" "}
-                <Link href={changeHref} className="underline">
-                  조건 변경
-                </Link>
-              </div>
             )}
-            <ul className="feed-grid">
-              {shown.map((entry, index) => (
-                <Fragment key={entry.id}>
-                  {index === first.length && rest.length > 0 && (
-                    <li className="col-span-full pt-4 text-base font-bold">
-                      접수 중인 관심 공고
-                    </li>
-                  )}
-                  <li>
-                    <FeedCard
-                      poster={entry.data}
-                      display={entry.display}
-                      favorite={favorites.has(entry.id)}
-                      busy={busy.has(entry.id)}
-                      onFavorite={() => void toggle(entry.id)}
-                      priority={index < 2}
-                    />
-                  </li>
-                  {index === 3 && showPrompt && promptCard}
-                </Fragment>
-              ))}
-              {shown.length < 4 && showPrompt && promptCard}
-            </ul>
-            {combined.length > page * 8 && (
-              <button
-                type="button"
-                onClick={() => setPage((p) => p + 1)}
-                className="my-6 flex min-h-12 w-full items-center justify-center rounded-lg border border-pl-line bg-pl-card font-bold"
+            {layout.deadline.length > 0 && (
+              <PosterRow
+                sectionId="deadline"
+                title="7일 안에 마감"
+                extra={`${layout.deadlineTotal}건`}
+                action={{ href: "/posters?sort=deadline", label: "전체" }}
+                items={layout.deadline}
+                handlers={handlers}
+                priorityCount={layout.picks.length ? 0 : 2}
+              />
+            )}
+            {layout.followed.length > 0 && (
+              <PosterRow
+                sectionId="followed"
+                title="팔로우 기관 소식"
+                action={{ href: "/institutions/following", label: "전체" }}
+                items={layout.followed}
+                handlers={handlers}
+              />
+            )}
+            {pages.length > 0 && (
+              <section
+                aria-labelledby="home-new"
+                data-home-section="new"
+                className="mt-8"
               >
-                더 보기
-              </button>
-            )}
-            {feed.wider.length > 0 && (
-              <section className="mt-9" aria-label="서울·전국 대상 공고">
-                <h2 className="mb-2 text-lg font-bold">
-                  {[...new Set(feed.wider.map((i) => i.scope.label))].join("·")}{" "}
-                  대상 공고
-                </h2>
-                <p className="mb-4 text-xs text-pl-meta">
-                  신청 대상은 원문에서 확인해 주세요.
-                </p>
-                <ul className="feed-grid">
-                  {feed.wider.slice(0, page * 8).map(({ entry, scope }) => (
-                    <li key={entry.id}>
-                      <FeedCard
-                        poster={{ ...entry.data, regionLabel: scope.label }}
-                        display={entry.display}
-                        favorite={favorites.has(entry.id)}
-                        busy={busy.has(entry.id)}
-                        onFavorite={() => void toggle(entry.id)}
-                      />
-                    </li>
-                  ))}
-                </ul>
-                {feed.wider.length > page * 8 && (
-                  <button
-                    type="button"
-                    className="my-6 min-h-12 w-full rounded-lg border border-pl-line bg-pl-card"
-                    onClick={() => setPage((p) => p + 1)}
+                <div className="flex items-baseline justify-between gap-2">
+                  <h2
+                    id="home-new"
+                    className="text-[17px] font-bold md:text-lg"
                   >
-                    대상 공고 더 보기
-                  </button>
+                    새로 올라온 공고
+                    <span className="ml-1.5 text-[13px] font-medium text-pl-meta">
+                      접수 중 {layout.openTotal.toLocaleString()}
+                    </span>
+                  </h2>
+                </div>
+                {freshSince > 0 && baseline !== null && (
+                  <p className="mt-1 text-xs text-pl-meta">
+                    {visitDateLabel(baseline)} 방문 이후 올라온 공고{" "}
+                    {freshSince}건
+                  </p>
+                )}
+                {pages.map((blocks, pageIndex) =>
+                  blocks.map((block) => {
+                    if (block.kind === "new") {
+                      const start = position;
+                      position += block.items.length;
+                      return (
+                        <PosterGrid
+                          key={`new-${pageIndex}`}
+                          items={block.items}
+                          handlers={handlers}
+                          startPosition={start}
+                          priorityCount={
+                            pageIndex === 0 &&
+                            !layout.picks.length &&
+                            !layout.deadline.length
+                              ? 2
+                              : 0
+                          }
+                        />
+                      );
+                    }
+                    if (block.kind === "bundle")
+                      return (
+                        <PosterRow
+                          key={block.id}
+                          sectionId={block.id}
+                          title={block.title}
+                          action={{ href: block.href, label: "전체" }}
+                          items={block.items}
+                          handlers={handlers}
+                          band
+                        />
+                      );
+                    return (
+                      <OrgSuggestions
+                        key="orgs"
+                        items={block.items}
+                        returnPath="/"
+                      />
+                    );
+                  }),
                 )}
               </section>
             )}
-            {!combined.length && !feed.wider.length && (
-              <Link
-                href="/posters"
-                className="my-5 inline-flex min-h-11 items-center underline"
+            <div ref={sentinel} aria-hidden="true" />
+            {loadingMore && (
+              <div
+                role="status"
+                className="flex h-14 items-center justify-center gap-2 text-[13.5px] text-pl-meta"
               >
-                다른 지역·분야 공고 찾기
-              </Link>
+                <span
+                  aria-hidden="true"
+                  className="h-4 w-4 animate-spin rounded-full border-2 border-pl-line border-t-pl-ink"
+                />
+                공고를 더 불러오는 중
+              </div>
             )}
-          </section>
+            {hasMore && !loadingMore && (
+              <a
+                href={`/?page=${pages.length + 1}`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  void loadMore();
+                }}
+                className="my-6 flex min-h-12 w-full items-center justify-center rounded-lg border border-pl-line bg-pl-card font-bold"
+              >
+                더 보기
+              </a>
+            )}
+            {!pages.length &&
+              !layout.picks.length &&
+              !layout.deadline.length && (
+                <p className="py-8 text-sm text-pl-meta">
+                  지금 접수 중인 공고가 없어요.{" "}
+                  <Link href="/posters" className="underline">
+                    다른 지역·분야 공고 찾기
+                  </Link>
+                </p>
+              )}
+          </>
         )}
         <nav
           aria-label="지역별 공고"
           className="mt-12 border-t border-pl-line pt-6"
         >
           <p className="mb-3 text-sm font-bold">지역별 공고 모아보기</p>
-          {summary && summary.activePosters > 0 && (
-            <p className="mb-3 text-xs text-pl-meta">
-              지금 신청할 수 있는 공고 {summary.activePosters.toLocaleString()}
-              건
-              {summary.dueThisWeek > 0 &&
-                ` · 7일 안에 마감 ${summary.dueThisWeek.toLocaleString()}건`}
-            </p>
-          )}
           <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-pl-meta">
             {topCombinations.map((c) => (
               <Link
@@ -496,6 +640,37 @@ export default function Home({
       </main>
       <Footer />
       <BottomNav />
+      {prompt.request && (
+        <FollowPrompt
+          request={prompt.request}
+          screen="home"
+          signedIn={signedIn}
+          returnTo="/"
+          headline={
+            signedIn
+              ? "찜했어요 · 내 공고에 담겼어요"
+              : "이 기기에 찜했어요 · 내 공고에 담겼어요"
+          }
+          onClose={prompt.close}
+          onFollowed={(institutionId) =>
+            setConditions((current) =>
+              current
+                ? {
+                    ...current,
+                    institutions: [
+                      ...current.institutions,
+                      {
+                        id: institutionId,
+                        name: prompt.request?.institution.name ?? "",
+                        slug: "",
+                      },
+                    ],
+                  }
+                : current,
+            )
+          }
+        />
+      )}
       <BottomSheet
         open={sheet !== null}
         onClose={() => setSheet(null)}

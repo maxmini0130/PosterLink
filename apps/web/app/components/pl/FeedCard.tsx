@@ -4,30 +4,62 @@ import { Heart } from "lucide-react";
 import { PosterArt } from "./PosterArt";
 import type { PlPosterCardData } from "./PosterListCard";
 import type { DeadlineDisplay } from "../../../lib/deadlineDisplay";
+
+export type FeedCardPoster = PlPosterCardData & {
+  /** `지역 문구 · 신청 대상`; the line is left out when null. */
+  metaLine?: string | null;
+  /** Confirmed key fact (and event day); left out when null. */
+  benefitLine?: string | null;
+};
+
+/**
+ * Home poster card (UI plan 3-4 C 「포스터 카드」): 3:4 poster, deadline badge,
+ * favorite button, then title (2 lines) / region · target / one key fact.
+ * Unconfirmed lines are left out, never filled with a guess.
+ */
 export function FeedCard({
   poster,
   display,
   favorite,
   busy,
   onFavorite,
+  onOpen,
   priority = false,
+  variant = "feed",
+  headingLevel = "h3",
+  sectionId,
+  position,
 }: {
-  poster: PlPosterCardData;
+  poster: FeedCardPoster;
   display: DeadlineDisplay;
   favorite: boolean;
   busy?: boolean;
   onFavorite: () => void;
+  /** Called when the card is opened (measurement). */
+  onOpen?: () => void;
   priority?: boolean;
+  /** "row": narrow card of a sideways row on phones. */
+  variant?: "feed" | "row";
+  headingLevel?: "h2" | "h3";
+  sectionId?: string;
+  position?: number;
 }) {
-  const place = poster.regionLabel || poster.tags?.[1];
+  const Heading = headingLevel;
+  const row = variant === "row";
   return (
-    <article className="min-w-0" data-feed-card={poster.id}>
+    <article
+      className="min-w-0"
+      data-feed-card={poster.id}
+      data-section={sectionId}
+      data-position={position}
+    >
       <div className="relative aspect-[3/4] overflow-hidden rounded-lg border border-pl-line bg-[#ECE7DA]">
         <Link
           prefetch={false}
           href={`/posters/${poster.id}`}
           data-poster-source="home"
           aria-label={poster.title}
+          onClick={onOpen}
           className="absolute inset-0 block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-pl-accent"
         >
           <PosterArt
@@ -70,15 +102,28 @@ export function FeedCard({
         prefetch={false}
         href={`/posters/${poster.id}`}
         data-poster-source="home"
-        className="mt-2 block px-0.5 text-pl-ink"
+        onClick={onOpen}
+        className="mt-2 flex flex-col gap-[3px] px-0.5 text-pl-ink"
       >
-        <h2 className="line-clamp-2 text-[14px] font-bold leading-[1.4] md:text-[15px]">
+        <Heading
+          className={`line-clamp-2 break-keep font-bold leading-[1.4] ${row ? "text-[13.5px]" : "text-[14px] md:text-[15px]"}`}
+        >
           {poster.title}
-        </h2>
-        <p className="mt-1 truncate text-xs text-pl-meta md:text-[13px]">
-          {[place, poster.org].filter(Boolean).join(" · ") ||
-            "대상 지역은 원문에서 확인"}
-        </p>
+        </Heading>
+        {poster.metaLine && (
+          <p
+            className={`truncate text-pl-sub ${row ? "text-xs" : "text-xs md:text-[13px]"}`}
+          >
+            {poster.metaLine}
+          </p>
+        )}
+        {poster.benefitLine && (
+          <p
+            className={`truncate font-bold text-pl-green ${row ? "text-xs" : "text-xs md:text-[13px]"}`}
+          >
+            {poster.benefitLine}
+          </p>
+        )}
       </Link>
     </article>
   );

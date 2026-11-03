@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
+import { homeStub } from "./helpers/homeStub";
 
 // 관심 지역·분야 고르기 (UI redesign ⑤) and the full guest-to-member flow on a
 // phone, against the local server (playwright.ui-components.config.ts).
@@ -96,11 +97,14 @@ const json = (body: unknown, headers: Record<string, string> = {}) => ({
 
 let writes: string[] = [];
 let searchCalls: Array<Record<string, unknown>> = [];
+/** Query strings of the home's condition requests (/api/home). */
+let homeCalls: URLSearchParams[] = [];
 let signedIn = false;
 let account = new Set<string>();
 test.beforeEach(() => {
   writes = [];
   searchCalls = [];
+  homeCalls = [];
   signedIn = false;
   account = new Set();
 });
@@ -152,6 +156,18 @@ async function mock(page: Page, width = 390) {
             json({ id: USER, aud: "authenticated", role: "authenticated" }),
           )
         : route.fulfill({ status: 401, body: "{}" });
+    if (/\/api\/home\?/.test(url)) {
+      // Home v5 asks the server for condition-first sections.
+      const params = new URL(url).searchParams;
+      homeCalls.push(params);
+      return route.fulfill(
+        json(
+          homeStub(INTEREST.slice(0, 2), {
+            freshSince: params.has("since") ? 2 : 0,
+          }),
+        ),
+      );
+    }
     if (!/supabase\.co\/rest\/v1\//.test(url))
       return /supabase\.co|\/api\/|sentry\.io/.test(url)
         ? route.abort()
@@ -259,34 +275,17 @@ test("⑤ opening home shows the feed before explicit condition selection", asyn
 
   await page.getByRole("button", { name: "마포구 공고 보기" }).click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(
-    page.getByRole("link", { name: "마포구", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "마포구", exact: true }),
-  ).toHaveAttribute("href", "/interests");
-  // The home asks in each chosen category for my area (마포구) and, apart,
-  // for the areas above it (서울), so newer 서울 posters never push 마포구 out;
-  // other districts of 서울 in the same categories; and the newest posters.
+  // Home v5: the chip says the applied conditions; the server is asked for
+  // condition-first sections (region + categories), not every group itself.
+  const chip = page.getByRole("link", { name: /^적용 조건: 마포구 · /, exact: false }).first();
+  await expect(chip).toBeVisible();
+  await expect(chip).toHaveAttribute("href", "/interests");
   await expect
     .poll(() =>
-      searchCalls.map((call) => [call.p_region_ids, call.p_category_id]),
+      homeCalls.map((call) => [call.get("region"), call.get("categories")]),
     )
-    .toEqual(
-      expect.arrayContaining([
-        [[MAPO], CULTURE],
-        [[MAPO], EDU],
-        [[SEOUL], CULTURE],
-        [[SEOUL], EDU],
-        [[EUNPYEONG], CULTURE],
-        [[EUNPYEONG], EDU],
-        [null, null],
-      ]),
-    );
-  await expect(page.getByRole("tab", { name: "지금 접수 중" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
+    .toContainEqual([MAPO, [CULTURE, EDU].join(",")]);
+  await expect(page.getByRole("tab")).toHaveCount(0);
   await expect(page.locator("[data-feed-card]").first()).toBeVisible();
   expect(await stored(page, "pl.guest_interest.v1")).toMatchObject({
     v: 1,
@@ -451,11 +450,9 @@ test("full flow on a phone: guest 찜 → later → 내 공고 → sign-in → m
     .getByRole("link", { name: "홈" })
     .click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole("tab", { name: "새 공고 2" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
-  await expect(page.getByText(/방문 이후/).first()).toBeVisible();
+  // Members with conditions: the server counts posters since the last visit.
+  await expect.poll(() => homeCalls.some((call) => call.has("since"))).toBe(true);
+  await expect(page.getByText(/방문 이후 올라온 공고 2건/).first()).toBeVisible();
   await expect(
     page
       .locator("[data-feed-card]")

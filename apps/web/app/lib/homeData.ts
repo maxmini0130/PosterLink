@@ -1,21 +1,15 @@
 "use client";
 
-import type { PlPosterCardData } from "../components/pl/PosterListCard";
-import type { HomeItem } from "../../lib/homeSections";
-import type { RegionNode } from "../../lib/searchGroups";
 import { readGuestInterest } from "../../lib/guestInterest";
 import { readGuestFavorites } from "../../lib/guestStore";
-import { PUBLIC_POSTER_EXPOSURE_FILTER } from "../../lib/publicPosterVisibility";
-import { searchInterestGroups, searchNearby } from "../../lib/homeQueries";
-import { categoryScopeIds } from "../../lib/categoryTaxonomy";
 import { guestLocal } from "./guestSession";
-import { fetchCategoryRegionNames } from "./posterHelpers";
 import { supabase } from "./supabase";
-import {
-  loadPosterImageMetadata,
-  metadataForUrl,
-} from "../../lib/posterImageMetadata";
-import { interestCategories } from "../../lib/categoryTaxonomy";
+
+/**
+ * Who is looking at the home and with which conditions. The sections
+ * themselves come from the server (lib/homeFeedServer); the browser only
+ * knows the session, this browser's guest conditions and saved posters.
+ */
 
 /** Interest conditions shown on the home button and used for the lists. */
 export type HomeInterest = {
@@ -23,155 +17,12 @@ export type HomeInterest = {
   categories: Array<{ id: string; name: string }>;
 };
 
-export type HomeData = {
+export type HomeConditions = {
   signedIn: boolean;
   interest: HomeInterest;
-  interestItems: HomeItem<PlPosterCardData>[];
-  /** Open posters for the other districts of the chosen 시·도. */
-  nearbyItems: HomeItem<PlPosterCardData>[];
-  latestItems: HomeItem<PlPosterCardData>[];
-  favoriteItems: HomeItem<PlPosterCardData>[];
-  followedItems: HomeItem<PlPosterCardData>[];
+  favoriteIds: string[];
   institutions: Array<{ id: string; name: string; slug: string }>;
-  /** The region tree, for grouping by region scope. */
-  regions: RegionNode[];
-  /** Interest category id -> the category ids it covers (for the chips). */
-  categoryScopes: Record<string, string[]>;
-  availableCategories: Array<{
-    id: string;
-    name: string;
-    code?: string | null;
-  }>;
 };
-
-const SELECT =
-  "id,title,source_org_name,organizer_name,verification_status,verified_at,application_start_at,application_end_at,deadline_type,event_end_at,thumbnail_url,source_key,created_at,published_at,poster_status,source_institution_id,organizer_id";
-
-type Row = {
-  id: string;
-  title: string;
-  source_org_name: string | null;
-  organizer_name: string | null;
-  verification_status: string | null;
-  verified_at: string | null;
-  application_start_at: string | null;
-  application_end_at: string | null;
-  deadline_type: string | null;
-  event_end_at: string | null;
-  thumbnail_url: string | null;
-  source_key: string | null;
-  created_at: string | null;
-  published_at: string | null;
-  poster_status: string | null;
-  source_institution_id: string | null;
-  organizer_id: string | null;
-};
-
-const time = (value: string | null) => {
-  const parsed = value ? Date.parse(value) : Number.NaN;
-  return Number.isNaN(parsed) ? null : parsed;
-};
-
-async function toItems(rows: Row[]): Promise<HomeItem<PlPosterCardData>[]> {
-  const ids = rows.map((row) => row.id);
-  const [images, names] = await Promise.all([
-    loadPosterImageMetadata(supabase, ids),
-    fetchCategoryRegionNames(ids).catch(() => ({})),
-  ]);
-  const meta = names as Record<
-    string,
-    {
-      categoryName?: string | null;
-      regionName?: string | null;
-      categoryIds?: string[];
-      regionIds?: string[];
-    }
-  >;
-  return rows.map((row) => ({
-    id: row.id,
-    publishedAt: time(row.published_at) ?? time(row.created_at),
-    institutionIds: [row.source_institution_id, row.organizer_id].filter(
-      (id): id is string => Boolean(id),
-    ),
-    regionIds: meta[row.id]?.regionIds ?? [],
-    categoryIds: meta[row.id]?.categoryIds ?? [],
-    application: {
-      applicationStartAt: row.application_start_at,
-      applicationEndAt: row.application_end_at,
-      deadlineType: row.deadline_type,
-      posterStatus: row.poster_status,
-      eventEndAt: row.event_end_at,
-    },
-    data: {
-      id: row.id,
-      title: row.title,
-      org: row.organizer_name ?? undefined,
-      regionLabel: meta[row.id]?.regionName,
-      ...metadataForUrl(images.get(row.id), row.thumbnail_url),
-      applicationStartAt: row.application_start_at,
-      deadline: row.application_end_at ?? undefined,
-      deadlineType: row.deadline_type,
-      eventEndAt: row.event_end_at,
-      tags: meta[row.id]?.categoryName ? [meta[row.id].categoryName!] : [],
-      image: row.thumbnail_url ?? undefined,
-      sourceUrl: row.source_key ?? undefined,
-      posterStatus: row.poster_status,
-    },
-  }));
-}
-
-const LATEST_LIMIT = 60;
-
-type TaxonomyRows = {
-  regions: RegionNode[];
-  categories: Array<{
-    id: string;
-    code: string | null;
-    parent_id: string | null;
-    name: string;
-  }>;
-};
-
-/** The region tree and the category list, read once per home load. */
-async function loadTaxonomy(): Promise<TaxonomyRows> {
-  const [regions, categories] = await Promise.all([
-    supabase.from("regions").select("id, name, level, parent_id"),
-    supabase.from("categories").select("id, name, code, parent_id"),
-  ]);
-  if (regions.error || categories.error) throw new Error("taxonomy");
-  return {
-    regions: (regions.data ?? []) as RegionNode[],
-    categories: (categories.data ?? []) as TaxonomyRows["categories"],
-  };
-}
-
-function searchOpen(
-  categoryId: string | null,
-  regionIds: string[] | null,
-  limit: number,
-) {
-  return supabase
-    .rpc("search_public_posters", {
-      p_query: null,
-      p_category_id: categoryId,
-      p_region_ids: regionIds,
-      p_include_closed: false,
-      p_sort: "latest",
-      p_limit: limit,
-    })
-    .select(SELECT)
-    .then(({ data, error }) => ({
-      data: (Array.isArray(data) ? data : []) as unknown as Row[],
-      error,
-    }));
-}
-
-/** Newest open posters with no conditions, for "최근 올라온 공고". */
-async function loadLatestRows(): Promise<Row[]> {
-  const result = await searchOpen(null, null, LATEST_LIMIT);
-  if (result.error) throw new Error("latest posters");
-  return result.data;
-}
 
 async function loadMemberSetup(userId: string) {
   const [profile, interests, favorites, follows] = await Promise.all([
@@ -244,36 +95,6 @@ async function loadMemberSetup(userId: string) {
   };
 }
 
-async function loadRowsByIds(ids: string[]): Promise<Row[]> {
-  if (ids.length === 0) return [];
-  const { data, error } = await supabase
-    .from("posters")
-    .select(SELECT)
-    .in("id", ids)
-    .in("poster_status", ["published", "closed"])
-    .or(PUBLIC_POSTER_EXPOSURE_FILTER)
-    .returns<Row[]>();
-  if (error) throw new Error("favorite posters");
-  const byId = new Map((data ?? []).map((row) => [row.id, row]));
-  return ids.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []));
-}
-
-async function loadFollowedRows(institutionIds: string[]): Promise<Row[]> {
-  if (institutionIds.length === 0) return [];
-  const list = institutionIds.join(",");
-  const { data, error } = await supabase
-    .from("posters")
-    .select(SELECT)
-    .eq("poster_status", "published")
-    .or(PUBLIC_POSTER_EXPOSURE_FILTER)
-    .or(`source_institution_id.in.(${list}),organizer_id.in.(${list})`)
-    .order("created_at", { ascending: false })
-    .limit(40)
-    .returns<Row[]>();
-  if (error) throw new Error("followed posters");
-  return data ?? [];
-}
-
 /**
  * The guest's conditions from this browser, with names from the database.
  * A region or category that no longer exists is left out.
@@ -315,83 +136,15 @@ async function loadGuestInterest(): Promise<HomeInterest> {
   };
 }
 
-/** Everything the home needs, for a member or for this browser's guest. */
-export async function loadHomeData(): Promise<HomeData> {
+/** The session's member conditions, or this browser's guest conditions. */
+export async function loadHomeConditions(): Promise<HomeConditions> {
   const userId =
     (await supabase.auth.getSession()).data.session?.user.id ?? null;
-  const [setup, taxonomy] = await Promise.all([
-    userId
-      ? loadMemberSetup(userId)
-      : loadGuestInterest().then((interest) => ({
-          interest,
-          favoriteIds: readGuestFavorites(guestLocal).map(
-            (item) => item.posterId,
-          ),
-          institutions: [] as Array<{ id: string; name: string; slug: string }>,
-        })),
-    loadTaxonomy(),
-  ]);
-  const categoryScopes = Object.fromEntries(
-    setup.interest.categories.map((category) => [
-      category.id,
-      categoryScopeIds(category.id, taxonomy.categories),
-    ]),
-  );
-  const searchedCategoryIds = Array.from(
-    new Set(Object.values(categoryScopes).flat()),
-  );
-  const institutionIds = setup.institutions.map((item) => item.id);
-  const [interestRows, nearbyRows, latestRows, favoriteRows, followedRows] =
-    await Promise.all([
-      searchInterestGroups({
-        regionId: setup.interest.region?.id ?? null,
-        regions: taxonomy.regions,
-        categoryIds: searchedCategoryIds,
-        search: searchOpen,
-      }),
-      searchNearby({
-        regionId: setup.interest.region?.id ?? null,
-        regions: taxonomy.regions,
-        categoryIds: searchedCategoryIds,
-        search: searchOpen,
-      }),
-      loadLatestRows(),
-      loadRowsByIds(setup.favoriteIds),
-      loadFollowedRows(institutionIds),
-    ]);
-  // The same poster occurs in several groups. Enrich its public metadata only
-  // once, rather than re-downloading the same rows for every group.
-  const groups = [
-    interestRows,
-    nearbyRows,
-    latestRows,
-    favoriteRows,
-    followedRows,
-  ];
-  const uniqueRows = [
-    ...new Map(groups.flat().map((row) => [row.id, row])).values(),
-  ];
-  const byId = new Map(
-    (await toItems(uniqueRows)).map((item) => [item.id, item]),
-  );
-  const [
-    interestItems,
-    nearbyItems,
-    latestItems,
-    favoriteItems,
-    followedItems,
-  ] = groups.map((rows) => rows.map((row) => byId.get(row.id)!));
+  if (userId) return { signedIn: true, ...(await loadMemberSetup(userId)) };
   return {
-    signedIn: Boolean(userId),
-    interest: setup.interest,
-    interestItems,
-    nearbyItems,
-    latestItems,
-    favoriteItems,
-    followedItems,
-    institutions: setup.institutions,
-    regions: taxonomy.regions,
-    categoryScopes,
-    availableCategories: interestCategories(taxonomy.categories),
+    signedIn: false,
+    interest: await loadGuestInterest(),
+    favoriteIds: readGuestFavorites(guestLocal).map((item) => item.posterId),
+    institutions: [],
   };
 }
