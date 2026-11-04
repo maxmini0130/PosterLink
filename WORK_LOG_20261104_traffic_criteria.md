@@ -59,3 +59,15 @@ www 및 비www는 저장소가 다르므로 실제 사용하는 주소마다 설
 
 복구는 이번 커밋의 애플리케이션 변경을 되돌려 재배포한다. 새 스키마가 없어 DB 롤백은
 필요 없다. 이미 수집된 manual-test 기록은 보존되며 기존 자동화 제외 규칙으로 계속 제외된다.
+
+## 후속 운영 반영
+
+사용자의 별도 운영 반영 요청에 따라 기존 운영 `ff70547`에서 분리한
+`release/traffic-20261104`에 이번 변경만 옮겼다. 운영의 공통 visitorIdentity와
+90일 조회 범위를 보존했다. 소스 `2e36dd5508028bc3fee905173c1fd4cba5878173`의
+배포 `dpl_9tx6Yc5EQQjrEQydpbEsJCZHYMig`를 Production으로 승격하고
+`www.posterlink.kr`에서 READY·일반 페이지 응답·비로그인 관리자 접근 차단·새 추적 로직 제공을
+확인했다. DB·과거 로그 변경 없음. 실제 로그인 관리자 화면 수치는 브라우저 연결 문제로
+직접 읽지 못했으며 격리 UI/API 검증은 운영 기준 적용본에서도 6/6 통과했다.
+상세 및 이전 배포 복구 정보는
+[운영 반영 기록](https://github.com/maxmini0130/PosterLink/blob/release/traffic-20261104/WORK_LOG_20261104_traffic_production.md)에 있다.
