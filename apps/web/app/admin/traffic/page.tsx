@@ -386,8 +386,10 @@ export default function AdminTrafficPage() {
     : ACTOR_FILTERS.filter(
         (filter) => filter.key !== "staff" && filter.key !== "automation",
       );
-  const mobileWebSessions = clientPlatforms.find((row) => row.key === "mobile_web")?.sessions ?? 0;
-  const appSessions = clientPlatforms.find((row) => row.key === "app")?.sessions ?? 0;
+  const mobileWebSessions =
+    clientPlatforms.find((row) => row.key === "mobile_web")?.sessions ?? 0;
+  const appSessions =
+    clientPlatforms.find((row) => row.key === "app")?.sessions ?? 0;
   const periodLabel = days === 1 ? "오늘" : `최근 ${days}일`;
   const scopeLabel = includeInternal
     ? "내부·자동 방문 포함"
