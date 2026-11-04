@@ -18,11 +18,31 @@
 ## 검증 및 진행
 
 - 운영 기준 적용본의 관련 단위/개인정보 테스트 18/18 및 웹 lint 통과.
-- 운영 기준 적용본의 격리된 실제 API 및 모바일·데스크톱 Playwright 재검증 중.
+- 운영 기준 적용본의 격리된 실제 API 및 모바일·데스크톱 Playwright 6/6 통과.
 - Vercel Production 환경으로 먼저 도메인 미연결 후보를 빌드하고 READY 확인 후 승격한다.
   운영 데이터에 테스트 기록을 쓰거나 기존 로그를 소급 삭제하지 않는다.
 - 이전 구현 검증 및 전체 회귀의 기존 실패 2건은
   [구현 작업 로그](WORK_LOG_20261104_traffic_criteria.md)에 기록되어 있다.
+- 운영 후보 소스 `2e36dd5508028bc3fee905173c1fd4cba5878173`는 원격 release
+  브랜치에 push했다. Production 후보 `dpl_9tx6Yc5EQQjrEQydpbEsJCZHYMig`
+  (`poster-link-1otcztkfj-maxmini0130s-projects.vercel.app`)는 `--skip-domain`으로 생성했다.
+- 첫 업로드는 종료 중인 Playwright 임시 경로의 ENOENT로 후보 생성 전에 중단됐다.
+  검증 종료 후 재업로드는 성공했다.
+
+## 운영 결과
+
+- Vercel Production 빌드의 compile·lint·타입 검사 및 정적 생성 성공, 후보 READY 확인.
+  승격 직전 운영이 여전히 이전 배포를 가리키는지 확인한 뒤 `vercel promote`를 수행했다.
+- `www.posterlink.kr`의 배포 ID는 `dpl_9tx6Yc5EQQjrEQydpbEsJCZHYMig`,
+  소스는 `2e36dd5508028bc3fee905173c1fd4cba5878173`, 상태 READY로 재확인했다.
+- 운영 홈 GET 200, 비www 홈 307(정규 주소 전환), 비로그인 관리자 화면 307,
+  관리자 통계 API 401. 권한 보호가 유지됐다.
+- 실제 운영 홈페이지가 참조하는 JavaScript에서 새 테스트 브라우저 키와
+  `manual-test` 전송 로직이 모두 제공되는 것을 읽기 전용으로 확인했다.
+- 로그인된 실제 관리자 화면의 운영 수치 읽기는 브라우저 연결 문제로 검증하지 못했다.
+  관리자 UI·API의 출처 분리, 제외 및 설정 지속은 격리 E2E에서 검증했다.
+- 운영 기록 생성 테스트·DB 변경·환경변수 변경 없음. 사용자는 통계 페이지를 새로고침한 뒤
+  사용하는 브라우저의 **이 브라우저 테스트 방문 제외**를 켜면 된다.
 
 ## 복구
 
