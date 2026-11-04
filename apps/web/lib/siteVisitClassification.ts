@@ -93,6 +93,7 @@ export function getVisitAutomationLabel(
   isBot = false,
 ) {
   const source = (automationSource ?? "").toLowerCase();
+  if (source === "manual-test") return "내부 수동 테스트";
   if (isBot || source === "bot-user-agent") return "검색/서비스 봇";
   if (/ai|codex|openai|chatgpt/.test(source)) return "AI 검사";
   if (/e2e|playwright|test/.test(source)) return "E2E 자동검사";

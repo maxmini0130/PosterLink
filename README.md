@@ -47,6 +47,9 @@ pnpm --filter posterlink-crawler crawl:dry
 
 ## 검증
 
+자체 관리자 방문 통계의 집계·제외·출처 판정과 테스트 브라우저 설정은
+[방문 통계 기준](docs/TRAFFIC_ANALYTICS.md)을 참고하세요.
+
 ```bash
 # 루트 회귀 테스트
 pnpm test
