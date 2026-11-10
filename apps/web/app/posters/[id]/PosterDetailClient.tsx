@@ -131,6 +131,8 @@ export type PosterDetailPoster = DeadlineVerificationRow & {
   regionIds?: string[];
   categoryName?: string | null;
   regionName?: string | null;
+  /** Short v6.1 tag: "마포구", "서울", "전국" (null when unknown). */
+  regionTag?: string | null;
   images?: string[];
 };
 
@@ -1078,7 +1080,13 @@ export function PosterDetailClient({
   const tags = (
     <DetailTags
       category={poster.categoryName}
-      region={poster.regionName ? regionDisplay.label : null}
+      region={
+        !poster.regionName
+          ? null
+          : regionDisplay.conflict
+            ? regionDisplay.label
+            : poster.regionTag || regionDisplay.label
+      }
       presentation={presentation}
     />
   );

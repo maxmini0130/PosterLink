@@ -47,7 +47,7 @@ const kstDay = new Intl.DateTimeFormat("en-CA", {
 });
 
 /** Days left until this Sunday (KST): Monday 6 … Sunday 0. */
-function daysToSunday(now: Date) {
+export function daysToSunday(now: Date) {
   const weekday = kstDay
     .formatToParts(now)
     .find((part) => part.type === "weekday")?.value;

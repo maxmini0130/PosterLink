@@ -4,6 +4,7 @@ import {
   fetchPublicTaxonomies,
 } from "./publicDiscovery";
 import { getRegionScopeIds } from "./regionHelpers";
+import { browseRegionLabel, inBrowsedDistrict } from "./browseRegion";
 import {
   categoryScopeIds,
   CONTENT_TYPE_INTEREST,
@@ -399,6 +400,8 @@ export type HomeRequest = {
   chip?: string | null;
   /** List only posters published after `since`. */
   onlySince?: boolean;
+  /** Also return the 찜 "이번 주에 마감되는 공고" (up to this many). */
+  dueWeekLimit?: number;
 };
 
 export type HomeShortcut = {
@@ -410,7 +413,7 @@ export type HomeShortcut = {
 
 export type HomeFeedResult = {
   layout: HomeLayout;
-  /** The region the home is scoped to (조건 or 서울 by default). */
+  /** The browsed region's title: "서울 전체", "서울 마포구", "전국". */
   scopeLabel: string;
   shortcuts: HomeShortcut[];
 };
@@ -543,14 +546,22 @@ export async function loadHomeFeed(
       : null;
   const chosen = regionId ? regions.get(regionId)! : null;
   // Default scope: 서울 (first-target market). A chosen region keeps its 시·도.
+  // 전국 has no scope (every poster); its id gives getRegionScopeIds null.
   const sidoId =
-    chosen?.level === "sido"
+    chosen?.level === "sido" || chosen?.level === "nation"
       ? chosen.id
       : chosen?.level === "sigungu"
         ? (chosen.parent_id ?? null)
         : (taxonomy.regions.find((region) => region.code === "REG_SEOUL")?.id ??
           null);
   const scope = getRegionScopeIds(sidoId, taxonomy.regions);
+  // A 구·군 is browsed strictly: its own posters plus those for its 시·도 as a
+  // whole and nationwide ones (SPEC 7.1: the list, count and chips all follow
+  // the browsed region). Posters for other 구 are left out.
+  const district =
+    chosen?.level === "sigungu"
+      ? getRegionScopeIds(chosen.id, taxonomy.regions)
+      : null;
   const { links, images, popularity } = source;
   const regionLinksBy = new Map<string, RegionLink[]>();
   for (const link of links.regionLinks)
@@ -566,6 +577,12 @@ export async function loadHomeFeed(
     ]);
   const inScope = rows.filter((row) => {
     const own = regionLinksBy.get(row.id) ?? [];
+    if (district)
+      return inBrowsedDistrict(
+        own.map((link) => link.region_id),
+        (id) => regions.get(id)?.level,
+        district,
+      );
     return (
       !scope || !own.length || own.some((link) => scope.has(link.region_id))
     );
@@ -585,9 +602,9 @@ export async function loadHomeFeed(
     (id) => UUID.test(id) && categories.has(id),
   );
   const conditions: HomeConditions = {
-    regionScope: regionId
-      ? (getRegionScopeIds(regionId, taxonomy.regions) ?? new Set())
-      : new Set(),
+    // The browsed region already narrowed the posters above, so it no longer
+    // reorders them; only the interest categories do.
+    regionScope: new Set(),
     categoryScope: new Set(
       categoryIds.flatMap((id) => categoryScopeIds(id, taxonomy.categories)),
     ),
@@ -610,15 +627,14 @@ export async function loadHomeFeed(
     onlySince: request.onlySince === true,
     // v6.1 home: posters first, no rows above the feed.
     upperRows: false,
+    dueWeekLimit: Math.min(Math.max(request.dueWeekLimit ?? 0, 0), 12),
   });
   const sido = sidoId ? regions.get(sidoId) : null;
-  const scopeLabel = chosen
-    ? chosen.level === "sigungu"
-      ? chosen.name
-      : `${(chosen.name ?? "").replace(/특별시|광역시/, "")} 전체`
-    : sido
-      ? `${sido.name.replace(/특별시|광역시/, "")} 전체`
-      : "전체 지역";
+  const scopeLabel =
+    browseRegionLabel(
+      chosen ?? sido,
+      chosen?.level === "sigungu" ? sido : null,
+    ) ?? "전국";
   const order: readonly string[] = INTEREST_CATEGORY_CODES;
   const shortcuts = taxonomy.categories
     .filter((category) => order.includes(String(category.code)))

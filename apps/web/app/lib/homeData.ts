@@ -19,6 +19,9 @@ export type HomeInterest = {
 
 export type HomeConditions = {
   signedIn: boolean;
+  /** The member's id (owner of the browsed region); null for guests. */
+  userId: string | null;
+  /** Profile region (members) or interest region (guests): the browsing default. */
   interest: HomeInterest;
   favoriteIds: string[];
   institutions: Array<{ id: string; name: string; slug: string }>;
@@ -140,9 +143,11 @@ async function loadGuestInterest(): Promise<HomeInterest> {
 export async function loadHomeConditions(): Promise<HomeConditions> {
   const userId =
     (await supabase.auth.getSession()).data.session?.user.id ?? null;
-  if (userId) return { signedIn: true, ...(await loadMemberSetup(userId)) };
+  if (userId)
+    return { signedIn: true, userId, ...(await loadMemberSetup(userId)) };
   return {
     signedIn: false,
+    userId: null,
     interest: await loadGuestInterest(),
     favoriteIds: readGuestFavorites(guestLocal).map((item) => item.posterId),
     institutions: [],
