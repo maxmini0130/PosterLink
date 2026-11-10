@@ -172,7 +172,7 @@ const fetchPosterDetail = cache(async (id: string) => {
       .maybeSingle();
     if (
       !verifiedResult.error ||
-      !/deadline_status|deadline_time_verified|reception_verified|session_rule|last_session|deadline_label|deadline_note/.test(
+      !/deadline_status|deadline_time_verified|reception_verified|session_rule|last_session|deadline_label|deadline_note|selection_notice/.test(
         verifiedResult.error.message ?? "",
       )
     )

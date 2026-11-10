@@ -397,6 +397,20 @@ function withoutApplied(input: DeadlineInput): DeadlinePresentation {
   });
 }
 
+/**
+ * "11.12(목) 오후 3시" with the same date and time rules (SPEC 4.4), e.g. the
+ * confirmed 선정 안내 time after applying. Null when the value is unusable.
+ */
+export function spokenDateTime(
+  value: string | null | undefined,
+  now: Date = new Date(),
+): string | null {
+  const time = parse(value, false);
+  if (time === null) return null;
+  const moment = seoul(time);
+  return `${dateLabel(moment, seoul(now.getTime()))} ${spokenTime(moment)}`;
+}
+
 export function getDeadlinePresentation(
   input: DeadlineInput,
 ): DeadlinePresentation {

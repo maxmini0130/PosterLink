@@ -84,15 +84,20 @@ export function FavoriteButton({
   );
 }
 
-/** Primary action (ink, opens the official page in a new tab). */
+/**
+ * Primary action (ink, opens the official page in a new tab). After 신청했어요
+ * it turns into an outline button (SPEC 5).
+ */
 export function PrimaryActionLink({
   href,
   children,
   onClick,
+  outline = false,
 }: {
   href: string;
   children: ReactNode;
   onClick?: () => void;
+  outline?: boolean;
 }) {
   return (
     <a
@@ -100,7 +105,11 @@ export function PrimaryActionLink({
       target="_blank"
       rel="noopener noreferrer"
       onClick={onClick}
-      className="flex h-[46px] w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] border border-pl-ink bg-pl-ink px-4 text-[14px] font-bold text-white hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pl-ink"
+      className={`flex h-[46px] w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] border border-pl-ink px-4 text-[14px] font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pl-ink ${
+        outline
+          ? "bg-white text-pl-ink"
+          : "bg-pl-ink text-white hover:brightness-110"
+      }`}
     >
       {children}
       <ExternalLink size={16} strokeWidth={2} aria-hidden="true" />

@@ -18,6 +18,7 @@ import {
   type PendingActionDoneDetail,
 } from "../lib/guestSession";
 import { supabase } from "../lib/supabase";
+import { mergeGuestApplied } from "../lib/appliedClient";
 
 // Sign-in and onboarding screens come first; the action waits until after them.
 const WAIT_ON = /^\/(login|signup|auth|onboarding)(\/|$)/;
@@ -139,6 +140,8 @@ export default function PendingActionRunner() {
       .then(async () => {
         const userId = await currentUserId();
         if (!userId) return;
+        // v6.1: this browser's "신청했어요" marks move with the favourites.
+        await mergeGuestApplied(userId).catch(() => undefined);
         const result = await mergeIntoAccount(userId);
         if (result.status === "none") return;
         const merged = result.status === "merged";

@@ -60,6 +60,7 @@ import {
   type SavedSearch,
 } from "../../lib/searchGroups";
 import { trackAnalytics } from "../../lib/analytics";
+import { useAppliedPosters } from "../lib/appliedClient";
 import {
   deadlineVerificationFromRow,
   withDeadlineColumns,
@@ -137,6 +138,8 @@ function PosterListPageContent({
   initialIncludeClosed,
 }: PosterListClientProps) {
   const [loading, setLoading] = useState(false);
+  // v6.1: applied posters read ✓ 신청했어요 here too (SPEC 5).
+  const appliedMarks = useAppliedPosters();
   const [failed, setFailed] = useState(false);
   const [posters, setPosters] = useState<Row[]>(initialPosters);
   const [resultTotalCount, setResultTotalCount] = useState(initialTotalCount);
@@ -888,7 +891,7 @@ function PosterListPageContent({
                   {groups.matched.slice(0, displayCount).map((poster) => (
                     <li key={poster.id}>
                       <PosterListCard
-                        poster={toCard(poster)}
+                        poster={{ ...toCard(poster), applied: appliedMarks.has(poster.id) }}
                         source="search"
                         badge={favoriteIds.has(poster.id) ? "찜" : undefined}
                       />
@@ -920,7 +923,7 @@ function PosterListPageContent({
                   {groups.wider.slice(0, widerCount).map(({ item, scope }) => (
                     <li key={item.id}>
                       <PosterListCard
-                        poster={toCard(item)}
+                        poster={{ ...toCard(item), applied: appliedMarks.has(item.id) }}
                         source="search"
                         region={scope.nation ? "nation" : "seoul"}
                         regionLabel={scope.label}

@@ -9,6 +9,8 @@ import { PlPosterCard } from "./PlPosterCard";
 import { DeadlineStamp } from "./DeadlineParts";
 import { PlChip } from "./PlControls";
 import type { CardHandlers } from "./HomeSections";
+import { getDeadlinePresentation } from "../../../lib/deadlinePresentation";
+import { cardDeadlineInput } from "../../../lib/posterDeadlineFields";
 
 /**
  * v6.1 home pieces (docs/design/v6.1/SPEC.md 7.1, 7.5): region title, the
@@ -191,7 +193,15 @@ function CardItem({
   return (
     <PlPosterCard
       poster={item.card}
-      presentation={item.presentation}
+      presentation={
+        // SPEC 5: an applied poster's card reads ✓ 신청했어요, no stamp.
+        handlers.applied?.has(item.id)
+          ? getDeadlinePresentation({
+              ...cardDeadlineInput(item.card),
+              applied: true,
+            })
+          : item.presentation
+      }
       favorite={handlers.favorites.has(item.id)}
       busy={handlers.busy.has(item.id)}
       onFavorite={() => handlers.onFavorite(item, sectionId)}

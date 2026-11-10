@@ -7,7 +7,7 @@ import type { DeadlineInput, DeadlineStatus } from "./deadlinePresentation";
 
 /** Appended to explicit poster column lists. */
 export const DEADLINE_VERIFICATION_COLUMNS =
-  "deadline_status,deadline_time_verified,reception_verified,session_rule_text,session_rule_verified,last_session_deadline_date,deadline_label,deadline_note";
+  "deadline_status,deadline_time_verified,reception_verified,session_rule_text,session_rule_verified,last_session_deadline_date,deadline_label,deadline_note,selection_notice_at";
 
 type ColumnProbeClient = {
   from: (table: string) => {
@@ -71,6 +71,8 @@ export type DeadlineVerificationRow = {
   last_session_deadline_date?: string | null;
   deadline_label?: string | null;
   deadline_note?: string | null;
+  /** Confirmed 선정 안내 time (shown after applying, SPEC 5). */
+  selection_notice_at?: string | null;
 };
 
 export type DeadlineVerification = Pick<

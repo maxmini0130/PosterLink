@@ -14,6 +14,8 @@ import type { HomeShortcut } from "../../../lib/homeFeedServer";
 export type CardHandlers = {
   favorites: ReadonlySet<string>;
   busy: ReadonlySet<string>;
+  /** v6.1: posters this person marked as applied (cards show ✓ 신청했어요). */
+  applied?: ReadonlySet<string>;
   onFavorite: (card: HomeCard, sectionId: HomeSectionId) => void;
   onOpen: (card: HomeCard, sectionId: HomeSectionId, position: number) => void;
 };

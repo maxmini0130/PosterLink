@@ -22,6 +22,7 @@ import {
   SinceLastVisitButton,
 } from "./components/pl/HomeV61";
 import { loadPosterCards } from "./lib/posterCards";
+import { useAppliedPosters } from "./lib/appliedClient";
 import { getDeadlinePresentation } from "../lib/deadlinePresentation";
 import { cardDeadlineInput } from "../lib/posterDeadlineFields";
 import {
@@ -230,9 +231,13 @@ export default function Home({
     [conditions, baseline, view],
   );
 
-  // 찜 마감 줄 (SPEC 4.6): the favourites, wherever they are, judged the same way.
+  // 찜 마감 줄 (SPEC 4.6): the favourites, wherever they are, judged the same
+  // way; posters marked as applied are left out (SPEC 5).
+  const appliedMarks = useAppliedPosters();
   const favoriteKey = [...favorites].sort().join(",");
+  const appliedKey = [...appliedMarks.applied].sort().join(",");
   useEffect(() => {
+    const appliedIds = new Set(appliedKey ? appliedKey.split(",") : []);
     let active = true;
     const ids = favoriteKey ? favoriteKey.split(",").slice(0, 200) : [];
     if (!ids.length) {
@@ -248,7 +253,10 @@ export default function Home({
             cards.map((card) => ({
               id: card.id,
               presentation: getDeadlinePresentation(
-                cardDeadlineInput(card, now),
+                cardDeadlineInput(
+                  { ...card, applied: appliedIds.has(card.id) },
+                  now,
+                ),
               ),
             })),
             now,
@@ -259,7 +267,7 @@ export default function Home({
     return () => {
       active = false;
     };
-  }, [favoriteKey]);
+  }, [favoriteKey, appliedKey]);
 
   // Who is looking, with which conditions; then the matching sections.
   useEffect(() => {
@@ -455,6 +463,7 @@ export default function Home({
   const handlers: CardHandlers = {
     favorites,
     busy,
+    applied: appliedMarks.applied,
     onFavorite: (card, sectionId) => void toggle(card, sectionId),
     onOpen: (card, sectionId, position) =>
       trackProductEvent("feed_card_click", {

@@ -3,18 +3,19 @@ import toast from "react-hot-toast";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
-import { Bell, ChevronDown, ChevronLeft, ChevronRight, Share2, X } from "lucide-react";
+import { Bell, Check, ChevronDown, ChevronLeft, ChevronRight, Share2, X } from "lucide-react";
 
 import { Header } from "../../components/Header";
 import { BottomNav } from "../../components/BottomNav";
 import { CommentSection } from "../../components/CommentSection";
 import { Footer } from "../../components/Footer";
 import { ActionBar, FavoriteButton, PrimaryActionLink } from "../../components/pl/ActionBar";
-import { ApplyMark } from "../../components/pl/ApplyMark";
 import { BottomSheet } from "../../components/pl/BottomSheet";
 import { PosterListCard, type PlPosterCardData } from "../../components/pl/PosterListCard";
 import { PosterThumb } from "../../components/pl/PosterThumb";
 import {
+  AppliedBand,
+  ApplyReturnPrompt,
   ClosedBanner,
   DetailPosterPreview,
   DetailSimilar,
@@ -22,7 +23,21 @@ import {
   DetailSummaryCard,
   DetailTags,
 } from "./DetailV61";
-import { getDeadlinePresentation } from "../../../lib/deadlinePresentation";
+import { getDeadlinePresentation, spokenDateTime } from "../../../lib/deadlinePresentation";
+import { PlButton } from "../../components/pl/PlControls";
+import {
+  APPLIED_CHANGE_EVENT,
+  markApplied,
+  unmarkApplied,
+  useAppliedPosters,
+  type AppliedChange,
+} from "../../lib/appliedClient";
+import {
+  clearApplyOpened,
+  rememberApplyOpened,
+  rememberApplyPrompted,
+  shouldAskApplied,
+} from "../../../lib/appliedPosters";
 import {
   deadlineVerificationFromRow,
   type DeadlineVerificationRow,
@@ -50,7 +65,6 @@ import { receptionEndedOn } from "../../../lib/deadlineDisplay";
 import { readEntry, readGuestInterest } from "../../../lib/guestInterest";
 import { canGoBackInSite } from "../../../lib/backTarget";
 import { currentArrival } from "../../lib/inSiteHistory";
-import type { UserStatus } from "../../../lib/myPosters";
 import {
   formatApplicationPeriod,
   formatPosterDate,
@@ -595,6 +609,10 @@ export function PosterDetailClient({
   const router = useRouter();
   const pathname = usePathname() ?? `/posters/${poster.id}`;
   const [isFavorited, setIsFavoritedState] = useState(false);
+  const appliedMarks = useAppliedPosters();
+  const applied = appliedMarks.has(poster.id);
+  // "신청을 마치셨나요?" after coming back from the application page.
+  const [askApplied, setAskApplied] = useState(false);
   // Bumped by every local change (click, completion after sign-in), so a slower
   // initial lookup cannot overwrite a newer state.
   const favoriteVersion = useRef(0);
@@ -603,9 +621,6 @@ export function PosterDetailClient({
     setIsFavoritedState(value);
   };
   const [favoriteBusy, setFavoriteBusy] = useState(false);
-  // Signed-in person's own mark (retention plan 3-1); applySupported stays false
-  // until favorites.user_status exists (migration 20261101010000).
-  const [member, setMember] = useState<{ id: string; applySupported: boolean; status: UserStatus | null } | null>(null);
   const [applyBusy, setApplyBusy] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   // Guests without interest conditions are offered to choose them (UI plan ⑤).
@@ -680,23 +695,22 @@ export function PosterDetailClient({
         setIsFavoritedState(isGuestFavorite(poster.id));
         return;
       }
-      const lookup = (columns: string) =>
-        supabase.from("favorites").select(columns).eq("user_id", user.id).eq("poster_id", poster.id).maybeSingle();
-      let applySupported = true;
-      let result = await lookup("poster_id, user_status");
-      if (result.error && (result.error.code === "42703" || result.error.code === "PGRST204" || /user_status/.test(result.error.message))) {
-        applySupported = false;
-        result = await lookup("poster_id");
-      }
-      const row = result.data as { user_status?: string | null } | null;
-      if (cancelled) return;
-      setMember({
-        id: user.id,
-        applySupported,
-        status: row ? (row.user_status === "applied" ? "applied" : "interested") : null
-      });
+      const { data: row } = await supabase
+        .from("favorites")
+        .select("poster_id")
+        .eq("user_id", user.id)
+        .eq("poster_id", poster.id)
+        .maybeSingle();
       if (stillCurrent()) setIsFavoritedState(!!row);
     });
+
+    // A mark creates (or its undo removes) a member favourite: keep the heart in step.
+    const onApplied = (event: Event) => {
+      const change = (event as CustomEvent<AppliedChange>).detail;
+      if (change?.posterId === poster.id && typeof change.favorite === "boolean")
+        setIsFavorited(change.favorite);
+    };
+    window.addEventListener(APPLIED_CHANGE_EVENT, onApplied);
 
     // A favorite started before sign-in, completed by PendingActionRunner.
     const onDone = (event: Event) => {
@@ -708,8 +722,40 @@ export function PosterDetailClient({
     return () => {
       cancelled = true;
       window.removeEventListener(PENDING_ACTION_DONE_EVENT, onDone);
+      window.removeEventListener(APPLIED_CHANGE_EVENT, onApplied);
     };
   }, [poster.id]);
+
+  // Coming back to this tab after opening the application page: ask once
+  // (SPEC 5). Never asked when the mark is already set or was asked before.
+  useEffect(() => {
+    if (!appliedMarks.ready) return;
+    const check = () => {
+      if (document.visibilityState !== "visible") return;
+      if (
+        shouldAskApplied({
+          session: guestTab,
+          local: guestLocal,
+          posterId: poster.id,
+          applied,
+          now: Date.now(),
+        })
+      ) {
+        rememberApplyPrompted(guestLocal, poster.id);
+        clearApplyOpened(guestTab);
+        setAskApplied(true);
+      }
+    };
+    check();
+    document.addEventListener("visibilitychange", check);
+    window.addEventListener("focus", check);
+    window.addEventListener("pageshow", check);
+    return () => {
+      document.removeEventListener("visibilitychange", check);
+      window.removeEventListener("focus", check);
+      window.removeEventListener("pageshow", check);
+    };
+  }, [appliedMarks.ready, applied, poster.id]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -807,25 +853,13 @@ export function PosterDetailClient({
     }
   };
 
-  // 신청했어요: marking a poster not yet favorited saves it as a favorite too.
-  const setApplyStatus = async (status: UserStatus) => {
-    if (!member || applyBusy) return;
+  // v6.1 신청 표시 (SPEC 5): only this click sets it; undo is instant.
+  const setApplied = async (next: boolean) => {
+    if (applyBusy) return;
     setApplyBusy(true);
-    const values = { user_status: status, user_status_updated_at: new Date().toISOString() };
-    const { error } =
-      status === "applied"
-        ? await supabase
-            .from("favorites")
-            .upsert({ user_id: member.id, poster_id: poster.id, ...values }, { onConflict: "user_id,poster_id" })
-        : await supabase.from("favorites").update(values).eq("user_id", member.id).eq("poster_id", poster.id);
+    const ok = next ? await markApplied(poster.id, "detail") : await unmarkApplied(poster.id, "detail");
     setApplyBusy(false);
-    if (error) {
-      toast.error("표시를 저장하지 못했어요. 잠시 후 다시 시도해 주세요.");
-      return;
-    }
-    setMember({ ...member, status });
-    if (status === "applied") setIsFavorited(true);
-    trackProductEvent("apply_status_set", { posterId: poster.id, metadata: { screen: "detail", status, logged_in: true } });
+    if (!ok) toast.error("표시를 저장하지 못했어요. 잠시 후 다시 시도해 주세요.");
   };
 
   const keepInAccount = async () => {
@@ -909,9 +943,19 @@ export function PosterDetailClient({
     applicationEndAt: poster.application_end_at,
     eventEndAt: poster.event_end_at,
     posterStatus: poster.poster_status,
+    applied,
     now: clock
   });
-  const closed = presentation.state === "closed";
+  // The mark never changes whether reception is over.
+  const closed = getDeadlinePresentation({
+    ...deadlineVerificationFromRow(poster),
+    deadlineType: poster.deadline_type,
+    applicationStartAt: poster.application_start_at,
+    applicationEndAt: poster.application_end_at,
+    eventEndAt: poster.event_end_at,
+    posterStatus: poster.poster_status,
+    now: clock
+  }).state === "closed";
 
   const imageUrls = resolvePosterImageGallery(poster.images ?? [], poster.thumbnail_url, poster.source_key);
   // Plan 3-2: only an official_apply link is a sign-up page; otherwise the
@@ -1014,7 +1058,15 @@ export function PosterDetailClient({
   };
 
   const primaryButton = primaryAction ? (
-    <PrimaryActionLink href={primaryAction.link.url} onClick={() => void logOfficialLinkClick(primaryAction.link)}>
+    <PrimaryActionLink
+      href={primaryAction.link.url}
+      outline={applied}
+      onClick={() => {
+        void logOfficialLinkClick(primaryAction.link);
+        // Only a real application page leads to "신청을 마치셨나요?" (SPEC 12장 B).
+        if (applyLink && primaryAction.link.id === applyLink.id) rememberApplyOpened(guestTab, poster.id, Date.now());
+      }}
+    >
       {primaryAction.label}
     </PrimaryActionLink>
   ) : (
@@ -1176,17 +1228,38 @@ export function PosterDetailClient({
     <DetailSourceLine sourceLabel={sourceLabel} noticeUrl={noticeLink?.url ?? null} onNoticeClick={logNotice} />
   );
 
-  // A member's own 신청 mark (stage 6 moves this into the action bar).
-  const applyRecord = member?.applySupported && (!closed || member.status === "applied") && (
-    <section aria-labelledby="my-record" className="rounded-xl border border-pl-line bg-pl-card px-4 py-3">
-      <h2 id="my-record" className="m-0 pb-2 text-[15px] font-bold">내 기록</h2>
-      <ApplyMark
-        marked={member.status === "applied"}
-        busy={applyBusy}
-        onMark={() => void setApplyStatus("applied")}
-        onUnmark={() => void setApplyStatus("interested")}
-      />
-    </section>
+  // SPEC 5: the green band after 신청했어요, with undo.
+  const applyRecord = applied && (
+    <AppliedBand
+      onUndo={() => void setApplied(false)}
+      busy={applyBusy}
+      selectionNotice={spokenDateTime(poster.selection_notice_at, clock)}
+    />
+  );
+
+  // 신청했어요 (selected: green). Hidden while the return prompt asks the same.
+  const applyButton = !askApplied && (
+    <PlButton
+      variant={applied ? "applied" : "default"}
+      aria-pressed={applied}
+      disabled={applyBusy}
+      onClick={() => void setApplied(!applied)}
+      className="shrink-0 px-3.5"
+    >
+      <Check size={16} strokeWidth={applied ? 3 : 2} aria-hidden="true" />
+      신청했어요
+    </PlButton>
+  );
+
+  const returnPrompt = askApplied && !applied && (
+    <ApplyReturnPrompt
+      busy={applyBusy}
+      onApplied={() => {
+        setAskApplied(false);
+        void setApplied(true);
+      }}
+      onNotYet={() => setAskApplied(false)}
+    />
   );
 
   const alertCta = closed && (
@@ -1320,10 +1393,13 @@ export function PosterDetailClient({
                 {tags}
                 {title}
                 {displayOrgName && <p className="m-0 hidden text-[14px] text-pl-meta xl:block">{displayOrgName}</p>}
+                {/* SPEC 5 (m-detail-applied): the band sits between the title and the summary. */}
+                {applyRecord}
                 {summaryCard}
                 {/* PC: the buttons sit under the summary (SPEC 7.5). */}
                 <div className="hidden gap-2 xl:flex">
                   <div className="min-w-0 flex-1">{primaryButton}</div>
+                  {applyButton}
                   <FavoriteButton favorited={isFavorited} onToggle={toggleFavorite} busy={favoriteBusy} />
                   <button
                     type="button"
@@ -1334,7 +1410,13 @@ export function PosterDetailClient({
                     <Share2 size={18} aria-hidden="true" />
                   </button>
                 </div>
-                {applyRecord}
+                {/* PC: the prompt sits near the buttons; on phones it floats above the bar. */}
+                {returnPrompt}
+                {!applied && (
+                  <p className="m-0 hidden text-[13px] leading-[1.55] text-pl-meta xl:block">
+                    신청을 마친 뒤 &lsquo;신청했어요&rsquo;로 표시하면 마감 알림에서 빠지고 찜의 &lsquo;신청한 공고&rsquo;에 모여요. 언제든 되돌릴 수 있어요.
+                  </p>
+                )}
                 {sourceLine}
                 <div className="pt-3">{similar}</div>
               </div>
@@ -1352,7 +1434,13 @@ export function PosterDetailClient({
       </main>
 
       {!closed && (
-        <ActionBar favorited={isFavorited} onToggleFavorite={toggleFavorite} favoriteBusy={favoriteBusy} primary={primaryButton} />
+        <ActionBar
+          favorited={isFavorited}
+          onToggleFavorite={toggleFavorite}
+          favoriteBusy={favoriteBusy}
+          extra={applyButton || undefined}
+          primary={primaryButton}
+        />
       )}
 
       <BottomSheet

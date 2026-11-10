@@ -1,10 +1,96 @@
 "use client";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ChevronRight, Maximize2 } from "lucide-react";
+import { Check, ChevronRight, Maximize2 } from "lucide-react";
 import type { DeadlinePresentation } from "../../../lib/deadlinePresentation";
 import { StatusTag } from "../../components/pl/DeadlineParts";
 import { DefaultPoster } from "../../components/pl/DefaultPoster";
+import { PlButton } from "../../components/pl/PlControls";
+
+/** "✓ 신청한 공고예요 · 되돌리기 / 마감 알림을 껐어요 · 선정 안내 … 예정" (SPEC 5). */
+export function AppliedBand({
+  onUndo,
+  busy,
+  selectionNotice,
+}: {
+  onUndo: () => void;
+  busy?: boolean;
+  /** Confirmed 선정 안내 time ("11.12(목) 오후 3시"), else null. */
+  selectionNotice: string | null;
+}) {
+  return (
+    <div
+      role="status"
+      data-applied-band
+      className="rounded-xl border border-pl-ok/30 bg-pl-ok-bg px-3.5 py-2.5 text-pl-ok"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="m-0 flex items-center gap-1.5 text-[14px] font-bold">
+          <Check size={16} strokeWidth={3} aria-hidden="true" />
+          신청한 공고예요
+        </p>
+        <button
+          type="button"
+          onClick={onUndo}
+          disabled={busy}
+          className="min-h-8 shrink-0 text-[13px] font-medium text-pl-ink-soft underline underline-offset-2 disabled:opacity-60"
+        >
+          되돌리기
+        </button>
+      </div>
+      <p className="m-0 mt-0.5 text-[12.5px] text-pl-ok">
+        마감 알림을 껐어요
+        {selectionNotice && ` · 선정 안내 ${selectionNotice} 예정`}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * "신청을 마치셨나요?" after coming back from the application page (SPEC 5).
+ * Fixed above the bar on phones; a small box near the buttons on PC.
+ */
+export function ApplyReturnPrompt({
+  onApplied,
+  onNotYet,
+  busy,
+}: {
+  onApplied: () => void;
+  onNotYet: () => void;
+  busy?: boolean;
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-labelledby="apply-return-title"
+      data-apply-prompt
+      className="fixed inset-x-3 bottom-[calc(var(--mobile-nav-height)+var(--pl-bottom-extra,72px)+12px)] z-50 rounded-2xl border border-pl-line bg-pl-card p-4 shadow-lg xl:static xl:inset-auto xl:z-auto xl:shadow-none"
+    >
+      <p
+        id="apply-return-title"
+        className="m-0 text-[15px] font-bold text-pl-ink"
+      >
+        신청을 마치셨나요?
+      </p>
+      <p className="m-0 mt-1 text-[13px] leading-[1.5] text-pl-meta">
+        신청했다고 표시하면 이 공고의 마감 알림이 꺼져요.
+      </p>
+      <div className="mt-3 flex gap-2">
+        <PlButton
+          variant="primary"
+          className="flex-1"
+          onClick={onApplied}
+          disabled={busy}
+        >
+          신청했어요
+        </PlButton>
+        <PlButton className="flex-1" onClick={onNotYet}>
+          아직이에요
+        </PlButton>
+      </div>
+    </div>
+  );
+}
 
 /**
  * v6.1 detail pieces (docs/design/v6.1/SPEC.md 7.2, 7.3). Values that are not
