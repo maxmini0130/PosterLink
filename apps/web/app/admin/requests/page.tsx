@@ -45,7 +45,7 @@ export default function AdminRequestsPage() {
     setLoading(true);
     const { data, error } = await supabase
       .from("poster_requests")
-      .select("*, profiles!poster_requests_requester_id_fkey(nickname, email)")
+      .select("*, profiles!poster_requests_requester_id_fkey(nickname)")
       .eq("status", status)
       .order("created_at", { ascending: status === "pending" });
 

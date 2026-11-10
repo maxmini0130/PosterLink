@@ -20,7 +20,7 @@ const TABS: {
   },
   {
     href: "/my-posters",
-    label: "내 공고",
+    label: "찜",
     Icon: Heart,
     match: (path) =>
       path.startsWith("/my-posters") || path.startsWith("/favorites"),

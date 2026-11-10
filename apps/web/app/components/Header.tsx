@@ -63,7 +63,7 @@ export function Header() {
           <HeaderNavLink href="/posters" label="찾기" current={pathname === "/posters"} />
           <HeaderNavLink
             href="/my-posters"
-            label="내 공고"
+            label="찜"
             current={pathname.startsWith("/my-posters") || pathname.startsWith("/favorites")}
           />
           <HeaderNavLink href="/institutions" label="기관 찾기" current={pathname.startsWith("/institutions")} />
@@ -86,14 +86,6 @@ export function Header() {
                 style={{ whiteSpace: "nowrap" }}
               >
                 로그인
-              </Link>
-              <Link
-                href="/signup"
-                data-signup-feature="header"
-                className="bg-slate-950 px-2.5 py-1.5 text-xs font-black text-white transition-colors hover:bg-blue-800"
-                style={{ whiteSpace: "nowrap" }}
-              >
-                회원가입
               </Link>
             </>
           )}

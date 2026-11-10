@@ -3,9 +3,58 @@ import test from "node:test";
 
 import {
   buildStructuredPosterFields,
+  hasOpenEndedDeadlineEvidence,
   inferStructuredDeadlineType,
   normalizeStructuredDeadlineType,
+  toApplicationEndIso,
 } from "./poster-structured-fields.js";
+
+test("a date-only deadline ends at 23:59:59 Asia/Seoul", () => {
+  assert.equal(toApplicationEndIso("2026-11-19"), "2026-11-19T14:59:59.000Z");
+  const fields = buildStructuredPosterFields({
+    applicationEndAt: "2026-11-19",
+    sourceText: "접수기간 2026-11-02 ~ 2026-11-19",
+  });
+  assert.equal(fields.application_end_at, "2026-11-19T14:59:59.000Z");
+});
+
+test("a deadline that already has a time is kept", () => {
+  assert.equal(
+    toApplicationEndIso("2026-11-12T18:00:00+09:00"),
+    "2026-11-12T09:00:00.000Z",
+  );
+  const fields = buildStructuredPosterFields({
+    applicationEndAt: "2026-11-12T18:00:00+09:00",
+    sourceText: "접수 ~11.12 18시",
+  });
+  assert.equal(fields.application_end_at, "2026-11-12T09:00:00.000Z");
+});
+
+test("an existing 09:00 value is not mistaken for a date-only deadline", () => {
+  const fields = buildStructuredPosterFields({
+    applicationEndAt: "2026-11-19T00:00:00.000Z",
+    sourceText: "11/19 09:00까지 신청",
+  });
+  assert.equal(fields.application_end_at, "2026-11-19T00:00:00.000Z");
+});
+
+test("start and event dates keep their date-only storage", () => {
+  const fields = buildStructuredPosterFields({
+    applicationStartAt: "2026-11-02",
+    applicationEndAt: "2026-11-19",
+    eventStartAt: "2026-11-28",
+    eventEndAt: "2026-11-28",
+  });
+  assert.equal(fields.application_start_at, "2026-11-02T00:00:00.000Z");
+  assert.equal(fields.event_start_at, "2026-11-28T00:00:00.000Z");
+  assert.equal(fields.event_end_at, "2026-11-28T00:00:00.000Z");
+});
+
+test("no deadline stays empty", () => {
+  assert.equal(toApplicationEndIso(null), null);
+  assert.equal(toApplicationEndIso(""), null);
+  assert.equal(toApplicationEndIso("not a date"), null);
+});
 
 test("deadline type stays unknown without explicit evidence", () => {
   assert.equal(inferStructuredDeadlineType({}), "unknown");
@@ -271,4 +320,71 @@ test("LLM-filled facts remain review suggestions instead of public fields", () =
   assert.equal(fields.benefits_summary, null);
   assert.equal(fields.application_method, null);
   assert.equal(fields.contact_info, "02-1234-5678");
+});
+
+test("an open-ended type without wording in the notice is not kept (screen plan 09)", () => {
+  const goesan =
+    "신청기간: 2026. 10. 12.(월) 10:00~ 신청방법: 서울시 공공서비스예약시스템에서 신청 여행기간: 2026. 10. 24.(토)~10. 25.(일) 참가인원: 서울시민 20명";
+  // A reviewer's "until filled" with no such wording becomes unknown.
+  assert.equal(
+    inferStructuredDeadlineType({
+      deadlineType: "until_exhausted",
+      sourceText: goesan,
+    }),
+    "unknown",
+  );
+  // ...and a stated end date still wins over the unsupported type.
+  assert.equal(
+    inferStructuredDeadlineType({
+      deadlineType: "until_exhausted",
+      applicationEndAt: "2026-10-20",
+      sourceText: "접수기간: 10.12 ~ 10.20",
+    }),
+    "fixed",
+  );
+  assert.equal(
+    inferStructuredDeadlineType({ deadlineType: "ongoing", sourceText: "신청: 온라인" }),
+    "unknown",
+  );
+  // Stated wording keeps the type.
+  for (const text of [
+    "선착순 20명 모집",
+    "정원 마감 시 조기 종료",
+    "예산 소진 시까지",
+    "모집 완료 시 마감",
+    "인원이 차면 마감됩니다",
+  ]) {
+    assert.equal(
+      inferStructuredDeadlineType({ deadlineType: "until_exhausted", sourceText: text }),
+      "until_exhausted",
+      text,
+    );
+  }
+  assert.equal(
+    inferStructuredDeadlineType({ deadlineType: "ongoing", sourceText: "연중 상시 모집" }),
+    "ongoing",
+  );
+  assert.equal(hasOpenEndedDeadlineEvidence("fixed", ""), true);
+});
+
+test("a labeled participant line fills target and count only from the notice", () => {
+  const fields = buildStructuredPosterFields({
+    sourceText:
+      "행사유형: 농촌체험 신청방법: 서울시 공공서비스예약시스템에서 신청 참가인원: 서울시민 20명 참가비용: 50,000원",
+  });
+  assert.equal(fields.recruitment_count, "20명");
+  assert.equal(fields.eligibility_summary, "서울시민");
+
+  // A count with no audience word gives no target.
+  const countOnly = buildStructuredPosterFields({
+    sourceText: "참여인원: 선착순 15명",
+  });
+  assert.equal(countOnly.recruitment_count, "15명");
+  assert.equal(countOnly.eligibility_summary, null);
+
+  // An explicit 대상 line still comes first.
+  const labeled = buildStructuredPosterFields({
+    sourceText: "모집대상: 관내 거주 청년 신청방법: 온라인 참가인원: 서울시민 20명",
+  });
+  assert.equal(labeled.eligibility_summary, "관내 거주 청년");
 });

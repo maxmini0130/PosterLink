@@ -104,9 +104,13 @@ export type PendingAction = {
   targetId: string;
   returnTo: string;
   createdAt: number;
+  /** The follow prompt that started this action (measurement only). */
+  promptId?: string;
 };
 
 const ACTION_ID = /^[A-Za-z0-9-]{8,64}$/;
+/** Follow prompt ids: short opaque tokens, never user data. */
+export const PROMPT_ID = /^fp_[a-z0-9]{6,40}$/;
 const AUTH_PATH = /^\/(login|signup|auth|onboarding)(\/|$)/;
 // Placeholder origin used only to normalise a path; never navigated to.
 const PATH_BASE = "https://app.invalid";
@@ -160,6 +164,9 @@ export function setPendingAction(
     targetId: action.targetId,
     returnTo,
     createdAt: now,
+    ...(action.promptId && PROMPT_ID.test(action.promptId)
+      ? { promptId: action.promptId }
+      : {}),
   });
   return stored ? id : null;
 }
@@ -194,6 +201,9 @@ export function readPendingAction(
     targetId: value.targetId as string,
     returnTo: returnTo as string,
     createdAt: value.createdAt as number,
+    ...(typeof value.promptId === "string" && PROMPT_ID.test(value.promptId)
+      ? { promptId: value.promptId }
+      : {}),
   };
 }
 

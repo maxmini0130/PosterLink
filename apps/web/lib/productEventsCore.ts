@@ -10,7 +10,12 @@ export type ProductEventName =
   | "share_click"
   | "signup_prompt_shown"
   | "signup_start"
-  | "guest_merge";
+  | "guest_merge"
+  | "follow_prompt_shown"
+  | "follow_prompt_click"
+  | "follow_prompt_dismiss"
+  | "feed_card_impression"
+  | "feed_card_click";
 
 export type PageType =
   | "home"
@@ -63,7 +68,12 @@ export type ProductEventMetadata = Partial<
     | "category_count"
     | "previous_count"
     | "duplicate_count"
-    | "success",
+    | "success"
+    | "prompt_id"
+    | "trigger"
+    | "section_id"
+    | "position"
+    | "image_kind",
     string | number | boolean | null | undefined
   >
 >;
@@ -72,6 +82,8 @@ export type SignupIntent = {
   screen: PageType;
   feature: SignupFeature;
   at: number;
+  /** Follow prompt that led here, if any. */
+  promptId?: string;
 };
 
 export const SIGNUP_INTENT_KEY = "pl.signup_intent.v1";
@@ -130,6 +142,11 @@ const METADATA_KEYS = new Set([
   "previous_count",
   "duplicate_count",
   "success",
+  "prompt_id",
+  "trigger",
+  "section_id",
+  "position",
+  "image_kind",
 ]);
 const UUID_PATH =
   "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
@@ -198,7 +215,17 @@ export function parseSignupIntent(
       value.at > now + 60_000
     )
       return null;
-    return value as SignupIntent;
+    const promptId =
+      typeof value.promptId === "string" &&
+      /^fp_[a-z0-9]{6,40}$/.test(value.promptId)
+        ? value.promptId
+        : undefined;
+    return {
+      screen: value.screen,
+      feature: value.feature,
+      at: value.at,
+      ...(promptId ? { promptId } : {}),
+    };
   } catch {
     return null;
   }

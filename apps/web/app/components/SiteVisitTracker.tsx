@@ -2,13 +2,26 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import {
+  MANUAL_TEST_SOURCE,
+  readTrafficTestBrowser,
+} from "../../lib/trafficTestBrowser";
 
-import { publicAnalyticsPath, sanitizedVisitQuery, safeReferrer } from "../../lib/analyticsPrivacy";
+import {
+  publicAnalyticsPath,
+  sanitizedVisitQuery,
+  safeReferrer,
+} from "../../lib/analyticsPrivacy";
 import { getSessionKey, getVisitorKey } from "../../lib/visitorIdentity";
 
 const AUTOMATION_SOURCE_KEY = "posterlink.automation_source";
 
 function getAutomationSource(searchParams: URLSearchParams) {
+  try {
+    if (readTrafficTestBrowser(window.localStorage)) return MANUAL_TEST_SOURCE;
+  } catch {
+    // Storage unavailable: retain the existing per-session automation signals.
+  }
   const querySource = searchParams.get("_pl_automation")?.trim().slice(0, 80);
   try {
     if (querySource) {
@@ -58,7 +71,7 @@ export default function SiteVisitTracker() {
     if ("sendBeacon" in navigator) {
       const sent = navigator.sendBeacon(
         "/api/site-visits",
-        new Blob([body], { type: "application/json" })
+        new Blob([body], { type: "application/json" }),
       );
       if (sent) return;
     }

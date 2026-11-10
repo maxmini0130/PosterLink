@@ -17,11 +17,22 @@ const FAVORITE_USER_STATUS = "72a05ab93ea353381446cdf85d8fe578a2afb755";
 /** UI redesign stage 4 user_visit_state; pending Codex review. */
 const USER_VISIT_STATE = "98145cf4e64a02e8b6fa0eba3ebbc4da960f9b3d";
 
-/**
- * UI redesign stage 5: onboarding prefilled from the guest's interest choice
- * (no age gate), with the cbdad15 review fix; pending Codex re-review.
- */
-const STAGE5_ONBOARDING = "ac2d35526fffc016de48cd5f59e06a6010706f9d";
+/** Screen plan v1.0 section 09: finished events left out of open search; pending Codex review. */
+const FINISHED_EVENTS_SEARCH = "b143a7694cbd729a979e9deee543ccea0fbe8924";
+
+/** Screen plan v1.0 (05): onboarding lists the main categories only; pending Codex review. */
+const PLAN_V1_ONBOARDING = "728901f148dee03e774219a3e88c22d76098951b";
+
+/** Optional poster-feed image metadata only; pending independent review, not production application approval. */
+const POSTER_FEED_METADATA = "b3ce4b4a5c9ea6128683de0daf50ca022dc5651f";
+/** Admin UPDATE policy on comments (hide reported comments); full test 2026-11-02, pending review and production approval. */
+const ADMIN_COMMENT_MODERATION = "c87927ba8cad60cb075ad1f3aa9a4da6b5f12ec2";
+
+/** Home v5 card facts, featured week, region basis, popularity RPC and events; pending independent review, not production application approval. */
+const HOME_V5_CARD_FACTS = "1b4fac4933132c01aec256196f6c1d9df7187747";
+
+/** v6.1 deadline verification columns with portal time (user decision 2026-11-10); approved by the user on 2026-11-10, not yet applied to production. */
+const DEADLINE_VERIFICATION = "00d24343be5436d5435d79cefb150a197217cc67";
 
 /** New migration path -> commit holding its reviewed content. */
 export const APPROVED_MIGRATIONS: Readonly<Record<string, string>> = {
@@ -35,11 +46,21 @@ export const APPROVED_MIGRATIONS: Readonly<Record<string, string>> = {
     FAVORITE_USER_STATUS,
   "supabase/migrations/20261101020000_add_user_visit_state.sql":
     USER_VISIT_STATE,
+  "supabase/migrations/20261102010000_exclude_finished_events_from_open_search.sql":
+    FINISHED_EVENTS_SEARCH,
+  "supabase/migrations/20261102020000_add_poster_image_feed_metadata.sql":
+    POSTER_FEED_METADATA,
+  "supabase/migrations/20261102030000_allow_admin_comment_moderation.sql":
+    ADMIN_COMMENT_MODERATION,
+  "supabase/migrations/20261103010000_add_home_v5_card_facts.sql":
+    HOME_V5_CARD_FACTS,
+  "supabase/migrations/20261110010000_add_deadline_verification_fields.sql":
+    DEADLINE_VERIFICATION,
 };
 
 /** File path -> commit holding its reviewed content; replaces the base pin. */
 export const APPROVED_SNAPSHOTS: Readonly<Record<string, string>> = {
-  "apps/web/app/onboarding/page.tsx": STAGE5_ONBOARDING,
+  "apps/web/app/onboarding/page.tsx": PLAN_V1_ONBOARDING,
 };
 
 const TEST_PATH = /^[A-Za-z0-9_][A-Za-z0-9_./-]*\.test\.ts$/;

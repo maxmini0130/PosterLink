@@ -1,0 +1,11 @@
+# A/C recheck and separation — 2026-10-25
+
+User requested code-level cache/clock tracing, the same three failing tests on82fb1f4's parent, independent A/C without migrations or DB-write-path changes, and B evidence/confidence aggregation with random samples. Fetch/status clean at82fb1f4. Read existing instructions and targeted tests/source. No agents.
+
+- Parent detached worktree9bb8a9e: same three selected tests produce1pass/2fail. The Naver security/supabase/package freeze **passes** on parent and failed on82fb1f4, so it was a new failure. Corrected the previous blanket classification.
+- Independent branch `fix/public-ac-web-20261025` starts at9bb8a9e, includes A/C web changes only. No supabase/package/lock/existing API changes. New API is read-only GET. Preserved exact parent declarations of favorite/link-click write handlers. Kept web application engine local; excluded the Edge notification change. New freeze test passes without changing any assertion; two old failures remain documented.
+- Independent B branch starts at same parent and carries district filter, supplemental section, region tests, prepared migration/backfill, CSV aggregation script and53random samples. SQL and apply paths were not executed. Production master/post organization lookup used GET-only transport; no operational changes.
+- Traced no-store fetch, force-dynamic, absence of unstable_cache/tags/revalidate in list path, native Date and KST ordinal, DB now() predicate. React cache is detail-only. Current raw curl HTML gives D-22/D-19/D-8 etc.19:09 stale display cause remains unresolved; current headers do not prove historical state.
+- A/C Node20 build/lint PASS; targeted application tests15PASS; isolated desktop/mobile E2E8PASS. Build occurred before restoring exact parent handler formatting; restoration is source-equivalent and lint/selected release tests reran afterward. Test execution blocked browser mutations and server Supabase writes. No auth/member writes, notification send, migration apply, Preview/push/deploy or policy publication.
+
+See [review report](docs/public_ac_recheck_20261025.md). Keep original82fb1f4 and old mixed branch for audit. Local source CSV and logs remain ignored under root data/results. No secrets committed. User retains all approval decisions.

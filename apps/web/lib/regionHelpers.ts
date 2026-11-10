@@ -58,6 +58,11 @@ export function getRegionScopeIds(regionId: string | null, regionList: any[]) {
     parentId =
       regionList.find((region) => region.id === parentId)?.parent_id ?? null;
   }
+  // 전국 contains every region even where the 시·도 rows have no parent link
+  // (as in production), so nationwide posters stay in scope.
+  for (const region of regionList) {
+    if (region.level === "nation") ids.add(region.id);
+  }
 
   return ids;
 }

@@ -291,118 +291,8 @@ const visitDate = (time: number) => {
   return `${parts.month}월 ${parts.day}일(${parts.weekday}) 방문 이후`;
 };
 
-test("home ⑥ first visit: open posters and the 찜 guide, no 'since' line", async ({
-  page,
-}) => {
-  await open(page, "/", 390);
-  const first = page.getByRole("region", { name: "지금 접수 중인 공고" });
-  await expect(first.getByRole("heading", { level: 3 })).toHaveText([
-    SOON.title as string,
-    ONGOING.title as string,
-    OLDER.title as string,
-  ]);
-  await expect(
-    page.getByText("찜해 두면 다음에 모아 보여드려요"),
-  ).toBeVisible();
-  await expect(page.getByText("방문 이후")).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "포스터 제보" })).toBeVisible();
-  // The first visit is remembered without a baseline.
-  const stored = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem("pl.visit.v1") || "null"),
-  );
-  expect(stored.baselineAt).toBeNull();
-});
-
-test("home ⑦ new posters since the last visit, kept across a reload", async ({
-  page,
-}) => {
-  const last = NOW - 10 * DAY;
-  await open(page, "/", 390, {
-    visit: {
-      visitStartedAt: last - HOUR,
-      lastActiveAt: last,
-      baselineAt: null,
-    },
-    guestFavorites: [SOON.id as string],
-  });
-  await expect(page.getByText(visitDate(last))).toBeVisible();
-  await expect(page.getByText("새로 올라온 공고 2건")).toBeVisible();
-  await expect(
-    page
-      .getByRole("region", { name: "새로 올라온 공고" })
-      .getByRole("heading", { level: 3 }),
-  ).toHaveText([SOON.title as string, ONGOING.title as string]);
-  const rail = page.getByRole("list", { name: "7일 안에 마감" });
-  await expect(rail.getByRole("link")).toHaveCount(1);
-  await expect(rail.getByText("찜")).toBeVisible();
-  // Same visit: a reload shows the same baseline and list.
-  await page.reload({ waitUntil: "networkidle" });
-  await expect(page.getByText(visitDate(last))).toBeVisible();
-  await expect(page.getByText("새로 올라온 공고 2건")).toBeVisible();
-});
-
-test("home ⑧ return visit with nothing new: 7-day deadlines and one guide card", async ({
-  page,
-}) => {
-  const last = NOW - 40 * 60 * 1000;
-  await open(page, "/", 390, {
-    visit: {
-      visitStartedAt: last - HOUR,
-      lastActiveAt: last,
-      baselineAt: null,
-    },
-  });
-  await expect(
-    page.getByText(`${visitDate(last)} 새 공고는 아직 없어요`),
-  ).toBeVisible();
-  const closing = page.getByRole("region", { name: "7일 안에 마감되는 공고" });
-  await expect(closing.getByRole("heading", { level: 3 })).toHaveText([
-    SOON.title as string,
-  ]);
-  await expect(page.getByText("자주 보는 기관을 구독해 보세요")).toBeVisible();
-  await expect(page.getByText("새로 올라온")).toHaveCount(0);
-});
-
-test("member home on PC: conditions, 2 columns, follows, started 찜, server visit write", async ({
-  page,
-}) => {
-  const last = NOW - 3 * DAY;
-  await open(page, "/", 1280, {
-    member: true,
-    serverVisit: {
-      visitStartedAt: last - HOUR,
-      lastActiveAt: last,
-      baselineAt: null,
-    },
-  });
-  await expect(page.getByText(visitDate(last))).toBeVisible();
-  await expect(page.getByText("새로 올라온 관심 공고 2건")).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: /마포구 · 문화\/행사 · 교육\/취업/ }),
-  ).toBeVisible();
-  const aside = page.getByRole("complementary", { name: "마감과 구독 소식" });
-  await expect(aside.getByText("마포문화재단")).toBeVisible();
-  await expect(aside.getByText(FOLLOWED.title as string)).toBeVisible();
-  await expect(
-    page
-      .getByRole("region", { name: "접수를 시작한 찜 공고" })
-      .getByText(STARTED.title as string),
-  ).toBeVisible();
-  // Two columns at 1280: the aside sits to the right of the main column.
-  const main = await page
-    .getByRole("region", { name: "새로 올라온 관심 공고" })
-    .boundingBox();
-  const side = await aside.boundingBox();
-  expect(side!.x).toBeGreaterThan(main!.x + main!.width - 1);
-  // No bottom tab bar or floating report button on PC.
-  await expect(page.locator(".pl-report-fab")).toBeHidden();
-  // The new visit was sent through record_user_visit (fake response).
-  expect(writes).toContain("POST /rest/v1/rpc/record_user_visit");
-  // No horizontal scroll.
-  expect(
-    await page.evaluate(() => document.documentElement.scrollWidth),
-  ).toBeLessThanOrEqual(1280);
-});
+// The home's own checks (sections, rows, columns, member conditions) moved to
+// e2e/home-v5.spec.ts with the home v5 layout (UI plan 3-4 C-0).
 
 test("search ⑪ keeps 서울·전국 posters apart with labels, and saves a condition", async ({
   page,
@@ -444,7 +334,9 @@ test("search ⑪ keeps 서울·전국 posters apart with labels, and saves a con
   await expect(matched.getByText(/마포구 대상 · 접수 중/)).toBeVisible();
   const wider = page.getByRole("region", { name: "서울·전국 대상 공고" });
   await expect(wider.getByText("서울 전체", { exact: true })).toBeVisible();
-  await expect(wider.getByText("서울 전체 대상 공고")).toBeVisible();
+  await expect(
+    wider.getByRole("heading", { name: "서울 전체 대상 공고" }),
+  ).toBeVisible();
   // 전국 is not a parent of 서울 in the region table, so the existing region
   // filter never returns nationwide posters here (the unit test covers 전국).
   await expect(page.getByText("신청할 수 있는")).toHaveCount(0);

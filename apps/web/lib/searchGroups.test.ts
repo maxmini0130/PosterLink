@@ -77,6 +77,33 @@ test("a province search uses its own short name; no region means one group", () 
   assert.equal(nation.matched.length, posters.length);
 });
 
+test("전국 stays the widest scope when the 시·도 has no parent link", () => {
+  const unlinked = regions.map((region) =>
+    region.level === "sido" ? { ...region, parent_id: null } : region,
+  );
+  const groups = groupByRegionScope(
+    posters,
+    (p) => p.regionIds,
+    "mapo",
+    unlinked,
+  );
+  assert.deepEqual(
+    groups.wider.map(({ item, scope }) => [item.id, scope.label]),
+    [
+      ["seoul", "서울 전체"],
+      ["both", "서울 전체"],
+      ["nation", "전국"],
+    ],
+  );
+  const province = groupByRegionScope(
+    [{ id: "n", regionIds: ["kr"] }],
+    (p: P) => p.regionIds,
+    "seoul",
+    unlinked,
+  );
+  assert.deepEqual(province.wider[0].scope.label, "전국");
+});
+
 function memory(): KeyValueStore {
   const data: Record<string, string> = {};
   return {

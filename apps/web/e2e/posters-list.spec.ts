@@ -94,3 +94,18 @@ test.describe("메인 화면 - 포스터 카운트", () => {
   });
 
 });
+
+test.describe("포스터 목록 - 휴대폰 폭", () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test("결과 카드가 화면 폭 안에 들어간다 (제목이 긴 카드 포함)", async ({ page }) => {
+    for (const url of ["/posters", "/posters?q=%EC%B2%AD%EB%85%84"]) {
+      await page.goto(url, { waitUntil: "networkidle" });
+      await expect(page.locator("main article").first()).toBeVisible();
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow, url).toBeLessThanOrEqual(0);
+    }
+  });
+});

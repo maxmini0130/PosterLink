@@ -9,6 +9,7 @@ import {
 import { filterAndOrderPosterImages } from "../poster-image-rules.js";
 import { mergeAttachmentImageCandidates } from "../attachment-image-candidates.js";
 import { extractYouthSchedule } from "../youth-seoul-schedule.js";
+import { readPortalDeadline } from "../deadline-provenance.js";
 import {
   isLikelyApplicationLink,
   shouldUseExternalNoticeDetail,
@@ -37,6 +38,18 @@ function isInvalidDetailTitle(value) {
     /^\uC11C\uC6B8\uD2B9\uBCC4\uC2DC\s+\S+\uAD6C$/.test(title) ||
     /\uCCAD\uB144\uC815\uCC45\s*>\s*\uCCAD\uB144\uC815\uCC45\uAC80\uC0C9\s*>\s*\uCCAD\uB144\uC9C0\uC6D0\uC815\uBCF4/.test(title)
   );
+}
+
+/**
+ * The portal header shows "신청기간 2026-10-26 ~ 2026-11-12 00 : 00" for a
+ * notice that gives only a date. That 00:00 is not a time from the notice, so
+ * it is dropped before the text becomes evidence or a summary; a real time
+ * (e.g. "19 : 00") is kept.
+ */
+export function stripPortalMidnight(text) {
+  const value = String(text ?? "");
+  if (!/^\s*신청\s*기간/.test(value)) return value;
+  return value.replace(/(\d{4}-\d{2}-\d{2})\s*00\s*:\s*00(?!\s*:?\s*\d)/g, "$1");
 }
 
 export function choosePreferredDetailTitle(youthTitle, externalTitle) {
@@ -197,8 +210,15 @@ export default {
     const title = isInvalidDetailTitle(parsedTitle) ? "" : parsedTitle;
     const overviewText = cleanText($(".feed-view .overview").first().text());
     const schedule = extractYouthSchedule($);
-    const overviewEvidence = $(".feed-view .overview .info li")
-      .map((_, el) => cleanText($(el).text())).get()
+    const overviewItems = $(".feed-view .overview .info li")
+      .map((_, el) => cleanText($(el).text())).get();
+    // The raw field keeps its time ("19 : 00"); stripPortalMidnight only affects evidence text.
+    const portalDeadline = readPortalDeadline(
+      overviewItems.find((value) => /^\s*신청\s*기간/.test(value)),
+      { site: "youth-seoul", field: "신청기간" },
+    );
+    const overviewEvidence = overviewItems
+      .map((value) => stripPortalMidnight(value))
       .filter((value) => value && value !== "진행일정");
     if (schedule) overviewEvidence.push(`진행일정: ${schedule} (Asia/Seoul)`);
     const detailText = cleanText($(".feed-view .detail").first().text());
@@ -310,6 +330,8 @@ export default {
       title: inferredTitle || undefined,
       content: content || undefined,
       deadline: externalDetail?.deadline ?? end,
+      deadlineOrigin: externalDetail?.deadline ? "external_detail" : end ? "portal_field" : undefined,
+      portalDeadline: portalDeadline ?? undefined,
       images: posterImages.images,
       posterImageRule: posterImages.posterImageRule,
       posterImageCandidates: posterImages.posterImageCandidates,

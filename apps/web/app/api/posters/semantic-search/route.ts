@@ -97,6 +97,7 @@ export async function POST(request: Request) {
           applicationStartAt: poster.application_start_at,
           applicationEndAt: poster.application_end_at,
           deadlineType: poster.deadline_type,
+          eventEndAt: poster.event_end_at,
         }),
     );
 

@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createReadWriteGate, groupByReception, noDateNote } from "./myPosters";
+import {
+  cardApplicationInput,
+  createReadWriteGate,
+  groupByReception,
+  noDateNote,
+} from "./myPosters";
 import { getDeadlineDisplay } from "./deadlineDisplay";
 
 // 2026-11-03 12:00 KST
@@ -124,4 +129,26 @@ test("only the newest of overlapping reads is applied", () => {
   const second = gate.beginRead()!;
   assert.equal(gate.endRead(second), true);
   assert.equal(gate.endRead(first), false);
+});
+
+test("a saved card whose event already ended is 접수 종료, as on every other screen", () => {
+  // The 괴산 case: until filled, no application end, event ended 10-25.
+  const card = {
+    deadlineType: "until_exhausted",
+    posterStatus: "published",
+    eventEndAt: "2026-10-25T14:59:59Z",
+  };
+  const input = { ...cardApplicationInput(card), now };
+  assert.equal(getDeadlineDisplay(input).reception, "closed");
+  const groups = groupByReception([card], () => input);
+  assert.deepEqual(
+    groups.map((group) => group.key),
+    ["closed"],
+  );
+  // Without an event end the same card is still open (소진 시 마감).
+  const { eventEndAt: _ignored, ...withoutEnd } = card;
+  assert.equal(
+    getDeadlineDisplay({ ...cardApplicationInput(withoutEnd), now }).reception,
+    "until_exhausted",
+  );
 });

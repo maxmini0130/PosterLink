@@ -1,5 +1,7 @@
+"use client";
 import Link from "next/link";
 import type { PosterViewSource } from "../../lib/productEventsCore";
+import { usePosterClock } from "../../lib/usePosterClock";
 import {
   Building2,
   CalendarClock,
@@ -23,6 +25,12 @@ interface PosterCardProps {
     applicationStartAt?: string | null;
     deadline?: string;
     deadlineType?: string | null;
+    /** event_end_at: a finished event is shown as ended, not open. */
+    eventEndAt?: string | null;
+    imageWidth?: number | null;
+    imageHeight?: number | null;
+    imageStatus?: "ok" | "missing" | "unsuitable" | "broken" | null;
+    regionLabel?: string | null;
     tags?: string[];
     image?: string;
     images?: string[];
@@ -41,10 +49,13 @@ interface PosterCardProps {
 export type PosterCardData = PosterCardProps["poster"];
 
 export function PosterCard({ poster, source }: PosterCardProps) {
+  const now = usePosterClock();
   const applicationState = getPosterApplicationState({
+    now,
     applicationStartAt: poster.applicationStartAt,
     applicationEndAt: poster.deadline,
     deadlineType: poster.deadlineType,
+    eventEndAt: poster.eventEndAt,
   });
   const soon =
     applicationState.status === "due_today" ||
@@ -69,7 +80,11 @@ export function PosterCard({ poster, source }: PosterCardProps) {
   const showFitBadge = fitPercent !== null && fitPercent >= 30;
 
   return (
-    <Link href={`/posters/${poster.id}`} data-poster-source={source} className="group block h-full">
+    <Link
+      href={`/posters/${poster.id}`}
+      data-poster-source={source}
+      className="group block h-full"
+    >
       <article
         className={`flex h-full flex-col border bg-white transition-colors group-hover:border-blue-500 ${
           closed ? "border-slate-300" : "border-slate-200"

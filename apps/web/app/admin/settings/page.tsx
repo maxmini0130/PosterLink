@@ -51,7 +51,14 @@ export default function AdminSettingsPage() {
     else payload.sort_order = categories.length + 1;
     const { data: { user } } = await supabase.auth.getUser();
     const { data, error } = await supabase.from(table).insert(payload).select("id").single();
-    if (error) toast.error(error.message);
+    // categories/regions have no write policy: master data changes ship as
+    // supabase/migrations, so a policy refusal is expected here.
+    if (error)
+      toast.error(
+        error.code === "42501"
+          ? "기준정보는 화면에서 추가할 수 없습니다. DB 마이그레이션으로 추가해 주세요."
+          : "추가하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      );
     else {
       await supabase.from("admin_actions").insert({
         actor_user_id: user?.id ?? null,

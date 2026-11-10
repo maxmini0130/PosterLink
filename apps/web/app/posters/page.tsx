@@ -12,6 +12,7 @@ type PosterSearchParams = {
   region?: string;
   sort?: string;
   closed?: string;
+  status?: string;
 };
 
 function readFilters(searchParams: PosterSearchParams) {
@@ -20,19 +21,34 @@ function readFilters(searchParams: PosterSearchParams) {
     category: searchParams.category ?? null,
     region: searchParams.region ?? null,
     sort: searchParams.sort ?? null,
-    includeClosed: searchParams.closed === "include",
+    includeClosed:
+      searchParams.status === "open"
+        ? false
+        : searchParams.closed === "include",
   };
 }
 
-export async function generateMetadata({ searchParams }: { searchParams: PosterSearchParams }): Promise<Metadata> {
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: PosterSearchParams;
+}): Promise<Metadata> {
   const filters = readFilters(searchParams);
   const discovery = await fetchPublicDiscovery({ ...filters, limit: 1 });
-  const labels = [discovery.selectedRegion?.name, discovery.selectedCategory?.name, filters.query].filter(Boolean);
+  const labels = [
+    discovery.selectedRegion?.name,
+    discovery.selectedCategory?.name,
+    filters.query,
+  ].filter(Boolean);
   const qualifier = labels.length > 0 ? `${labels.join(" · ")} ` : "";
   const title = `${qualifier}공공 공고 찾기`;
   const description = `${qualifier}지원사업, 교육, 행사, 채용·모집 공고의 신청기간과 공식 신청 링크를 확인하세요.`;
   let canonical = "/posters";
-  if (!filters.query && discovery.selectedRegion && discovery.selectedCategory) {
+  if (
+    !filters.query &&
+    discovery.selectedRegion &&
+    discovery.selectedCategory
+  ) {
     canonical = `/regions/${taxonomySlug(discovery.selectedRegion, "REG")}/${taxonomySlug(discovery.selectedCategory, "CAT")}`;
   } else if (!filters.query && discovery.selectedRegion) {
     canonical = `/regions/${taxonomySlug(discovery.selectedRegion, "REG")}`;
@@ -44,12 +60,19 @@ export async function generateMetadata({ searchParams }: { searchParams: PosterS
     title,
     description,
     alternates: { canonical },
-    robots: filters.query || filters.sort || filters.includeClosed ? { index: false, follow: true } : undefined,
+    robots:
+      filters.query || filters.sort || filters.includeClosed
+        ? { index: false, follow: true }
+        : undefined,
     openGraph: { title: `${title} | PosterLink`, description, url: canonical },
   };
 }
 
-export default async function PosterListPage({ searchParams }: { searchParams: PosterSearchParams }) {
+export default async function PosterListPage({
+  searchParams,
+}: {
+  searchParams: PosterSearchParams;
+}) {
   const filters = readFilters(searchParams);
   const discovery = await fetchPublicDiscovery(filters);
   const appOrigin = getAppOrigin();
@@ -70,11 +93,14 @@ export default async function PosterListPage({ searchParams }: { searchParams: P
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(itemList).replace(/</g, "\\u003c") }}
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(itemList).replace(/</g, "\\u003c"),
+        }}
       />
       <PosterListClient
         initialPosters={discovery.posters}
         initialTotalCount={discovery.totalCount}
+        initialTotalIsMinimum={discovery.totalIsMinimum}
         initialCategories={discovery.categories}
         initialRegions={discovery.regions}
         initialQuery={filters.query}

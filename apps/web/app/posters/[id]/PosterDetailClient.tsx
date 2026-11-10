@@ -3,23 +3,50 @@ import toast from "react-hot-toast";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, Share2, X } from "lucide-react";
+import { Bell, Check, ChevronDown, ChevronLeft, ChevronRight, Share2, X } from "lucide-react";
 
 import { Header } from "../../components/Header";
 import { BottomNav } from "../../components/BottomNav";
 import { CommentSection } from "../../components/CommentSection";
 import { Footer } from "../../components/Footer";
-import { PosterImageCarousel } from "../../components/PosterImageCarousel";
 import { ActionBar, FavoriteButton, PrimaryActionLink } from "../../components/pl/ActionBar";
-import { ApplyMark } from "../../components/pl/ApplyMark";
 import { BottomSheet } from "../../components/pl/BottomSheet";
-import { DdayStamp } from "../../components/pl/DdayStamp";
-import { DeadlineLabel, ReceptionChip } from "../../components/pl/DeadlineLabel";
 import { PosterListCard, type PlPosterCardData } from "../../components/pl/PosterListCard";
 import { PosterThumb } from "../../components/pl/PosterThumb";
+import {
+  AppliedBand,
+  ApplyReturnPrompt,
+  ClosedBanner,
+  DetailPosterPreview,
+  DetailSimilar,
+  DetailSourceLine,
+  DetailSummaryCard,
+  DetailTags,
+} from "./DetailV61";
+import { getDeadlinePresentation, spokenDateTime } from "../../../lib/deadlinePresentation";
+import { PlButton } from "../../components/pl/PlControls";
+import {
+  APPLIED_CHANGE_EVENT,
+  markApplied,
+  unmarkApplied,
+  useAppliedPosters,
+  type AppliedChange,
+} from "../../lib/appliedClient";
+import {
+  clearApplyOpened,
+  rememberApplyOpened,
+  rememberApplyPrompted,
+  shouldAskApplied,
+} from "../../../lib/appliedPosters";
+import {
+  deadlineVerificationFromRow,
+  type DeadlineVerificationRow,
+} from "../../../lib/posterDeadlineFields";
+import { cardTitleText } from "../../../lib/posterCardText";
 import { SectionHeader } from "../../components/pl/SectionHeader";
 import { showActionToast } from "../../components/pl/actionToast";
 import { InstitutionFollowButton } from "../../institutions/InstitutionFollowButton";
+import { FollowPrompt, useFollowPromptOffer } from "../../components/pl/FollowPrompt";
 import { supabase } from "../../lib/supabase";
 import { logPosterView } from "../../lib/posterMetrics";
 import {
@@ -28,14 +55,16 @@ import {
   continueWithKakao,
   forgetGuestFavorite,
   guestLocal,
+  guestTab,
   isGuestFavorite,
   rememberActionForLogin,
   saveGuestFavorite,
   type PendingActionDoneDetail,
 } from "../../lib/guestSession";
-import { getDeadlineDisplay, receptionEndedOn } from "../../../lib/deadlineDisplay";
-import { readGuestInterest } from "../../../lib/guestInterest";
-import type { UserStatus } from "../../../lib/myPosters";
+import { receptionEndedOn } from "../../../lib/deadlineDisplay";
+import { readEntry, readGuestInterest } from "../../../lib/guestInterest";
+import { canGoBackInSite } from "../../../lib/backTarget";
+import { currentArrival } from "../../lib/inSiteHistory";
 import {
   formatApplicationPeriod,
   formatPosterDate,
@@ -49,6 +78,8 @@ import {
   extractTargetAgeRange,
 } from "../../../lib/posterSummaryFacts";
 import { usePosterClock } from "../../../lib/usePosterClock";
+import { isInstitutionHomepage, isPublicHttpUrl } from "../../../lib/posterActionLinks";
+import { posterRegionDisplay } from "../../../lib/posterRegionDisplay";
 import { FieldReportButton } from "./FieldReportButton";
 import { ClosedPosterAlertCta, type AlertDefaults } from "./ClosedPosterAlertCta";
 import { trackAlertEvent } from "../../../lib/alertAnalytics";
@@ -57,7 +88,7 @@ import { trackAnalytics, setAnalyticsLoginStatus } from "../../../lib/analytics"
 import { consumePosterViewSource, promptSignup, trackProductEvent } from "../../../lib/productEvents";
 import { shareUrl } from "../../../lib/productEventsCore";
 
-export type PosterDetailPoster = {
+export type PosterDetailPoster = DeadlineVerificationRow & {
   id: string;
   title: string;
   source_org_name: string | null;
@@ -84,6 +115,9 @@ export type PosterDetailPoster = {
   verified_at?: string | null;
   verification_status?: string | null;
   data_confidence?: number | null;
+  imageWidth?: number | null;
+  imageHeight?: number | null;
+  imageStatus?: "ok" | "missing" | "unsuitable" | "broken" | null;
   thumbnail_url: string | null;
   source_key: string | null;
   organizer_id?: string | null;
@@ -538,10 +572,10 @@ function FactsList({
       {facts.map((fact) => (
         <div
           key={fact.fieldKey}
-          className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3 border-t border-pl-divider py-2.5 first:border-t-0 xl:[&:nth-child(2)]:border-t-0"
+          className="flex flex-wrap gap-x-3 gap-y-1 border-t border-pl-divider py-2.5 first:border-t-0 xl:[&:nth-child(2)]:border-t-0"
         >
-          <dt className="text-[13px] text-pl-sub">{fact.label}</dt>
-          <dd className="flex min-w-0 items-start justify-between gap-2 text-sm font-medium leading-6 text-pl-ink">
+          <dt className="w-[5.5rem] shrink-0 text-[13px] text-pl-sub">{fact.label}</dt>
+          <dd className="flex min-w-[min(100%,9rem)] flex-1 items-start justify-between gap-2 text-sm font-medium leading-6 text-pl-ink">
             <FactValue
               value={fact.value}
               noticeLink={noticeLink}
@@ -575,6 +609,10 @@ export function PosterDetailClient({
   const router = useRouter();
   const pathname = usePathname() ?? `/posters/${poster.id}`;
   const [isFavorited, setIsFavoritedState] = useState(false);
+  const appliedMarks = useAppliedPosters();
+  const applied = appliedMarks.has(poster.id);
+  // "신청을 마치셨나요?" after coming back from the application page.
+  const [askApplied, setAskApplied] = useState(false);
   // Bumped by every local change (click, completion after sign-in), so a slower
   // initial lookup cannot overwrite a newer state.
   const favoriteVersion = useRef(0);
@@ -583,9 +621,6 @@ export function PosterDetailClient({
     setIsFavoritedState(value);
   };
   const [favoriteBusy, setFavoriteBusy] = useState(false);
-  // Signed-in person's own mark (retention plan 3-1); applySupported stays false
-  // until favorites.user_status exists (migration 20261101010000).
-  const [member, setMember] = useState<{ id: string; applySupported: boolean; status: UserStatus | null } | null>(null);
   const [applyBusy, setApplyBusy] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   // Guests without interest conditions are offered to choose them (UI plan ⑤).
@@ -593,6 +628,58 @@ export function PosterDetailClient({
   const [imageExpanded, setImageExpanded] = useState(false);
   const [expandedImageIndex, setExpandedImageIndex] = useState(0);
   const clock = usePosterClock();
+  // Organiser follow prompt (instruction 9): after a favorite, 20s on the
+  // page or reading to the end; once per visit, never for a followed or
+  // refused institution, never for a poster without an organiser.
+  const [followedSet, setFollowedSet] = useState<ReadonlySet<string> | null>(null);
+  const followPrompt = useFollowPromptOffer(followedSet ?? undefined);
+  const offerFollow = followPrompt.offer;
+  const [signedIn, setSignedIn] = useState(false);
+
+  useEffect(() => {
+    if (!institution) return;
+    let active = true;
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      const user = session?.user;
+      if (!active) return;
+      setSignedIn(Boolean(user));
+      if (!user) {
+        setFollowedSet(new Set());
+        return;
+      }
+      const { data, error } = await supabase
+        .from("institution_follows")
+        .select("institution_id")
+        .eq("user_id", user.id)
+        .eq("institution_id", institution.id)
+        .maybeSingle();
+      // Unknown follow state: do not prompt (it may already be followed).
+      if (active && !error) setFollowedSet(new Set(data ? [institution.id] : []));
+    });
+    return () => {
+      active = false;
+    };
+  }, [institution]);
+
+  useEffect(() => {
+    if (!institution || followedSet === null) return;
+    const target = { id: institution.id, name: institution.name };
+    const timer = window.setTimeout(() => {
+      if (document.visibilityState === "visible") offerFollow(target, "dwell");
+    }, 20000);
+    const onScroll = () => {
+      const end = document.documentElement.scrollHeight - 120;
+      if (window.innerHeight + window.scrollY >= end) {
+        window.removeEventListener("scroll", onScroll);
+        offerFollow(target, "scroll_end");
+      }
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, [institution, followedSet, offerFollow]);
 
   useEffect(() => {
     let cancelled = false;
@@ -608,23 +695,22 @@ export function PosterDetailClient({
         setIsFavoritedState(isGuestFavorite(poster.id));
         return;
       }
-      const lookup = (columns: string) =>
-        supabase.from("favorites").select(columns).eq("user_id", user.id).eq("poster_id", poster.id).maybeSingle();
-      let applySupported = true;
-      let result = await lookup("poster_id, user_status");
-      if (result.error && (result.error.code === "42703" || result.error.code === "PGRST204" || /user_status/.test(result.error.message))) {
-        applySupported = false;
-        result = await lookup("poster_id");
-      }
-      const row = result.data as { user_status?: string | null } | null;
-      if (cancelled) return;
-      setMember({
-        id: user.id,
-        applySupported,
-        status: row ? (row.user_status === "applied" ? "applied" : "interested") : null
-      });
+      const { data: row } = await supabase
+        .from("favorites")
+        .select("poster_id")
+        .eq("user_id", user.id)
+        .eq("poster_id", poster.id)
+        .maybeSingle();
       if (stillCurrent()) setIsFavoritedState(!!row);
     });
+
+    // A mark creates (or its undo removes) a member favourite: keep the heart in step.
+    const onApplied = (event: Event) => {
+      const change = (event as CustomEvent<AppliedChange>).detail;
+      if (change?.posterId === poster.id && typeof change.favorite === "boolean")
+        setIsFavorited(change.favorite);
+    };
+    window.addEventListener(APPLIED_CHANGE_EVENT, onApplied);
 
     // A favorite started before sign-in, completed by PendingActionRunner.
     const onDone = (event: Event) => {
@@ -636,8 +722,40 @@ export function PosterDetailClient({
     return () => {
       cancelled = true;
       window.removeEventListener(PENDING_ACTION_DONE_EVENT, onDone);
+      window.removeEventListener(APPLIED_CHANGE_EVENT, onApplied);
     };
   }, [poster.id]);
+
+  // Coming back to this tab after opening the application page: ask once
+  // (SPEC 5). Never asked when the mark is already set or was asked before.
+  useEffect(() => {
+    if (!appliedMarks.ready) return;
+    const check = () => {
+      if (document.visibilityState !== "visible") return;
+      if (
+        shouldAskApplied({
+          session: guestTab,
+          local: guestLocal,
+          posterId: poster.id,
+          applied,
+          now: Date.now(),
+        })
+      ) {
+        rememberApplyPrompted(guestLocal, poster.id);
+        clearApplyOpened(guestTab);
+        setAskApplied(true);
+      }
+    };
+    check();
+    document.addEventListener("visibilitychange", check);
+    window.addEventListener("focus", check);
+    window.addEventListener("pageshow", check);
+    return () => {
+      document.removeEventListener("visibilitychange", check);
+      window.removeEventListener("focus", check);
+      window.removeEventListener("pageshow", check);
+    };
+  }, [appliedMarks.ready, applied, poster.id]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -655,6 +773,10 @@ export function PosterDetailClient({
     const query = params.toString();
     window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
   }, [poster.categoryName, poster.id, poster.poster_status, poster.regionName]);
+
+  // SPEC 9 "찜한 직후(미확인)": no deadline reminder can follow an unconfirmed date.
+  const noDeadlineAlert = () =>
+    presentation.state !== "verified_time" && presentation.state !== "date_only";
 
   const toggleFavorite = async () => {
     if (favoriteBusy) return;
@@ -680,9 +802,12 @@ export function PosterDetailClient({
         }
         setIsFavorited(true);
         trackProductEvent("favorite_add", { posterId: poster.id, metadata: { screen: "detail", logged_in: false } });
+        if (followedSet && institution && offerFollow({ id: institution.id, name: institution.name }, "favorite")) return;
         promptSignup("detail", "favorite", { posterId: poster.id });
         showActionToast(
-          "이 기기에 저장됐어요",
+          noDeadlineAlert()
+            ? "이 기기에 찜했어요. 마감일 확인 전이라 마감 알림은 없어요."
+            : "이 기기에 저장됐어요",
           {
             label: "계정에 보관하기",
             onClick: () => {
@@ -715,7 +840,10 @@ export function PosterDetailClient({
           setAnalyticsLoginStatus(true);
           trackAnalytics("save_poster", {poster_id:poster.id,poster_category:poster.categoryId,poster_region:poster.regionId});
           trackProductEvent("favorite_add", { posterId: poster.id, metadata: { screen: "detail", logged_in: true } });
-          toast.success("찜했어요");
+          if (!(followedSet && institution && offerFollow({ id: institution.id, name: institution.name }, "favorite")))
+            toast.success(
+              noDeadlineAlert() ? "찜했어요. 마감일 확인 전이라 마감 알림은 없어요." : "찜했어요",
+            );
         } else {
           toast.error("찜하지 못했어요. 잠시 후 다시 시도해 주세요.");
         }
@@ -725,25 +853,13 @@ export function PosterDetailClient({
     }
   };
 
-  // 신청했어요: marking a poster not yet favorited saves it as a favorite too.
-  const setApplyStatus = async (status: UserStatus) => {
-    if (!member || applyBusy) return;
+  // v6.1 신청 표시 (SPEC 5): only this click sets it; undo is instant.
+  const setApplied = async (next: boolean) => {
+    if (applyBusy) return;
     setApplyBusy(true);
-    const values = { user_status: status, user_status_updated_at: new Date().toISOString() };
-    const { error } =
-      status === "applied"
-        ? await supabase
-            .from("favorites")
-            .upsert({ user_id: member.id, poster_id: poster.id, ...values }, { onConflict: "user_id,poster_id" })
-        : await supabase.from("favorites").update(values).eq("user_id", member.id).eq("poster_id", poster.id);
+    const ok = next ? await markApplied(poster.id, "detail") : await unmarkApplied(poster.id, "detail");
     setApplyBusy(false);
-    if (error) {
-      toast.error("표시를 저장하지 못했어요. 잠시 후 다시 시도해 주세요.");
-      return;
-    }
-    setMember({ ...member, status });
-    if (status === "applied") setIsFavorited(true);
-    trackProductEvent("apply_status_set", { posterId: poster.id, metadata: { screen: "detail", status, logged_in: true } });
+    if (!ok) toast.error("표시를 저장하지 못했어요. 잠시 후 다시 시도해 주세요.");
   };
 
   const keepInAccount = async () => {
@@ -803,34 +919,71 @@ export function PosterDetailClient({
     }
   };
 
-  const display = getDeadlineDisplay({
+  // The tab bar is hidden here on a phone, so 뒤로 가기 must never leave the
+  // site: it goes back only to a page of PosterLink, otherwise to the home
+  // (lib/backTarget.ts).
+  const goBack = () => {
+    const back = canGoBackInSite({
+      ...currentArrival(),
+      historyLength: window.history.length,
+      referrer: document.referrer,
+      origin: window.location.origin,
+      firstPageOfTab: readEntry(guestTab)?.path === window.location.pathname,
+    });
+    if (back) router.back();
+    else router.push("/");
+  };
+
+  // v6.1: the shared deadline function decides every deadline word on this
+  // screen (SPEC 4); missing confirmation columns claim nothing.
+  const presentation = getDeadlinePresentation({
+    ...deadlineVerificationFromRow(poster),
+    deadlineType: poster.deadline_type,
     applicationStartAt: poster.application_start_at,
     applicationEndAt: poster.application_end_at,
-    deadlineType: poster.deadline_type,
+    eventEndAt: poster.event_end_at,
     posterStatus: poster.poster_status,
+    applied,
     now: clock
   });
-  const closed = display.reception === "closed";
+  // The mark never changes whether reception is over.
+  const closed = getDeadlinePresentation({
+    ...deadlineVerificationFromRow(poster),
+    deadlineType: poster.deadline_type,
+    applicationStartAt: poster.application_start_at,
+    applicationEndAt: poster.application_end_at,
+    eventEndAt: poster.event_end_at,
+    posterStatus: poster.poster_status,
+    now: clock
+  }).state === "closed";
 
   const imageUrls = resolvePosterImageGallery(poster.images ?? [], poster.thumbnail_url, poster.source_key);
   // Plan 3-2: only an official_apply link is a sign-up page; otherwise the
   // primary action is the official notice. A homepage never becomes either.
-  const applyLink =
-    links.find((link) => link.link_type === "official_apply" && link.is_primary) ||
-    links.find((link) => link.link_type === "official_apply") ||
-    null;
+  // Unsafe URLs are never offered, and a bare institution homepage is not a
+  // sign-up form (from fix/public-ac-web-20261025, posterActionLinks).
+  const publicLinks = links.filter((link) => isPublicHttpUrl(link.url));
+  const applyLinks = publicLinks.filter(
+    (link) => link.link_type === "official_apply" && !isInstitutionHomepage(link.url),
+  );
+  const applyLink = applyLinks.find((link) => link.is_primary) || applyLinks[0] || null;
   const noticeLink =
-    links.find((link) => link.link_type === "official_notice" && link.is_primary) ||
-    links.find((link) => link.link_type === "official_notice") ||
+    publicLinks.find((link) => link.link_type === "official_notice" && link.is_primary) ||
+    publicLinks.find((link) => link.link_type === "official_notice") ||
     null;
   const primaryAction = applyLink
     ? { link: applyLink, label: getLinkActionLabel(applyLink) }
     : noticeLink
       ? { link: noticeLink, label: "공식 공고 확인하기" }
       : null;
-  const referenceLinks = links.filter((link) => link.id !== applyLink?.id && link.id !== noticeLink?.id);
+  const referenceLinks = publicLinks.filter(
+    (link) => link.id !== applyLink?.id && link.id !== noticeLink?.id && link.link_type !== "official_apply",
+  );
   const canSaveCalendar = getVerifiedPosterCalendarSource(poster) !== null;
-  const summaryLines = formatSummaryLines(poster.summary_long || poster.summary_short).filter(
+  // A region join that contradicts the notice's own 지역 line is shown as
+  // unconfirmed rather than as an eligibility scope (posterRegionDisplay).
+  const regionDisplay = posterRegionDisplay(poster.regionName, poster.summary_long || poster.summary_short);
+  const summaryLines = formatSummaryLines(regionDisplay.summary).filter(
     (line, index, lines) => lines.findIndex((item) => item.label === line.label && item.text === line.text) === index
   );
   const summaryFallbackFacts = derivePosterSummaryFallbackFacts(summaryLines);
@@ -863,30 +1016,34 @@ export function PosterDetailClient({
   const deadlinePassed = closedOn !== null;
   const logNotice = () => void logOfficialLinkClick(noticeLink);
 
-  // Plan ①-3 and ④-4: the facts a person needs to decide and apply.
+  const fee = poster.participation_fee || summaryFallbackFacts.participationFee || null;
+  // Screen plan v1.0 (06) "핵심 정보": 접수기간·신청대상·비용·인원·운영기간·
+  // 장소·신청방법 first. A missing value is never guessed; it points to the
+  // original instead (FactValue). Keys are the field-report keys.
   const coreFacts: Fact[] = closed
     ? [
         { fieldKey: "deadline_date", label: "접수 기간", value: period ? (deadlinePassed ? `${period} (종료)` : period) : null },
         { fieldKey: "target_desc", label: "신청 대상", value: eligibility },
-        { fieldKey: "recruitment_count", label: "모집 인원", value: poster.recruitment_count || null },
+        { fieldKey: "capacity", label: "모집 인원", value: poster.recruitment_count || null },
         ...(eventPeriod ? [{ fieldKey: "event_period", label: "교육/운영 기간", value: eventPeriod }] : []),
-        ...(poster.event_location ? [{ fieldKey: "event_location", label: "장소", value: poster.event_location }] : [])
+        ...(poster.event_location ? [{ fieldKey: "venue", label: "장소", value: poster.event_location }] : [])
       ]
     : [
         { fieldKey: "deadline_date", label: "접수 기간", value: period },
-        { fieldKey: "region", label: "대상 지역", value: poster.regionName || null },
-        { fieldKey: "recruitment_count", label: "모집 인원", value: poster.recruitment_count || null },
         { fieldKey: "target_desc", label: "신청 대상", value: eligibility },
+        { fieldKey: "cost", label: "비용", value: fee },
+        { fieldKey: "capacity", label: "모집 인원", value: poster.recruitment_count || null },
+        { fieldKey: "event_period", label: "교육/운영 기간", value: eventPeriod },
+        { fieldKey: "venue", label: "장소", value: poster.event_location || null },
         { fieldKey: "apply_method", label: "신청 방법", value: method }
       ];
   // Everything else stays inside "공고 원문 전체 보기".
   const moreFacts = [
     { label: "연령", value: targetAgeMin != null || targetAgeMax != null ? formatTargetAge(targetAgeMin, targetAgeMax) : null },
-    { label: "비용", value: poster.participation_fee || summaryFallbackFacts.participationFee || null },
+    ...(closed ? [{ label: "비용", value: fee }] : []),
     { label: "혜택", value: poster.benefits_summary || summaryFallbackFacts.benefitsSummary || null },
     { label: "준비 서류", value: poster.required_documents || null },
     { label: "문의", value: poster.contact_info || null },
-    ...(closed ? [] : [{ label: "교육/운영 기간", value: eventPeriod }, { label: "장소", value: poster.event_location || null }]),
     { label: "주최/주관", value: organizerName },
     { label: "신청 접수기관", value: poster.application_organization_name || null },
     { label: "정보 확인", value: publicInformationCheckLabel(poster) }
@@ -901,53 +1058,29 @@ export function PosterDetailClient({
   };
 
   const primaryButton = primaryAction ? (
-    <PrimaryActionLink href={primaryAction.link.url} onClick={() => void logOfficialLinkClick(primaryAction.link)}>
+    <PrimaryActionLink
+      href={primaryAction.link.url}
+      outline={applied}
+      onClick={() => {
+        void logOfficialLinkClick(primaryAction.link);
+        // Only a real application page leads to "신청을 마치셨나요?" (SPEC 12장 B).
+        if (applyLink && primaryAction.link.id === applyLink.id) rememberApplyOpened(guestTab, poster.id, Date.now());
+      }}
+    >
       {primaryAction.label}
     </PrimaryActionLink>
   ) : (
-    <span className="flex min-h-[44px] w-full items-center justify-center rounded-lg border border-pl-line px-4 text-sm text-pl-sub">
+    <span className="flex h-[46px] w-full items-center justify-center rounded-[10px] border border-pl-line-strong bg-white px-4 text-[14px] text-pl-meta">
       공식 링크 확인 중
     </span>
   );
 
-  const chips = (
-    <p className="flex flex-wrap items-center gap-1.5">
-      {poster.categoryName && (
-        <span className="inline-flex min-h-6 items-center rounded-md bg-pl-ink px-2 text-xs font-bold text-white">
-          {poster.categoryName}
-        </span>
-      )}
-      {poster.regionName && (
-        <span className="inline-flex min-h-6 items-center rounded-md border border-pl-line bg-pl-card px-2 text-xs font-medium text-pl-ink">
-          {poster.regionName}
-        </span>
-      )}
-      <ReceptionChip display={display} />
-    </p>
-  );
-
-  const posterFigure = (className: string) => (
-    <figure className={`relative overflow-hidden rounded-xl bg-pl-poster ${className}`}>
-      <PosterImageCarousel
-        images={imageUrls}
-        title={poster.title}
-        org={displayOrgName}
-        fallbackClassName="p-8"
-        imgClassName="h-full w-full object-contain"
-        showControls
-        iconSize={34}
-        onImageClick={(_, index) => openImage(index)}
-      />
-      {imageUrls.length > 0 && (
-        <button
-          type="button"
-          onClick={() => openImage(0)}
-          className="absolute bottom-3 right-3 inline-flex min-h-[36px] items-center rounded-full bg-pl-ink/90 px-3 text-xs font-bold text-white"
-        >
-          크게 보기
-        </button>
-      )}
-    </figure>
+  const tags = (
+    <DetailTags
+      category={poster.categoryName}
+      region={poster.regionName ? regionDisplay.label : null}
+      presentation={presentation}
+    />
   );
 
   const originalSection = (
@@ -957,12 +1090,14 @@ export function PosterDetailClient({
         <ChevronDown size={18} aria-hidden="true" className="transition-transform group-open:rotate-180" />
       </summary>
       <div className="space-y-5 border-t border-pl-divider px-4 py-4 text-sm leading-relaxed text-pl-ink">
+        {/* The field list keeps its 정보 오류 신고 buttons (moved from the first screen). */}
+        <FactsList facts={coreFacts} posterId={poster.id} noticeLink={noticeLink} onNoticeClick={logNotice} columns={!closed} />
         {moreFacts.length > 0 && (
           <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
             {moreFacts.map((fact) => (
-              <div key={fact.label} className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3">
-                <dt className="text-[13px] text-pl-sub">{fact.label}</dt>
-                <dd className="min-w-0 break-words font-medium">{fact.value}</dd>
+              <div key={fact.label} className="flex flex-wrap gap-x-3 gap-y-1">
+                <dt className="w-[5.5rem] shrink-0 text-[13px] text-pl-sub">{fact.label}</dt>
+                <dd className="min-w-[min(100%,9rem)] flex-1 break-words font-medium">{fact.value}</dd>
               </div>
             ))}
           </dl>
@@ -1019,7 +1154,7 @@ export function PosterDetailClient({
         <Link href={`/institutions/${institution.slug}`} className="block truncate text-[15px] font-bold text-pl-ink underline-offset-2 hover:underline">
           {institution.name}
         </Link>
-        <p className="text-[13px] leading-5 text-pl-sub">구독하면 이 기관의 새 공고를 모아 보여드려요</p>
+        <p className="text-[13px] leading-5 text-pl-sub">팔로우하면 홈의 &lsquo;팔로우 기관 소식&rsquo;에 새 공고가 모여요</p>
       </div>
       <InstitutionFollowButton institutionId={institution.id} returnPath={pathname} variant="pl" />
     </section>
@@ -1058,45 +1193,73 @@ export function PosterDetailClient({
     </p>
   );
 
-  const titleBlock = (
-    <div className="flex items-start gap-3">
-      <div className="min-w-0 flex-1">
-        {chips}
-        <h1
-          data-analytics-poster-id={poster.id}
-          data-analytics-category={poster.categoryId || undefined}
-          data-analytics-region={poster.regionId || undefined}
-          className={`mt-2.5 font-pl-serif text-[23px] font-bold leading-[1.38] xl:text-[32px] ${closed ? "text-pl-sub" : "text-pl-ink"}`}
-        >
-          {poster.title}
-        </h1>
-        {displayOrgName && <p className="mt-1.5 text-[13px] text-pl-meta">{displayOrgName}</p>}
-      </div>
-      {closed ? (
-        imageUrls[0] && (
-          <PosterThumb src={imageUrls[0]} className="h-[72px] w-14" />
-        )
-      ) : (
-        <DdayStamp display={display} />
-      )}
-    </div>
+  // Official title, serif, up to three lines (SPEC 7.2 ④).
+  const title = (
+    <h1
+      data-analytics-poster-id={poster.id}
+      data-analytics-category={poster.categoryId || undefined}
+      data-analytics-region={poster.regionId || undefined}
+      className={`m-0 line-clamp-3 break-keep font-pl-serif text-[21px] font-bold leading-[1.4] xl:text-[30px] ${closed ? "text-pl-ink-soft" : "text-pl-ink"}`}
+    >
+      {cardTitleText(poster.title)}
+    </h1>
   );
 
-  // ④ banner: when it ended, then accepting alternatives (most relevant first).
-  const closedBanner = closed && (
-    <section className="rounded-xl bg-pl-ink p-4 text-white">
-      <p className="text-[15px] font-bold">
-        {closedOn ? `이 공고는 ${closedOn}에 접수가 끝났어요` : "이 공고는 접수가 끝났어요"}
-      </p>
-      {institution && relatedPosters.length > 0 && (
-        <div className="mt-3 space-y-2">
-          <p className="text-[13px] text-white/80">{institution.name}에서 지금 접수 중인 공고</p>
-          {relatedPosters.map((related) => (
-            <PosterListCard key={related.id} poster={related} source="related" />
-          ))}
-        </div>
-      )}
-    </section>
+  const summaryCard = (
+    <DetailSummaryCard
+      eligibility={eligibility}
+      recruitment={poster.recruitment_count || null}
+      presentation={presentation}
+      fee={fee}
+      eventPeriod={eventPeriod}
+      location={poster.event_location || null}
+    />
+  );
+
+  const similar = (
+    <DetailSimilar
+      closed={closed}
+      categoryName={poster.categoryName ?? null}
+      categoryHref={poster.categoryId ? `/posters?category=${poster.categoryId}` : "/posters"}
+    />
+  );
+
+  const sourceLine = (
+    <DetailSourceLine sourceLabel={sourceLabel} noticeUrl={noticeLink?.url ?? null} onNoticeClick={logNotice} />
+  );
+
+  // SPEC 5: the green band after 신청했어요, with undo.
+  const applyRecord = applied && (
+    <AppliedBand
+      onUndo={() => void setApplied(false)}
+      busy={applyBusy}
+      selectionNotice={spokenDateTime(poster.selection_notice_at, clock)}
+    />
+  );
+
+  // 신청했어요 (selected: green). Hidden while the return prompt asks the same.
+  const applyButton = !askApplied && (
+    <PlButton
+      variant={applied ? "applied" : "default"}
+      aria-pressed={applied}
+      disabled={applyBusy}
+      onClick={() => void setApplied(!applied)}
+      className="shrink-0 px-3.5"
+    >
+      <Check size={16} strokeWidth={applied ? 3 : 2} aria-hidden="true" />
+      신청했어요
+    </PlButton>
+  );
+
+  const returnPrompt = askApplied && !applied && (
+    <ApplyReturnPrompt
+      busy={applyBusy}
+      onApplied={() => {
+        setAskApplied(false);
+        void setApplied(true);
+      }}
+      onNotYet={() => setAskApplied(false)}
+    />
   );
 
   const alertCta = closed && (
@@ -1129,8 +1292,9 @@ export function PosterDetailClient({
               type="button"
               onClick={open}
               disabled={disabled}
-              className="flex min-h-[44px] flex-1 items-center justify-center rounded-lg bg-pl-accent px-3 text-sm font-bold text-white disabled:opacity-60"
+              className="flex h-[46px] flex-1 items-center justify-center gap-1.5 rounded-[10px] border border-pl-ink bg-white px-3 text-[14px] font-bold text-pl-ink disabled:opacity-60"
             >
+              <Bell size={17} strokeWidth={2} aria-hidden="true" />
               비슷한 공고 받기
             </button>
           </div>
@@ -1149,7 +1313,7 @@ export function PosterDetailClient({
         <button
           type="button"
           aria-label="뒤로 가기"
-          onClick={() => (window.history.length > 1 ? router.back() : router.push("/posters"))}
+          onClick={goBack}
           className="flex h-11 w-11 items-center justify-center rounded-lg"
         >
           <ChevronLeft size={22} aria-hidden="true" />
@@ -1160,109 +1324,123 @@ export function PosterDetailClient({
         </button>
       </div>
 
-      <main className="mx-auto w-full max-w-[1200px] px-5 py-5 xl:px-10 xl:py-8">
+      <main className="mx-auto w-full max-w-[1200px] pb-8 xl:px-10 xl:py-8">
         <nav aria-label="위치" className="mb-5 hidden text-[13px] text-pl-meta xl:block">
           <ol className="flex flex-wrap items-center gap-1.5">
             <li><Link href="/" className="hover:underline">홈</Link></li>
             {poster.categoryName && poster.categoryId && (
               <li><span aria-hidden="true">› </span><Link href={`/posters?category=${poster.categoryId}`} className="hover:underline">{poster.categoryName}</Link></li>
             )}
-            {poster.regionName && poster.regionId && (
+            {poster.regionName && poster.regionId && !regionDisplay.conflict && (
               <li><span aria-hidden="true">› </span><Link href={`/posters?region=${poster.regionId}`} className="hover:underline">{poster.regionName}</Link></li>
             )}
           </ol>
         </nav>
 
-        <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_380px] xl:items-start xl:gap-10">
-          <div className="min-w-0 space-y-6">
-            {titleBlock}
-            {closedBanner}
-            {/* ④ 내 기록: only for a member who marked it; the poster closing never changes it. */}
-            {closed && member?.applySupported && member.status === "applied" && (
-              <section aria-labelledby="my-record" className="rounded-xl border border-pl-line bg-pl-card px-4 py-3">
-                <h2 id="my-record" className="pb-2 text-[15px] font-bold">내 기록</h2>
-                <ApplyMark
-                  marked
-                  busy={applyBusy}
-                  onMark={() => void setApplyStatus("applied")}
-                  onUnmark={() => void setApplyStatus("interested")}
-                />
-                <p className="mt-2 text-[13px] leading-5 text-pl-sub">내가 직접 표시한 기록이에요. 공고가 끝나도 그대로 남아요.</p>
-              </section>
-            )}
-
-            <section aria-labelledby="core-facts" className="rounded-xl border border-pl-line bg-pl-card px-4 py-3">
-              <h2 id="core-facts" className="pb-1.5 pt-1 text-[15px] font-bold">
-                {closed ? "공고 정보" : "신청 핵심 정보"}
-              </h2>
-              <FactsList facts={coreFacts} posterId={poster.id} noticeLink={noticeLink} onNoticeClick={logNotice} columns={!closed} />
-              {!closed && member?.applySupported && (
-                <div className="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-dashed border-pl-line pt-3">
-                  <p className="text-[13px] leading-5 text-pl-sub">
-                    신청을 마쳤다면 직접 표시해 두세요.
-                    <br />
-                    내 공고에서 따로 모아 볼 수 있어요.
-                  </p>
-                  <ApplyMark
-                    marked={member.status === "applied"}
-                    busy={applyBusy}
-                    onMark={() => void setApplyStatus("applied")}
-                    onUnmark={() => void setApplyStatus("interested")}
-                  />
-                </div>
-              )}
-            </section>
-
-
-            {!closed && posterFigure("h-[240px] xl:hidden")}
-            {originalSection}
-            {!closed && institutionCard}
-            {!closed && relatedSection}
-            {closed && institutionCard}
-            {sourceNote}
-            {alertCta}
-            <CommentSection posterId={poster.id} />
-          </div>
-
-          {/* PC right column: poster and actions, kept in view while scrolling. */}
-          <aside aria-label="공고 행동" className="hidden xl:sticky xl:top-6 xl:block">
-            {posterFigure("aspect-[3/4] w-full")}
-            <div className="mt-4 space-y-3 rounded-xl border border-pl-line bg-pl-card p-4">
-              {closed ? (
-                noticeLink && (
-                  <a
-                    href={noticeLink.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={logNotice}
-                    className="flex min-h-[44px] w-full items-center justify-center rounded-lg border border-pl-ink px-4 text-sm font-bold text-pl-ink"
-                  >
-                    공식 공고 확인하기<span className="sr-only"> (새 창)</span>
-                  </a>
-                )
-              ) : (
-                <>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-pl-sub">마감</span>
-                    <DeadlineLabel display={display} />
-                  </div>
-                  {primaryButton}
-                  <div className="flex gap-2">
-                    <FavoriteButton favorited={isFavorited} onToggle={toggleFavorite} busy={favoriteBusy} className="flex-1" />
-                    <button type="button" onClick={share} className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-lg border border-pl-line text-sm font-bold text-pl-ink">
-                      <Share2 size={16} aria-hidden="true" />
-                      공유
-                    </button>
-                  </div>
-                </>
+        {closed ? (
+          /* v6.1 마감 상세 (SPEC 7.3): small poster, banner, alternatives,
+             then the original content behind "마감된 공고 내용 보기". */
+          <div className="space-y-5 px-4 pt-4 xl:mx-auto xl:max-w-[720px] xl:px-0 xl:pt-0">
+            <div className="flex items-start gap-3">
+              <div className="min-w-0 flex-1 space-y-2.5">
+                {tags}
+                {title}
+              </div>
+              {imageUrls[0] && (
+                <button type="button" onClick={() => openImage(0)} aria-label="포스터 크게 보기" className="shrink-0">
+                  <PosterThumb src={imageUrls[0]} className="h-[116px] w-[84px]" />
+                </button>
               )}
             </div>
-          </aside>
-        </div>
+            <ClosedBanner text={presentation.detail} />
+            {applyRecord}
+            {similar}
+            {alertCta}
+            <details className="group" data-closed-content>
+              <summary className="flex min-h-[48px] cursor-pointer list-none items-center justify-center gap-1 text-[14px] text-pl-meta [&::-webkit-details-marker]:hidden">
+                마감된 공고 내용 보기
+                <ChevronDown size={17} aria-hidden="true" className="transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="mt-3 space-y-4">
+                {summaryCard}
+                {sourceLine}
+                {originalSection}
+              </div>
+            </details>
+            {institutionCard}
+            {relatedSection}
+            {sourceNote}
+            <CommentSection posterId={poster.id} />
+          </div>
+        ) : (
+          <>
+            {/* v6.1 접수 중 상세 (SPEC 7.2, 7.5): poster preview, tags, title,
+                summary and the buttons on the first screen. PC: poster left (480). */}
+            <div className="xl:grid xl:grid-cols-[480px_minmax(0,1fr)] xl:items-start xl:gap-10">
+              <div className="xl:sticky xl:top-6">
+                <DetailPosterPreview
+                  src={imageUrls[0] ?? null}
+                  title={poster.title}
+                  org={displayOrgName}
+                  category={poster.categoryName}
+                  imageWidth={poster.imageWidth}
+                  imageHeight={poster.imageHeight}
+                  onOpen={() => openImage(0)}
+                  className="xl:max-h-[760px] xl:rounded-xl"
+                />
+              </div>
+              <div className="min-w-0 space-y-3.5 px-4 pt-4 xl:space-y-4 xl:px-0 xl:pt-0">
+                {tags}
+                {title}
+                {displayOrgName && <p className="m-0 hidden text-[14px] text-pl-meta xl:block">{displayOrgName}</p>}
+                {/* SPEC 5 (m-detail-applied): the band sits between the title and the summary. */}
+                {applyRecord}
+                {summaryCard}
+                {/* PC: the buttons sit under the summary (SPEC 7.5). */}
+                <div className="hidden gap-2 xl:flex">
+                  <div className="min-w-0 flex-1">{primaryButton}</div>
+                  {applyButton}
+                  <FavoriteButton favorited={isFavorited} onToggle={toggleFavorite} busy={favoriteBusy} />
+                  <button
+                    type="button"
+                    onClick={share}
+                    aria-label="공유하기"
+                    className="inline-flex h-[46px] w-[52px] items-center justify-center rounded-[10px] border border-pl-line-strong bg-white text-pl-ink"
+                  >
+                    <Share2 size={18} aria-hidden="true" />
+                  </button>
+                </div>
+                {/* PC: the prompt sits near the buttons; on phones it floats above the bar. */}
+                {returnPrompt}
+                {!applied && (
+                  <p className="m-0 hidden text-[13px] leading-[1.55] text-pl-meta xl:block">
+                    신청을 마친 뒤 &lsquo;신청했어요&rsquo;로 표시하면 마감 알림에서 빠지고 찜의 &lsquo;신청한 공고&rsquo;에 모여요. 언제든 되돌릴 수 있어요.
+                  </p>
+                )}
+                {sourceLine}
+                <div className="pt-3">{similar}</div>
+              </div>
+            </div>
+            {/* Below the first screen: the existing sections (SPEC 7.2, 12장 B). */}
+            <div className="mt-8 space-y-6 px-4 xl:px-0">
+              {originalSection}
+              {institutionCard}
+              {relatedSection}
+              {sourceNote}
+              <CommentSection posterId={poster.id} />
+            </div>
+          </>
+        )}
       </main>
 
       {!closed && (
-        <ActionBar favorited={isFavorited} onToggleFavorite={toggleFavorite} favoriteBusy={favoriteBusy} primary={primaryButton} />
+        <ActionBar
+          favorited={isFavorited}
+          onToggleFavorite={toggleFavorite}
+          favoriteBusy={favoriteBusy}
+          extra={applyButton || undefined}
+          primary={primaryButton}
+        />
       )}
 
       <BottomSheet
@@ -1358,6 +1536,18 @@ export function PosterDetailClient({
             onClick={(event) => event.stopPropagation()}
           />
         </div>
+      )}
+      {followPrompt.request && (
+        <FollowPrompt
+          request={followPrompt.request}
+          screen="detail"
+          signedIn={signedIn}
+          returnTo={pathname}
+          raised
+          headline={followPrompt.request.trigger === "favorite" ? "찜했어요 · 내 공고에 담겼어요" : undefined}
+          onClose={followPrompt.close}
+          onFollowed={(id) => setFollowedSet(new Set([id]))}
+        />
       )}
       <Footer />
       <BottomNav />

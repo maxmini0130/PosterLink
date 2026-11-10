@@ -80,6 +80,8 @@ async function open(
     const req = r.request();
     const u = req.url();
     const m = req.method();
+    if (m === "GET" && /\/rest\/v1\/poster_images/.test(u))
+      return r.fulfill(json([]));
     if (
       m === "GET" &&
       /\/api\/image-proxy|\/storage\/v1\/object\/public\//.test(u)
@@ -218,7 +220,7 @@ test("guest: this browser's favorites, no account tabs, 찜 취소", async ({
   await expect(
     page
       .getByRole("navigation", { name: "주요 탐색" })
-      .getByRole("link", { name: "내 공고" }),
+      .getByRole("link", { name: "찜", exact: true }),
   ).toHaveAttribute("aria-current", "page");
 });
 
@@ -230,7 +232,7 @@ test("member: merge notice, tabs, reception groups and the apply mark", async ({
     page.getByText("이 기기에 찜한 공고 2개를 계정으로 옮겼어요"),
   ).toBeVisible();
   expect((await page.getByRole("tab").allTextContents()).join("|")).toBe(
-    "찜 3|신청 표시 2|구독 기관 1",
+    "찜 3|신청 표시 2|팔로우 기관 1",
   );
   expect(
     (await page.locator("#my-panel-favorites h2").allTextContents()).join(
@@ -262,7 +264,7 @@ test("member before the user_status migration: no apply mark or 신청 표시 ta
 }) => {
   await open(page, 390, { member: true, applySupported: false });
   expect((await page.getByRole("tab").allTextContents()).join("|")).toBe(
-    "찜 3|구독 기관 1",
+    "찜 3|팔로우 기관 1",
   );
   await expect(page.getByRole("button", { name: "신청했어요" })).toHaveCount(0);
 });
@@ -306,7 +308,7 @@ test("PC account menu opens, moves with keys and closes", async ({ page }) => {
   await expect(
     page
       .getByRole("navigation", { name: "주요 메뉴" })
-      .getByRole("link", { name: "내 공고" }),
+      .getByRole("link", { name: "찜", exact: true }),
   ).toHaveAttribute("aria-current", "page");
 });
 

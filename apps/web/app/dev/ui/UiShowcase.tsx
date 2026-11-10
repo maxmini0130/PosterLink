@@ -26,6 +26,7 @@ import { ReportFab } from "../../components/pl/ReportFab";
 import { SectionHeader } from "../../components/pl/SectionHeader";
 import { showActionToast } from "../../components/pl/actionToast";
 import { BottomNav } from "../../components/BottomNav";
+import { V61CardStates } from "./V61CardStates";
 
 // Review-only samples relative to now, so every reception state is visible.
 const day = 86_400_000;
@@ -123,6 +124,8 @@ export function UiShowcase() {
         <h1 className="font-pl-serif text-2xl font-bold">
           UI 컴포넌트 확인 (개발용)
         </h1>
+
+        <V61CardStates />
 
         <section aria-labelledby="tokens">
           <SectionHeader
@@ -233,10 +236,10 @@ export function UiShowcase() {
         </section>
 
         <GuideCard
-          title="자주 보는 기관을 구독해 보세요"
+          title="자주 보는 기관을 팔로우해 보세요"
           action={{ href: "/institutions", label: "기관 둘러보기" }}
         >
-          구독한 기관에 새 공고가 올라오면 홈에서 모아 보여드려요.
+          팔로우한 기관의 새 공고를 홈에서 모아 보여드려요.
         </GuideCard>
 
         <section aria-labelledby="actions" className="space-y-3">

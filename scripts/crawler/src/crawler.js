@@ -684,6 +684,7 @@ export async function crawlSite(site, adapter, options = {}) {
                 fullPost.attachmentAnalysis = attachmentAnalysis;
                 if (!fullPost.deadline && attachmentAnalysis.suggestedDeadline) {
                   fullPost.deadline = attachmentAnalysis.suggestedDeadline;
+                  fullPost.deadlineOrigin = "attachment_suggestion";
                 }
               } else if (attachmentAnalysis.checked > 0) {
                 fullPost.attachmentAnalysis = attachmentAnalysis;

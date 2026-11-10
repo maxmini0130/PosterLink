@@ -1,4 +1,5 @@
 import { fetchPage } from "../crawler.js";
+import { readPortalDeadline } from "../deadline-provenance.js";
 
 const BASE_URL = "https://job.alio.go.kr";
 const LIST_URL = `${BASE_URL}/recruit.do`;
@@ -63,10 +64,13 @@ function extractLabelDate(text, label) {
   return normalizeDate(match?.[1]);
 }
 
-function extractLabelDeadline(text, label) {
+function labelValue(text, label) {
   const pattern = new RegExp(`${label}\\s*:\\s*([^\\n]+)`);
-  const match = String(text ?? "").match(pattern);
-  return extractDeadline(match?.[1]);
+  return String(text ?? "").match(pattern)?.[1] ?? null;
+}
+
+function extractLabelDeadline(text, label) {
+  return extractDeadline(labelValue(text, label));
 }
 
 function buildPageUrl(boardUrl, page) {
@@ -257,11 +261,17 @@ export default {
       bodyText,
     ].filter(Boolean).join("\n\n"));
 
+    const deadline = extractLabelDeadline(content, "채용기간") ?? extractLabelDeadline(content, "마감일") ?? extractDeadline(content);
+    const portalDeadline = readPortalDeadline(labelValue(content, "채용기간"), { site: "job-alio", field: "채용기간" });
     return {
       title: title || undefined,
       content: content || undefined,
       date: extractLabelDate(content, "등록일") ?? normalizeDate(content) ?? undefined,
-      deadline: extractLabelDeadline(content, "채용기간") ?? extractLabelDeadline(content, "마감일") ?? extractDeadline(content),
+      deadline,
+      deadlineOrigin: deadline
+        ? portalDeadline?.date === deadline ? "portal_field" : "notice_text"
+        : undefined,
+      portalDeadline: portalDeadline ?? undefined,
       images: [],
       attachments,
       sourceUrl: postUrl,

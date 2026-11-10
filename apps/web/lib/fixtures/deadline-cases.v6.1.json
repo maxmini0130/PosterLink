@@ -1,0 +1,493 @@
+{
+ "_about": "마감 표시 함수의 검수 사례. input의 이름은 SPEC.md 4.1의 제안 이름을 줄인 것이며 코드에 맞게 바꿔도 됩니다. expected에 있는 항목만 확인합니다. card는 2열 카드, row는 목록 행, detail은 상세의 문구. alert는 홈의 찜 마감 줄 대상인지(찜했다고 가정), push_alert는 알림 발송 대상인지. 시각은 모두 Asia/Seoul.",
+ "cases": [
+  {
+   "name": "날짜·시각 확인, D-10",
+   "now": "2026-11-09T10:00:00+09:00",
+   "input": {
+    "kind": "fixed",
+    "status": "verified",
+    "date": "2026-11-19",
+    "time": "09:00",
+    "time_verified": true,
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "state": "verified_time",
+    "card": "11.19(목) 오전 9시까지",
+    "row": "11.19(목) 오전 9시까지 · D-10",
+    "detail": "11.19(목) 오전 9시까지",
+    "stamp": null,
+    "dday": 10,
+    "status_tag": "접수 중",
+    "alert": false
+   },
+   "posting": "njob"
+  },
+  {
+   "name": "날짜·시각 확인, D-3 도장",
+   "now": "2026-11-09T10:00:00+09:00",
+   "input": {
+    "kind": "fixed",
+    "status": "verified",
+    "date": "2026-11-12",
+    "time": "18:00",
+    "time_verified": true,
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "state": "verified_time",
+    "card": "11.12(목) 오후 6시까지",
+    "row": "11.12(목) 오후 6시까지",
+    "stamp": "D-3",
+    "dday": 3,
+    "alert": true
+   },
+   "posting": "sinhon"
+  },
+  {
+   "name": "원문에 23:59가 있는 공고",
+   "now": "2026-11-09T10:00:00+09:00",
+   "input": {
+    "kind": "fixed",
+    "status": "verified",
+    "date": "2026-11-11",
+    "time": "23:59",
+    "time_verified": true,
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "state": "verified_time",
+    "card": "11.11(수) 23:59까지",
+    "row": "11.11(수) 밤 11시 59분까지",
+    "detail": "11.11(수) 밤 11시 59분까지",
+    "stamp": "D-2",
+    "dday": 2,
+    "alert": true
+   },
+   "posting": "leather"
+  },
+  {
+   "name": "저장값만 23:59:59이고 시각 확인 표시가 없음 → 날짜만",
+   "now": "2026-11-09T10:00:00+09:00",
+   "input": {
+    "kind": "fixed",
+    "status": "verified",
+    "date": "2026-11-15",
+    "time": "23:59",
+    "time_verified": false,
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "state": "date_only",
+    "card": "11.15(일)까지",
+    "row": "11.15(일)까지 · D-6",
+    "detail": "11.15(일)까지",
+    "detail_caption": "마감 시각은 공고문에서 확인",
+    "stamp": null,
+    "dday": 6,
+    "alert": false
+   },
+   "posting": "labor"
+  },
+  {
+   "name": "오전 마감, D-1",
+   "now": "2026-11-09T10:00:00+09:00",
+   "input": {
+    "kind": "fixed",
+    "status": "verified",
+    "date": "2026-11-10",
+    "time": "09:00",
+    "time_verified": true,
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "state": "verified_time",
+    "card": "11.10(화) 오전 9시까지",
+    "stamp": "D-1",
+    "dday": 1,
+    "alert": true
+   },
+   "posting": "coach"
+  },
+  {
+   "name": "오후 1시 마감, D-17",
+   "now": "2026-11-09T10:00:00+09:00",
+   "input": {
+    "kind": "fixed",
+    "status": "verified",
+    "date": "2026-11-26",
+    "time": "13:00",
+    "time_verified": true,
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "card": "11.26(목) 오후 1시까지",
+    "row": "11.26(목) 오후 1시까지 · D-17",
+    "stamp": null,
+    "dday": 17
+   },
+   "posting": "kitchen"
+  },
+  {
+   "name": "날짜·시각 확인, 당일 시각 전",
+   "now": "2026-11-12T10:00:00+09:00",
+   "input": {
+    "kind": "fixed",
+    "status": "verified",
+    "date": "2026-11-12",
+    "time": "18:00",
+    "time_verified": true,
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "state": "verified_time",
+    "stamp": "오늘",
+    "dday": 0,
+    "status_tag": "접수 중",
+    "alert": true
+   }
+  },
+  {
+   "name": "날짜·시각 확인, 당일 시각 지남 → 마감",
+   "now": "2026-11-12T18:01:00+09:00",
+   "input": {
+    "kind": "fixed",
+    "status": "verified",
+    "date": "2026-11-12",
+    "time": "18:00",
+    "time_verified": true,
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "state": "closed",
+    "stamp": null,
+    "status_tag": "접수 종료",
+    "alert": false
+   }
+  },
+  {
+   "name": "날짜만 확인, D-3부터 도장",
+   "now": "2026-11-12T10:00:00+09:00",
+   "input": {
+    "kind": "fixed",
+    "status": "verified",
+    "date": "2026-11-15",
+    "time": null,
+    "time_verified": false,
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "state": "date_only",
+    "card": "11.15(일)까지",
+    "stamp": "D-3",
+    "dday": 3,
+    "alert": true
+   },
+   "posting": "labor"
+  },
+  {
+   "name": "날짜만 확인, 당일",
+   "now": "2026-11-09T10:00:00+09:00",
+   "input": {
+    "kind": "fixed",
+    "status": "verified",
+    "date": "2026-11-09",
+    "time": null,
+    "time_verified": false,
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "state": "date_only",
+    "card": "오늘이 마감일 · 시각 확인",
+    "stamp": "오늘",
+    "dday": 0,
+    "status_tag": "접수 중",
+    "push_alert": false
+   },
+   "posting": "single"
+  },
+  {
+   "name": "날짜만 확인, 밤 11시에도 접수 중",
+   "now": "2026-11-09T23:30:00+09:00",
+   "input": {
+    "kind": "fixed",
+    "status": "verified",
+    "date": "2026-11-09",
+    "time": null,
+    "time_verified": false,
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "state": "date_only",
+    "status_tag": "접수 중"
+   }
+  },
+  {
+   "name": "날짜만 확인, 다음 날 0시 → 마감",
+   "now": "2026-11-10T00:00:00+09:00",
+   "input": {
+    "kind": "fixed",
+    "status": "verified",
+    "date": "2026-11-09",
+    "time": null,
+    "time_verified": false,
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "state": "closed",
+    "status_tag": "접수 종료"
+   }
+  },
+  {
+   "name": "회차별 접수(조건 확인됨)",
+   "now": "2026-11-09T10:00:00+09:00",
+   "input": {
+    "kind": "per_session",
+    "session_rule_text": "각 클래스 전날까지 접수",
+    "session_rule_verified": true,
+    "last_session_deadline_date": "2026-12-13",
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "state": "per_session",
+    "card": "각 클래스 전날까지 접수",
+    "row": "각 클래스 전날까지 접수",
+    "stamp": null,
+    "dday": null,
+    "alert": false,
+    "must_not_contain": [
+     "12.13",
+     "D-34"
+    ]
+   },
+   "posting": "jobtalk"
+  },
+  {
+   "name": "회차별 접수(조건 확인 전)",
+   "now": "2026-11-09T10:00:00+09:00",
+   "input": {
+    "kind": "per_session",
+    "session_rule_verified": false,
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "state": "per_session_unverified",
+    "card": "회차별 접수 조건 확인",
+    "row": "회차별 접수 조건은 신청 페이지에서 확인",
+    "tone": "muted",
+    "stamp": null,
+    "dday": null,
+    "alert": false
+   },
+   "posting": "house"
+  },
+  {
+   "name": "정원 마감 때까지",
+   "now": "2026-11-09T10:00:00+09:00",
+   "input": {
+    "kind": "until_full",
+    "label": "정원 마감 때까지",
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "state": "label",
+    "card": "정원 마감 때까지",
+    "stamp": null,
+    "dday": null,
+    "alert": false
+   },
+   "posting": "jongno"
+  },
+  {
+   "name": "상시·반복 예약: 운영 기간 끝(12.31)을 마감으로 쓰지 않음",
+   "now": "2026-11-09T10:00:00+09:00",
+   "input": {
+    "kind": "rolling",
+    "label": "매월 선착순 예약",
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "state": "label",
+    "card": "매월 선착순 예약",
+    "stamp": null,
+    "dday": null,
+    "must_not_contain": [
+     "12.31"
+    ]
+   },
+   "posting": "law"
+  },
+  {
+   "name": "출처끼리 날짜가 다름",
+   "now": "2026-11-09T10:00:00+09:00",
+   "input": {
+    "kind": "fixed",
+    "status": "conflict",
+    "date": "2026-12-03",
+    "time": null,
+    "time_verified": false,
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "state": "unverified",
+    "card": "마감일은 공고문에서 확인",
+    "tone": "muted",
+    "stamp": null,
+    "dday": null,
+    "status_tag": "접수 중",
+    "alert": false,
+    "must_not_contain": [
+     "12.3",
+     "D-24"
+    ]
+   },
+   "posting": "gangsa"
+  },
+  {
+   "name": "같은 공고, 포스터로 확인한 뒤",
+   "now": "2026-11-09T10:00:00+09:00",
+   "input": {
+    "kind": "fixed",
+    "status": "verified",
+    "date": "2026-11-20",
+    "time": "18:00",
+    "time_verified": true,
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "state": "verified_time",
+    "card": "11.20(금) 오후 6시까지",
+    "row": "11.20(금) 오후 6시까지 · D-11",
+    "dday": 11
+   },
+   "posting": "gangsa"
+  },
+  {
+   "name": "접수 중인지도 확인되지 않음",
+   "now": "2026-11-09T10:00:00+09:00",
+   "input": {
+    "kind": "unknown",
+    "status": "unverified",
+    "reception_verified": false,
+    "applied": false
+   },
+   "expected": {
+    "state": "reception_unknown",
+    "card": "접수 여부 확인",
+    "tone": "muted",
+    "status_tag": "접수 여부 확인",
+    "stamp": null,
+    "alert": false
+   },
+   "posting": "tour"
+  },
+  {
+   "name": "신청 표시한 공고",
+   "now": "2026-11-09T10:00:00+09:00",
+   "input": {
+    "kind": "fixed",
+    "status": "verified",
+    "date": "2026-11-11",
+    "time": "23:59",
+    "time_verified": true,
+    "reception_verified": true,
+    "applied": true
+   },
+   "expected": {
+    "state": "applied",
+    "card": "신청했어요",
+    "tone": "applied",
+    "stamp": null,
+    "dday": null,
+    "alert": false
+   },
+   "posting": "leather"
+  },
+  {
+   "name": "원문에 00:00이 적힌 공고 → 전날 밤 12시",
+   "now": "2026-11-09T10:00:00+09:00",
+   "input": {
+    "kind": "fixed",
+    "status": "verified",
+    "date": "2026-11-12",
+    "time": "00:00",
+    "time_verified": true,
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "state": "verified_time",
+    "card": "11.11(수) 밤 12시까지",
+    "row": "11.11(수) 밤 12시까지",
+    "detail": "11.11(수) 밤 12시까지",
+    "stamp": "D-2",
+    "dday": 2,
+    "status_tag": "접수 중",
+    "alert": true,
+    "must_not_contain": [
+     "11.12"
+    ]
+   },
+   "posting": "time-midnight"
+  },
+  {
+   "name": "원문에 00:00 → 전날 밤 11시 30분에는 오늘 마감",
+   "now": "2026-11-11T23:30:00+09:00",
+   "input": {
+    "kind": "fixed",
+    "status": "verified",
+    "date": "2026-11-12",
+    "time": "00:00",
+    "time_verified": true,
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "state": "verified_time",
+    "stamp": "오늘",
+    "dday": 0,
+    "status_tag": "접수 중",
+    "alert": true,
+    "push_alert": true
+   }
+  },
+  {
+   "name": "원문에 00:00 → 그 시각이 지나면 마감",
+   "now": "2026-11-12T00:00:01+09:00",
+   "input": {
+    "kind": "fixed",
+    "status": "verified",
+    "date": "2026-11-12",
+    "time": "00:00",
+    "time_verified": true,
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "state": "closed",
+    "stamp": null,
+    "status_tag": "접수 종료",
+    "alert": false
+   }
+  }
+ ]
+}

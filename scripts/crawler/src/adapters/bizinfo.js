@@ -1,4 +1,5 @@
 import { fetchPage } from "../crawler.js";
+import { readPortalDeadline } from "../deadline-provenance.js";
 
 const BASE_URL = "https://www.bizinfo.go.kr";
 const LIST_URL = `${BASE_URL}/sii/siia/selectSIIA200View.do?null=&rows=15&cpage=1`;
@@ -197,6 +198,9 @@ export default {
           sourceUrl: url,
           date: normalizeDate(cells[6]) ?? "",
           deadline: extractDeadline(cells[3]),
+          deadlineOrigin: extractDeadline(cells[3]) ? "portal_field" : undefined,
+          portalDeadline:
+            readPortalDeadline(cells[3], { site: "bizinfo", field: "신청기간" }) ?? undefined,
           content: buildListContent(cells),
           images: [],
           attachments: [],
@@ -227,12 +231,18 @@ export default {
       fieldLines.length === 0 ? bodyText : "",
     ].filter(Boolean).join("\n\n"));
     const applicationPeriod = findField(fields, /신청\s*기간/);
+    const deadline = extractDeadline(applicationPeriod || content);
+    const portalDeadline = readPortalDeadline(applicationPeriod, { site: "bizinfo", field: "신청기간" });
 
     return {
       title: title || undefined,
       content: content || undefined,
       date: extractRegisteredDate($, $root) ?? undefined,
-      deadline: extractDeadline(applicationPeriod || content),
+      deadline,
+      deadlineOrigin: deadline
+        ? portalDeadline?.date === deadline ? "portal_field" : "notice_text"
+        : undefined,
+      portalDeadline: portalDeadline ?? undefined,
       images: [],
       attachments,
       sourceUrl: postUrl,
