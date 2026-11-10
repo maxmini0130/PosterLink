@@ -8,7 +8,11 @@ import {
   checkTestScript,
 } from "./releaseFreezeAllowlist";
 
-const base = "3c71e3a76e01c3b7966217e3e7c17f7433b0a716";
+// Production source (release/traffic-20261104, deployment dpl_9tx6Yc5EQQjrEQydpbEsJCZHYMig).
+// Moved from 3c71e3a on 2026-11-10: between them the admin traffic API changed
+// only its aggregation (same admin-role check), and the Naver routes became the
+// 503 stop that production serves.
+const base = "2e36dd5508028bc3fee905173c1fd4cba5878173";
 const origin = "https://synthetic.invalid";
 function newAuthRequest(url: string) {
   return Object.assign(new Request(url), {
