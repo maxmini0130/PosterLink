@@ -5,7 +5,7 @@ import {
   BROWSE_REGION_KEY,
   browseRegionLabel,
   browseRegionOwner,
-  inBrowsedDistrict,
+  browsePosterScope,
   posterRegionTag,
   readBrowseRegion,
   saveBrowseRegion,
@@ -134,23 +134,66 @@ test("poster region tags use the most specific short name", () => {
   assert.equal(posterRegionTag([]), null);
 });
 
-test("a 구 view keeps its own, 서울-wide and nationwide posters only", () => {
-  const level: Record<string, string> = {
-    seoul: "sido",
-    nation: "nation",
-    mapo: "sigungu",
-    gangbuk: "sigungu",
-  };
-  const mapoScope = new Set(["mapo", "seoul", "nation"]);
-  const inMapo = (ids: string[]) =>
-    inBrowsedDistrict(ids, (id) => level[id], mapoScope);
-  assert.equal(inMapo(["mapo"]), true);
-  assert.equal(inMapo(["mapo", "seoul"]), true);
-  assert.equal(inMapo(["seoul"]), true);
-  assert.equal(inMapo(["nation"]), true);
-  assert.equal(inMapo(["seoul", "nation"]), true);
-  // Linked to 강북구 and to 서울: a 강북구 poster, not a 마포구 one.
-  assert.equal(inMapo(["gangbuk", "seoul"]), false);
-  assert.equal(inMapo(["gangbuk", "mapo", "seoul"]), true);
-  assert.equal(inMapo([]), false);
+const REGIONS = [
+  { id: "nation", name: "전국", level: "nation", parent_id: null },
+  { id: "seoul", name: "서울특별시", level: "sido", parent_id: null },
+  { id: "busan", name: "부산광역시", level: "sido", parent_id: null },
+  { id: "mapo", name: "마포구", level: "sigungu", parent_id: "seoul" },
+  { id: "gangbuk", name: "강북구", level: "sigungu", parent_id: "seoul" },
+  { id: "jongno", name: "종로구", level: "sigungu", parent_id: "seoul" },
+];
+const POSTERS = [
+  { id: "mapo-only", regionIds: ["mapo"] },
+  { id: "gangbuk-only", regionIds: ["gangbuk"] },
+  // 서울시 공고 held in 강북구: the 서울 link keeps it in every 구.
+  { id: "gangbuk+seoul", regionIds: ["gangbuk", "seoul"] },
+  { id: "seoul", regionIds: ["seoul"] },
+  { id: "nation", regionIds: ["nation"] },
+  { id: "unlinked", regionIds: [] },
+];
+const scopeOf = (chosen: string | null) => {
+  const result = browsePosterScope({
+    chosen: REGIONS.find((r) => r.id === chosen) ?? null,
+    defaultSidoId: "seoul",
+    regions: REGIONS,
+    posters: POSTERS,
+  });
+  return { ids: result.posters.map((p) => p.id), fallback: result.fallback };
+};
+
+test("a 구 view keeps its own, 서울-linked and nationwide posters", () => {
+  assert.deepEqual(scopeOf("mapo"), {
+    ids: ["mapo-only", "gangbuk+seoul", "seoul", "nation"],
+    fallback: null,
+  });
+  assert.deepEqual(scopeOf("gangbuk").ids, [
+    "gangbuk-only",
+    "gangbuk+seoul",
+    "seoul",
+    "nation",
+  ]);
+});
+
+test("서울 전체 chosen is the same view as nothing chosen", () => {
+  const all = [
+    "mapo-only",
+    "gangbuk-only",
+    "gangbuk+seoul",
+    "seoul",
+    "nation",
+    "unlinked",
+  ];
+  assert.deepEqual(scopeOf(null), { ids: all, fallback: null });
+  assert.deepEqual(scopeOf("seoul"), { ids: all, fallback: null });
+  assert.deepEqual(scopeOf("nation").ids, all);
+});
+
+test("a region without its own posters says so and shows the wider ones", () => {
+  // 부산: nothing of its own, so the nationwide posters.
+  assert.deepEqual(scopeOf("busan"), { ids: ["nation"], fallback: "nation" });
+  // 종로구: nothing of its own, so 서울 전체 and 전국.
+  assert.deepEqual(scopeOf("jongno"), {
+    ids: ["gangbuk+seoul", "seoul", "nation"],
+    fallback: "sido",
+  });
 });

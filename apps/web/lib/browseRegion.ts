@@ -1,4 +1,5 @@
 import type { KeyValueStore } from "./guestStore";
+import { getRegionScopeIds } from "./regionHelpers";
 
 /**
  * The region the home is browsed in ("둘러보는 지역", docs/design/v6.1/SPEC.md
@@ -132,22 +133,63 @@ export function browseRegionLabel(
   return `${shortSidoName(region.name)} 전체`;
 }
 
+/** What a browsed region shows when it has no posters of its own. */
+export type BrowseFallback = "sido" | "nation";
+
 /**
- * Whether a poster belongs to the browsed 구·군. `district` is that 구 with
- * its 시·도 and 전국 (regionHelpers.getRegionScopeIds). A poster is judged by
- * its most specific links: one linked to 강북구 (and to 서울 as well) belongs to
- * 강북구 only; one linked to 서울 or 전국 alone belongs to every 구. A poster
- * with no region links is left out of a 구 view.
+ * Which posters a browsed region shows (SPEC 7.1: list, count and chips).
+ *
+ * - Nothing chosen, or the default 시·도 (서울 전체): posters linked to 서울, its
+ *   구·군 or 전국, plus posters with no region link yet.
+ * - 전국: every poster.
+ * - A 시·도: posters linked to it, its 구·군 or 전국.
+ * - A 구·군: posters linked to it, to its 시·도 or to 전국. A poster linked to
+ *   another 구 *and* to 서울 stays in: the 서울 link is the only sign in the data
+ *   that anyone in 서울 can apply (`poster_regions.basis` is not filled yet, so a
+ *   venue 구 cannot be told from an eligibility 구).
+ * - A region with no posters of its own still lists the wider ones and says so
+ *   (`fallback`): a 시·도 shows nationwide posters, a 구 its 시·도 and 전국.
  */
-export function inBrowsedDistrict(
-  linkedIds: string[],
-  levelOf: (id: string) => string | null | undefined,
-  district: Set<string>,
-) {
-  const districts = linkedIds.filter((id) => levelOf(id) === "sigungu");
-  return (districts.length ? districts : linkedIds).some((id) =>
-    district.has(id),
-  );
+export function browsePosterScope<
+  P extends { id: string; regionIds: string[] },
+>(input: {
+  chosen: RegionLike | null;
+  defaultSidoId: string | null;
+  regions: RegionLike[];
+  posters: P[];
+}): { posters: P[]; fallback: BrowseFallback | null } {
+  const { chosen, regions, posters } = input;
+  const levelOf = new Map(regions.map((r) => [r.id, r.level ?? null]));
+  const isNation = (id: string) => levelOf.get(id) === "nation";
+  if (chosen?.level === "nation") return { posters, fallback: null };
+  // Choosing "서울 전체" is the same view as choosing nothing.
+  if (!chosen || chosen.id === input.defaultSidoId) {
+    const scope = getRegionScopeIds(input.defaultSidoId, regions);
+    return {
+      posters: posters.filter(
+        (p) =>
+          !scope ||
+          !p.regionIds.length ||
+          p.regionIds.some((id) => scope.has(id)),
+      ),
+      fallback: null,
+    };
+  }
+  const own = new Set([
+    chosen.id,
+    ...regions.filter((r) => r.parent_id === chosen.id).map((r) => r.id),
+  ]);
+  const hasOwn = posters.some((p) => p.regionIds.some((id) => own.has(id)));
+  if (chosen.level !== "sigungu" && !hasOwn)
+    return {
+      posters: posters.filter((p) => p.regionIds.some(isNation)),
+      fallback: "nation",
+    };
+  const scope = getRegionScopeIds(chosen.id, regions) ?? new Set<string>();
+  return {
+    posters: posters.filter((p) => p.regionIds.some((id) => scope.has(id))),
+    fallback: hasOwn ? null : "sido",
+  };
 }
 
 /**

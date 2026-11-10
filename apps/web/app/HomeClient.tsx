@@ -19,6 +19,7 @@ import {
   HomeRegionBar,
   HomeSectionHead,
   HomeSubtitle,
+  RegionFallbackNote,
   SinceLastVisitButton,
 } from "./components/pl/HomeV61";
 import { loadPosterCards } from "./lib/posterCards";
@@ -509,8 +510,14 @@ export default function Home({
   };
 
   const layout = feed?.layout;
-  // "접수 중 N건": the chosen region's open posters (SPEC 7.1).
-  const intro = layout?.openTotal ?? summary?.activePosters ?? null;
+  // "접수 중 N건": the chosen region's open posters (SPEC 7.1). While a newly
+  // chosen region loads, the previous region's number is not shown.
+  const stale = Boolean(
+    browse?.label && feed && feed.scopeLabel !== browse.label,
+  );
+  const intro = stale
+    ? null
+    : (layout?.openTotal ?? summary?.activePosters ?? null);
   let position = 1;
   const freshSince = baseline !== null ? (layout?.freshSince ?? 0) : 0;
   // The server names the region ("서울 전체", "서울 마포구"); a fresh choice
@@ -539,6 +546,13 @@ export default function Home({
               onChoose={chooseRegion}
             />
             <HomeSubtitle openTotal={intro} />
+            {feed?.regionFallback && feed.scopeLabel === scopeLabel && (
+              <RegionFallbackNote
+                label={scopeLabel}
+                fallback={feed.regionFallback}
+                hasPosters={(layout?.openTotal ?? 0) > 0}
+              />
+            )}
           </div>
           {favoriteLine && (
             <div className="mt-3 md:mt-0">

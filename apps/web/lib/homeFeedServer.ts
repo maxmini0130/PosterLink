@@ -4,7 +4,11 @@ import {
   fetchPublicTaxonomies,
 } from "./publicDiscovery";
 import { getRegionScopeIds } from "./regionHelpers";
-import { browseRegionLabel, inBrowsedDistrict } from "./browseRegion";
+import {
+  browsePosterScope,
+  browseRegionLabel,
+  type BrowseFallback,
+} from "./browseRegion";
 import {
   categoryScopeIds,
   CONTENT_TYPE_INTEREST,
@@ -416,6 +420,11 @@ export type HomeFeedResult = {
   /** The browsed region's title: "서울 전체", "서울 마포구", "전국". */
   scopeLabel: string;
   shortcuts: HomeShortcut[];
+  /**
+   * Set when the browsed region has no posters of its own: the list then
+   * shows the wider ones ("nation": 전국, "sido": its 시·도 and 전국).
+   */
+  regionFallback?: BrowseFallback | null;
 };
 
 type HomeSource = {
@@ -554,14 +563,8 @@ export async function loadHomeFeed(
         ? (chosen.parent_id ?? null)
         : (taxonomy.regions.find((region) => region.code === "REG_SEOUL")?.id ??
           null);
-  const scope = getRegionScopeIds(sidoId, taxonomy.regions);
-  // A 구·군 is browsed strictly: its own posters plus those for its 시·도 as a
-  // whole and nationwide ones (SPEC 7.1: the list, count and chips all follow
-  // the browsed region). Posters for other 구 are left out.
-  const district =
-    chosen?.level === "sigungu"
-      ? getRegionScopeIds(chosen.id, taxonomy.regions)
-      : null;
+  const defaultSidoId =
+    taxonomy.regions.find((region) => region.code === "REG_SEOUL")?.id ?? null;
   const { links, images, popularity } = source;
   const regionLinksBy = new Map<string, RegionLink[]>();
   for (const link of links.regionLinks)
@@ -575,18 +578,20 @@ export async function loadHomeFeed(
       ...(categoriesBy.get(link.poster_id) ?? []),
       link.category_id,
     ]);
-  const inScope = rows.filter((row) => {
-    const own = regionLinksBy.get(row.id) ?? [];
-    if (district)
-      return inBrowsedDistrict(
-        own.map((link) => link.region_id),
-        (id) => regions.get(id)?.level,
-        district,
-      );
-    return (
-      !scope || !own.length || own.some((link) => scope.has(link.region_id))
-    );
+  // The browsed region decides the posters (SPEC 7.1: list, count, chips).
+  const browsed = browsePosterScope({
+    chosen,
+    defaultSidoId,
+    regions: taxonomy.regions,
+    posters: rows.map((row) => ({
+      id: row.id,
+      row,
+      regionIds: (regionLinksBy.get(row.id) ?? []).map(
+        (link) => link.region_id,
+      ),
+    })),
   });
+  const inScope = browsed.posters.map((item) => item.row);
   const posters = inScope.map((row) =>
     toHomePoster(row, {
       regions,
@@ -647,7 +652,12 @@ export async function loadHomeFeed(
       name: category.name,
       href: `/categories/${taxonomySlug(category, "CAT")}`,
     }));
-  return { layout, scopeLabel, shortcuts };
+  return {
+    layout,
+    scopeLabel,
+    shortcuts,
+    regionFallback: browsed.fallback,
+  };
 }
 
 export { HOME_PAGE_SIZE };

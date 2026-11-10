@@ -57,6 +57,15 @@ const regions = [
     level: "sigungu",
     parent_id: R.seoul,
   },
+  // No posters: the home says so and shows the nationwide ones.
+  {
+    id: "bbbbbbbb-0000-4000-8000-000000000006",
+    name: "부산광역시",
+    full_name: "부산광역시",
+    code: "REG_BUSAN",
+    level: "sido",
+    parent_id: null,
+  },
 ];
 const categoryDefs = [
   ["CAT_WELFARE", "지원금/복지"],

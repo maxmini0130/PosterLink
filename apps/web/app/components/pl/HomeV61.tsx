@@ -66,6 +66,40 @@ export function HomeSubtitle({ openTotal }: { openTotal: number | null }) {
   );
 }
 
+/**
+ * The browsed region has no posters of its own: say so, and that the list
+ * shows the wider ones ("부산 전체" → 전국; "서울 마포구" → 서울 전체·전국).
+ */
+export function RegionFallbackNote({
+  label,
+  fallback,
+  hasPosters,
+}: {
+  label: string;
+  fallback: "sido" | "nation";
+  /** False when the wider list is empty too: then only the first sentence. */
+  hasPosters: boolean;
+}) {
+  const place = label.replace(/ 전체$/, "");
+  const wider =
+    fallback === "nation" ? "전국" : `${label.split(" ")[0]} 전체·전국`;
+  return (
+    <p
+      role="status"
+      data-region-fallback={fallback}
+      className="mt-3 rounded-xl border border-pl-line bg-pl-card px-3.5 py-3 text-[14px] leading-6 text-pl-ink"
+    >
+      <strong className="font-semibold">아직 {place} 공고가 없어요.</strong>
+      {hasPosters && (
+        <>
+          {" "}
+          <span className="text-pl-sub">{wider} 공고를 보여 드려요.</span>
+        </>
+      )}
+    </p>
+  );
+}
+
 /** The home "찜 마감 줄" with the soonest stamp. */
 export function FavoriteDeadlineBanner({
   line,

@@ -66,6 +66,15 @@ async function open(
         body: `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="${long ? 1800 : 800}"><rect width="100%" height="100%" fill="#e4d9b9"/><text x="40" y="200" font-size="56" fill="#1c2d4f">POSTER</text></svg>`,
       });
     }
+    // The app's own write endpoints (view and link-click counters) would
+    // reach a database through the server; answer them here too.
+    if (
+      !url.hostname.endsWith(".supabase.co") &&
+      url.pathname.startsWith("/api/") &&
+      req.method() !== "GET" &&
+      req.method() !== "HEAD"
+    )
+      return route.fulfill({ status: 204, body: "" });
     if (!url.hostname.endsWith(".supabase.co")) {
       if (
         /sentry\.io|google-analytics|googletagmanager|vercel\.live/.test(
@@ -524,8 +533,11 @@ for (const member of [false, true])
     await expect(
       page.getByText(/^지원·강좌·행사 · 접수 중 \d+건$/),
     ).toBeVisible();
-    // Browsing never writes the profile or the guest's interest conditions.
-    expect(writes).toEqual([]);
+    // Browsing never writes the profile or the interest conditions (a member's
+    // visit records, record_user_visit / link_visitor_identity, are unrelated).
+    expect(
+      writes.filter((write) => /profiles|user_interest/.test(write)),
+    ).toEqual([]);
     expect(
       await page.evaluate(() => localStorage.getItem("pl.guest_interest.v1")),
     ).toBeNull();
@@ -548,4 +560,30 @@ test("PC 1440: the region picker is a dropdown under the title", async ({
   await page.keyboard.press("Escape");
   await expect(panel).toHaveCount(0);
   await expect(title).toBeFocused();
+});
+
+test("390: a region without posters is still listed and says so", async ({
+  page,
+}) => {
+  await open(page, 390);
+  const title = page.getByRole("button", { name: /^둘러보는 지역: / });
+  await title.click();
+  const sheet = page.getByRole("dialog");
+  // Listed even without posters; a 시·도 without 구·군 applies at once.
+  await sheet.getByRole("button", { name: "부산" }).click();
+  await expect(title).toContainText("부산 전체");
+  // The fixture has no nationwide posters either, so the note does not
+  // promise them (with nationwide posters it adds "전국 공고를 보여 드려요.";
+  // browseRegion.test.ts covers which posters are listed).
+  const note = page.locator("[data-region-fallback=nation]");
+  await expect(note).toHaveText("아직 부산 공고가 없어요.");
+  await expect(page.locator("[data-home-grid] li")).toHaveCount(0);
+  mkdirSync(SHOTS, { recursive: true });
+  await page.screenshot({ path: `${SHOTS}/region-fallback-390.png` });
+  // Back to 서울 전체: the note goes away.
+  await title.click();
+  await sheet.getByRole("button", { name: /^서울/ }).first().click();
+  await sheet.getByRole("button", { name: "서울 전체" }).click();
+  await expect(title).toContainText("서울 전체");
+  await expect(page.locator("[data-region-fallback]")).toHaveCount(0);
 });
