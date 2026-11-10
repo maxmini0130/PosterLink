@@ -237,3 +237,56 @@ test("conflicting sources explain why there is no D-day", () => {
     "마감일이 서로 다르게 올라와 있어 확인하고 있어요. 확인 전에는 D-day와 마감 알림을 표시하지 않아요.",
   );
 });
+
+test("home and suggestions leave out posters that are over or probably over", () => {
+  const now = at("2026-11-09T10:00:00+09:00");
+  const pastUnverified = getDeadlinePresentation({
+    deadlineType: "fixed",
+    deadlineStatus: "unverified",
+    applicationEndAt: "2026-11-01T23:59:59+09:00",
+    receptionVerified: true,
+    now,
+  });
+  assert.equal(pastUnverified.state, "reception_unknown");
+  assert.equal(pastUnverified.showOnHome, false);
+  assert.equal(pastUnverified.recommendable, false);
+
+  const noDateUnknown = getDeadlinePresentation({
+    deadlineType: "unknown",
+    now,
+  });
+  assert.equal(noDateUnknown.state, "reception_unknown");
+  assert.equal(noDateUnknown.showOnHome, true);
+  assert.equal(noDateUnknown.recommendable, false);
+
+  const open = getDeadlinePresentation({
+    deadlineType: "fixed",
+    deadlineStatus: "verified",
+    applicationEndAt: "2026-11-20T23:59:59+09:00",
+    receptionVerified: true,
+    now,
+  });
+  assert.equal(open.showOnHome, true);
+  assert.equal(open.recommendable, true);
+
+  const over = getDeadlinePresentation({
+    deadlineType: "fixed",
+    deadlineStatus: "verified",
+    applicationEndAt: "2026-11-01T23:59:59+09:00",
+    now,
+  });
+  assert.equal(over.showOnHome, false);
+  assert.equal(over.recommendable, false);
+});
+
+test("a verified 00:00 closed in the past names the day before", () => {
+  const result = getDeadlinePresentation({
+    deadlineType: "fixed",
+    deadlineStatus: "verified",
+    deadlineTimeVerified: true,
+    applicationEndAt: "2026-08-18T00:00:00+09:00",
+    now: at("2026-11-09T10:00:00+09:00"),
+  });
+  assert.equal(result.row, "8.17 마감");
+  assert.equal(result.closedOn, "8월 17일");
+});

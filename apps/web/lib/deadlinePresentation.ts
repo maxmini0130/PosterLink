@@ -82,6 +82,10 @@ export type DeadlinePresentation = {
   homeAlert: boolean;
   /** Reminder delivery: until the time, or until the day before for date only. */
   pushAlert: boolean;
+  /** False when closed, or when an unverified date has already passed. */
+  showOnHome: boolean;
+  /** Similar-poster suggestions take only posters with confirmed reception (SPEC 8장). */
+  recommendable: boolean;
 };
 
 const MS_PER_DAY = 86_400_000;
@@ -154,7 +158,10 @@ function shortDate(moment: SeoulMoment, today: SeoulMoment) {
   return moment.year === today.year ? day : `${moment.year}.${day}`;
 }
 
-/** 1~11 오전, 12 낮, 13~20 오후, 21~23 밤. Midnight reads 밤 12시. */
+/**
+ * 1~11 오전, 12 낮, 13~20 오후, 21~23 밤. A verified 00:00 deadline is shown
+ * on the day before as 밤 12시 (see withoutApplied), so hour 0 reads 밤 12시.
+ */
 function spokenTime({ hour, minute }: SeoulMoment) {
   const period =
     hour >= 1 && hour <= 11
@@ -207,6 +214,16 @@ const CONFLICT_CAPTION =
 const UNVERIFIED_CAPTION =
   "마감일을 확인하고 있어요. 확인 전에는 D-day와 마감 알림을 표시하지 않아요.";
 
+/** States where reception is open and known to be open, so a suggestion is fair. */
+const RECOMMENDABLE = new Set<DeadlineState>([
+  "verified_time",
+  "date_only",
+  "per_session",
+  "per_session_unverified",
+  "label",
+  "unverified",
+]);
+
 function base(
   state: DeadlineState,
   fields: Partial<DeadlinePresentation> & { card: string },
@@ -225,6 +242,8 @@ function base(
     closedOn: null,
     homeAlert: false,
     pushAlert: false,
+    showOnHome: state !== "closed",
+    recommendable: RECOMMENDABLE.has(state),
     ...fields,
   };
 }
@@ -261,15 +280,21 @@ function withoutApplied(input: DeadlineInput): DeadlinePresentation {
 
   const fixedVerified = kind === "fixed" && status === "verified" && end;
   const timeVerified = Boolean(fixedVerified && input.deadlineTimeVerified);
+  // A verified 00:00 ends the day before: "11.12 00:00" reads "11.11(수) 밤
+  // 12시까지", and the D-day, stamp and closing follow 11.11.
+  const shownEnd =
+    timeVerified && end!.hour === 0 && end!.minute === 0
+      ? seoul(endTime! - 1)
+      : end;
 
   // 2. Reception is over.
   if (input.posterStatus === "closed")
-    return closed(end && endTime! <= nowTime ? end : null, today);
+    return closed(shownEnd && endTime! <= nowTime ? shownEnd : null, today);
   if (fixedVerified) {
     const over = timeVerified
       ? nowTime > endTime!
       : today.ordinal > end!.ordinal;
-    if (over) return closed(end, today);
+    if (over) return closed(shownEnd, today);
   }
 
   // Not open yet (kept as before, SPEC 12장 B), judged by the Seoul date.
@@ -279,15 +304,16 @@ function withoutApplied(input: DeadlineInput): DeadlinePresentation {
 
   // 3·4. A verified fixed deadline, with or without a verified time.
   if (fixedVerified) {
-    const days = end!.ordinal - today.ordinal;
+    const days = shownEnd!.ordinal - today.ordinal;
     const stamp = stampFor(days);
-    const date = dateLabel(end!, today);
+    const date = dateLabel(shownEnd!, today);
     const suffix = stamp ? "" : ` · D-${days}`;
     const aside = days === 0 ? "오늘" : `D-${days}`;
     if (timeVerified) {
-      const long = `${date} ${spokenTime(end!)}까지`;
+      const midnight = shownEnd !== end;
+      const long = `${date} ${midnight ? "밤 12시" : spokenTime(end!)}까지`;
       return base("verified_time", {
-        card: `${date} ${cardTime(end!)}까지`,
+        card: midnight ? long : `${date} ${cardTime(end!)}까지`,
         row: long + suffix,
         detail: long,
         detailAside: aside,
@@ -366,6 +392,8 @@ function withoutApplied(input: DeadlineInput): DeadlinePresentation {
     detail: "공고문에서 확인",
     statusTag: "접수 여부 확인",
     tone: "muted",
+    // Probably over, but not confirmed: kept off the home and suggestions.
+    showOnHome: !pastUnverifiedDate,
   });
 }
 

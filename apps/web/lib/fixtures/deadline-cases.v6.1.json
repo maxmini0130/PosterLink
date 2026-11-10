@@ -421,6 +421,73 @@
     "alert": false
    },
    "posting": "leather"
+  },
+  {
+   "name": "원문에 00:00이 적힌 공고 → 전날 밤 12시",
+   "now": "2026-11-09T10:00:00+09:00",
+   "input": {
+    "kind": "fixed",
+    "status": "verified",
+    "date": "2026-11-12",
+    "time": "00:00",
+    "time_verified": true,
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "state": "verified_time",
+    "card": "11.11(수) 밤 12시까지",
+    "row": "11.11(수) 밤 12시까지",
+    "detail": "11.11(수) 밤 12시까지",
+    "stamp": "D-2",
+    "dday": 2,
+    "status_tag": "접수 중",
+    "alert": true,
+    "must_not_contain": [
+     "11.12"
+    ]
+   },
+   "posting": "time-midnight"
+  },
+  {
+   "name": "원문에 00:00 → 전날 밤 11시 30분에는 오늘 마감",
+   "now": "2026-11-11T23:30:00+09:00",
+   "input": {
+    "kind": "fixed",
+    "status": "verified",
+    "date": "2026-11-12",
+    "time": "00:00",
+    "time_verified": true,
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "state": "verified_time",
+    "stamp": "오늘",
+    "dday": 0,
+    "status_tag": "접수 중",
+    "alert": true,
+    "push_alert": true
+   }
+  },
+  {
+   "name": "원문에 00:00 → 그 시각이 지나면 마감",
+   "now": "2026-11-12T00:00:01+09:00",
+   "input": {
+    "kind": "fixed",
+    "status": "verified",
+    "date": "2026-11-12",
+    "time": "00:00",
+    "time_verified": true,
+    "reception_verified": true,
+    "applied": false
+   },
+   "expected": {
+    "state": "closed",
+    "stamp": null,
+    "status_tag": "접수 종료",
+    "alert": false
+   }
   }
  ]
 }
