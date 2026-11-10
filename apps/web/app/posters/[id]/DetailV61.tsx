@@ -5,7 +5,8 @@ import { Check, ChevronRight, Maximize2 } from "lucide-react";
 import type { DeadlinePresentation } from "../../../lib/deadlinePresentation";
 import { StatusTag } from "../../components/pl/DeadlineParts";
 import { DefaultPoster } from "../../components/pl/DefaultPoster";
-import { PlButton } from "../../components/pl/PlControls";
+import { PlBadge, PlButton } from "../../components/pl/PlControls";
+import type { RegionCondition } from "../../../lib/browseRegion";
 
 /** "✓ 신청한 공고예요 · 되돌리기 / 마감 알림을 껐어요 · 선정 안내 … 예정" (SPEC 5). */
 export function AppliedBand({
@@ -252,6 +253,7 @@ function Value({
  */
 export function DetailSummaryCard({
   eligibility,
+  condition = null,
   recruitment,
   presentation,
   fee,
@@ -260,6 +262,8 @@ export function DetailSummaryCard({
   eventNote,
 }: {
   eligibility: string | null;
+  /** "○○구 주민만 신청 가능" (필수) / "○○구 거주·생활권" (우대), SPEC 7.2. */
+  condition?: RegionCondition | null;
   recruitment: string | null;
   presentation: DeadlinePresentation;
   fee: string | null;
@@ -277,6 +281,17 @@ export function DetailSummaryCard({
       className="overflow-hidden rounded-xl border border-pl-line bg-pl-card"
     >
       <Cell label="대상" aside={recruitment || undefined}>
+        {condition && (
+          <p
+            data-region-condition={condition.kind}
+            className="m-0 mb-1 break-keep text-[13px] font-semibold leading-[1.5] text-pl-ink"
+          >
+            <PlBadge must={condition.kind === "only"}>
+              {condition.kind === "only" ? "필수" : "우대"}
+            </PlBadge>
+            {condition.text}
+          </p>
+        )}
         <Value value={eligibility} clamp />
       </Cell>
       <div className="grid grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] border-t border-pl-line">

@@ -7,6 +7,30 @@ import { cardOrganization, cardTitleText } from "../../../lib/posterCardText";
 import { PosterArt } from "./PosterArt";
 import { DeadlinePill, DeadlineStamp } from "./DeadlineParts";
 import type { PlPosterCardData } from "./PosterListCard";
+import { PlBadge } from "./PlControls";
+import type { RegionCondition } from "../../../lib/browseRegion";
+
+/**
+ * Region condition before the title (SPEC 8): "강북구 주민만 신청 가능", or
+ * an outlined 우대 tag (SPEC 7.2) with "강북구 거주·생활권".
+ */
+export function RegionConditionLine({
+  condition,
+  className = "",
+}: {
+  condition: RegionCondition;
+  className?: string;
+}) {
+  return (
+    <p
+      data-region-condition={condition.kind}
+      className={`m-0 mb-0.5 truncate text-[12px] font-semibold leading-[1.5] text-pl-ink ${className}`}
+    >
+      {condition.kind === "preferred" && <PlBadge>우대</PlBadge>}
+      {condition.text}
+    </p>
+  );
+}
 
 /**
  * v6.1 poster card (docs/design/v6.1/SPEC.md 6): 5:7 poster with the stamp
@@ -99,6 +123,9 @@ export function PlPosterCard({
         className="block px-2.5 pb-2.5 pt-[9px] text-pl-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-pl-ink"
       >
         <DeadlinePill presentation={presentation} />
+        {poster.regionCondition && (
+          <RegionConditionLine condition={poster.regionCondition} />
+        )}
         <Heading
           className={`line-clamp-2 h-[39px] break-keep text-[14px] font-semibold leading-[1.4] ${
             presentation.state === "closed" ? "text-pl-ink-soft" : ""

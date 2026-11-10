@@ -15,6 +15,7 @@ import { DeadlinePill, DeadlineRowText, DeadlineStamp } from "./DeadlineParts";
 import { PosterThumb } from "./PosterThumb";
 import { PosterArt } from "./PosterArt";
 import { RegionLabel, type RegionScope } from "./RegionLabel";
+import type { RegionCondition } from "../../../lib/browseRegion";
 
 export type PlPosterCardData = PosterCardData & {
   posterStatus?: string | null;
@@ -25,6 +26,8 @@ export type PlPosterCardData = PosterCardData & {
   /** Person-checked short title and eligibility (SPEC 6); never guessed. */
   shortTitle?: string | null;
   eligibility?: string | null;
+  /** "○○구 주민만 신청 가능" / "[우대] ○○구 거주·생활권" (SPEC 8), from data only. */
+  regionCondition?: RegionCondition | null;
 };
 
 /** The collection portal is never substituted for the actual organizer. */
@@ -132,7 +135,9 @@ export function PosterListCard({
           )}
           <h3
             className={`mt-1 line-clamp-2 break-keep text-[14px] font-semibold leading-[1.4] ${
-              presentation.state === "closed" ? "text-pl-ink-soft" : "text-pl-ink"
+              presentation.state === "closed"
+                ? "text-pl-ink-soft"
+                : "text-pl-ink"
             }`}
           >
             {title}
@@ -169,7 +174,9 @@ export function PosterMiniCard({
     >
       <div className="flex items-center justify-between gap-2">
         <DeadlinePill presentation={presentation} className="mb-0" />
-        {badge && <span className="text-xs font-bold text-pl-ink">{badge}</span>}
+        {badge && (
+          <span className="text-xs font-bold text-pl-ink">{badge}</span>
+        )}
       </div>
       <div className="flex gap-2">
         <div className="h-12 w-9 shrink-0 overflow-hidden rounded">

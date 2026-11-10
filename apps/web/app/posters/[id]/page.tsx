@@ -5,7 +5,10 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { getAppOrigin } from "../../../lib/siteUrl";
-import { posterRegionTag } from "../../../lib/browseRegion";
+import {
+  posterRegionCondition,
+  posterRegionTag,
+} from "../../../lib/browseRegion";
 import { resolvePosterImageGallery } from "../../../lib/posterImage";
 import { hasVerifiedPosterStructuredData } from "../../../lib/posterStructuredTrust";
 import { buildPosterStructuredSeoData } from "../../../lib/posterStructuredSeo";
@@ -87,6 +90,8 @@ type CategoryLinkRow = {
 type RegionLinkRow = {
   poster_id: string;
   region_id: string;
+  /** poster_regions.basis (20261103010000); missing on older databases. */
+  basis?: string | null;
 };
 
 type ImageRow = {
@@ -201,10 +206,19 @@ const fetchPosterDetail = cache(async (id: string) => {
         .from("poster_categories")
         .select("poster_id, category_id")
         .eq("poster_id", id),
+      // With basis when the column exists; a database without it still works.
       supabase
         .from("poster_regions")
-        .select("poster_id, region_id")
-        .eq("poster_id", id),
+        .select("poster_id, region_id, basis")
+        .eq("poster_id", id)
+        .then((result) =>
+          result.error
+            ? supabase
+                .from("poster_regions")
+                .select("poster_id, region_id")
+                .eq("poster_id", id)
+            : result,
+        ),
       supabase
         .from("poster_images")
         .select("*")
@@ -334,6 +348,18 @@ const fetchPosterDetail = cache(async (id: string) => {
           })),
       ),
     ),
+    // SPEC 8 / 7.2: "○○구 주민만 신청 가능" or "[우대] ○○구 거주·생활권".
+    regionCondition: posterRegionCondition({
+      onlyNames: regionLinks
+        .filter((link) => link.basis === "eligibility")
+        .flatMap((link) =>
+          regions
+            .filter((r) => r.id === link.region_id && r.level === "sigungu")
+            .map((r) => r.name ?? ""),
+        ),
+      eligibility:
+        poster.field_verification?.cardFacts?.regionEligibility ?? null,
+    }),
     images: images
       .map((image) => image.storage_path)
       .filter((path): path is string => Boolean(path)),
