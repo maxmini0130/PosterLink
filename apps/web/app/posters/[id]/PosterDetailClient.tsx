@@ -53,6 +53,8 @@ import {
   extractTargetAgeRange,
 } from "../../../lib/posterSummaryFacts";
 import { usePosterClock } from "../../../lib/usePosterClock";
+import { isInstitutionHomepage, isPublicHttpUrl } from "../../../lib/posterActionLinks";
+import { posterRegionDisplay } from "../../../lib/posterRegionDisplay";
 import { FieldReportButton } from "./FieldReportButton";
 import { ClosedPosterAlertCta, type AlertDefaults } from "./ClosedPosterAlertCta";
 import { trackAlertEvent } from "../../../lib/alertAnalytics";
@@ -892,22 +894,30 @@ export function PosterDetailClient({
   const imageUrls = resolvePosterImageGallery(poster.images ?? [], poster.thumbnail_url, poster.source_key);
   // Plan 3-2: only an official_apply link is a sign-up page; otherwise the
   // primary action is the official notice. A homepage never becomes either.
-  const applyLink =
-    links.find((link) => link.link_type === "official_apply" && link.is_primary) ||
-    links.find((link) => link.link_type === "official_apply") ||
-    null;
+  // Unsafe URLs are never offered, and a bare institution homepage is not a
+  // sign-up form (from fix/public-ac-web-20261025, posterActionLinks).
+  const publicLinks = links.filter((link) => isPublicHttpUrl(link.url));
+  const applyLinks = publicLinks.filter(
+    (link) => link.link_type === "official_apply" && !isInstitutionHomepage(link.url),
+  );
+  const applyLink = applyLinks.find((link) => link.is_primary) || applyLinks[0] || null;
   const noticeLink =
-    links.find((link) => link.link_type === "official_notice" && link.is_primary) ||
-    links.find((link) => link.link_type === "official_notice") ||
+    publicLinks.find((link) => link.link_type === "official_notice" && link.is_primary) ||
+    publicLinks.find((link) => link.link_type === "official_notice") ||
     null;
   const primaryAction = applyLink
     ? { link: applyLink, label: getLinkActionLabel(applyLink) }
     : noticeLink
       ? { link: noticeLink, label: "공식 공고 확인하기" }
       : null;
-  const referenceLinks = links.filter((link) => link.id !== applyLink?.id && link.id !== noticeLink?.id);
+  const referenceLinks = publicLinks.filter(
+    (link) => link.id !== applyLink?.id && link.id !== noticeLink?.id && link.link_type !== "official_apply",
+  );
   const canSaveCalendar = getVerifiedPosterCalendarSource(poster) !== null;
-  const summaryLines = formatSummaryLines(poster.summary_long || poster.summary_short).filter(
+  // A region join that contradicts the notice's own 지역 line is shown as
+  // unconfirmed rather than as an eligibility scope (posterRegionDisplay).
+  const regionDisplay = posterRegionDisplay(poster.regionName, poster.summary_long || poster.summary_short);
+  const summaryLines = formatSummaryLines(regionDisplay.summary).filter(
     (line, index, lines) => lines.findIndex((item) => item.label === line.label && item.text === line.text) === index
   );
   const summaryFallbackFacts = derivePosterSummaryFallbackFacts(summaryLines);
@@ -1000,7 +1010,7 @@ export function PosterDetailClient({
       )}
       {poster.regionName && (
         <span className="inline-flex min-h-6 items-center rounded-md border border-pl-line bg-pl-card px-2 text-xs font-medium text-pl-ink">
-          {poster.regionName}
+          {regionDisplay.label}
         </span>
       )}
       <ReceptionChip display={display} />
@@ -1249,7 +1259,7 @@ export function PosterDetailClient({
             {poster.categoryName && poster.categoryId && (
               <li><span aria-hidden="true">› </span><Link href={`/posters?category=${poster.categoryId}`} className="hover:underline">{poster.categoryName}</Link></li>
             )}
-            {poster.regionName && poster.regionId && (
+            {poster.regionName && poster.regionId && !regionDisplay.conflict && (
               <li><span aria-hidden="true">› </span><Link href={`/posters?region=${poster.regionId}`} className="hover:underline">{poster.regionName}</Link></li>
             )}
           </ol>

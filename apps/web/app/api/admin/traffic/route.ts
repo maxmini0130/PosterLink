@@ -10,8 +10,11 @@ import {
 } from "../../../../lib/siteVisitClassification";
 import {
   getTrafficPeriodStart,
+  getTrafficSourceLabel,
   isExternalHumanTraffic,
 } from "../../../../lib/trafficAnalytics";
+
+export const dynamic = "force-dynamic";
 
 const ADMIN_ROLES = new Set(["admin", "super_admin"]);
 const DEFAULT_DAYS = 1;
@@ -78,7 +81,7 @@ function createAdminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
+    { auth: { autoRefreshToken: false, persistSession: false } },
   );
 }
 
@@ -105,16 +108,21 @@ function clampDays(value: string | null) {
   return Math.min(365, Math.max(1, Math.floor(parsed)));
 }
 
-function normalizeHost(host: string | null) {
-  return (host ?? "").toLowerCase().replace(/^www\./, "");
-}
-
 function getOwnHosts() {
-  const hosts = new Set(["posterlink.kr", "posterlink.co.kr", "localhost", "127.0.0.1"]);
+  const hosts = new Set([
+    "posterlink.kr",
+    "posterlink.co.kr",
+    "localhost",
+    "127.0.0.1",
+  ]);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   if (appUrl) {
     try {
-      hosts.add(new URL(appUrl.startsWith("http") ? appUrl : `https://${appUrl}`).hostname.replace(/^www\./, ""));
+      hosts.add(
+        new URL(
+          appUrl.startsWith("http") ? appUrl : `https://${appUrl}`,
+        ).hostname.replace(/^www\./, ""),
+      );
     } catch {
       // Ignore malformed environment values.
     }
@@ -122,29 +130,17 @@ function getOwnHosts() {
   return hosts;
 }
 
-function getSourceLabel(row: VisitRow, ownHosts: Set<string>) {
-  const utmSource = row.utm_source?.trim();
-  if (utmSource) return utmSource;
-
-  const host = normalizeHost(row.referrer_host);
-  if (!host || ownHosts.has(host)) return "직접 유입";
-  if (host.includes("google.")) return "Google";
-  if (host.includes("naver.")) return "Naver";
-  if (host.includes("daum.net") || host.includes("kakao.")) return "Daum/Kakao";
-  if (host.includes("instagram.")) return "Instagram";
-  if (host.includes("facebook.") || host.includes("fb.")) return "Facebook";
-  if (host.includes("threads.")) return "Threads";
-  if (host.includes("x.com") || host.includes("twitter.")) return "X/Twitter";
-  if (host.includes("youtube.")) return "YouTube";
-  return host;
-}
-
 function getSessionId(row: VisitRow, index: number) {
   return row.session_key || getVisitorId(row, index);
 }
 
 function getVisitorId(row: VisitRow, index: number) {
-  return row.user_id || row.ip_hash || row.visitor_key || `anonymous-${row.created_at}-${index}`;
+  return (
+    row.user_id ||
+    row.ip_hash ||
+    row.visitor_key ||
+    `anonymous-${row.created_at}-${index}`
+  );
 }
 
 function getPath(row: VisitRow) {
@@ -160,8 +156,16 @@ function getQueryParams(row: VisitRow) {
 function getClientPlatform(row: VisitRow): ClientPlatform {
   const ua = (row.user_agent ?? "").toLowerCase();
   const query = getQueryParams(row);
-  const utmSource = (row.utm_source ?? query.get("utm_source") ?? "").toLowerCase();
-  const utmMedium = (row.utm_medium ?? query.get("utm_medium") ?? "").toLowerCase();
+  const utmSource = (
+    row.utm_source ??
+    query.get("utm_source") ??
+    ""
+  ).toLowerCase();
+  const utmMedium = (
+    row.utm_medium ??
+    query.get("utm_medium") ??
+    ""
+  ).toLowerCase();
   const appParam = (query.get("app") ?? "").toLowerCase();
 
   if (
@@ -174,7 +178,11 @@ function getClientPlatform(row: VisitRow): ClientPlatform {
     return { key: "app", label: "앱" };
   }
 
-  if (/bot|crawler|spider|slurp|facebookexternalhit|kakaotalk-scrap|naverbot|googlebot/i.test(ua)) {
+  if (
+    /bot|crawler|spider|slurp|facebookexternalhit|kakaotalk-scrap|naverbot|googlebot/i.test(
+      ua,
+    )
+  ) {
     return { key: "bot", label: "봇/크롤러" };
   }
 
@@ -196,7 +204,7 @@ function parseIncludeInternal(value: string | null) {
 
 function getVisitActorContext(
   row: VisitRow,
-  profiles: Map<string, ProfileIdentity>
+  profiles: Map<string, ProfileIdentity>,
 ): VisitActorContext {
   const profile = row.user_id ? profiles.get(row.user_id) : null;
   const queryAutomationSource = getQueryParams(row).get("_pl_automation");
@@ -205,7 +213,7 @@ function getVisitActorContext(
     explicitSource: row.automation_source || queryAutomationSource,
   });
   const isAutomated = Boolean(
-    row.is_automated || detectedAutomation.isAutomated
+    row.is_automated || detectedAutomation.isAutomated,
   );
   const automation = {
     isAutomated,
@@ -230,7 +238,7 @@ function getVisitActorContext(
     automation_source: automation.source,
     automation_label: getVisitAutomationLabel(
       automation.source,
-      automation.isBot
+      automation.isBot,
     ),
   };
 }
@@ -244,7 +252,9 @@ function formatDateKey(value: string) {
   }).format(new Date(value));
 }
 
-function isMissingAnalyticsError(error: { code?: string; message?: string } | null) {
+function isMissingAnalyticsError(
+  error: { code?: string; message?: string } | null,
+) {
   if (!error) return false;
   const message = error.message ?? "";
   return (
@@ -257,13 +267,21 @@ function isMissingAnalyticsError(error: { code?: string; message?: string } | nu
   );
 }
 
-function isMissingIdentityColumnError(error: { code?: string; message?: string } | null) {
+function isMissingIdentityColumnError(
+  error: { code?: string; message?: string } | null,
+) {
   if (!error) return false;
   const message = error.message ?? "";
-  return error.code === "42703" || error.code === "PGRST204" || message.includes("ip_hash");
+  return (
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    message.includes("ip_hash")
+  );
 }
 
-function isMissingActorColumnError(error: { code?: string; message?: string } | null) {
+function isMissingActorColumnError(
+  error: { code?: string; message?: string } | null,
+) {
   if (!error) return false;
   const message = error.message ?? "";
   return (
@@ -273,7 +291,9 @@ function isMissingActorColumnError(error: { code?: string; message?: string } | 
   );
 }
 
-function normalizeVisitRows(rows: Partial<VisitRow>[] | null | undefined): VisitRow[] {
+function normalizeVisitRows(
+  rows: Partial<VisitRow>[] | null | undefined,
+): VisitRow[] {
   return (rows ?? []).map((row) => ({
     created_at: row.created_at ?? new Date(0).toISOString(),
     user_id: row.user_id ?? null,
@@ -329,13 +349,22 @@ function buildFallbackOverview(allRows: VisitRow[], periodRows: VisitRow[]) {
   };
 }
 
-function toCountList<T extends { visitors?: Set<string>; sessions?: Set<string> }>(
+function toCountList<
+  T extends { visitors?: Set<string>; sessions?: Set<string> },
+>(
   entries: Array<[string, T & { pageviews?: number }]>,
-  mapValue: (key: string, value: T & { pageviews?: number }) => Record<string, unknown>
+  mapValue: (
+    key: string,
+    value: T & { pageviews?: number },
+  ) => Record<string, unknown>,
 ) {
   return entries
     .map(([key, value]) => mapValue(key, value))
-    .sort((a, b) => Number(b.sessions ?? b.pageviews ?? 0) - Number(a.sessions ?? a.pageviews ?? 0));
+    .sort(
+      (a, b) =>
+        Number(b.sessions ?? b.pageviews ?? 0) -
+        Number(a.sessions ?? a.pageviews ?? 0),
+    );
 }
 
 export async function GET(request: NextRequest) {
@@ -358,7 +387,10 @@ export async function GET(request: NextRequest) {
     .single<OverviewRow>();
 
   if (overviewRes.error && !isMissingAnalyticsError(overviewRes.error)) {
-    return NextResponse.json({ error: overviewRes.error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: overviewRes.error.message },
+      { status: 500 },
+    );
   }
 
   let visitsRes: any = await admin
@@ -396,14 +428,21 @@ export async function GET(request: NextRequest) {
   }
 
   if (visitsRes.error) {
-    return NextResponse.json({ error: visitsRes.error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: visitsRes.error.message },
+      { status: 500 },
+    );
   }
 
   const sampledRows = normalizeVisitRows(
     visitsRes.data as Partial<VisitRow>[] | null,
   );
   const userIds = Array.from(
-    new Set(sampledRows.map((row) => row.user_id).filter((value): value is string => Boolean(value)))
+    new Set(
+      sampledRows
+        .map((row) => row.user_id)
+        .filter((value): value is string => Boolean(value)),
+    ),
   );
   const profileMap = new Map<string, ProfileIdentity>();
   if (userIds.length > 0) {
@@ -412,7 +451,10 @@ export async function GET(request: NextRequest) {
       .select("id, role, nickname")
       .in("id", userIds);
     if (profilesError) {
-      return NextResponse.json({ error: profilesError.message }, { status: 500 });
+      return NextResponse.json(
+        { error: profilesError.message },
+        { status: 500 },
+      );
     }
     for (const profile of (profiles ?? []) as ProfileIdentity[]) {
       profileMap.set(profile.id, profile);
@@ -429,11 +471,36 @@ export async function GET(request: NextRequest) {
   const ownHosts = getOwnHosts();
   const sessions = new Map<string, VisitRow>();
   const sessionPageviews = new Map<string, number>();
-  const sourceMap = new Map<string, { visitors: Set<string>; sessions: Set<string>; pageviews: number; detail: string | null }>();
-  const platformMap = new Map<string, { label: string; visitors: Set<string>; sessions: Set<string>; pageviews: number }>();
-  const landingMap = new Map<string, { visitors: Set<string>; sessions: Set<string>; pageviews: number }>();
-  const pageMap = new Map<string, { visitors: Set<string>; sessions: Set<string>; pageviews: number }>();
-  const dailyMap = new Map<string, { visitors: Set<string>; sessions: Set<string>; pageviews: number }>();
+  const sourceMap = new Map<
+    string,
+    {
+      visitors: Set<string>;
+      sessions: Set<string>;
+      pageviews: number;
+      detail: string | null;
+    }
+  >();
+  const platformMap = new Map<
+    string,
+    {
+      label: string;
+      visitors: Set<string>;
+      sessions: Set<string>;
+      pageviews: number;
+    }
+  >();
+  const landingMap = new Map<
+    string,
+    { visitors: Set<string>; sessions: Set<string>; pageviews: number }
+  >();
+  const pageMap = new Map<
+    string,
+    { visitors: Set<string>; sessions: Set<string>; pageviews: number }
+  >();
+  const dailyMap = new Map<
+    string,
+    { visitors: Set<string>; sessions: Set<string>; pageviews: number }
+  >();
   const actorMap = new Map<
     string,
     {
@@ -483,13 +550,21 @@ export async function GET(request: NextRequest) {
     platformBucket.pageviews += 1;
     platformMap.set(platform.key, platformBucket);
 
-    const pageBucket = pageMap.get(path) ?? { visitors: new Set<string>(), sessions: new Set<string>(), pageviews: 0 };
+    const pageBucket = pageMap.get(path) ?? {
+      visitors: new Set<string>(),
+      sessions: new Set<string>(),
+      pageviews: 0,
+    };
     pageBucket.visitors.add(visitorId);
     pageBucket.sessions.add(sessionId);
     pageBucket.pageviews += 1;
     pageMap.set(path, pageBucket);
 
-    const dailyBucket = dailyMap.get(dateKey) ?? { visitors: new Set<string>(), sessions: new Set<string>(), pageviews: 0 };
+    const dailyBucket = dailyMap.get(dateKey) ?? {
+      visitors: new Set<string>(),
+      sessions: new Set<string>(),
+      pageviews: 0,
+    };
     dailyBucket.visitors.add(visitorId);
     dailyBucket.sessions.add(sessionId);
     dailyBucket.pageviews += 1;
@@ -498,18 +573,18 @@ export async function GET(request: NextRequest) {
 
   sessions.forEach((row, sessionId) => {
     const visitorId = getVisitorId(row, 0);
-    const source = getSourceLabel(row, ownHosts);
-    const sourceBucket =
-      sourceMap.get(source) ?? {
-        visitors: new Set<string>(),
-        sessions: new Set<string>(),
-        pageviews: 0,
-        detail: row.utm_campaign || row.referrer_host || null,
-      };
+    const source = getTrafficSourceLabel(row, ownHosts);
+    const sourceBucket = sourceMap.get(source) ?? {
+      visitors: new Set<string>(),
+      sessions: new Set<string>(),
+      pageviews: 0,
+      detail: row.utm_campaign || row.referrer_host || null,
+    };
     sourceBucket.visitors.add(visitorId);
     sourceBucket.sessions.add(sessionId);
     sourceBucket.pageviews += sessionPageviews.get(sessionId) ?? 1;
-    if (!sourceBucket.detail) sourceBucket.detail = row.utm_campaign || row.referrer_host || null;
+    if (!sourceBucket.detail)
+      sourceBucket.detail = row.utm_campaign || row.referrer_host || null;
     sourceMap.set(source, sourceBucket);
 
     const landingPath = getPath(row);
@@ -524,21 +599,27 @@ export async function GET(request: NextRequest) {
     landingMap.set(landingPath, landingBucket);
   });
 
-  const sources = toCountList(Array.from(sourceMap.entries()), (source, value) => ({
-    source,
-    detail: value.detail,
-    visitors: value.visitors?.size ?? 0,
-    sessions: value.sessions?.size ?? 0,
-    pageviews: value.pageviews ?? 0,
-  })).slice(0, 20);
+  const sources = toCountList(
+    Array.from(sourceMap.entries()),
+    (source, value) => ({
+      source,
+      detail: value.detail,
+      visitors: value.visitors?.size ?? 0,
+      sessions: value.sessions?.size ?? 0,
+      pageviews: value.pageviews ?? 0,
+    }),
+  ).slice(0, 20);
 
-  const clientPlatforms = toCountList(Array.from(platformMap.entries()), (key, value) => ({
-    key,
-    label: value.label,
-    visitors: value.visitors?.size ?? 0,
-    sessions: value.sessions?.size ?? 0,
-    pageviews: value.pageviews ?? 0,
-  }));
+  const clientPlatforms = toCountList(
+    Array.from(platformMap.entries()),
+    (key, value) => ({
+      key,
+      label: value.label,
+      visitors: value.visitors?.size ?? 0,
+      sessions: value.sessions?.size ?? 0,
+      pageviews: value.pageviews ?? 0,
+    }),
+  );
 
   const actorBreakdown = Array.from(actorMap.entries())
     .map(([key, value]) => ({
@@ -551,18 +632,24 @@ export async function GET(request: NextRequest) {
     }))
     .sort((left, right) => right.pageviews - left.pageviews);
 
-  const landingPages = toCountList(Array.from(landingMap.entries()), (path, value) => ({
-    path,
-    visitors: value.visitors?.size ?? 0,
-    sessions: value.sessions?.size ?? 0,
-  })).slice(0, 20);
+  const landingPages = toCountList(
+    Array.from(landingMap.entries()),
+    (path, value) => ({
+      path,
+      visitors: value.visitors?.size ?? 0,
+      sessions: value.sessions?.size ?? 0,
+    }),
+  ).slice(0, 20);
 
-  const topPages = toCountList(Array.from(pageMap.entries()), (path, value) => ({
-    path,
-    visitors: value.visitors?.size ?? 0,
-    sessions: value.sessions?.size ?? 0,
-    pageviews: value.pageviews ?? 0,
-  })).slice(0, 20);
+  const topPages = toCountList(
+    Array.from(pageMap.entries()),
+    (path, value) => ({
+      path,
+      visitors: value.visitors?.size ?? 0,
+      sessions: value.sessions?.size ?? 0,
+      pageviews: value.pageviews ?? 0,
+    }),
+  ).slice(0, 20);
 
   const daily = Array.from(dailyMap.entries())
     .map(([date, value]) => ({
@@ -579,7 +666,7 @@ export async function GET(request: NextRequest) {
       created_at: row.created_at,
       path: getPath(row),
       query_string: row.query_string,
-      source: getSourceLabel(row, ownHosts),
+      source: getTrafficSourceLabel(row, ownHosts),
       client_platform: getClientPlatform(row),
       actor,
       referrer_host: row.referrer_host,
@@ -621,6 +708,12 @@ export async function GET(request: NextRequest) {
         .limit(MAX_ROWS);
     }
 
+    if (allVisitsRes.error) {
+      return NextResponse.json(
+        { error: "누적 방문 로그를 불러오지 못했습니다." },
+        { status: 503 },
+      );
+    }
     const allRows = normalizeVisitRows(
       allVisitsRes.data as Partial<VisitRow>[] | null,
     );
@@ -633,10 +726,16 @@ export async function GET(request: NextRequest) {
     ).filter((userId) => !profileMap.has(userId));
 
     if (fallbackUserIds.length > 0) {
-      const { data: profiles } = await admin
+      const { data: profiles, error: profilesError } = await admin
         .from("profiles")
         .select("id, role, nickname")
         .in("id", fallbackUserIds);
+      if (profilesError) {
+        return NextResponse.json(
+          { error: "내부 방문 제외에 필요한 권한을 확인하지 못했습니다." },
+          { status: 503 },
+        );
+      }
       for (const profile of (profiles ?? []) as ProfileIdentity[]) {
         profileMap.set(profile.id, profile);
       }
@@ -658,6 +757,7 @@ export async function GET(request: NextRequest) {
     rangeDays: days,
     includeInternal,
     sampledRows: rows.length,
+    detailsTruncated: sampledRows.length >= MAX_ROWS,
     excludedRows: sampledRows.length - rows.length,
     generatedAt: new Date().toISOString(),
     overview,
