@@ -242,12 +242,46 @@ export function step1Targets(plans, rowsById) {
   return plans.filter((plan) => !rowsById.get(plan.id)?.deadline_checked_at);
 }
 
-async function fetchRows(supabase) {
+/** Columns that exist before 20261110010000 is applied. */
+const PRE_MIGRATION_COLUMNS = [
+  "id",
+  "title",
+  "poster_status",
+  "deadline_type",
+  "application_start_at",
+  "application_end_at",
+  "event_start_at",
+  "event_end_at",
+  "created_at",
+  "updated_at",
+].join(",");
+const CORRECTABLE = ["application_end_at", "event_start_at", "event_end_at"];
+
+/**
+ * Step 2 before the migration (--existing-columns-only): only the deadline and
+ * event values are written; the confirmation travels with step 1 later.
+ * Rows that already hold the corrected values are left out.
+ */
+export function existingColumnsPatch(plan, row) {
+  if (!plan.step2) return null;
+  const patch = Object.fromEntries(
+    CORRECTABLE.filter((key) => plan.step2[key] !== undefined).map((key) => [
+      key,
+      plan.step2[key],
+    ]),
+  );
+  const same = Object.entries(patch).every(
+    ([key, value]) => row[key] && Date.parse(row[key]) === Date.parse(value),
+  );
+  return Object.keys(patch).length && !same ? patch : null;
+}
+
+async function fetchRows(supabase, columns = READ_COLUMNS) {
   const rows = [];
   for (let from = 0; ; from += 1000) {
     const { data, error } = await supabase
       .from("posters")
-      .select(READ_COLUMNS)
+      .select(columns)
       .in("poster_status", ["published", "review"])
       .order("id")
       .range(from, from + 999);
@@ -264,7 +298,7 @@ async function fetchRows(supabase) {
   }));
 }
 
-function patchFor(plan, step) {
+function fullPatchFor(plan, step) {
   if (step === 1)
     return { ...plan.step1, deadline_checked_at: new Date().toISOString() };
   if (step === 2) return plan.step2;
@@ -306,13 +340,22 @@ async function main() {
 
   const step = Number(args.step);
   if (![1, 2, 3].includes(step)) throw new Error("--step=1|2|3 is required");
+  const preMigration = Boolean(args["existing-columns-only"]);
+  if (preMigration && step !== 2)
+    throw new Error("--existing-columns-only works with --step=2 only");
   const today = toSeoulDate(new Date().toISOString());
-  const rows = await fetchRows(supabase);
+  const rows = await fetchRows(
+    supabase,
+    preMigration ? PRE_MIGRATION_COLUMNS : READ_COLUMNS,
+  );
   const plans = planBackfill(rows, DEADLINE_VERIFICATION_OVERRIDES, today);
   const byId = new Map(rows.map((row) => [row.id, row]));
   const missing = DEADLINE_VERIFICATION_OVERRIDES.filter(
     (item) => !byId.has(item.id),
   );
+  const patchFor = preMigration
+    ? (plan) => existingColumnsPatch(plan, byId.get(plan.id))
+    : (plan, s) => fullPatchFor(plan, s);
   const targets = (step === 1 ? step1Targets(plans, byId) : plans).filter(
     (plan) => patchFor(plan, step),
   );

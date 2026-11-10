@@ -117,8 +117,8 @@ export const DEADLINE_VERIFICATION_OVERRIDES = [
     deadline_time_verified: true,
     correct: {
       application_end_at: "2026-11-20T18:00:00+09:00",
-      event_start_at: "2026-12-03T00:00:00+09:00",
-      event_end_at: "2026-12-17T23:59:59+09:00",
+      event_start_at: "2026-12-03T13:30:00+09:00",
+      event_end_at: "2026-12-17T17:00:00+09:00",
     },
   },
   {

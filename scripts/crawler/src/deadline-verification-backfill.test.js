@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  existingColumnsPatch,
   planBackfill,
   receptionVerifiedByRule,
   step1ByRule,
@@ -140,5 +141,42 @@ test("posters collected after the A-1 cutoff are not given a legacy date", () =>
   assert.equal(
     step1ByRule(row({ created_at: "2026-11-09T12:00:00+00:00" }), today).rule,
     "legacy-date",
+  );
+});
+
+test("before the migration, step 2 writes only the deadline and event values", () => {
+  const id = "00000000-0000-4000-8000-000000000003";
+  const [plan] = planBackfill(
+    [row({ id })],
+    [
+      {
+        id,
+        why: "w",
+        deadline_status: "verified",
+        deadline_source: "poster",
+        deadline_time_verified: true,
+        correct: {
+          application_end_at: "2026-11-20T18:00:00+09:00",
+          event_start_at: "2026-12-03T00:00:00+09:00",
+        },
+      },
+    ],
+    today,
+  );
+  const stored = {
+    application_end_at: "2026-12-03T14:59:59+00:00",
+    event_start_at: null,
+  };
+  assert.deepEqual(existingColumnsPatch(plan, stored), {
+    application_end_at: "2026-11-20T18:00:00+09:00",
+    event_start_at: "2026-12-03T00:00:00+09:00",
+  });
+  // Already corrected: nothing to write.
+  assert.equal(
+    existingColumnsPatch(plan, {
+      application_end_at: "2026-11-20T09:00:00+00:00",
+      event_start_at: "2026-12-02T15:00:00+00:00",
+    }),
+    null,
   );
 });

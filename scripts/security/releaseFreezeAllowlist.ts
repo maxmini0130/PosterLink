@@ -31,6 +31,9 @@ const ADMIN_COMMENT_MODERATION = "c87927ba8cad60cb075ad1f3aa9a4da6b5f12ec2";
 /** Home v5 card facts, featured week, region basis, popularity RPC and events; pending independent review, not production application approval. */
 const HOME_V5_CARD_FACTS = "1b4fac4933132c01aec256196f6c1d9df7187747";
 
+/** v6.1 deadline verification columns; approved by the user on 2026-11-10, not yet applied to production. */
+const DEADLINE_VERIFICATION = "28bdc9980539f84e32e36ff763d04f311de778af";
+
 /** New migration path -> commit holding its reviewed content. */
 export const APPROVED_MIGRATIONS: Readonly<Record<string, string>> = {
   "supabase/migrations/20261031010000_extend_product_events_for_retention.sql":
@@ -51,6 +54,8 @@ export const APPROVED_MIGRATIONS: Readonly<Record<string, string>> = {
     ADMIN_COMMENT_MODERATION,
   "supabase/migrations/20261103010000_add_home_v5_card_facts.sql":
     HOME_V5_CARD_FACTS,
+  "supabase/migrations/20261110010000_add_deadline_verification_fields.sql":
+    DEADLINE_VERIFICATION,
 };
 
 /** File path -> commit holding its reviewed content; replaces the base pin. */
