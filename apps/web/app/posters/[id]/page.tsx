@@ -17,10 +17,14 @@ import {
   type PosterDetailPoster,
 } from "./PosterDetailClient";
 import type { AlertDefaults } from "./ClosedPosterAlertCta";
+import {
+  DEADLINE_VERIFICATION_COLUMNS,
+  type DeadlineVerificationRow,
+} from "../../../lib/posterDeadlineFields";
 
 export const dynamic = "force-dynamic";
 
-type PosterRow = {
+type PosterRow = DeadlineVerificationRow & {
   id: string;
   title: string;
   source_org_name: string | null;
@@ -159,6 +163,20 @@ const fetchPosterDetail = cache(async (id: string) => {
   const supabase = createPosterServerClient();
 
   const fetchPoster = async () => {
+    // v6.1 confirmation columns first (20261110010000); without them, the
+    // structured columns as before.
+    const verifiedResult = await supabase
+      .from("posters")
+      .select(`${STRUCTURED_POSTER_SELECT}, ${DEADLINE_VERIFICATION_COLUMNS}`)
+      .eq("id", id)
+      .maybeSingle();
+    if (
+      !verifiedResult.error ||
+      !/deadline_status|deadline_time_verified|reception_verified|session_rule|last_session|deadline_label|deadline_note/.test(
+        verifiedResult.error.message ?? "",
+      )
+    )
+      return verifiedResult;
     const structuredResult = await supabase
       .from("posters")
       .select(STRUCTURED_POSTER_SELECT)

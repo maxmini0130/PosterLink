@@ -1,22 +1,25 @@
 "use client";
 
-import { Heart } from "lucide-react";
+import { ExternalLink, Heart } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 
 /**
- * Bottom action bar on mobile detail screens: 찜하기 on the left, the primary
- * action on the right. Hidden from xl (1280px) up, where the detail page uses its side
- * action box instead.
+ * Bottom action bar on mobile detail screens (v6.1 SPEC 7.2): [찜] [extra]
+ * [primary ↗]. Hidden from xl (1280px) up, where the detail page shows the
+ * same buttons beside the summary.
  */
 export function ActionBar({
   favorited,
   onToggleFavorite,
   favoriteBusy,
+  extra,
   primary,
 }: {
   favorited: boolean;
   onToggleFavorite: () => void;
   favoriteBusy?: boolean;
+  /** Optional middle button (신청했어요, stage 6). */
+  extra?: ReactNode;
   /** The primary link or button (신청 페이지로 이동 / 공식 공고 확인하기 …). */
   primary: ReactNode;
 }) {
@@ -31,53 +34,57 @@ export function ActionBar({
     <div
       role="group"
       aria-label="공고 행동"
-      className="pl-action-bar fixed inset-x-0 z-40 flex items-center gap-2 border-t border-pl-line bg-pl-card px-5 py-2.5 xl:hidden"
+      className="pl-action-bar fixed inset-x-0 z-40 flex items-center gap-2 border-t border-pl-line bg-pl-card px-4 py-[13px] xl:hidden"
     >
       <FavoriteButton
         favorited={favorited}
         onToggle={onToggleFavorite}
         busy={favoriteBusy}
+        iconOnly
       />
+      {extra}
       <div className="min-w-0 flex-1">{primary}</div>
     </div>
   );
 }
 
-/** 찜하기 / 찜함 toggle with text, usable in the bar and the PC action box. */
+/** 찜 toggle: a square heart in the bar, with text in the PC action row. */
 export function FavoriteButton({
   favorited,
   onToggle,
   busy,
   className = "",
+  iconOnly = false,
 }: {
   favorited: boolean;
   onToggle: () => void;
   busy?: boolean;
   className?: string;
+  iconOnly?: boolean;
 }) {
   return (
     <button
       type="button"
       aria-pressed={favorited}
+      aria-label={favorited ? "찜 취소" : "찜하기"}
       disabled={busy}
       onClick={onToggle}
-      className={`inline-flex min-h-[44px] min-w-[72px] items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-bold disabled:opacity-60 ${
-        favorited
-          ? "border-pl-accent text-pl-accent"
-          : "border-pl-line text-pl-ink"
+      className={`inline-flex h-[46px] shrink-0 items-center justify-center gap-1.5 rounded-[10px] border border-pl-line-strong bg-white text-[14px] font-semibold text-pl-ink disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pl-ink ${
+        iconOnly ? "w-[52px]" : "px-4"
       } ${className}`}
     >
       <Heart
-        size={18}
+        size={20}
+        strokeWidth={2}
         aria-hidden="true"
         fill={favorited ? "currentColor" : "none"}
       />
-      {favorited ? "찜함" : "찜하기"}
+      {!iconOnly && (favorited ? "찜함" : "찜")}
     </button>
   );
 }
 
-/** Primary action as a link styled for the bar or the PC action box. */
+/** Primary action (ink, opens the official page in a new tab). */
 export function PrimaryActionLink({
   href,
   children,
@@ -93,9 +100,10 @@ export function PrimaryActionLink({
       target="_blank"
       rel="noopener noreferrer"
       onClick={onClick}
-      className="flex min-h-[44px] w-full items-center justify-center rounded-lg bg-pl-accent px-4 text-sm font-bold text-white hover:brightness-95"
+      className="flex h-[46px] w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] border border-pl-ink bg-pl-ink px-4 text-[14px] font-bold text-white hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pl-ink"
     >
       {children}
+      <ExternalLink size={16} strokeWidth={2} aria-hidden="true" />
       <span className="sr-only"> (새 창)</span>
     </a>
   );

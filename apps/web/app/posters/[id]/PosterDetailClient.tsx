@@ -3,20 +3,31 @@ import toast from "react-hot-toast";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, Share2, X } from "lucide-react";
+import { Bell, ChevronDown, ChevronLeft, ChevronRight, Share2, X } from "lucide-react";
 
 import { Header } from "../../components/Header";
 import { BottomNav } from "../../components/BottomNav";
 import { CommentSection } from "../../components/CommentSection";
 import { Footer } from "../../components/Footer";
-import { PosterImageCarousel } from "../../components/PosterImageCarousel";
 import { ActionBar, FavoriteButton, PrimaryActionLink } from "../../components/pl/ActionBar";
 import { ApplyMark } from "../../components/pl/ApplyMark";
 import { BottomSheet } from "../../components/pl/BottomSheet";
-import { DdayStamp } from "../../components/pl/DdayStamp";
-import { DeadlineLabel, ReceptionChip } from "../../components/pl/DeadlineLabel";
 import { PosterListCard, type PlPosterCardData } from "../../components/pl/PosterListCard";
 import { PosterThumb } from "../../components/pl/PosterThumb";
+import {
+  ClosedBanner,
+  DetailPosterPreview,
+  DetailSimilar,
+  DetailSourceLine,
+  DetailSummaryCard,
+  DetailTags,
+} from "./DetailV61";
+import { getDeadlinePresentation } from "../../../lib/deadlinePresentation";
+import {
+  deadlineVerificationFromRow,
+  type DeadlineVerificationRow,
+} from "../../../lib/posterDeadlineFields";
+import { cardTitleText } from "../../../lib/posterCardText";
 import { SectionHeader } from "../../components/pl/SectionHeader";
 import { showActionToast } from "../../components/pl/actionToast";
 import { InstitutionFollowButton } from "../../institutions/InstitutionFollowButton";
@@ -35,7 +46,7 @@ import {
   saveGuestFavorite,
   type PendingActionDoneDetail,
 } from "../../lib/guestSession";
-import { getDeadlineDisplay, receptionEndedOn } from "../../../lib/deadlineDisplay";
+import { receptionEndedOn } from "../../../lib/deadlineDisplay";
 import { readEntry, readGuestInterest } from "../../../lib/guestInterest";
 import { canGoBackInSite } from "../../../lib/backTarget";
 import { currentArrival } from "../../lib/inSiteHistory";
@@ -63,7 +74,7 @@ import { trackAnalytics, setAnalyticsLoginStatus } from "../../../lib/analytics"
 import { consumePosterViewSource, promptSignup, trackProductEvent } from "../../../lib/productEvents";
 import { shareUrl } from "../../../lib/productEventsCore";
 
-export type PosterDetailPoster = {
+export type PosterDetailPoster = DeadlineVerificationRow & {
   id: string;
   title: string;
   source_org_name: string | null;
@@ -717,6 +728,10 @@ export function PosterDetailClient({
     window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
   }, [poster.categoryName, poster.id, poster.poster_status, poster.regionName]);
 
+  // SPEC 9 "찜한 직후(미확인)": no deadline reminder can follow an unconfirmed date.
+  const noDeadlineAlert = () =>
+    presentation.state !== "verified_time" && presentation.state !== "date_only";
+
   const toggleFavorite = async () => {
     if (favoriteBusy) return;
     setFavoriteBusy(true);
@@ -744,7 +759,9 @@ export function PosterDetailClient({
         if (followedSet && institution && offerFollow({ id: institution.id, name: institution.name }, "favorite")) return;
         promptSignup("detail", "favorite", { posterId: poster.id });
         showActionToast(
-          "이 기기에 저장됐어요",
+          noDeadlineAlert()
+            ? "이 기기에 찜했어요. 마감일 확인 전이라 마감 알림은 없어요."
+            : "이 기기에 저장됐어요",
           {
             label: "계정에 보관하기",
             onClick: () => {
@@ -778,7 +795,9 @@ export function PosterDetailClient({
           trackAnalytics("save_poster", {poster_id:poster.id,poster_category:poster.categoryId,poster_region:poster.regionId});
           trackProductEvent("favorite_add", { posterId: poster.id, metadata: { screen: "detail", logged_in: true } });
           if (!(followedSet && institution && offerFollow({ id: institution.id, name: institution.name }, "favorite")))
-            toast.success("찜했어요");
+            toast.success(
+              noDeadlineAlert() ? "찜했어요. 마감일 확인 전이라 마감 알림은 없어요." : "찜했어요",
+            );
         } else {
           toast.error("찜하지 못했어요. 잠시 후 다시 시도해 주세요.");
         }
@@ -881,15 +900,18 @@ export function PosterDetailClient({
     else router.push("/");
   };
 
-  const display = getDeadlineDisplay({
+  // v6.1: the shared deadline function decides every deadline word on this
+  // screen (SPEC 4); missing confirmation columns claim nothing.
+  const presentation = getDeadlinePresentation({
+    ...deadlineVerificationFromRow(poster),
+    deadlineType: poster.deadline_type,
     applicationStartAt: poster.application_start_at,
     applicationEndAt: poster.application_end_at,
-    deadlineType: poster.deadline_type,
-    posterStatus: poster.poster_status,
     eventEndAt: poster.event_end_at,
+    posterStatus: poster.poster_status,
     now: clock
   });
-  const closed = display.reception === "closed";
+  const closed = presentation.state === "closed";
 
   const imageUrls = resolvePosterImageGallery(poster.images ?? [], poster.thumbnail_url, poster.source_key);
   // Plan 3-2: only an official_apply link is a sign-up page; otherwise the
@@ -996,49 +1018,17 @@ export function PosterDetailClient({
       {primaryAction.label}
     </PrimaryActionLink>
   ) : (
-    <span className="flex min-h-[44px] w-full items-center justify-center rounded-lg border border-pl-line px-4 text-sm text-pl-sub">
+    <span className="flex h-[46px] w-full items-center justify-center rounded-[10px] border border-pl-line-strong bg-white px-4 text-[14px] text-pl-meta">
       공식 링크 확인 중
     </span>
   );
 
-  const chips = (
-    <p className="flex flex-wrap items-center gap-1.5">
-      {poster.categoryName && (
-        <span className="inline-flex min-h-6 items-center rounded-md bg-pl-ink px-2 text-xs font-bold text-white">
-          {poster.categoryName}
-        </span>
-      )}
-      {poster.regionName && (
-        <span className="inline-flex min-h-6 items-center rounded-md border border-pl-line bg-pl-card px-2 text-xs font-medium text-pl-ink">
-          {regionDisplay.label}
-        </span>
-      )}
-      <ReceptionChip display={display} />
-    </p>
-  );
-
-  const posterFigure = (className: string) => (
-    <figure className={`relative overflow-hidden rounded-xl bg-pl-poster ${className}`}>
-      <PosterImageCarousel
-        images={imageUrls}
-        title={poster.title}
-        org={displayOrgName}
-        fallbackClassName="p-8"
-        imgClassName="h-full w-full object-contain"
-        showControls
-        iconSize={34}
-        onImageClick={(_, index) => openImage(index)}
-      />
-      {imageUrls.length > 0 && (
-        <button
-          type="button"
-          onClick={() => openImage(0)}
-          className="absolute bottom-3 right-3 inline-flex min-h-[36px] items-center rounded-full bg-pl-ink/90 px-3 text-xs font-bold text-white"
-        >
-          크게 보기
-        </button>
-      )}
-    </figure>
+  const tags = (
+    <DetailTags
+      category={poster.categoryName}
+      region={poster.regionName ? regionDisplay.label : null}
+      presentation={presentation}
+    />
   );
 
   const originalSection = (
@@ -1048,6 +1038,8 @@ export function PosterDetailClient({
         <ChevronDown size={18} aria-hidden="true" className="transition-transform group-open:rotate-180" />
       </summary>
       <div className="space-y-5 border-t border-pl-divider px-4 py-4 text-sm leading-relaxed text-pl-ink">
+        {/* The field list keeps its 정보 오류 신고 buttons (moved from the first screen). */}
+        <FactsList facts={coreFacts} posterId={poster.id} noticeLink={noticeLink} onNoticeClick={logNotice} columns={!closed} />
         {moreFacts.length > 0 && (
           <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
             {moreFacts.map((fact) => (
@@ -1149,45 +1141,51 @@ export function PosterDetailClient({
     </p>
   );
 
-  const titleBlock = (
-    <div className="flex items-start gap-3">
-      <div className="min-w-0 flex-1">
-        {chips}
-        <h1
-          data-analytics-poster-id={poster.id}
-          data-analytics-category={poster.categoryId || undefined}
-          data-analytics-region={poster.regionId || undefined}
-          className={`mt-2.5 font-pl-serif text-[23px] font-bold leading-[1.38] xl:text-[32px] ${closed ? "text-pl-sub" : "text-pl-ink"}`}
-        >
-          {poster.title}
-        </h1>
-        {displayOrgName && <p className="mt-1.5 text-[13px] text-pl-meta">{displayOrgName}</p>}
-      </div>
-      {closed ? (
-        imageUrls[0] && (
-          <PosterThumb src={imageUrls[0]} className="h-[72px] w-14" />
-        )
-      ) : (
-        <DdayStamp display={display} />
-      )}
-    </div>
+  // Official title, serif, up to three lines (SPEC 7.2 ④).
+  const title = (
+    <h1
+      data-analytics-poster-id={poster.id}
+      data-analytics-category={poster.categoryId || undefined}
+      data-analytics-region={poster.regionId || undefined}
+      className={`m-0 line-clamp-3 break-keep font-pl-serif text-[21px] font-bold leading-[1.4] xl:text-[30px] ${closed ? "text-pl-ink-soft" : "text-pl-ink"}`}
+    >
+      {cardTitleText(poster.title)}
+    </h1>
   );
 
-  // ④ banner: when it ended, then accepting alternatives (most relevant first).
-  const closedBanner = closed && (
-    <section className="rounded-xl bg-pl-ink p-4 text-white">
-      <p className="text-[15px] font-bold">
-        {closedOn ? `이 공고는 ${closedOn}에 접수가 끝났어요` : "이 공고는 접수가 끝났어요"}
-      </p>
-      {institution && relatedPosters.length > 0 && (
-        <div className="mt-3 space-y-2">
-          <p className="text-[13px] text-white/80">{institution.name}에서 지금 접수 중인 공고</p>
-          {/* Up to three open alternatives (screen plan v1.0, 06 종료 화면). */}
-          {relatedPosters.slice(0, 3).map((related) => (
-            <PosterListCard key={related.id} poster={related} source="related" />
-          ))}
-        </div>
-      )}
+  const summaryCard = (
+    <DetailSummaryCard
+      eligibility={eligibility}
+      recruitment={poster.recruitment_count || null}
+      presentation={presentation}
+      fee={fee}
+      eventPeriod={eventPeriod}
+      location={poster.event_location || null}
+    />
+  );
+
+  const similar = (
+    <DetailSimilar
+      closed={closed}
+      categoryName={poster.categoryName ?? null}
+      categoryHref={poster.categoryId ? `/posters?category=${poster.categoryId}` : "/posters"}
+    />
+  );
+
+  const sourceLine = (
+    <DetailSourceLine sourceLabel={sourceLabel} noticeUrl={noticeLink?.url ?? null} onNoticeClick={logNotice} />
+  );
+
+  // A member's own 신청 mark (stage 6 moves this into the action bar).
+  const applyRecord = member?.applySupported && (!closed || member.status === "applied") && (
+    <section aria-labelledby="my-record" className="rounded-xl border border-pl-line bg-pl-card px-4 py-3">
+      <h2 id="my-record" className="m-0 pb-2 text-[15px] font-bold">내 기록</h2>
+      <ApplyMark
+        marked={member.status === "applied"}
+        busy={applyBusy}
+        onMark={() => void setApplyStatus("applied")}
+        onUnmark={() => void setApplyStatus("interested")}
+      />
     </section>
   );
 
@@ -1221,8 +1219,9 @@ export function PosterDetailClient({
               type="button"
               onClick={open}
               disabled={disabled}
-              className="flex min-h-[44px] flex-1 items-center justify-center rounded-lg bg-pl-accent px-3 text-sm font-bold text-white disabled:opacity-60"
+              className="flex h-[46px] flex-1 items-center justify-center gap-1.5 rounded-[10px] border border-pl-ink bg-white px-3 text-[14px] font-bold text-pl-ink disabled:opacity-60"
             >
+              <Bell size={17} strokeWidth={2} aria-hidden="true" />
               비슷한 공고 받기
             </button>
           </div>
@@ -1252,7 +1251,7 @@ export function PosterDetailClient({
         </button>
       </div>
 
-      <main className="mx-auto w-full max-w-[1200px] px-5 py-5 xl:px-10 xl:py-8">
+      <main className="mx-auto w-full max-w-[1200px] pb-8 xl:px-10 xl:py-8">
         <nav aria-label="위치" className="mb-5 hidden text-[13px] text-pl-meta xl:block">
           <ol className="flex flex-wrap items-center gap-1.5">
             <li><Link href="/" className="hover:underline">홈</Link></li>
@@ -1265,104 +1264,91 @@ export function PosterDetailClient({
           </ol>
         </nav>
 
-        <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_380px] xl:items-start xl:gap-10">
-          <div className="min-w-0 space-y-6">
-            {titleBlock}
-            {closedBanner}
-            {/* ④ 내 기록: only for a member who marked it; the poster closing never changes it. */}
-            {closed && member?.applySupported && member.status === "applied" && (
-              <section aria-labelledby="my-record" className="rounded-xl border border-pl-line bg-pl-card px-4 py-3">
-                <h2 id="my-record" className="pb-2 text-[15px] font-bold">내 기록</h2>
-                <ApplyMark
-                  marked
-                  busy={applyBusy}
-                  onMark={() => void setApplyStatus("applied")}
-                  onUnmark={() => void setApplyStatus("interested")}
-                />
-                <p className="mt-2 text-[13px] leading-5 text-pl-sub">내가 직접 표시한 기록이에요. 공고가 끝나도 그대로 남아요.</p>
-              </section>
-            )}
-
-            <section aria-labelledby="core-facts" className="rounded-xl border border-pl-line bg-pl-card px-4 py-3">
-              <h2 id="core-facts" className="pb-1.5 pt-1 text-[15px] font-bold">
-                {closed ? "공고 정보" : "신청 핵심 정보"}
-              </h2>
-              <FactsList facts={coreFacts} posterId={poster.id} noticeLink={noticeLink} onNoticeClick={logNotice} columns={!closed} />
-              {!closed && member?.applySupported && (
-                <div className="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-dashed border-pl-line pt-3">
-                  <p className="text-[13px] leading-5 text-pl-sub">
-                    신청을 마쳤다면 직접 표시해 두세요.
-                    <br />
-                    내 공고에서 따로 모아 볼 수 있어요.
-                  </p>
-                  <ApplyMark
-                    marked={member.status === "applied"}
-                    busy={applyBusy}
-                    onMark={() => void setApplyStatus("applied")}
-                    onUnmark={() => void setApplyStatus("interested")}
-                  />
-                </div>
-              )}
-            </section>
-
-
-            {!closed && posterFigure("h-[240px] xl:hidden")}
-            {originalSection}
-            {/* On PC the institution sits in the side column. */}
-            {!closed && institutionCard && <div className="xl:hidden">{institutionCard}</div>}
-            {!closed && relatedSection}
-            {closed && institutionCard && <div className="xl:hidden">{institutionCard}</div>}
-            {sourceNote}
-            {alertCta}
-            <CommentSection posterId={poster.id} />
-          </div>
-
-          {/* PC right column (screen plan v1.0, 06): actions first, so a long
-              poster never pushes the 신청 button down; then the institution and
-              the poster. Kept in view while scrolling. */}
-          <aside aria-label="공고 행동" className="hidden space-y-4 xl:sticky xl:top-6 xl:block">
-            <div className="space-y-3 rounded-xl border border-pl-line bg-pl-card p-4">
-              {closed ? (
-                <>
-                  <p
-                    aria-disabled="true"
-                    className="flex min-h-[44px] w-full items-center justify-center rounded-lg bg-pl-divider px-4 text-sm font-bold text-pl-sub"
-                  >
-                    접수가 끝났어요
-                  </p>
-                  {noticeLink && (
-                    <a
-                      href={noticeLink.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={logNotice}
-                      className="flex min-h-[44px] w-full items-center justify-center rounded-lg border border-pl-ink px-4 text-sm font-bold text-pl-ink"
-                    >
-                      공식 공고 확인하기<span className="sr-only"> (새 창)</span>
-                    </a>
-                  )}
-                </>
-              ) : (
-                <>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-pl-sub">마감</span>
-                    <DeadlineLabel display={display} />
-                  </div>
-                  {primaryButton}
-                  <div className="flex gap-2">
-                    <FavoriteButton favorited={isFavorited} onToggle={toggleFavorite} busy={favoriteBusy} className="flex-1" />
-                    <button type="button" onClick={share} className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-lg border border-pl-line text-sm font-bold text-pl-ink">
-                      <Share2 size={16} aria-hidden="true" />
-                      공유
-                    </button>
-                  </div>
-                </>
+        {closed ? (
+          /* v6.1 마감 상세 (SPEC 7.3): small poster, banner, alternatives,
+             then the original content behind "마감된 공고 내용 보기". */
+          <div className="space-y-5 px-4 pt-4 xl:mx-auto xl:max-w-[720px] xl:px-0 xl:pt-0">
+            <div className="flex items-start gap-3">
+              <div className="min-w-0 flex-1 space-y-2.5">
+                {tags}
+                {title}
+              </div>
+              {imageUrls[0] && (
+                <button type="button" onClick={() => openImage(0)} aria-label="포스터 크게 보기" className="shrink-0">
+                  <PosterThumb src={imageUrls[0]} className="h-[116px] w-[84px]" />
+                </button>
               )}
             </div>
+            <ClosedBanner text={presentation.detail} />
+            {applyRecord}
+            {similar}
+            {alertCta}
+            <details className="group" data-closed-content>
+              <summary className="flex min-h-[48px] cursor-pointer list-none items-center justify-center gap-1 text-[14px] text-pl-meta [&::-webkit-details-marker]:hidden">
+                마감된 공고 내용 보기
+                <ChevronDown size={17} aria-hidden="true" className="transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="mt-3 space-y-4">
+                {summaryCard}
+                {sourceLine}
+                {originalSection}
+              </div>
+            </details>
             {institutionCard}
-            {posterFigure("aspect-[3/4] w-full")}
-          </aside>
-        </div>
+            {relatedSection}
+            {sourceNote}
+            <CommentSection posterId={poster.id} />
+          </div>
+        ) : (
+          <>
+            {/* v6.1 접수 중 상세 (SPEC 7.2, 7.5): poster preview, tags, title,
+                summary and the buttons on the first screen. PC: poster left (480). */}
+            <div className="xl:grid xl:grid-cols-[480px_minmax(0,1fr)] xl:items-start xl:gap-10">
+              <div className="xl:sticky xl:top-6">
+                <DetailPosterPreview
+                  src={imageUrls[0] ?? null}
+                  title={poster.title}
+                  org={displayOrgName}
+                  category={poster.categoryName}
+                  imageWidth={poster.imageWidth}
+                  imageHeight={poster.imageHeight}
+                  onOpen={() => openImage(0)}
+                  className="xl:max-h-[760px] xl:rounded-xl"
+                />
+              </div>
+              <div className="min-w-0 space-y-3.5 px-4 pt-4 xl:space-y-4 xl:px-0 xl:pt-0">
+                {tags}
+                {title}
+                {displayOrgName && <p className="m-0 hidden text-[14px] text-pl-meta xl:block">{displayOrgName}</p>}
+                {summaryCard}
+                {/* PC: the buttons sit under the summary (SPEC 7.5). */}
+                <div className="hidden gap-2 xl:flex">
+                  <div className="min-w-0 flex-1">{primaryButton}</div>
+                  <FavoriteButton favorited={isFavorited} onToggle={toggleFavorite} busy={favoriteBusy} />
+                  <button
+                    type="button"
+                    onClick={share}
+                    aria-label="공유하기"
+                    className="inline-flex h-[46px] w-[52px] items-center justify-center rounded-[10px] border border-pl-line-strong bg-white text-pl-ink"
+                  >
+                    <Share2 size={18} aria-hidden="true" />
+                  </button>
+                </div>
+                {applyRecord}
+                {sourceLine}
+                <div className="pt-3">{similar}</div>
+              </div>
+            </div>
+            {/* Below the first screen: the existing sections (SPEC 7.2, 12장 B). */}
+            <div className="mt-8 space-y-6 px-4 xl:px-0">
+              {originalSection}
+              {institutionCard}
+              {relatedSection}
+              {sourceNote}
+              <CommentSection posterId={poster.id} />
+            </div>
+          </>
+        )}
       </main>
 
       {!closed && (
