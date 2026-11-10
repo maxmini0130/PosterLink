@@ -24,10 +24,17 @@ import {
   isClosedCategoryPoster,
 } from "./categoryContent";
 import { assertPublicDiscoveryQuery } from "./publicDiscoveryErrors";
-import { DEADLINE_VERIFICATION_COLUMNS } from "./posterDeadlineFields";
+import { withDeadlineColumns } from "./posterDeadlineFields";
 
-const PUBLIC_POSTER_SELECT = `id,title,source_org_name,organizer_name,organizer_id,source_institution_id,application_institution_id,application_start_at,application_end_at,deadline_type,event_end_at,verification_status,verified_at,thumbnail_url,source_key,summary_short,created_at,updated_at,exposure_tier,${DEADLINE_VERIFICATION_COLUMNS},primary_category_code:field_verification->classification->>primaryCategory`;
-const PROMOTION_POSTER_SELECT = `${PUBLIC_POSTER_SELECT},deadline_review:field_verification->deadlineReview,date_quality_decision:field_verification->dateQuality->>decision,date_issues:field_verification->dateIssues`;
+const BASE_POSTER_SELECT =
+  "id,title,source_org_name,organizer_name,organizer_id,source_institution_id,application_institution_id,application_start_at,application_end_at,deadline_type,event_end_at,verification_status,verified_at,thumbnail_url,source_key,summary_short,created_at,updated_at,exposure_tier,primary_category_code:field_verification->classification->>primaryCategory";
+const PROMOTION_EXTRA_SELECT =
+  "deadline_review:field_verification->deadlineReview,date_quality_decision:field_verification->dateQuality->>decision,date_issues:field_verification->dateIssues";
+
+/** Public poster columns, with the v6.1 confirmation columns once they exist. */
+function publicPosterSelect(client: SupabaseClient) {
+  return withDeadlineColumns(client, BASE_POSTER_SELECT);
+}
 
 export type PublicDiscoveryFilters = {
   query?: string | null;
@@ -148,6 +155,7 @@ export async function fetchPublicDiscovery(
   const multiCategory = categoryScope.length > 1;
   const searchSort = sort === "deadline" ? "deadline" : "latest";
   const limit = Math.min(Math.max(filters.limit ?? 240, 1), 500);
+  const posterSelect = await publicPosterSelect(client);
   const [scoped, countRes] = await Promise.all([
     searchPublicPostersInScope<Record<string, unknown> & { id: string }>(
       client,
@@ -159,8 +167,8 @@ export async function fetchPublicDiscovery(
         sort: searchSort,
         limit,
         select: filters.promotionOnly
-          ? PROMOTION_POSTER_SELECT
-          : PUBLIC_POSTER_SELECT,
+          ? `${posterSelect},${PROMOTION_EXTRA_SELECT}`
+          : posterSelect,
         countable: includeClosed
           ? undefined
           : (row) =>
@@ -222,7 +230,7 @@ export async function fetchCategorySupplements(
   category: DiscoveryTaxonomy,
   client = createPublicSupabaseClient(),
 ) {
-  const select = `${PUBLIC_POSTER_SELECT},poster_status,poster_categories!inner(category_id)`;
+  const select = `${await publicPosterSelect(client)},poster_status,poster_categories!inner(category_id)`;
   const base = () =>
     client
       .from("posters")
@@ -462,12 +470,13 @@ export async function fetchPublicInstitution(slug: string) {
 
   const { data: posters } = await client
     .from("posters")
-    .select(PUBLIC_POSTER_SELECT)
+    .select(await publicPosterSelect(client))
     .eq("poster_status", "published")
     .or(PUBLIC_POSTER_EXPOSURE_FILTER)
     .or(`organizer_id.eq.${data.id},source_institution_id.eq.${data.id}`)
     .order("created_at", { ascending: false })
-    .limit(60);
+    .limit(60)
+    .returns<Record<string, unknown>[]>();
 
   const visiblePosters = ((posters ?? []) as Record<string, unknown>[]).filter(
     (poster) => isAcceptingPoster(poster),
@@ -510,13 +519,14 @@ export async function fetchInstitutionRelatedPosters(
 
   const { data: posters } = await client
     .from("posters")
-    .select(PUBLIC_POSTER_SELECT)
+    .select(await publicPosterSelect(client))
     .eq("poster_status", "published")
     .or(PUBLIC_POSTER_EXPOSURE_FILTER)
     .eq("organizer_id", institution.id)
     .neq("id", excludePosterId)
     .order("application_end_at", { ascending: true, nullsFirst: false })
-    .limit(24);
+    .limit(24)
+    .returns<Record<string, unknown>[]>();
 
   const accepting = ((posters ?? []) as Record<string, unknown>[])
     .filter((poster) => isAcceptingPoster(poster))

@@ -9,6 +9,59 @@ import type { DeadlineInput, DeadlineStatus } from "./deadlinePresentation";
 export const DEADLINE_VERIFICATION_COLUMNS =
   "deadline_status,deadline_time_verified,reception_verified,session_rule_text,session_rule_verified,last_session_deadline_date,deadline_label,deadline_note";
 
+type ColumnProbeClient = {
+  from: (table: string) => {
+    select: (columns: string) => {
+      limit: (
+        count: number,
+      ) => PromiseLike<{ error: { code?: string; message?: string } | null }>;
+    };
+  };
+};
+
+let probed: { value: boolean; at: number } | null = null;
+const RECHECK_MS = 5 * 60 * 1000;
+
+function isMissingColumn(error: { code?: string; message?: string }) {
+  return (
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    /column .* does not exist|could not find .* column/i.test(
+      error.message ?? "",
+    )
+  );
+}
+
+/**
+ * Whether 20261110010000 is applied where `client` reads. A "yes" is kept;
+ * a "no" is checked again after five minutes, so lists start reading the
+ * columns soon after the migration without a redeploy.
+ */
+export async function deadlineColumnsAvailable(client: ColumnProbeClient) {
+  if (probed && (probed.value || Date.now() - probed.at < RECHECK_MS))
+    return probed.value;
+  try {
+    const { error } = await client
+      .from("posters")
+      .select("deadline_status")
+      .limit(1);
+    probed = { value: !error || !isMissingColumn(error), at: Date.now() };
+  } catch {
+    probed = { value: false, at: Date.now() };
+  }
+  return probed.value;
+}
+
+/** `base` plus the confirmation columns when they exist. */
+export async function withDeadlineColumns(
+  client: ColumnProbeClient,
+  base: string,
+) {
+  return (await deadlineColumnsAvailable(client))
+    ? `${base},${DEADLINE_VERIFICATION_COLUMNS}`
+    : base;
+}
+
 export type DeadlineVerificationRow = {
   deadline_status?: string | null;
   deadline_time_verified?: boolean | null;

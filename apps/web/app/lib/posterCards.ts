@@ -8,12 +8,13 @@ import {
   metadataForUrl,
 } from "../../lib/posterImageMetadata";
 import {
-  DEADLINE_VERIFICATION_COLUMNS,
   deadlineVerificationFromRow,
+  withDeadlineColumns,
   type DeadlineVerificationRow,
 } from "../../lib/posterDeadlineFields";
 
-const CARD_SELECT = `id,title,source_org_name,organizer_name,application_start_at,application_end_at,deadline_type,event_end_at,thumbnail_url,source_key,poster_status,${DEADLINE_VERIFICATION_COLUMNS}`;
+const CARD_SELECT =
+  "id,title,source_org_name,organizer_name,application_start_at,application_end_at,deadline_type,event_end_at,thumbnail_url,source_key,poster_status";
 
 type CardRow = DeadlineVerificationRow & {
   id: string;
@@ -39,8 +40,9 @@ export async function loadPosterCards(
   if (posterIds.length === 0) return [];
   const { data, error } = await supabase
     .from("posters")
-    .select(CARD_SELECT)
-    .in("id", posterIds);
+    .select(await withDeadlineColumns(supabase, CARD_SELECT))
+    .in("id", posterIds)
+    .returns<CardRow[]>();
   if (error) return null;
   const rows = new Map(((data ?? []) as CardRow[]).map((row) => [row.id, row]));
   const images = await loadPosterImageMetadata(supabase, [...rows.keys()]);

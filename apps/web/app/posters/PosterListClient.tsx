@@ -61,13 +61,14 @@ import {
 } from "../../lib/searchGroups";
 import { trackAnalytics } from "../../lib/analytics";
 import {
-  DEADLINE_VERIFICATION_COLUMNS,
   deadlineVerificationFromRow,
+  withDeadlineColumns,
 } from "../../lib/posterDeadlineFields";
 
 const PAGE_SIZE = 12;
 const WIDER_FIRST = 6;
-const PUBLIC_POSTER_SELECT = `id,title,source_org_name,organizer_name,verification_status,verified_at,application_start_at,application_end_at,deadline_type,event_end_at,poster_status,thumbnail_url,source_key,summary_short,created_at,exposure_tier,${DEADLINE_VERIFICATION_COLUMNS}`;
+const PUBLIC_POSTER_SELECT =
+  "id,title,source_org_name,organizer_name,verification_status,verified_at,application_start_at,application_end_at,deadline_type,event_end_at,poster_status,thumbnail_url,source_key,summary_short,created_at,exposure_tier";
 
 const SORTS: Array<{ key: DiscoverySort; label: string }> = [
   { key: "latest", label: "최신 등록순" },
@@ -307,6 +308,10 @@ function PosterListPageContent({
       }
 
       if (!semanticSearchUsed || includeClosed) {
+        const posterSelect = await withDeadlineColumns(
+          supabase,
+          PUBLIC_POSTER_SELECT,
+        );
         const scoped = await searchCategoryScope<Row>({
           categoryIds: categoryScope,
           sort: searchArgs.p_sort === "deadline" ? "deadline" : "latest",
@@ -328,7 +333,7 @@ function PosterListPageContent({
                 p_category_id: categoryId,
                 p_limit: limit,
               })
-              .select(PUBLIC_POSTER_SELECT)
+              .select(posterSelect)
               .then(({ data: rows, error }) => ({
                 data: (Array.isArray(rows) ? rows : []) as Row[],
                 error,
