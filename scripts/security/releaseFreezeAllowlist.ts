@@ -31,8 +31,8 @@ const ADMIN_COMMENT_MODERATION = "c87927ba8cad60cb075ad1f3aa9a4da6b5f12ec2";
 /** Home v5 card facts, featured week, region basis, popularity RPC and events; pending independent review, not production application approval. */
 const HOME_V5_CARD_FACTS = "1b4fac4933132c01aec256196f6c1d9df7187747";
 
-/** v6.1 deadline verification columns; approved by the user on 2026-11-10, not yet applied to production. */
-const DEADLINE_VERIFICATION = "28bdc9980539f84e32e36ff763d04f311de778af";
+/** v6.1 deadline verification columns with portal time (user decision 2026-11-10); approved by the user on 2026-11-10, not yet applied to production. */
+const DEADLINE_VERIFICATION = "00d24343be5436d5435d79cefb150a197217cc67";
 
 /** New migration path -> commit holding its reviewed content. */
 export const APPROVED_MIGRATIONS: Readonly<Record<string, string>> = {
