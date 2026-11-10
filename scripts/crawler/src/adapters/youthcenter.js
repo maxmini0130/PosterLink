@@ -1,5 +1,7 @@
 import axios from "axios";
 
+import { readPortalDeadline } from "../deadline-provenance.js";
+
 const BASE_URL = "https://www.youthcenter.go.kr";
 const LIST_ENDPOINT = `${BASE_URL}/pubot/search/portalPolicySearch`;
 const DEFAULT_PAGE_SIZE = 9;
@@ -212,6 +214,9 @@ function buildPost(item) {
     sourceUrl: url,
     date: formatDate(item.FRST_REG_DT) || formatDate(item.DATE) || formatDate(item.LAST_MDFCN_DT) || "",
     deadline,
+    deadlineOrigin: deadline ? "portal_field" : undefined,
+    portalDeadline:
+      readPortalDeadline(item.APLY_PRD_END_YMD, { site: "youthcenter", field: "신청 종료일" }) ?? undefined,
     content: buildContent(item),
     images: [],
     attachments: buildAttachments(item),
@@ -281,6 +286,8 @@ export default {
       content: cached.content,
       date: cached.date,
       deadline: cached.deadline,
+      deadlineOrigin: cached.deadlineOrigin,
+      portalDeadline: cached.portalDeadline,
       images: cached.images,
       attachments: cached.attachments,
       sourceUrl: cached.sourceUrl,

@@ -1,4 +1,5 @@
 import { fetchPage } from "../crawler.js";
+import { readPortalDeadline } from "../deadline-provenance.js";
 
 const BASE_URL = "https://www.k-startup.go.kr";
 const LIST_URL = `${BASE_URL}/web/contents/bizpbanc-ongoing.do`;
@@ -104,12 +105,16 @@ function parseListMeta($, row) {
     date: "",
     startDate: "",
     deadline: "",
+    deadlineRaw: "",
   };
 
   for (const value of values) {
     if (/^\uB4F1\uB85D\uC77C\uC790/.test(value)) meta.date = normalizeDate(value) ?? "";
     if (/^\uC2DC\uC791\uC77C\uC790/.test(value)) meta.startDate = normalizeDate(value) ?? "";
-    if (/^\uB9C8\uAC10\uC77C\uC790/.test(value)) meta.deadline = normalizeDate(value) ?? "";
+    if (/^\uB9C8\uAC10\uC77C\uC790/.test(value)) {
+      meta.deadline = normalizeDate(value) ?? "";
+      meta.deadlineRaw = value;
+    }
   }
 
   return meta;
@@ -232,6 +237,16 @@ function dedupeLines(text) {
   return lines.join("\n");
 }
 
+/** The structured 접수기간/신청기간/마감 field of a K-Startup notice. */
+export function findPortalDeadline(fields) {
+  for (const field of fields) {
+    if (!/(접수|신청)\s*기간|마감\s*일/.test(field.label)) continue;
+    const evidence = readPortalDeadline(field.value, { site: "k-startup", field: compactText(field.label) });
+    if (evidence) return evidence;
+  }
+  return null;
+}
+
 function findDeadline(fields, fallbackText) {
   for (const field of fields) {
     if (!/(\uB9C8\uAC10|\uC811\uC218\uAE30\uAC04|\uC2E0\uCCAD\uAE30\uAC04|\uC811\uC218|\uC2E0\uCCAD)/.test(field.label)) continue;
@@ -268,6 +283,9 @@ export default {
           sourceUrl: buildDetailUrl(pbancSn),
           date: meta.date,
           deadline: meta.deadline,
+          deadlineOrigin: meta.deadline ? "portal_field" : undefined,
+          portalDeadline:
+            readPortalDeadline(meta.deadlineRaw, { site: "k-startup", field: "마감일자" }) ?? undefined,
           content: buildListContent($, row, meta),
           images: [],
           attachments: [],
@@ -296,10 +314,16 @@ export default {
       fallbackText,
     ].filter(Boolean).join("\n\n"));
 
+    const deadline = findDeadline(fields, content);
+    const portalDeadline = findPortalDeadline(fields);
     return {
       title: title || undefined,
       content: content || undefined,
-      deadline: findDeadline(fields, content),
+      deadline,
+      deadlineOrigin: deadline
+        ? portalDeadline?.date === deadline ? "portal_field" : "notice_text"
+        : undefined,
+      portalDeadline: portalDeadline ?? undefined,
       images: [],
       attachments,
       sourceUrl: postUrl,

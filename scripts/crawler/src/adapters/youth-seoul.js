@@ -9,6 +9,7 @@ import {
 import { filterAndOrderPosterImages } from "../poster-image-rules.js";
 import { mergeAttachmentImageCandidates } from "../attachment-image-candidates.js";
 import { extractYouthSchedule } from "../youth-seoul-schedule.js";
+import { readPortalDeadline } from "../deadline-provenance.js";
 import {
   isLikelyApplicationLink,
   shouldUseExternalNoticeDetail,
@@ -209,8 +210,15 @@ export default {
     const title = isInvalidDetailTitle(parsedTitle) ? "" : parsedTitle;
     const overviewText = cleanText($(".feed-view .overview").first().text());
     const schedule = extractYouthSchedule($);
-    const overviewEvidence = $(".feed-view .overview .info li")
-      .map((_, el) => stripPortalMidnight(cleanText($(el).text()))).get()
+    const overviewItems = $(".feed-view .overview .info li")
+      .map((_, el) => cleanText($(el).text())).get();
+    // The raw field keeps its time ("19 : 00"); stripPortalMidnight only affects evidence text.
+    const portalDeadline = readPortalDeadline(
+      overviewItems.find((value) => /^\s*신청\s*기간/.test(value)),
+      { site: "youth-seoul", field: "신청기간" },
+    );
+    const overviewEvidence = overviewItems
+      .map((value) => stripPortalMidnight(value))
       .filter((value) => value && value !== "진행일정");
     if (schedule) overviewEvidence.push(`진행일정: ${schedule} (Asia/Seoul)`);
     const detailText = cleanText($(".feed-view .detail").first().text());
@@ -322,6 +330,8 @@ export default {
       title: inferredTitle || undefined,
       content: content || undefined,
       deadline: externalDetail?.deadline ?? end,
+      deadlineOrigin: externalDetail?.deadline ? "external_detail" : end ? "portal_field" : undefined,
+      portalDeadline: portalDeadline ?? undefined,
       images: posterImages.images,
       posterImageRule: posterImages.posterImageRule,
       posterImageCandidates: posterImages.posterImageCandidates,

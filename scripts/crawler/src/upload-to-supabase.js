@@ -71,6 +71,11 @@ import {
   isMissingRegionBasisColumnError,
   withoutCardFactFields,
 } from "./poster-card-facts.js";
+import {
+  decideDeadlineVerification,
+  isMissingDeadlineVerificationColumnError,
+  withoutDeadlineVerificationFields,
+} from "./deadline-provenance.js";
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)?.trim();
 const SUPABASE_KEY = (process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)?.trim();
@@ -1441,6 +1446,18 @@ async function upsertNoticeCandidate(post, {
   // deadlineParse.applyEnd가 있으면 기존 regex/필드검증 마감일(finalDeadline)보다 우선한다
   // (라우터가 원문에서 다시 뽑은 deadline_text 기반이라 더 근거가 명확함).
   const applyEndAt = deadlineParse?.applyEnd ?? finalDeadline ?? null;
+  // Candidates have no deadline status columns; the trail travels with field_verification.
+  if (enrichedFieldVerification && typeof enrichedFieldVerification === "object") {
+    enrichedFieldVerification.deadlineProvenance = decideDeadlineVerification({
+      portal: post.portalDeadline ?? null,
+      steps: [
+        { path: post.deadlineOrigin ?? "adapter", value: post.deadline },
+        { path: "date_quality", value: finalDeadline },
+        { path: "deadline_parser", value: deadlineParse?.applyEnd },
+      ],
+      finalValue: applyEndAt ? toApplicationEndIso(applyEndAt) : null,
+    }).record;
+  }
   const record = sanitizeForPostgrest({
     source_key: sourceKey,
     source_url: sourceUrl,
@@ -2244,6 +2261,18 @@ async function uploadToSupabase(filePath) {
       sourceText: `${post.title ?? ""}\n${post.content ?? ""}`,
       fallbackOrganizerName: verifiedOrgName,
     });
+    // v6.1: confirmed only while the stored value still matches the portal field.
+    const deadlineDecision = decideDeadlineVerification({
+      portal: post.portalDeadline ?? null,
+      steps: [
+        { path: post.deadlineOrigin ?? "adapter", value: post.deadline },
+        { path: "field_verification", value: verifiedDeadline },
+        { path: "date_quality", value: finalDeadline },
+        { path: "structured_fields", value: structuredFields.application_end_at },
+      ],
+      finalValue: structuredFields.application_end_at,
+    });
+    structuredFields.application_end_at = deadlineDecision.applicationEndAt;
     const sourceOrgName = posterFieldVerification?.organization?.sourceOrgName || post.site || null;
     // Home v5 card facts: candidates only (card_facts_status='needs_review'); evidence in field_verification.cardFacts.
     const cardFacts = buildCardFacts(buildCardFactsInputFromUpload({
@@ -2269,8 +2298,13 @@ async function uploadToSupabase(filePath) {
       created_by: CRAWLER_USER_ID,     // 크롤러 봇 계정 (null 가능)
       ...structuredFields,
       ...cardFacts.columns,
+      ...deadlineDecision.columns,
       thumbnail_url: storedImages[0] ?? null,
-      field_verification: { ...posterFieldVerification, cardFacts: cardFacts.evidence },
+      field_verification: {
+        ...posterFieldVerification,
+        cardFacts: cardFacts.evidence,
+        deadlineProvenance: deadlineDecision.record,
+      },
       embedding: embeddingToPgVector(embedding),
     });
     if (isInvalidCrawlerTitle(posterRecord.title)) {
@@ -2413,19 +2447,28 @@ async function uploadToSupabase(filePath) {
       continue;
     }
 
-    let posterInsert = await supabase.from("posters").insert(posterRecord).select("id").single();
     let insertRecord = posterRecord;
-    if (isMissingCardFactColumnError(posterInsert.error)) {
-      // Card fact columns not migrated yet: keep evidence in field_verification.cardFacts only.
-      console.warn("\n  home v5 card facts migration 미적용: 카드 요약 컬럼 없이 저장합니다.");
-      insertRecord = withoutCardFactFields(posterRecord);
+    let posterInsert = await supabase.from("posters").insert(insertRecord).select("id").single();
+    // Columns from migrations that may not be applied yet; either can be reported first.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (isMissingDeadlineVerificationColumnError(posterInsert.error)) {
+        // Keep the decision in field_verification.deadlineProvenance only.
+        console.warn("\n  v6.1 deadline verification migration 미적용: 마감 확인 컬럼 없이 저장합니다.");
+        insertRecord = withoutDeadlineVerificationFields(insertRecord);
+      } else if (isMissingCardFactColumnError(posterInsert.error)) {
+        // Card fact columns not migrated yet: keep evidence in field_verification.cardFacts only.
+        console.warn("\n  home v5 card facts migration 미적용: 카드 요약 컬럼 없이 저장합니다.");
+        insertRecord = withoutCardFactFields(insertRecord);
+      } else {
+        break;
+      }
       posterInsert = await supabase.from("posters").insert(insertRecord).select("id").single();
     }
     if (isMissingStructuredPosterColumnError(posterInsert.error)) {
       console.warn("\n  구조화 공고 migration 미적용: 기존 컬럼 형식으로 저장합니다.");
       posterInsert = await supabase
         .from("posters")
-        .insert(withoutStructuredPosterFields(withoutCardFactFields(insertRecord)))
+        .insert(withoutStructuredPosterFields(withoutCardFactFields(withoutDeadlineVerificationFields(insertRecord))))
         .select("id")
         .single();
     }
