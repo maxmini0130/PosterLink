@@ -88,6 +88,13 @@ export function receptionVerifiedByRule(row, today) {
   return true;
 }
 
+/**
+ * A-1 keeps the dates of posters that existed when it was decided. A poster
+ * collected later gets its status from where the crawler read the date
+ * (portal field: date confirmed; text or summary: unverified), not from here.
+ */
+export const LEGACY_CUTOFF = "2026-11-10T00:00:00+09:00";
+
 /** Step-1 values for one poster by rule (no override). */
 export function step1ByRule(row, today) {
   const values = {
@@ -96,6 +103,8 @@ export function step1ByRule(row, today) {
   };
   if (row.deadline_type !== "fixed" || !row.end_at)
     return { values, rule: "no-fixed-date" };
+  if (row.created_at && Date.parse(row.created_at) >= Date.parse(LEGACY_CUTOFF))
+    return { values, rule: "after-cutoff-unverified" };
   const end = toSeoulDate(row.end_at);
   if (end === toSeoulDate(row.ev_start) || end === toSeoulDate(row.ev_end))
     return { values, rule: "auto-unverified-event-date" };
@@ -218,6 +227,7 @@ const READ_COLUMNS = [
   "application_end_at",
   "event_start_at",
   "event_end_at",
+  "created_at",
   "updated_at",
   "deadline_checked_at",
   ...STEP1_COLUMNS,

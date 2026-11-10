@@ -129,3 +129,16 @@ test("overrides are well formed", () => {
   }
   assert.equal(toSeoulDate("2026-11-19T14:59:59+00:00"), "2026-11-19");
 });
+
+test("posters collected after the A-1 cutoff are not given a legacy date", () => {
+  const { values, rule } = step1ByRule(
+    row({ created_at: "2026-11-10T03:00:00+00:00" }),
+    today,
+  );
+  assert.equal(rule, "after-cutoff-unverified");
+  assert.equal(values.deadline_status, "unverified");
+  assert.equal(
+    step1ByRule(row({ created_at: "2026-11-09T12:00:00+00:00" }), today).rule,
+    "legacy-date",
+  );
+});
