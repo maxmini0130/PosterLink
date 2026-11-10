@@ -7,6 +7,7 @@ import {
   usablePosterImage,
   type PosterImageMeta,
 } from "../../../lib/feedImages";
+import { posterCardFitClass } from "../../../lib/posterCardText";
 
 export function PosterArt({
   id,
@@ -19,12 +20,15 @@ export function PosterArt({
   imageStatus,
   priority = false,
   feed = false,
+  cardFit = false,
 }: DefaultPosterProps &
   PosterImageMeta & {
     id: string;
     src?: string | null;
     priority?: boolean;
     feed?: boolean;
+    /** v6.1 card (SPEC 3): cover from the top, contain when nearly square. */
+    cardFit?: boolean;
   }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [src]);
@@ -68,7 +72,12 @@ export function PosterArt({
       imageHeight: h,
       imageStatus: resolvedStatus as PosterImageMeta["imageStatus"],
     });
-  const tall = feed && w && h && h / w > 2;
+  const tall = !cardFit && feed && w && h && h / w > 2;
+  const imageClass = cardFit
+    ? posterCardFitClass(w, h)
+    : tall
+      ? "object-cover object-top"
+      : "object-contain";
   return (
     <div
       className="relative h-full w-full overflow-hidden bg-[#ECE7DA]"
@@ -86,14 +95,14 @@ export function PosterArt({
           alt=""
           fill
           sizes={
-            feed
-              ? "(min-width:1280px) 285px, (min-width:1200px) calc(25vw - 35px), (min-width:768px) calc(33.333vw - 27px), calc(50vw - 21px)"
+            feed || cardFit
+              ?"(min-width:1280px) 285px, (min-width:1200px) calc(25vw - 35px), (min-width:768px) calc(33.333vw - 27px), calc(50vw - 21px)"
               : "64px"
           }
           quality={80}
           priority={priority}
           loading={priority ? undefined : "lazy"}
-          className={tall ? "object-cover object-top" : "object-contain"}
+          className={imageClass}
           onError={() => setFailed(true)}
         />
       )}

@@ -1,3 +1,5 @@
+import type { DeadlineVerificationRow } from "./posterDeadlineFields";
+
 export type DiscoverySort =
   | "latest"
   | "deadline"
@@ -14,7 +16,7 @@ export type DiscoveryTaxonomy = {
   parent_id?: string | null;
 };
 
-export type DiscoveryPoster = {
+export type DiscoveryPoster = DeadlineVerificationRow & {
   id: string;
   title: string;
   source_org_name: string | null;

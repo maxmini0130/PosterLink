@@ -24,9 +24,9 @@ import {
   isClosedCategoryPoster,
 } from "./categoryContent";
 import { assertPublicDiscoveryQuery } from "./publicDiscoveryErrors";
+import { DEADLINE_VERIFICATION_COLUMNS } from "./posterDeadlineFields";
 
-const PUBLIC_POSTER_SELECT =
-  "id,title,source_org_name,organizer_name,organizer_id,source_institution_id,application_institution_id,application_start_at,application_end_at,deadline_type,event_end_at,verification_status,verified_at,thumbnail_url,source_key,summary_short,created_at,updated_at,exposure_tier,primary_category_code:field_verification->classification->>primaryCategory";
+const PUBLIC_POSTER_SELECT = `id,title,source_org_name,organizer_name,organizer_id,source_institution_id,application_institution_id,application_start_at,application_end_at,deadline_type,event_end_at,verification_status,verified_at,thumbnail_url,source_key,summary_short,created_at,updated_at,exposure_tier,${DEADLINE_VERIFICATION_COLUMNS},primary_category_code:field_verification->classification->>primaryCategory`;
 const PROMOTION_POSTER_SELECT = `${PUBLIC_POSTER_SELECT},deadline_review:field_verification->deadlineReview,date_quality_decision:field_verification->dateQuality->>decision,date_issues:field_verification->dateIssues`;
 
 export type PublicDiscoveryFilters = {

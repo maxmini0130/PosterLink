@@ -26,6 +26,7 @@ import { ReportFab } from "../../components/pl/ReportFab";
 import { SectionHeader } from "../../components/pl/SectionHeader";
 import { showActionToast } from "../../components/pl/actionToast";
 import { BottomNav } from "../../components/BottomNav";
+import { V61CardStates } from "./V61CardStates";
 
 // Review-only samples relative to now, so every reception state is visible.
 const day = 86_400_000;
@@ -123,6 +124,8 @@ export function UiShowcase() {
         <h1 className="font-pl-serif text-2xl font-bold">
           UI 컴포넌트 확인 (개발용)
         </h1>
+
+        <V61CardStates />
 
         <section aria-labelledby="tokens">
           <SectionHeader

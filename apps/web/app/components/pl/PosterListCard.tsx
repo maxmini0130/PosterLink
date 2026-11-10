@@ -1,17 +1,30 @@
 import Link from "next/link";
 import { Children, type ReactNode } from "react";
 import type { PosterViewSource } from "../../../lib/productEventsCore";
-import { getDeadlineDisplay } from "../../../lib/deadlineDisplay";
+import { getDeadlinePresentation } from "../../../lib/deadlinePresentation";
+import {
+  cardDeadlineInput,
+  deadlineVerificationFromRow,
+  type DeadlineVerification,
+} from "../../../lib/posterDeadlineFields";
+import { cardTitleText } from "../../../lib/posterCardText";
 import { resolvePosterImageGallery } from "../../../lib/posterImage";
 import type { DiscoveryPoster } from "../../../lib/discoveryRoutes";
 import type { PosterCardData } from "../PosterCard";
-import { DeadlineLabel } from "./DeadlineLabel";
+import { DeadlinePill, DeadlineRowText, DeadlineStamp } from "./DeadlineParts";
 import { PosterThumb } from "./PosterThumb";
 import { PosterArt } from "./PosterArt";
 import { RegionLabel, type RegionScope } from "./RegionLabel";
 
 export type PlPosterCardData = PosterCardData & {
   posterStatus?: string | null;
+  /** v6.1 confirmation columns; missing means nothing is confirmed. */
+  deadlineVerification?: DeadlineVerification;
+  /** The viewer marked this poster as applied. */
+  applied?: boolean;
+  /** Person-checked short title and eligibility (SPEC 6); never guessed. */
+  shortTitle?: string | null;
+  eligibility?: string | null;
 };
 
 /** The collection portal is never substituted for the actual organizer. */
@@ -36,19 +49,12 @@ export function discoveryPosterToCard(
     image: poster.thumbnail_url || undefined,
     images: poster.images,
     sourceUrl: poster.source_key || undefined,
+    deadlineVerification: deadlineVerificationFromRow(poster),
   };
 }
 
 function cardParts(poster: PlPosterCardData) {
-  const display = getDeadlineDisplay({
-    applicationStartAt: poster.applicationStartAt,
-    applicationEndAt: poster.deadline,
-    deadlineType: poster.deadlineType,
-    eventEndAt: poster.eventEndAt,
-    posterStatus:
-      poster.posterStatus ??
-      (poster.contentState === "closed" ? "closed" : null),
-  });
+  const presentation = getDeadlinePresentation(cardDeadlineInput(poster));
   const [category] = poster.tags ?? [];
   const thumb =
     resolvePosterImageGallery(
@@ -57,7 +63,12 @@ function cardParts(poster: PlPosterCardData) {
       poster.sourceUrl,
     )[0] ?? null;
   const meta = [category, poster.org].filter(Boolean).join(" · ");
-  return { display, thumb, meta };
+  return {
+    presentation,
+    thumb,
+    meta,
+    title: cardTitleText(poster.shortTitle || poster.title),
+  };
 }
 
 /**
@@ -84,25 +95,33 @@ export function PosterListCard({
   badge?: ReactNode;
   footer?: ReactNode;
 }) {
-  const { display, thumb, meta } = cardParts(poster);
+  const { presentation, thumb, meta, title } = cardParts(poster);
   return (
-    <article className="rounded-xl border border-pl-line bg-pl-card">
+    <article
+      className={`rounded-xl border border-pl-line ${
+        presentation.state === "closed" ? "bg-pl-closed" : "bg-pl-card"
+      }`}
+    >
       <Link
         href={`/posters/${poster.id}`}
         data-poster-source={source}
         className="flex min-h-[44px] gap-3 rounded-xl p-3 outline-offset-2 hover:bg-pl-paper/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pl-ink"
       >
-        <div className="h-[80px] w-[60px] shrink-0 overflow-hidden rounded-md">
-          <PosterArt
-            id={poster.id}
-            src={thumb}
-            title={poster.title}
-            category={poster.tags?.[0]}
-            organization={poster.org}
-            imageWidth={poster.imageWidth}
-            imageHeight={poster.imageHeight}
-            imageStatus={poster.imageStatus}
-          />
+        <div className="relative h-[80px] w-[60px] shrink-0">
+          <div className="h-full w-full overflow-hidden rounded-md border border-pl-line">
+            <PosterArt
+              id={poster.id}
+              src={thumb}
+              title={poster.title}
+              category={poster.tags?.[0]}
+              organization={poster.org}
+              imageWidth={poster.imageWidth}
+              imageHeight={poster.imageHeight}
+              imageStatus={poster.imageStatus}
+              cardFit
+            />
+          </div>
+          <DeadlineStamp presentation={presentation} variant="row" />
         </div>
         <div className="min-w-0 flex-1">
           {(meta || region) && (
@@ -111,11 +130,15 @@ export function PosterListCard({
               <span className="truncate">{meta}</span>
             </p>
           )}
-          <h3 className="mt-1 line-clamp-2 font-pl-serif text-[15px] font-bold leading-[1.38] text-pl-ink">
-            {poster.title}
+          <h3
+            className={`mt-1 line-clamp-2 break-keep text-[14px] font-semibold leading-[1.4] ${
+              presentation.state === "closed" ? "text-pl-ink-soft" : "text-pl-ink"
+            }`}
+          >
+            {title}
           </h3>
-          <p className="mt-1.5 flex items-center gap-2">
-            <DeadlineLabel display={display} />
+          <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            <DeadlineRowText presentation={presentation} />
             {badge && <span className="text-xs text-pl-meta">{badge}</span>}
           </p>
         </div>
@@ -137,7 +160,7 @@ export function PosterMiniCard({
   source?: PosterViewSource;
   badge?: ReactNode;
 }) {
-  const { display, thumb } = cardParts(poster);
+  const { presentation, thumb, title } = cardParts(poster);
   return (
     <Link
       href={`/posters/${poster.id}`}
@@ -145,10 +168,8 @@ export function PosterMiniCard({
       className="flex w-[168px] shrink-0 snap-start flex-col gap-2 rounded-xl border border-pl-line bg-pl-card p-3 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pl-ink"
     >
       <div className="flex items-center justify-between gap-2">
-        <DeadlineLabel display={display} showDate={false} />
-        {badge && (
-          <span className="text-xs font-bold text-pl-accent">{badge}</span>
-        )}
+        <DeadlinePill presentation={presentation} className="mb-0" />
+        {badge && <span className="text-xs font-bold text-pl-ink">{badge}</span>}
       </div>
       <div className="flex gap-2">
         <div className="h-12 w-9 shrink-0 overflow-hidden rounded">
@@ -163,8 +184,8 @@ export function PosterMiniCard({
             imageStatus={poster.imageStatus}
           />
         </div>
-        <h3 className="line-clamp-3 text-[13px] font-bold leading-[1.38] text-pl-ink">
-          {poster.title}
+        <h3 className="line-clamp-3 break-keep text-[13px] font-semibold leading-[1.38] text-pl-ink">
+          {title}
         </h3>
       </div>
       {poster.org && (
@@ -217,7 +238,7 @@ export function PosterTileCard({
   /** Overrides the region label wording, e.g. "서울 전체". */
   regionLabel?: string;
 }) {
-  const { display, thumb, meta } = cardParts(poster);
+  const { presentation, thumb, meta, title } = cardParts(poster);
   return (
     <Link
       href={`/posters/${poster.id}`}
@@ -235,11 +256,11 @@ export function PosterTileCard({
             <span className="truncate">{meta}</span>
           </p>
         )}
-        <h3 className="line-clamp-2 font-pl-serif text-[14px] font-bold leading-[1.4] text-pl-ink md:text-[15px] min-[1200px]:text-[16px]">
-          {poster.title}
+        <h3 className="line-clamp-2 break-keep text-[14px] font-semibold leading-[1.4] text-pl-ink">
+          {title}
         </h3>
         <p className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-0.5 pt-1">
-          <DeadlineLabel display={display} />
+          <DeadlinePill presentation={presentation} className="mb-0" />
           {badge && <span className="text-xs text-pl-meta">{badge}</span>}
         </p>
       </div>

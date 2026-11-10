@@ -7,11 +7,15 @@ import {
   loadPosterImageMetadata,
   metadataForUrl,
 } from "../../lib/posterImageMetadata";
+import {
+  DEADLINE_VERIFICATION_COLUMNS,
+  deadlineVerificationFromRow,
+  type DeadlineVerificationRow,
+} from "../../lib/posterDeadlineFields";
 
-const CARD_SELECT =
-  "id,title,source_org_name,organizer_name,application_start_at,application_end_at,deadline_type,event_end_at,thumbnail_url,source_key,poster_status";
+const CARD_SELECT = `id,title,source_org_name,organizer_name,application_start_at,application_end_at,deadline_type,event_end_at,thumbnail_url,source_key,poster_status,${DEADLINE_VERIFICATION_COLUMNS}`;
 
-type CardRow = {
+type CardRow = DeadlineVerificationRow & {
   id: string;
   title: string;
   source_org_name: string | null;
@@ -69,6 +73,7 @@ export async function loadPosterCards(
         image: row.thumbnail_url ?? undefined,
         sourceUrl: row.source_key ?? undefined,
         posterStatus: row.poster_status,
+        deadlineVerification: deadlineVerificationFromRow(row),
       },
     ];
   });

@@ -60,11 +60,14 @@ import {
   type SavedSearch,
 } from "../../lib/searchGroups";
 import { trackAnalytics } from "../../lib/analytics";
+import {
+  DEADLINE_VERIFICATION_COLUMNS,
+  deadlineVerificationFromRow,
+} from "../../lib/posterDeadlineFields";
 
 const PAGE_SIZE = 12;
 const WIDER_FIRST = 6;
-const PUBLIC_POSTER_SELECT =
-  "id,title,source_org_name,organizer_name,verification_status,verified_at,application_start_at,application_end_at,deadline_type,event_end_at,poster_status,thumbnail_url,source_key,summary_short,created_at,exposure_tier";
+const PUBLIC_POSTER_SELECT = `id,title,source_org_name,organizer_name,verification_status,verified_at,application_start_at,application_end_at,deadline_type,event_end_at,poster_status,thumbnail_url,source_key,summary_short,created_at,exposure_tier,${DEADLINE_VERIFICATION_COLUMNS}`;
 
 const SORTS: Array<{ key: DiscoverySort; label: string }> = [
   { key: "latest", label: "최신 등록순" },
@@ -107,6 +110,7 @@ function toCard(poster: Row): PlPosterCardData {
     images: poster.images,
     sourceUrl: poster.source_key ?? undefined,
     posterStatus: poster.poster_status,
+    deadlineVerification: deadlineVerificationFromRow(poster),
     tags: [poster.categoryName].filter((tag): tag is string => Boolean(tag)),
   };
 }
