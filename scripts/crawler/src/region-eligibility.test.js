@@ -121,3 +121,128 @@ test("organiser groups", () => {
   assert.equal(organizerGroup("KB금융공익재단"), "other");
   assert.equal(organizerGroup(null), "unknown");
 });
+
+test("crawler: the decision sets the 서울 link and any eligibility basis", async () => {
+  const { applyRegionEligibility } = await import("./region-eligibility.js");
+  const placeOnly = [
+    {
+      code: "REG_SEOUL_GANGBUK",
+      basis: "eligibility",
+      evidence: "target: 강북구 거주",
+    },
+    {
+      code: "REG_SEOUL_MAPO",
+      basis: "venue",
+      evidence: "location contains 마포구",
+    },
+  ];
+  const decide = (text) => classifyRegionEligibility([text]);
+  const codes = (items) =>
+    items.map((i) => `${i.code}:${i.basis}${i.added ? "+" : ""}`);
+
+  // 서울 전체: 서울 link added; the keyword "eligibility" on a 구 becomes 근거 없음.
+  assert.deepEqual(
+    codes(
+      applyRegionEligibility(
+        placeOnly,
+        decide("서울시 생활권 만 19~39세 청년"),
+      ),
+    ),
+    [
+      "REG_SEOUL_GANGBUK:related",
+      "REG_SEOUL_MAPO:venue",
+      "REG_SEOUL:eligibility+",
+    ],
+  );
+  // 구 우대 (approved): 서울 link too, 강북구 is not "residents only".
+  assert.deepEqual(
+    codes(
+      applyRegionEligibility(
+        placeOnly,
+        decide("만 19~39세 청년, 강북구 거주·생활권 청년 우대"),
+      ),
+    ),
+    [
+      "REG_SEOUL_GANGBUK:related",
+      "REG_SEOUL_MAPO:venue",
+      "REG_SEOUL:eligibility+",
+    ],
+  );
+  // 구 주민 한정: that 구 only, nothing added.
+  assert.deepEqual(
+    codes(applyRegionEligibility(placeOnly, decide("강북구민"))),
+    ["REG_SEOUL_GANGBUK:eligibility", "REG_SEOUL_MAPO:venue"],
+  );
+  // Ambiguous: no 서울 link, eligibility left as 근거 없음 for a person.
+  const ambiguous = applyRegionEligibility(
+    placeOnly,
+    decide("성북구민 및 방문객 누구나"),
+  );
+  assert.deepEqual(codes(ambiguous), [
+    "REG_SEOUL_GANGBUK:related",
+    "REG_SEOUL_MAPO:venue",
+  ]);
+  assert.match(ambiguous[0].evidence, /review: 근거 없음$/);
+  // An existing 서울 link stays as it is when the text says nothing.
+  assert.deepEqual(
+    codes(
+      applyRegionEligibility(
+        [
+          {
+            code: "REG_SEOUL",
+            basis: "eligibility",
+            evidence: "eligibility_scope",
+          },
+        ],
+        decide("청년"),
+      ),
+    ),
+    ["REG_SEOUL:eligibility"],
+  );
+});
+
+test("crawler: buildCardFacts keeps the decision as evidence", async () => {
+  const { buildCardFacts } = await import("./poster-card-facts.js");
+  const facts = buildCardFacts({
+    title: "서울청년센터 강서 <마음 가드닝>",
+    eligibility_summary: "만 19 ~ 39세 서울특별시 권역 청년 10명",
+    event_location: "서울청년센터 강서",
+    regions: [{ code: "REG_SEOUL_GANGSEO", name: "강서구" }],
+    fv_regions: [
+      {
+        code: "REG_SEOUL_GANGSEO",
+        source: "keyword",
+        evidence: "서울청년센터 강서",
+      },
+    ],
+  });
+  assert.equal(facts.regionEligibility.kind, "seoul_wide");
+  assert.ok(
+    facts.regionBasis.some((item) => item.code === "REG_SEOUL" && item.added),
+  );
+  assert.equal(
+    facts.regionBasis.find((item) => item.code === "REG_SEOUL_GANGSEO").basis,
+    "venue",
+  );
+});
+
+test("구 우대 names the preferred 구, also when written without 구", () => {
+  const gus = (text) => classifyRegionEligibility([text]).gus;
+  assert.deepEqual(
+    gus("강동·송파 생활권 등 우대하며 필수 거주 제한으로 해석하지 않음."),
+    ["강동구", "송파구"],
+  );
+  assert.deepEqual(gus("강동·송파 생활권 등 우선 선발 기준은 신청서 확인"), [
+    "강동구",
+    "송파구",
+  ]);
+  assert.deepEqual(gus("마포구·서대문구 거주자 우선 선발 안내."), [
+    "마포구",
+    "서대문구",
+  ]);
+  assert.deepEqual(gus("만 19~39세 청년, 강북구 거주·생활권 청년 우대"), [
+    "강북구",
+  ]);
+  // Not a 구 name: nothing guessed.
+  assert.deepEqual(gus("학교 생활권 등 우대"), []);
+});

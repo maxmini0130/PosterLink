@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { planPoster, summarize, toPlanRow } from "./region-basis-backfill.js";
+import {
+  planPoster,
+  summarize,
+  toPlanRow,
+  withRecordedEligibility,
+} from "./region-basis-backfill.js";
 
 const SEOUL = "11111111-1111-4111-8111-111111111111";
 const gu = (name, code, basis = null) => ({
@@ -36,6 +41,7 @@ test("서울-wide: adds the 서울 link and a place basis for the 구 link", () 
     [
       ["insert", "REG_SEOUL", "eligibility"],
       ["set_basis", "REG_SEOUL_GANGSEO", "venue"],
+      ["record", "field_verification.cardFacts.regionEligibility", undefined],
     ],
   );
   assert.equal(plan.actions[0].region_id, SEOUL);
@@ -53,7 +59,10 @@ test("구 residents only: marks that 구 link, adds nothing", () => {
   assert.equal(plan.kind, "gu_restricted");
   assert.deepEqual(
     plan.actions.map((a) => [a.op, a.code, a.basis]),
-    [["set_basis", "REG_SEOUL_GEUMCHEON", "eligibility"]],
+    [
+      ["set_basis", "REG_SEOUL_GEUMCHEON", "eligibility"],
+      ["record", "field_verification.cardFacts.regionEligibility", undefined],
+    ],
   );
 });
 
@@ -67,7 +76,7 @@ test("a basis already set is never overwritten", () => {
   );
   assert.deepEqual(
     plan.actions.map((a) => a.op),
-    ["insert"],
+    ["insert", "record"],
   );
 });
 
@@ -137,4 +146,34 @@ test("summary counts", () => {
   assert.equal(summary.seoulLinksAdded, 1);
   assert.deepEqual(summary.byKind, { seoul_wide: 1, unknown: 1 });
   assert.deepEqual(summary.skipped, { needs_person: 1 });
+});
+
+test("the decision is recorded once, and can be removed again", () => {
+  const recorded = planPoster(
+    row({ eligibility_summary: "39세 이하 청년 누구나, 송파구민 우대" }),
+    { seoulRegionId: SEOUL, kinds: ["gu_preferred"] },
+  );
+  const record = recorded.actions.find((a) => a.op === "record");
+  assert.deepEqual(
+    { kind: record.value.kind, gus: record.value.gus },
+    { kind: "gu_preferred", gus: ["송파구"] },
+  );
+  // Already recorded (by the crawler or an earlier run): not again.
+  const again = planPoster(
+    row({
+      eligibility_summary: "39세 이하 청년 누구나, 송파구민 우대",
+      field_verification: { cardFacts: { regionEligibility: record.value } },
+    }),
+    { seoulRegionId: SEOUL, kinds: ["gu_preferred"] },
+  );
+  assert.ok(!again.actions.some((a) => a.op === "record"));
+  const fv = { readableNotice: { x: 1 }, cardFacts: { version: 2 } };
+  const written = withRecordedEligibility(fv, record.value);
+  assert.deepEqual(written.readableNotice, { x: 1 });
+  assert.equal(written.cardFacts.version, 2);
+  assert.equal(written.cardFacts.regionEligibility.kind, "gu_preferred");
+  assert.deepEqual(withRecordedEligibility(written, null).cardFacts, {
+    version: 2,
+  });
+  assert.equal(fv.cardFacts.regionEligibility, undefined);
 });

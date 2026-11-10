@@ -18,7 +18,65 @@
  * Pure. The evidence is the matched phrase, kept with every decision.
  */
 
+import { SEOUL_SIGUNGU_REGIONS } from "./region-rules.js";
+
 export const REGION_ELIGIBILITY_RULES_VERSION = "region-eligibility-20261110";
+
+const GU_NAMES = new Set(SEOUL_SIGUNGU_REGIONS.map(([, name]) => name));
+const GU_NAME_BY_CODE = new Map(
+  SEOUL_SIGUNGU_REGIONS.map(([code, name]) => [code, name]),
+);
+/** Decisions that make a poster open to anyone in 서울 (approved 2026-11-10). */
+export const SEOUL_LINK_KINDS = new Set(["seoul_wide", "gu_preferred"]);
+
+/**
+ * Applies a decision to the crawler's region basis (classifyRegionBasis).
+ * - seoul_wide / gu_preferred: the 서울 link is 'eligibility' and is added when
+ *   missing (`added: true`).
+ * - gu_restricted: the named 구 links are 'eligibility'.
+ * - Any other 구 'eligibility' from the keyword classifier (e.g. "강북구 거주·
+ *   생활권 우대", or an ambiguous text) becomes 'related' (근거 없음) so a person
+ *   checks it; venue and institution stay.
+ */
+export function applyRegionEligibility(regionBasis, decision) {
+  const items = (regionBasis ?? []).map((item) => ({ ...item }));
+  const tag = `${REGION_ELIGIBILITY_RULES_VERSION}:${decision.kind}`;
+  for (const item of items) {
+    const guName = GU_NAME_BY_CODE.get(item.code);
+    if (item.code === "REG_SEOUL") {
+      if (SEOUL_LINK_KINDS.has(decision.kind))
+        Object.assign(item, {
+          basis: "eligibility",
+          evidence: `${tag}: ${decision.evidence}`.slice(0, MAX_EVIDENCE),
+        });
+      else if (item.basis === "eligibility" && decision.kind !== "unknown")
+        Object.assign(item, {
+          basis: "related",
+          evidence: `${tag}: 근거 없음`,
+        });
+      continue;
+    }
+    if (!guName) continue;
+    if (decision.kind === "gu_restricted" && decision.gus.includes(guName))
+      Object.assign(item, {
+        basis: "eligibility",
+        evidence: `${tag}: ${decision.evidence}`.slice(0, MAX_EVIDENCE),
+      });
+    else if (item.basis === "eligibility")
+      Object.assign(item, { basis: "related", evidence: `${tag}: 근거 없음` });
+  }
+  if (
+    SEOUL_LINK_KINDS.has(decision.kind) &&
+    !items.some((item) => item.code === "REG_SEOUL")
+  )
+    items.push({
+      code: "REG_SEOUL",
+      basis: "eligibility",
+      evidence: `${tag}: ${decision.evidence}`.slice(0, MAX_EVIDENCE),
+      added: true,
+    });
+  return items;
+}
 
 const MAX_EVIDENCE = 160;
 
@@ -144,12 +202,22 @@ export function classifyRegionEligibility(texts) {
       gus,
     };
   }
-  if (preferred.length || AREA_PREFERENCE.test(cleaned))
+  if (preferred.length || AREA_PREFERENCE.test(cleaned)) {
+    // "강동·송파 생활권 등 우대": 구 names written without 구, when they are
+    // real 서울 구 names.
+    const bare = cleaned.match(
+      /((?:[가-힣]{1,3}·)*[가-힣]{1,3})\s*(?:거주·)?생활권\s*(?:등\s*)?(?:우대|우선)/,
+    );
+    const named = (bare?.[1] ?? "")
+      .split("·")
+      .map((stem) => `${stem}구`)
+      .filter((name) => GU_NAMES.has(name));
     return {
       kind: "gu_preferred",
       evidence: evidence(joined),
-      gus: [...new Set(preferred)],
+      gus: [...new Set([...preferred, ...named])],
     };
+  }
   // "구민 누구나", "지역주민 누구나", "관내 … 누구나": local people, 구 unnamed.
   if (openMatch && LOCAL_ONLY.test(cleaned))
     return { kind: "review", evidence: evidence(joined), gus: [] };

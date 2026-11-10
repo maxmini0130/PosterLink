@@ -41,9 +41,28 @@
 - 운영 홈(쓰기 차단 브라우저): 마포구 92 → 109건. 서울 연결이 생긴 26건 중 홈 조건(마감일 확인 상태, 행사 종료 여부 등)을 통과한 17건이 늘었다. 서울 전체 245건, 부산 전체 33건은 그대로.
 - 되돌리기: `node src/region-basis-backfill.js --rollback=data/results/region-basis-backup-2026-11-10T12-21-49-421Z.json --apply --confirm=REGION_BASIS_BACKFILL`
 
+## 크롤러 연결 (대표 지시 11-10)
+
+- `buildCardFacts`가 판정을 계산하고 `applyRegionEligibility`로 지역 근거를 정한다. 판정은 `field_verification.cardFacts.regionEligibility`(종류, 구, 근거 문장, 규칙 버전)에 남는다.
+  - 서울 전체·구 우대(구 우대는 대표 승인): 서울 연결 추가(`eligibility`).
+  - 구 주민 한정: 그 구 연결만 `eligibility`.
+  - 그 밖(애매함 포함): 서울 연결을 추가하지 않고, 키워드 분류기가 붙인 구 `eligibility`는 '없음'(`related`)으로 내려 검수 대상으로 남긴다. 장소·기관 근거는 그대로.
+- 업로드(`assignPosterRegions`): 추가된 서울 연결을 저장하고, 이미 있는 연결의 비어 있는 근거를 채운다(채워진 값은 덮어쓰지 않음). 전에는 `ignoreDuplicates` 때문에 기존 연결의 근거가 채워지지 않았다.
+- 크롤러 테스트 419건 통과(새 테스트: 크롤러 연결 2, 구 우대 이름 1, 판정 기록 1).
+
+## 구 우대 8건 dry-run (읽기 전용 스냅샷 2, 11-10)
+
+- `--kinds=gu_preferred`: 8건 모두 서울 연결 추가, 판정 기록 8, 구 연결 근거 venue 6·institution 2·related 1.
+- 우대 구: 마포구·서대문구, 용산구 2건, 강북구, 강동구·송파구 2건('강동·송파 생활권'을 실제 구 이름으로 인식), 송파구, 종로구.
+- 화면의 '○○구 거주·생활권 우대'는 이 판정 기록을 읽는다(웹 브랜치 `fix/home-region-eligibility-20261110`).
+
+## 검수 목록
+
+- `docs/REGION_BASIS_REVIEW_20261110.md`: 근거 '없음' 연결 7개(공고 6건), 애매한 공고 11건, 지역 언급 없음 351건 안내.
+
 ## 남은 작업
 
-- gu_preferred 8건, open 34건 처리 결정.
+- 구 우대 8건 운영 적용(대표 실행).
+- open 34건: 장소인 구에만 둠(11-10 결정).
 - unknown 351건(서울시 산하 36건 포함): 원문에서 대상 문장을 다시 추출해야 판정 가능.
-- 크롤러가 새 공고에도 같은 판정으로 서울 연결·`basis`를 쓰도록 연결.
-- 웹이 `basis`를 읽어 '구 주민만' 공고를 다른 구에서 빼거나 표시(SPEC 8 표).
+- 검수 목록 A·B를 사람이 확인.

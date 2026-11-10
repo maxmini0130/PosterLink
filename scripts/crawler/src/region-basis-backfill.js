@@ -135,7 +135,31 @@ export function planPoster(
       ...place,
     });
   }
+  // The decision itself, where the crawler keeps it for new posters
+  // (field_verification.cardFacts.regionEligibility): the screen reads it for
+  // "○○구 거주·생활권 우대" and it keeps the evidence with the data.
+  if (plan.actions.length && !row.recorded_eligibility)
+    plan.actions.push({
+      op: "record",
+      code: "field_verification.cardFacts.regionEligibility",
+      value: {
+        kind: decision.kind,
+        gus: decision.gus,
+        evidence: decision.evidence,
+        rules: REGION_ELIGIBILITY_RULES_VERSION,
+      },
+    });
   return plan;
+}
+
+/** field_verification with the decision recorded (or removed when null). */
+export function withRecordedEligibility(fieldVerification, value) {
+  const verification = { ...(fieldVerification ?? {}) };
+  const cardFacts = { ...(verification.cardFacts ?? {}) };
+  if (value == null) delete cardFacts.regionEligibility;
+  else cardFacts.regionEligibility = value;
+  verification.cardFacts = cardFacts;
+  return verification;
 }
 
 export function summarize(plans) {
@@ -156,6 +180,7 @@ export function summarize(plans) {
     byGroup,
     toWrite: plans.filter((plan) => plan.actions.length).length,
     seoulLinksAdded: actions.filter((a) => a.op === "insert").length,
+    decisionsRecorded: actions.filter((a) => a.op === "record").length,
     basisSet: count(
       actions.filter((a) => a.op === "set_basis"),
       "basis",
@@ -222,6 +247,10 @@ export function toPlanRow(row) {
     summary_long: row.summary_long ?? null,
     facts: row.facts ?? verification.readableNotice?.facts ?? null,
     fv_regions: row.fv_regions ?? verification.classification?.regions ?? [],
+    recorded_eligibility:
+      row.recorded_eligibility ??
+      verification.cardFacts?.regionEligibility ??
+      null,
     links:
       row.links ??
       (row.poster_regions ?? []).map((link) => ({
@@ -276,7 +305,11 @@ async function writeReport(dir, stamp, plans, summary) {
       plan.kind,
       plan.skipped,
       plan.actions
-        .map((a) => `${a.op === "insert" ? "+" : "="}${a.code}:${a.basis}`)
+        .map((a) =>
+          a.op === "record"
+            ? "+판정기록"
+            : `${a.op === "insert" ? "+" : "="}${a.code}:${a.basis}`,
+        )
         .join(" "),
       plan.evidence,
       plan.title,
@@ -288,6 +321,58 @@ async function writeReport(dir, stamp, plans, summary) {
   return { json, csv };
 }
 
+/**
+ * Writes (or, with value null, removes) the recorded decision. Read-modify-
+ * write guarded by updated_at, so a poster changed meanwhile is left alone.
+ */
+async function writeDecision(
+  supabase,
+  posterId,
+  value,
+  expectUpdatedAt = null,
+) {
+  const { data: current, error } = await supabase
+    .from("posters")
+    .select("field_verification,updated_at")
+    .eq("id", posterId)
+    .single();
+  if (error) return { ok: false, reason: error.message };
+  if (expectUpdatedAt && current.updated_at !== expectUpdatedAt)
+    return { ok: false, reason: "changed since" };
+  const before =
+    current.field_verification?.cardFacts?.regionEligibility ?? null;
+  const updatedAt = new Date().toISOString();
+  const { data, error: updateError } = await supabase
+    .from("posters")
+    .update({
+      field_verification: withRecordedEligibility(
+        current.field_verification,
+        value,
+      ),
+      updated_at: updatedAt,
+    })
+    .eq("id", posterId)
+    .eq("updated_at", current.updated_at)
+    .select("id");
+  if (updateError || !data?.length)
+    return { ok: false, reason: updateError?.message ?? "changed since read" };
+  return { ok: true, before, updatedAt };
+}
+
+async function recordDecision(supabase, item) {
+  const result = await writeDecision(supabase, item.poster_id, item.value);
+  if (!result.ok) {
+    console.log(`  ${item.poster_id.slice(0, 8)} record: ${result.reason}`);
+    return false;
+  }
+  Object.assign(item, {
+    written: true,
+    before: result.before,
+    updatedAtAfter: result.updatedAt,
+  });
+  return true;
+}
+
 async function rollback(supabase, file, apply) {
   const backup = JSON.parse(await fs.readFile(file, "utf8"));
   const inserted = backup.items.filter(
@@ -296,11 +381,28 @@ async function rollback(supabase, file, apply) {
   const updated = backup.items.filter(
     (item) => item.op === "set_basis" && item.written,
   );
+  const recorded = backup.items.filter(
+    (item) => item.op === "record" && item.written,
+  );
   console.log(
-    `rollback: delete ${inserted.length} added links, clear ${updated.length} basis values`,
+    `rollback: delete ${inserted.length} added links, clear ${updated.length} basis values, restore ${recorded.length} recorded decisions`,
   );
   if (!apply) return console.log("dry-run: nothing written");
   let failed = 0;
+  for (const item of recorded) {
+    const result = await writeDecision(
+      supabase,
+      item.poster_id,
+      item.before ?? null,
+      item.updatedAtAfter,
+    );
+    if (!result.ok) {
+      failed += 1;
+      console.log(
+        `  ${item.poster_id.slice(0, 8)} not restored: ${result.reason}`,
+      );
+    }
+  }
   for (const item of inserted) {
     const { error } = await supabase
       .from("poster_regions")
@@ -387,6 +489,11 @@ async function main() {
   console.log(`backup: ${backupFile}`);
   let failed = 0;
   for (const item of items) {
+    if (item.op === "record") {
+      const ok = await recordDecision(supabase, item);
+      if (!ok) failed += 1;
+      continue;
+    }
     const result =
       item.op === "insert"
         ? await supabase

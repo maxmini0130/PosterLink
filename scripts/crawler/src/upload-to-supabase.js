@@ -459,7 +459,13 @@ async function assignPosterCategories(posterId, post, categoryMap, classificatio
 let supportsPosterRegionBasis = true;
 
 async function assignPosterRegions(posterId, post, regionMap, classification = null, regionBasis = []) {
-  const regionCodes = classification?.regionCodes ?? inferPosterClassification(post).regionCodes;
+  const regionCodes = [
+    ...new Set([
+      ...(classification?.regionCodes ?? inferPosterClassification(post).regionCodes),
+      // The 서울 link of a 서울-wide poster (region-eligibility.js).
+      ...(regionBasis ?? []).filter((item) => item.added).map((item) => item.code),
+    ]),
+  ];
   const basisByCode = new Map((regionBasis ?? []).map((item) => [item.code, item.basis]));
   for (const regionCode of regionCodes) {
     const regionId = regionMap[regionCode];
@@ -478,6 +484,17 @@ async function assignPosterRegions(posterId, post, regionMap, classification = n
         { poster_id: posterId, region_id: regionId },
         { onConflict: "poster_id,region_id", ignoreDuplicates: true },
       );
+      continue;
+    }
+    // An existing link keeps a basis already set (by a person or an earlier
+    // run); an empty one is filled now.
+    if (!error && supportsPosterRegionBasis && basis) {
+      await supabase
+        .from("poster_regions")
+        .update({ basis })
+        .eq("poster_id", posterId)
+        .eq("region_id", regionId)
+        .is("basis", null);
     }
   }
 }

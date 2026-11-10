@@ -1,4 +1,10 @@
 import { SEOUL_SIGUNGU_REGIONS } from "./region-rules.js";
+import {
+  applyRegionEligibility,
+  classifyRegionEligibility,
+  REGION_ELIGIBILITY_RULES_VERSION,
+  targetTexts,
+} from "./region-eligibility.js";
 
 // Home v5 card facts: one short benefit line, the event schedule shape, an
 // organizer candidate and why each region is attached.
@@ -942,7 +948,13 @@ export function buildCardFacts(input = {}, { now = new Date() } = {}) {
   const benefit = benefitExplanation.result;
   const schedule = classifySchedule(input, { now });
   const organizer = extractOrganizerCandidate(input);
-  const regionBasis = classifyRegionBasis(input, { organizerName: organizer?.name ?? null });
+  // Who may apply, by region (region-eligibility.js), decides the 서울 link and
+  // any 'eligibility' basis; the keyword classifier only supplies places.
+  const regionEligibility = classifyRegionEligibility(targetTexts(input));
+  const regionBasis = applyRegionEligibility(
+    classifyRegionBasis(input, { organizerName: organizer?.name ?? null }),
+    regionEligibility,
+  );
   const evidence = {
     version: CARD_FACTS_VERSION,
     extractedAt: now.toISOString(),
@@ -954,6 +966,7 @@ export function buildCardFacts(input = {}, { now = new Date() } = {}) {
       ? { candidate: organizer.name, basis: organizer.basis, confidence: organizer.confidence, evidence: organizer.evidence }
       : { candidate: null, basis: null, confidence: null, evidence: null },
     regionBasis,
+    regionEligibility: { ...regionEligibility, rules: REGION_ELIGIBILITY_RULES_VERSION },
     status: CARD_FACTS_STATUS,
   };
   return {
@@ -962,6 +975,7 @@ export function buildCardFacts(input = {}, { now = new Date() } = {}) {
     schedule,
     organizer,
     regionBasis,
+    regionEligibility,
     columns: {
       benefit_summary: benefit?.summary ?? null,
       benefit_kind: benefit?.kind ?? null,
