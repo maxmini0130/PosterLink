@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
  * a member's profile are sent by the browser) and the next "새로 올라온 공고"
  * pages. Reads public data with the anon key only.
  *   ?region=<uuid>&categories=<uuid,uuid>&follows=<uuid,..>&since=<ms>&pages=<1-20>&from=<1-20>
+ *   &chip=<support|education|culture|jobs|contest>&fresh=1 (only posters after `since`)
  * Returns pages[from-1 .. pages-1]; `from=1` also returns the upper sections.
  */
 export async function GET(request: Request) {
@@ -33,6 +34,8 @@ export async function GET(request: Request) {
         ? Number(params.get("since")) || null
         : null,
       pageCount: pages,
+      chip: params.get("chip"),
+      onlySince: params.get("fresh") === "1",
     });
     const { layout } = feed;
     return NextResponse.json(

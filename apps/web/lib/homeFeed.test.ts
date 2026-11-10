@@ -67,8 +67,11 @@ test("a poster shows once; picks then deadline then new", () => {
     ...Array.from({ length: 4 }, () =>
       poster({ hasBenefit: true, cardFactsStatus: "verified", popularity: 5 }),
     ),
-    ...Array.from({ length: 5 }, (_, i) =>
-      poster({
+    // v6.1: only confirmed dates count as "7일 안에 마감".
+    ...Array.from({ length: 5 }, (_, i) => {
+      const id = `due-${i}`;
+      return poster({
+        id,
         application: {
           applicationStartAt: "2026-10-01T00:00:00Z",
           applicationEndAt: new Date(
@@ -77,8 +80,17 @@ test("a poster shows once; picks then deadline then new", () => {
           deadlineType: "fixed",
           posterStatus: "published",
         },
-      }),
-    ),
+        card: {
+          id,
+          title: id,
+          image: "https://x.supabase.co/storage/v1/object/public/a.jpg",
+          deadlineVerification: {
+            deadlineStatus: "verified",
+            receptionVerified: true,
+          },
+        },
+      });
+    }),
     ...Array.from({ length: 30 }, () => poster()),
   ];
   const layout = buildHomeLayout({ posters: list, now: NOW, pageCount: 3 });
@@ -149,6 +161,89 @@ test("closed posters and posters whose event already took place are left out", (
   const layout = buildHomeLayout({ posters: list, now: NOW });
   assert.deepEqual(allIds(layout), ["ok"]);
   assert.equal(layout.openTotal, 1);
+});
+
+test("v6.1 without upper rows: picks are not used up, every poster is in the feed", () => {
+  const list = [
+    ...Array.from({ length: 4 }, () =>
+      poster({ hasBenefit: true, cardFactsStatus: "verified", popularity: 5 }),
+    ),
+    ...Array.from({ length: 3 }, () => poster()),
+  ];
+  const layout = buildHomeLayout({ posters: list, now: NOW, upperRows: false });
+  assert.deepEqual(layout.picks, []);
+  assert.deepEqual(layout.deadline, []);
+  assert.equal(allIds(layout).length, list.length);
+});
+
+test("v6.1 chips: counts in the chosen region, and a chip narrows the feed", () => {
+  const list = [
+    ...Array.from({ length: 6 }, () =>
+      poster({ contentCodes: ["CAT_COURSE"], regionIds: ["mapo"] }),
+    ),
+    poster({
+      id: "job",
+      contentCodes: ["CAT_RECRUITMENT"],
+      regionIds: ["mapo"],
+    }),
+    poster({
+      id: "far-job",
+      contentCodes: ["CAT_RECRUITMENT"],
+      regionIds: ["gangnam"],
+    }),
+  ];
+  const conditions = {
+    regionScope: new Set(["mapo"]),
+    categoryScope: new Set<string>(),
+  };
+  const all = buildHomeLayout({ posters: list, now: NOW, conditions });
+  assert.equal(all.chipCounts.education, 6);
+  assert.equal(all.chipCounts.jobs, 1);
+  assert.equal(all.openTotal, 7);
+  const jobs = buildHomeLayout({
+    posters: list,
+    now: NOW,
+    conditions,
+    chip: "jobs",
+  });
+  const first = jobs.pages[0][0];
+  // The chip keeps condition-first order: the chosen region's job first.
+  assert.deepEqual(first.kind === "new" && ids(first.items), [
+    "job",
+    "far-job",
+  ]);
+  assert.equal(jobs.chip, "jobs");
+});
+
+test("v6.1 '지난 방문 이후': only posters published after the last visit", () => {
+  const since = NOW.getTime() - 2.5 * 3600000;
+  const list = [
+    poster({ id: "new-1" }),
+    poster({ id: "new-2" }),
+    poster({ id: "old" }),
+  ];
+  // publishedAt: NOW - seq hours; seq continues from earlier tests, so pin them.
+  list[0].publishedAt = NOW.getTime() - 3600000;
+  list[1].publishedAt = NOW.getTime() - 2 * 3600000;
+  list[2].publishedAt = NOW.getTime() - 3 * 3600000;
+  const layout = buildHomeLayout({
+    posters: list,
+    now: NOW,
+    since,
+    onlySince: true,
+  });
+  const first = layout.pages[0][0];
+  assert.deepEqual(first.kind === "new" && ids(first.items), [
+    "new-1",
+    "new-2",
+  ]);
+  assert.equal(layout.freshSince, 2);
+  assert.equal(layout.onlySince, true);
+  // Without a baseline (first visit) the filter is off.
+  assert.equal(
+    buildHomeLayout({ posters: list, now: NOW, onlySince: true }).onlySince,
+    false,
+  );
 });
 
 test("bundles: weekend free needs a verified free benefit and a weekend day", () => {

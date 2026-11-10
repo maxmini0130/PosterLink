@@ -2,19 +2,33 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, MapPin, ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
 import { Header } from "./components/Header";
 import { BottomNav } from "./components/BottomNav";
 import { Footer } from "./components/Footer";
 import { BottomSheet } from "./components/pl/BottomSheet";
 import {
-  CategoryShortcuts,
   OrgSuggestions,
-  PosterGrid,
-  PosterRow,
   type CardHandlers,
 } from "./components/pl/HomeSections";
+import {
+  FavoriteDeadlineBanner,
+  HomeBundleRow,
+  HomeChipBar,
+  HomeGrid,
+  HomeRegionBar,
+  HomeSectionHead,
+  HomeSubtitle,
+  SinceLastVisitButton,
+} from "./components/pl/HomeV61";
+import { loadPosterCards } from "./lib/posterCards";
+import { getDeadlinePresentation } from "../lib/deadlinePresentation";
+import { cardDeadlineInput } from "../lib/posterDeadlineFields";
+import {
+  favoriteDeadlineLine,
+  type FavoriteDeadlineLine,
+} from "../lib/favoriteDeadlineLine";
+import { visibleHomeChips, type HomeChipId } from "../lib/homeChips";
 import {
   FollowPrompt,
   useFollowPromptOffer,
@@ -28,7 +42,6 @@ import {
 import { loadHomeConditions, type HomeConditions } from "./lib/homeData";
 import { recordVisitActivity } from "./lib/visitClock";
 import { supabase } from "./lib/supabase";
-import { visitDateLabel } from "../lib/homeSections";
 import { trackProductEvent } from "../lib/productEvents";
 import type { HomeBlock, HomeCard, HomeSectionId } from "../lib/homeFeed";
 import type { HomeFeedResult } from "../lib/homeFeedServer";
@@ -38,9 +51,30 @@ const RESTORE_KEY = "pl.home_restore.v1";
 
 type Restore = { key: string; pages: number; y: number; at: number };
 
+// The app router's back button is a client-side history move: the document's
+// navigation type stays "navigate", so the last popstate is remembered here.
+let lastHistoryMoveAt = 0;
+if (typeof window !== "undefined")
+  window.addEventListener("popstate", () => {
+    lastHistoryMoveAt = Date.now();
+  });
+
+function cameBackByHistory() {
+  const entry = performance.getEntriesByType?.("navigation")[0] as
+    | PerformanceNavigationTiming
+    | undefined;
+  return (
+    entry?.type === "back_forward" || Date.now() - lastHistoryMoveAt < 5000
+  );
+}
+
 function conditionQuery(
   conditions: HomeConditions | null,
   baseline: number | null,
+  view: { chip: HomeChipId | null; fresh: boolean } = {
+    chip: null,
+    fresh: false,
+  },
 ) {
   const params = new URLSearchParams();
   if (conditions?.interest.region)
@@ -52,13 +86,10 @@ function conditionQuery(
     );
   if (conditions?.institutions.length)
     params.set("follows", conditions.institutions.map((i) => i.id).join(","));
-  // "방문 이후" is shown to members with conditions only.
-  if (
-    conditions?.signedIn &&
-    (conditions.interest.region || conditions.interest.categories.length) &&
-    baseline !== null
-  )
-    params.set("since", String(baseline));
+  // v6.1: "지난 방문 이후" for every returning visitor (null on a first visit).
+  if (baseline !== null) params.set("since", String(baseline));
+  if (view.chip) params.set("chip", view.chip);
+  if (view.fresh && baseline !== null) params.set("fresh", "1");
   return params;
 }
 
@@ -165,10 +196,16 @@ export default function Home({
   const [favorites, setFavorites] = useState(new Set<string>());
   const [busy, setBusy] = useState(new Set<string>());
   const [baseline, setBaseline] = useState<number | null>(null);
-  const [query, setQuery] = useState("");
+  const [chip, setChip] = useState<HomeChipId | null>(null);
+  const [freshOnly, setFreshOnly] = useState(false);
+  const [favoriteLine, setFavoriteLine] = useState<FavoriteDeadlineLine | null>(
+    null,
+  );
   const [sheet, setSheet] = useState<string | null>(null);
   const inFlight = useRef(new Set<string>());
   const sequence = useRef(0);
+  /** The condition query the pages on screen were built for ("" = server's). */
+  const shownKey = useRef("");
   const main = useRef<HTMLElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
   const followedIds = useMemo(
@@ -177,10 +214,11 @@ export default function Home({
   );
   const prompt = useFollowPromptOffer(followedIds);
 
-  const queryKey = conditionQuery(conditions, baseline).toString();
+  const view = useMemo(() => ({ chip, fresh: freshOnly }), [chip, freshOnly]);
+  const queryKey = conditionQuery(conditions, baseline, view).toString();
   const fetchPages = useCallback(
     async (count: number, from: number) => {
-      const params = conditionQuery(conditions, baseline);
+      const params = conditionQuery(conditions, baseline, view);
       params.set("pages", String(count));
       params.set("from", String(from));
       const response = await fetch(`/api/home?${params}`, {
@@ -189,8 +227,39 @@ export default function Home({
       if (!response.ok) throw new Error("home");
       return (await response.json()) as HomeFeedResult & { from: number };
     },
-    [conditions, baseline],
+    [conditions, baseline, view],
   );
+
+  // 찜 마감 줄 (SPEC 4.6): the favourites, wherever they are, judged the same way.
+  const favoriteKey = [...favorites].sort().join(",");
+  useEffect(() => {
+    let active = true;
+    const ids = favoriteKey ? favoriteKey.split(",").slice(0, 200) : [];
+    if (!ids.length) {
+      setFavoriteLine(null);
+      return;
+    }
+    loadPosterCards(ids)
+      .then((cards) => {
+        if (!active || !cards) return;
+        const now = new Date();
+        setFavoriteLine(
+          favoriteDeadlineLine(
+            cards.map((card) => ({
+              id: card.id,
+              presentation: getDeadlinePresentation(
+                cardDeadlineInput(card, now),
+              ),
+            })),
+            now,
+          ),
+        );
+      })
+      .catch(() => active && setFavoriteLine(null));
+    return () => {
+      active = false;
+    };
+  }, [favoriteKey]);
 
   // Who is looking, with which conditions; then the matching sections.
   useEffect(() => {
@@ -222,15 +291,23 @@ export default function Home({
   useEffect(() => {
     if (!conditions) return;
     const restore = readRestore();
-    const back =
-      restore?.key === queryKey &&
-      (
-        performance.getEntriesByType?.("navigation")[0] as
-          | PerformanceNavigationTiming
-          | undefined
-      )?.type === "back_forward";
+    const back = restore?.key === queryKey && cameBackByHistory();
     const personal = queryKey.length > 0;
-    if (!personal && !back && initial) return;
+    const previousKey = shownKey.current;
+    shownKey.current = queryKey;
+    if (!personal && !back && initial) {
+      // Back to no conditions after a chip or "지난 방문 이후" view: show the
+      // server's layout again. On mount (or a preserved back navigation) the
+      // pages already on screen are kept.
+      if (previousKey) {
+        sequence.current += 1;
+        setFeed(initial);
+        setPages(initial.layout.pages);
+        setHasMore(initial.layout.hasMore);
+        setError(false);
+      }
+      return;
+    }
     const count = back
       ? Math.max(restore!.pages, 1)
       : Math.max(initialPages, 1);
@@ -308,13 +385,6 @@ export default function Home({
 
   const signedIn = Boolean(conditions?.signedIn);
   const interest = conditions?.interest;
-  const hasInterest = Boolean(interest?.region || interest?.categories.length);
-  const conditionText =
-    [interest?.region?.name, ...(interest?.categories.map((c) => c.name) ?? [])]
-      .filter(Boolean)
-      .join(" · ") ||
-    feed?.scopeLabel ||
-    "서울 전체";
   const changeHref = signedIn ? "/mypage/edit" : "/interests";
 
   async function toggle(card: HomeCard, sectionId: HomeSectionId) {
@@ -394,85 +464,40 @@ export default function Home({
   };
 
   const layout = feed?.layout;
-  // Same number as "새로 올라온 공고 · 접수 중 N" (서울·전국 or the 시·도).
+  // "접수 중 N건": the chosen region's open posters (SPEC 7.1).
   const intro = layout?.openTotal ?? summary?.activePosters ?? null;
   let position = 1;
-  const freshSince = signedIn && hasInterest ? (layout?.freshSince ?? 0) : 0;
+  const freshSince = baseline !== null ? (layout?.freshSince ?? 0) : 0;
+  const scopeLabel = interest?.region?.name || feed?.scopeLabel || "서울 전체";
+  const chips = layout ? visibleHomeChips(layout.chipCounts ?? {}) : [];
+  // A chip hidden after the region changed falls back to 전체.
+  const shownChip =
+    chip && chips.some((item) => item.id === chip) ? chip : null;
 
   return (
     <div className="min-h-screen bg-pl-paper pb-[calc(var(--mobile-nav-height)+24px)] font-pl-sans text-pl-ink md:pb-8">
       <div className="hidden md:block">
         <Header />
       </div>
-      <header className="mx-auto flex max-w-[1200px] items-center justify-between gap-2 px-4 pt-3 md:hidden">
-        <Link href="/" className="font-pl-serif text-lg font-bold">
-          PosterLink
-        </Link>
-        <Link
-          href={changeHref}
-          aria-label={`적용 조건: ${conditionText}. 변경`}
-          className="flex min-h-11 max-w-[68%] items-center gap-1 rounded-full border border-pl-line bg-pl-card px-3 text-[13.5px] font-medium"
-        >
-          <MapPin size={15} aria-hidden="true" />
-          <span className="truncate">{conditionText}</span>
-          <ChevronDown size={14} aria-hidden="true" />
-        </Link>
-      </header>
       <main
         ref={main}
-        className="mx-auto max-w-[1280px] px-4 pt-2 md:px-6 md:pt-7 min-[1200px]:px-10"
+        className="mx-auto max-w-[1200px] px-4 md:px-6 md:pt-8 min-[1248px]:px-0"
       >
         <h1 className="sr-only">공공기관 포스터 모아 보기</h1>
-        <div className="flex flex-col gap-3 md:flex-row md:items-center">
-          <Link
-            href={changeHref}
-            className="hidden min-h-11 shrink-0 items-center gap-2 rounded-full border border-pl-line bg-pl-card px-4 text-sm md:inline-flex"
-          >
-            <MapPin size={15} aria-hidden="true" />
-            <span className="max-w-[420px] truncate">{conditionText}</span>
-            <span className="text-pl-meta">변경</span>
-          </Link>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              router.push(
-                query.trim()
-                  ? `/posters?q=${encodeURIComponent(query.trim())}`
-                  : "/posters",
-              );
-            }}
-            role="search"
-            className="flex min-h-[46px] flex-1 items-center gap-2 rounded-full border border-pl-line bg-pl-card px-4"
-          >
-            <Search
-              size={18}
-              className="shrink-0 text-pl-meta"
-              aria-hidden="true"
-            />
-            <label htmlFor="feed-search" className="sr-only">
-              공고·기관·주제 검색
-            </label>
-            <input
-              id="feed-search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="공고·기관·주제 검색"
-              maxLength={80}
-              className="min-w-0 flex-1 bg-transparent py-2.5 text-base outline-none"
-            />
-            <button
-              type="submit"
-              className="min-h-11 shrink-0 px-1 text-sm font-bold"
-            >
-              검색
-            </button>
-          </form>
+        <div className="md:flex md:items-start md:justify-between md:gap-6">
+          <div className="min-w-0">
+            <HomeRegionBar scopeLabel={scopeLabel} changeHref={changeHref} />
+            <HomeSubtitle openTotal={intro} />
+          </div>
+          {favoriteLine && (
+            <div className="mt-3 md:mt-0">
+              <FavoriteDeadlineBanner line={favoriteLine} />
+            </div>
+          )}
         </div>
-        <p className="mt-2.5 px-0.5 text-[12.5px] text-pl-meta md:text-[13px]">
-          공공기관 포스터를 모아 보는 곳
-          {intro ? ` · 지금 접수 중 ${intro.toLocaleString()}건` : ""}
-        </p>
-        <CategoryShortcuts items={feed?.shortcuts ?? []} />
+        <div className="mt-3 md:mt-5">
+          <HomeChipBar chips={chips} selected={shownChip} onSelect={setChip} />
+        </div>
 
         {error && !layout ? (
           <div role="alert" className="py-10 text-center">
@@ -487,89 +512,51 @@ export default function Home({
           </div>
         ) : !layout ? null : (
           <>
-            {layout.picks.length > 0 && (
-              <PosterRow
-                sectionId="pick"
-                title="이번 주 눈여겨볼 공고"
-                items={layout.picks}
-                handlers={handlers}
-                priorityCount={2}
-              />
-            )}
-            {layout.deadline.length > 0 && (
-              <PosterRow
-                sectionId="deadline"
-                title="7일 안에 마감"
-                extra={`${layout.deadlineTotal}건`}
-                action={{ href: "/posters?sort=deadline", label: "전체" }}
-                items={layout.deadline}
-                handlers={handlers}
-                priorityCount={layout.picks.length ? 0 : 2}
-              />
-            )}
-            {layout.followed.length > 0 && (
-              <PosterRow
-                sectionId="followed"
-                title="팔로우 기관 소식"
-                action={{ href: "/institutions/following", label: "전체" }}
-                items={layout.followed}
-                handlers={handlers}
-              />
-            )}
+            {/* v6.1 (SPEC 7.1): the posters come first; the v5 rows above the
+                feed (눈여겨볼 공고, 7일 안에 마감, 팔로우 기관 소식) are left out. */}
             {pages.length > 0 && (
               <section
                 aria-labelledby="home-new"
                 data-home-section="new"
-                className="mt-8"
+                className="mt-4 md:mt-8"
               >
-                <div className="flex items-baseline justify-between gap-2">
-                  <h2
-                    id="home-new"
-                    className="text-[17px] font-bold md:text-lg"
-                  >
-                    새로 올라온 공고
-                    <span className="ml-1.5 text-[13px] font-medium text-pl-meta">
-                      접수 중 {layout.openTotal.toLocaleString()}
-                    </span>
-                  </h2>
-                </div>
-                {freshSince > 0 && baseline !== null && (
-                  <p className="mt-1 text-xs text-pl-meta">
-                    {visitDateLabel(baseline)} 방문 이후 올라온 공고{" "}
-                    {freshSince}건
-                  </p>
-                )}
+                <HomeSectionHead
+                  id="home-new"
+                  title="새로 올라온 공고"
+                  action={
+                    freshSince > 0 || freshOnly ? (
+                      <SinceLastVisitButton
+                        count={freshSince}
+                        active={freshOnly}
+                        onToggle={() => setFreshOnly((value) => !value)}
+                      />
+                    ) : null
+                  }
+                />
                 {pages.map((blocks, pageIndex) =>
                   blocks.map((block) => {
                     if (block.kind === "new") {
                       const start = position;
                       position += block.items.length;
                       return (
-                        <PosterGrid
+                        <HomeGrid
                           key={`new-${pageIndex}`}
                           items={block.items}
                           handlers={handlers}
                           startPosition={start}
-                          priorityCount={
-                            pageIndex === 0 &&
-                            !layout.picks.length &&
-                            !layout.deadline.length
-                              ? 2
-                              : 0
-                          }
+                          priorityCount={pageIndex === 0 ? 2 : 0}
                         />
                       );
                     }
                     if (block.kind === "bundle")
                       return (
-                        <PosterRow
+                        <HomeBundleRow
                           key={block.id}
                           sectionId={block.id}
                           title={block.title}
-                          action={{ href: block.href, label: "전체" }}
+                          href={block.href}
                           items={block.items}
                           handlers={handlers}
-                          band
                         />
                       );
                     return (
@@ -608,16 +595,26 @@ export default function Home({
                 더 보기
               </a>
             )}
-            {!pages.length &&
-              !layout.picks.length &&
-              !layout.deadline.length && (
-                <p className="py-8 text-sm text-pl-meta">
-                  지금 접수 중인 공고가 없어요.{" "}
+            {!pages.length && (
+              <p className="py-8 text-sm text-pl-meta">
+                {freshOnly
+                  ? "지난 방문 이후 올라온 공고가 없어요."
+                  : "지금 접수 중인 공고가 없어요."}{" "}
+                {freshOnly ? (
+                  <button
+                    type="button"
+                    onClick={() => setFreshOnly(false)}
+                    className="min-h-11 underline"
+                  >
+                    전체 보기
+                  </button>
+                ) : (
                   <Link href="/posters" className="underline">
                     다른 지역·분야 공고 찾기
                   </Link>
-                </p>
-              )}
+                )}
+              </p>
+            )}
           </>
         )}
         <nav

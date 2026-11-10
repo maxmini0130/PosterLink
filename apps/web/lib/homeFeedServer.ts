@@ -28,6 +28,12 @@ import {
   type HomePoster,
   type OrgSuggestion,
 } from "./homeFeed";
+import { readHomeChip, type HomeChipId } from "./homeChips";
+import {
+  DEADLINE_VERIFICATION_COLUMNS,
+  deadlineVerificationFromRow,
+  type DeadlineVerificationRow,
+} from "./posterDeadlineFields";
 
 /** Read with the public (anon) key only; row-level security applies. */
 const BASE_COLUMNS = [
@@ -59,7 +65,7 @@ const BASE_COLUMNS = [
 const CARD_FACT_COLUMNS =
   "benefit_summary,benefit_kind,event_schedule_kind,card_facts_status,featured_week";
 
-type Row = {
+type Row = DeadlineVerificationRow & {
   id: string;
   title: string;
   organizer_name: string | null;
@@ -120,7 +126,12 @@ async function loadOpenRows(client: SupabaseClient): Promise<Row[]> {
         p_limit: 500,
       })
       .select(columns);
-  let result = await search(`${BASE_COLUMNS},${CARD_FACT_COLUMNS}`);
+  // Newest migrations first; each missing set falls back to the older columns.
+  let result = await search(
+    `${BASE_COLUMNS},${CARD_FACT_COLUMNS},${DEADLINE_VERIFICATION_COLUMNS}`,
+  );
+  if (missingColumn(result.error))
+    result = await search(`${BASE_COLUMNS},${CARD_FACT_COLUMNS}`);
   if (missingColumn(result.error)) result = await search(BASE_COLUMNS);
   if (result.error) throw new Error("home posters");
   return (Array.isArray(result.data) ? result.data : []) as unknown as Row[];
@@ -317,6 +328,9 @@ function toHomePoster(
     regionIds: context.regionLinks.map((link) => link.region_id),
     categoryIds: context.categoryIds,
     interestCode,
+    contentCodes: [primary, ...categoryCodes].filter((code): code is string =>
+      Boolean(code),
+    ),
     application: {
       applicationStartAt: row.application_start_at,
       applicationEndAt: row.application_end_at,
@@ -351,6 +365,7 @@ function toHomePoster(
       sourceUrl: row.source_key ?? undefined,
       posterStatus: row.poster_status,
       organizerId: row.organizer_id,
+      deadlineVerification: deadlineVerificationFromRow(row),
       metaLine: cardMetaLine(
         regionPhrase(
           cardRegions,
@@ -377,9 +392,13 @@ export type HomeRequest = {
   categoryIds?: string[];
   /** Institutions the member follows (public ids sent by the browser). */
   followedIds?: string[];
-  /** Member's last-visit baseline (ms). */
+  /** Last-visit baseline (ms); null on a first visit. */
   since?: number | null;
   pageCount?: number;
+  /** v6.1 field chip id. */
+  chip?: string | null;
+  /** List only posters published after `since`. */
+  onlySince?: boolean;
 };
 
 export type HomeShortcut = {
@@ -587,6 +606,10 @@ export async function loadHomeFeed(
         ? request.since
         : null,
     pageCount: Math.min(Math.max(request.pageCount ?? 1, 1), 20),
+    chip: readHomeChip(request.chip),
+    onlySince: request.onlySince === true,
+    // v6.1 home: posters first, no rows above the feed.
+    upperRows: false,
   });
   const sido = sidoId ? regions.get(sidoId) : null;
   const scopeLabel = chosen

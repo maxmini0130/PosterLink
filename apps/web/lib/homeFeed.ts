@@ -8,11 +8,13 @@
  * out entirely. Pure: the same input always gives the same pages, so the
  * server render and the "더 보기" requests agree.
  */
+import { getDeadlineDisplay, type DeadlineDisplay } from "./deadlineDisplay";
 import {
-  getDeadlineDisplay,
-  isClosingWithinDays,
-  type DeadlineDisplay,
-} from "./deadlineDisplay";
+  getDeadlinePresentation,
+  type DeadlinePresentation,
+} from "./deadlinePresentation";
+import { cardDeadlineInput } from "./posterDeadlineFields";
+import { homeChipOf, type HomeChipId } from "./homeChips";
 import type { PosterApplicationInput } from "./posterApplication";
 import { mixFeedImages } from "./posterFeed";
 import type { HomeEntry } from "./homeSections";
@@ -51,6 +53,8 @@ export type HomePoster = {
   categoryIds: string[];
   /** The main category (7+1) the poster's content type folds into. */
   interestCode: string | null;
+  /** Unfolded content-type codes (primary first), for the v6.1 field chips. */
+  contentCodes?: string[];
   application: PosterApplicationInput;
   schedule: CardSchedule;
   benefitKind?: string | null;
@@ -71,6 +75,8 @@ export type HomeCard = {
   id: string;
   card: HomeCardData;
   display: DeadlineDisplay;
+  /** v6.1 deadline wording, stamp and home eligibility (SPEC 4). */
+  presentation: DeadlinePresentation;
 };
 
 export type OrgSuggestion = {
@@ -105,6 +111,12 @@ export type HomeLayout = {
   pages: HomeBlock[][];
   /** Whether another "새로 올라온 공고" page exists after `pages`. */
   hasMore: boolean;
+  /** Open posters per field chip within the chosen region (all chips). */
+  chipCounts: Record<HomeChipId, number>;
+  /** The chip the feed is narrowed to, if any. */
+  chip: HomeChipId | null;
+  /** True when the feed lists only posters published after `since`. */
+  onlySince: boolean;
 };
 
 export type HomeConditions = {
@@ -119,7 +131,6 @@ const NO_CONDITIONS: HomeConditions = {
   categoryScope: new Set(),
 };
 
-const OPEN = new Set(["open", "ongoing", "until_exhausted"]);
 const DAY = 86400000;
 
 /** KST Monday (YYYY-MM-DD) of the week containing `now`. */
@@ -212,14 +223,31 @@ function conditionFirst<T extends HomePoster>(
   return [...matched, ...list.filter((p) => !matched.includes(p))];
 }
 
-function toCard(poster: HomePoster & { display: DeadlineDisplay }): HomeCard {
-  return { id: poster.id, card: poster.card, display: poster.display };
+type Judged = HomePoster & {
+  display: DeadlineDisplay;
+  presentation: DeadlinePresentation;
+};
+
+function toCard(poster: Judged): HomeCard {
+  return {
+    id: poster.id,
+    card: poster.card,
+    display: poster.display,
+    presentation: poster.presentation,
+  };
+}
+
+/** States the home lists (SPEC 4.3: closed posters and 접수 예정 stay off). */
+function onHome(presentation: DeadlinePresentation) {
+  return (
+    presentation.showOnHome &&
+    presentation.state !== "closed" &&
+    presentation.state !== "scheduled"
+  );
 }
 
 /** Same-day posters interleave real posters with default images. */
-function mixed<T extends HomePoster & { display: DeadlineDisplay }>(
-  list: T[],
-): T[] {
+function mixed<T extends Judged>(list: T[]): T[] {
   const entries: HomeEntry<HomeCardData>[] = list.map((poster) => ({
     id: poster.id,
     publishedAt: poster.publishedAt,
@@ -242,6 +270,9 @@ export function buildHomeLayout({
   since = null,
   pageCount = 1,
   bundles = CURATED_BUNDLES,
+  chip = null,
+  onlySince = false,
+  upperRows = true,
 }: {
   posters: HomePoster[];
   now: Date;
@@ -254,6 +285,16 @@ export function buildHomeLayout({
   /** How many "새로 올라온 공고" pages to lay out (1-based). */
   pageCount?: number;
   bundles?: CuratedBundle[];
+  /** v6.1 field chip: the feed lists only that field. */
+  chip?: HomeChipId | null;
+  /** "지난 방문 이후 N건": the feed lists only posters published after `since`. */
+  onlySince?: boolean;
+  /**
+   * v5 rows above the feed (눈여겨볼 공고, 7일 안에 마감, 팔로우 기관 소식).
+   * v6.1 lists the posters first (SPEC 7.1), so it turns these off; their
+   * posters then stay in the feed instead of being used up.
+   */
+  upperRows?: boolean;
 }): HomeLayout {
   const seenIds = new Set<string>();
   const open = posters
@@ -265,8 +306,15 @@ export function buildHomeLayout({
     .map((poster) => ({
       ...poster,
       display: getDeadlineDisplay({ ...poster.application, now }),
+      // The poster's application values are the source; the card only adds
+      // the v6.1 confirmation columns (and the viewer's applied mark).
+      presentation: getDeadlinePresentation({
+        ...cardDeadlineInput(poster.card, now),
+        ...poster.application,
+        now,
+      }),
     }))
-    .filter((poster) => OPEN.has(poster.display.reception))
+    .filter((poster) => onHome(poster.presentation))
     .filter((poster) => !eventEnded(poster.schedule, now))
     .sort((a, b) => (b.publishedAt ?? 0) - (a.publishedAt ?? 0));
   type Open = (typeof open)[number];
@@ -300,19 +348,25 @@ export function buildHomeLayout({
     conditions,
   );
   const pickList = take([...picked, ...auto], ROW_LIMIT);
-  const picks = pickList.length >= MIN_SECTION ? commit(pickList) : [];
+  const picks =
+    upperRows && pickList.length >= MIN_SECTION ? commit(pickList) : [];
 
-  // 4. 7일 안에 마감, soonest first.
+  // 4. 7일 안에 마감, soonest first: confirmed dates only (v6.1 D-day).
   const closing = open
-    .filter((poster) => isClosingWithinDays(poster.display, 7))
+    .filter(
+      (poster) =>
+        poster.presentation.dday !== null &&
+        poster.presentation.dday >= 0 &&
+        poster.presentation.dday < 7,
+    )
     .sort(
       (a, b) =>
-        (a.display.daysLeft ?? 99) - (b.display.daysLeft ?? 99) ||
+        (a.presentation.dday ?? 99) - (b.presentation.dday ?? 99) ||
         (b.publishedAt ?? 0) - (a.publishedAt ?? 0),
     );
   const deadlineList = take(conditionFirst(closing, conditions), ROW_LIMIT);
   const deadline =
-    deadlineList.length >= MIN_SECTION ? commit(deadlineList) : [];
+    upperRows && deadlineList.length >= MIN_SECTION ? commit(deadlineList) : [];
 
   // 팔로우 기관 소식 (members who follow organisers), newest first.
   const followedList = followedIds.size
@@ -324,11 +378,34 @@ export function buildHomeLayout({
       )
     : [];
   const followed =
-    followedList.length >= MIN_SECTION ? commit(followedList) : [];
+    upperRows && followedList.length >= MIN_SECTION ? commit(followedList) : [];
 
   // 5. 새로 올라온 공고, with a bundle after each page and the institution
   // suggestions once after the first bundle.
-  const fresh = mixed(conditionFirst(open, conditions));
+  // v6.1 chips count the chosen region's open posters (all chips at once).
+  const inRegion = (poster: Open) =>
+    !conditions.regionScope.size ||
+    poster.regionIds.some((id) => conditions.regionScope.has(id));
+  const chipCounts: Record<HomeChipId, number> = {
+    support: 0,
+    education: 0,
+    culture: 0,
+    jobs: 0,
+    contest: 0,
+  };
+  for (const poster of open) {
+    if (!inRegion(poster)) continue;
+    const id = homeChipOf(poster.contentCodes ?? []);
+    if (id) chipCounts[id] += 1;
+  }
+  const isFresh = (poster: Open) =>
+    since !== null && poster.publishedAt !== null && poster.publishedAt > since;
+  const feedPool = open.filter(
+    (poster) =>
+      (!chip || homeChipOf(poster.contentCodes ?? []) === chip) &&
+      (!onlySince || (isFresh(poster) && inRegion(poster))),
+  );
+  const fresh = mixed(conditionFirst(feedPool, conditions));
   const pages: HomeBlock[][] = [];
   let bundleIndex = 0;
   let orgsPlaced = false;
@@ -376,7 +453,8 @@ export function buildHomeLayout({
     deadline,
     followed,
     deadlineTotal: closing.length,
-    openTotal: open.length,
+    // "접수 중 N건": the chosen region's open posters (SPEC 7.1).
+    openTotal: open.filter(inRegion).length,
     freshSince:
       since === null
         ? 0
@@ -390,5 +468,8 @@ export function buildHomeLayout({
           ).length,
     pages,
     hasMore: fresh.some((poster) => !used.has(poster.id)),
+    chipCounts,
+    chip,
+    onlySince: onlySince && since !== null,
   };
 }

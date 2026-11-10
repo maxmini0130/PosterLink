@@ -155,7 +155,7 @@ const cardIds = (page: Page) =>
       els.map((el) => (el as HTMLElement).dataset.feedCard!),
     );
 
-test("guest 390: v5 sections in order, each poster once, card lines", async ({
+test("guest 390: v6.1 order, posters first, each poster once", async ({
   page,
 }) => {
   await open(page, 390);
@@ -164,44 +164,74 @@ test("guest 390: v5 sections in order, each poster once, card lines", async ({
     .evaluateAll((els) =>
       els.map((el) => (el as HTMLElement).dataset.homeSection),
     );
-  expect(sections).toEqual([
-    "pick",
-    "deadline",
-    "new",
-    "curated_weekend_free",
-    "org",
-  ]);
-  await expect(page.getByRole("tab")).toHaveCount(0);
+  // v6.1 (SPEC 7.1): no rows above the feed; bundles stay between pages.
+  expect(sections[0]).toBe("new");
+  expect(sections).not.toContain("pick");
+  expect(sections).not.toContain("deadline");
   await expect(page.locator("[data-interest-prompt]")).toHaveCount(0);
   await expect(
-    page.getByRole("navigation", { name: "분야 바로가기" }).getByRole("link"),
-  ).toHaveCount(8);
-  await expect(page.getByText(/^공공기관 포스터를 모아 보는 곳/)).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: /^적용 조건: 서울 전체/ }),
+    page.getByRole("link", { name: /^둘러보는 지역: 서울 전체/ }),
   ).toBeVisible();
+  await expect(
+    page.getByText(/^지원·강좌·행사 · 접수 중 \d+건$/),
+  ).toBeVisible();
+  const chips = page.getByRole("group", { name: "분야" }).getByRole("button");
+  await expect(chips.first()).toHaveText("전체");
+  await expect(chips.first()).toHaveAttribute("aria-pressed", "true");
+  // First visit: no favourite line, no "지난 방문 이후".
+  await expect(page.locator("[data-favorite-deadline-line]")).toHaveCount(0);
+  await expect(page.getByText(/지난 방문 이후/)).toHaveCount(0);
+  const firstPoster = (await page
+    .locator("[data-home-grid] li")
+    .first()
+    .boundingBox())!;
+  expect(firstPoster.y).toBeLessThan(200);
   const ids = await cardIds(page);
   expect(new Set(ids).size).toBe(ids.length);
-  const first = page.locator('[data-section="pick"]').first();
-  await expect(first.getByRole("heading")).toHaveText(
-    "2026 하반기 청년 월세 지원 추가 모집",
-  );
-  await expect(first.getByText("서울 전체 · 만 19~39세")).toBeVisible();
-  await expect(first.getByText("월 최대 20만원 × 12개월")).toHaveClass(
-    /text-pl-green/,
-  );
-  // Badge shows the reception deadline only; the event day sits in line 2.
-  const sports = page.locator("[data-feed-card]", {
-    hasText: "마포구민 체육대회",
-  });
-  await expect(sports.getByText(/진행$/)).toBeVisible();
-  const rowCard = page.locator('[data-section="deadline"]').first();
-  expect(Math.round((await rowCard.boundingBox())!.width)).toBe(150);
-  // No line for a value that is not confirmed.
-  const kbs = page.locator("[data-feed-card]", { hasText: "KBS 전국노래자랑" });
-  await expect(kbs.locator("p")).toHaveCount(1);
   await expect(page.getByText("수집 포털", { exact: false })).toHaveCount(0);
 });
+
+test("chips: a field narrows the feed and 전체 brings it back", async ({
+  page,
+}) => {
+  await open(page, 390);
+  const firstGrid = () =>
+    page
+      .locator("[data-home-grid]")
+      .first()
+      .locator("[data-feed-card]")
+      .evaluateAll((els) =>
+        els.map((el) => (el as HTMLElement).dataset.feedCard!).join(","),
+      );
+  const before = await firstGrid();
+  const chip = page
+    .getByRole("group", { name: "분야" })
+    .getByRole("button")
+    .nth(1);
+  const request = page.waitForRequest((req) =>
+    /\/api\/home\?.*chip=/.test(req.url()),
+  );
+  await chip.click();
+  await request;
+  await expect(chip).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(firstGrid).not.toBe(before);
+  await page
+    .getByRole("group", { name: "분야" })
+    .getByRole("button", { name: "전체" })
+    .click();
+  await expect.poll(firstGrid).toBe(before);
+});
+
+/** Loads feed pages until the card is on the page (v6.1 lists newest first). */
+async function reveal(page: Page, id: string) {
+  const card = page.locator(`[data-feed-card="${id}"]`).first();
+  for (let i = 0; i < 8 && !(await card.count()); i += 1) {
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.waitForTimeout(800);
+  }
+  await card.scrollIntoViewIfNeeded();
+  return card;
+}
 
 for (const width of [360, 390, 430, 768, 1280, 1440])
   test(`home ${width}px: layout, rows, columns, no page overflow`, async ({
@@ -214,22 +244,24 @@ for (const width of [360, 390, 430, 768, 1280, 1440])
       ),
     ).toBe(0);
     const columns = await page
-      .locator(".feed-grid")
+      .locator("[data-home-grid]")
       .first()
       .evaluate(
         (el) => getComputedStyle(el).gridTemplateColumns.split(" ").length,
       );
     expect(columns).toBe(width >= 1200 ? 4 : width >= 768 ? 3 : 2);
-    const visibleInRow = await page
-      .locator('[data-home-section="pick"] li')
-      .evaluateAll(
-        (els) =>
-          els.filter((el) => (el as HTMLElement).offsetParent !== null).length,
-      );
-    expect(visibleInRow).toBe(width >= 768 ? 4 : 6);
-    const art = page.locator("[data-feed-card] .aspect-\\[3\\/4\\]").first();
+    // v6.1 card poster box is 5:7.
+    const art = page.locator("[data-feed-card] .aspect-\\[5\\/7\\]").first();
     const box = (await art.boundingBox())!;
-    expect(box.height / box.width).toBeCloseTo(4 / 3, 1);
+    expect(box.height / box.width).toBeCloseTo(7 / 5, 1);
+    if (width === 1440) {
+      // 1440×900: the first row's title and lines are on the first screen.
+      const firstCard = (await page
+        .locator("[data-home-grid] li")
+        .first()
+        .boundingBox())!;
+      expect(firstCard.y + firstCard.height).toBeLessThanOrEqual(900);
+    }
     mkdirSync(SHOTS, { recursive: true });
     await page.screenshot({
       path: `${SHOTS}/home-${width}.png`,
@@ -237,23 +269,22 @@ for (const width of [360, 390, 430, 768, 1280, 1440])
     });
   });
 
-test("image states: banner and broken images fall back, long posters crop, contain", async ({
+test("image states: banner and broken images fall back, tall posters fill from the top", async ({
   page,
 }) => {
   await open(page, 390);
   const card = (n: number) =>
-    page.locator(
-      `[data-feed-card="aaaaaaaa-0000-4000-8000-${String(n).padStart(12, "0")}"]`,
-    );
-  await expect(card(4).locator("[data-default-poster]")).toBeVisible(); // wide banner
-  await expect(card(8).getByText("전체 보기")).toBeVisible(); // very long
-  await card(1).scrollIntoViewIfNeeded();
-  await expect(card(1).locator("[data-default-poster]")).toBeVisible(); // 404 → default
-  expect(
-    await card(3)
-      .locator("img")
-      .evaluate((img) => getComputedStyle(img).objectFit),
-  ).toBe("contain");
+    reveal(page, `aaaaaaaa-0000-4000-8000-${String(n).padStart(12, "0")}`);
+  await expect((await card(4)).locator("[data-default-poster]")).toBeVisible(); // wide banner
+  await expect((await card(1)).locator("[data-default-poster]")).toBeVisible(); // 404 → default
+  // v6.1 (SPEC 3): height ÷ width ≥ 1.2 → cover from the top (600×800, 600×1800).
+  for (const n of [3, 8]) {
+    const fit = await (await card(n)).locator("img").evaluate((img) => {
+      const style = getComputedStyle(img);
+      return `${style.objectFit} ${style.objectPosition}`;
+    });
+    expect(fit).toMatch(/^cover 50% 0%/);
+  }
 });
 
 test("feed continues 600px before the end, keeps a 더 보기 link and restores on back", async ({
@@ -265,25 +296,27 @@ test("feed continues 600px before the end, keeps a 더 보기 link and restores 
     "/?page=2",
   );
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  await expect(
-    page.locator(
-      "#home-new ~ ul.feed-grid, [data-home-section=new] ul.feed-grid",
-    ),
-  ).toHaveCount(2);
+  await expect(page.locator("[data-home-grid]")).toHaveCount(2);
   await expect(
     page.locator('[data-home-section="curated_youth_support"]'),
   ).toBeVisible();
-  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  await expect(
-    page.locator("[data-home-section=new] ul.feed-grid"),
-  ).toHaveCount(3);
+  // v6.1 keeps every poster in the feed (no rows above it): more pages.
+  // (The 더 보기 link is hidden while a page loads, so wait on the cards.)
+  for (let i = 0; i < 10; i += 1) {
+    if ((await cardIds(page)).length >= fixture.rows.length) break;
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.waitForTimeout(800);
+  }
+  await expect(page.getByRole("status")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "더 보기" })).toHaveCount(0);
+  const pageCount = await page.locator("[data-home-grid]").count();
+  expect(pageCount).toBeGreaterThanOrEqual(3);
   const ids = await cardIds(page);
   expect(new Set(ids).size).toBe(ids.length);
   expect(ids.length).toBe(fixture.rows.length);
   // Open a card from page 3, then come back: same pages, same place.
   const target = page
-    .locator("[data-home-section=new] ul.feed-grid")
+    .locator("[data-home-grid]")
     .nth(2)
     .locator("[data-feed-card] a")
     .first();
@@ -292,9 +325,10 @@ test("feed continues 600px before the end, keeps a 더 보기 link and restores 
   await target.click();
   await page.waitForURL(/\/posters\//);
   await page.goBack({ waitUntil: "networkidle" });
-  await expect(
-    page.locator("[data-home-section=new] ul.feed-grid"),
-  ).toHaveCount(3);
+  // The saved pages come back (the feed may load one more below them).
+  await expect
+    .poll(() => page.locator("[data-home-grid]").count(), { timeout: 20000 })
+    .toBeGreaterThanOrEqual(pageCount);
   await expect
     .poll(() => page.evaluate(() => window.scrollY))
     .toBeGreaterThan(y - 400);
@@ -309,9 +343,7 @@ test("no-JS 더 보기: /?page=2 renders two feed pages on the server", async ({
   page,
 }) => {
   await open(page, 1280, { path: "/?page=2" });
-  await expect(
-    page.locator("[data-home-section=new] ul.feed-grid"),
-  ).toHaveCount(2);
+  await expect(page.locator("[data-home-grid]")).toHaveCount(2);
 });
 
 test("impressions: once per card, with section, position and image kind", async ({
@@ -324,6 +356,9 @@ test("impressions: once per card, with section, position and image kind", async 
       { timeout: 5000 },
     )
     .toBeGreaterThan(3);
+  // Default-image posters sit further down in the v6.1 feed.
+  await reveal(page, "aaaaaaaa-0000-4000-8000-000000000004");
+  await page.waitForTimeout(1500);
   const shown = events.filter((e) => e.name === "feed_card_impression");
   expect(
     shown.every(
@@ -343,8 +378,7 @@ test("guest follow prompt: after a 찜, organiser only, once per visit, then sig
   page,
 }) => {
   await open(page, 390);
-  const welfare = page.locator(`[data-feed-card="${WELFARE.id}"]`).first();
-  await welfare.scrollIntoViewIfNeeded();
+  const welfare = await reveal(page, WELFARE.id);
   await welfare.getByRole("button", { name: "찜하기" }).click();
   const prompt = page.getByRole("region", { name: "기관 팔로우 제안" });
   await expect(prompt).toBeVisible();
@@ -389,7 +423,7 @@ test("guest follow prompt: after a 찜, organiser only, once per visit, then sig
 
   // Same visit, another organiser: no second prompt (guest save sheet instead).
   await page.goto("/", { waitUntil: "networkidle" });
-  const runmate = page.locator(`[data-feed-card="${RUNMATE.id}"]`).first();
+  const runmate = await reveal(page, RUNMATE.id);
   await runmate.getByRole("button", { name: "찜하기" }).click();
   await expect(
     page.getByRole("dialog", { name: "찜한 공고를 계정에 보관할까요?" }),
@@ -405,9 +439,7 @@ test("guest follow prompt: 괜찮아요 is remembered for that institution", asy
   page,
 }) => {
   await open(page, 390);
-  await page
-    .locator(`[data-feed-card="${WELFARE.id}"]`)
-    .first()
+  await (await reveal(page, WELFARE.id))
     .getByRole("button", { name: "찜하기" })
     .click();
   const prompt = page.getByRole("region", { name: "기관 팔로우 제안" });
@@ -417,7 +449,7 @@ test("guest follow prompt: 괜찮아요 is remembered for that institution", asy
   // New visit (new tab session): the refused institution is not offered again.
   await page.evaluate(() => sessionStorage.clear());
   await page.reload({ waitUntil: "networkidle" });
-  const card = page.locator(`[data-feed-card="${WELFARE.id}"]`).first();
+  const card = await reveal(page, WELFARE.id);
   await card.getByRole("button", { name: "찜 취소" }).click();
   await card.getByRole("button", { name: "찜하기" }).click();
   await expect(
@@ -430,10 +462,8 @@ test("member follow prompt: 찜 → 기관 팔로우 writes the follow with prom
   page,
 }) => {
   await open(page, 1280, { member: true });
-  // First card of the 7-day row (visible on PC; organiser 서울청년센터 마포).
-  await page
-    .locator(`[data-feed-card="${RUNMATE.id}"]`)
-    .first()
+  // Organiser 서울청년센터 마포; further down the v6.1 feed.
+  await (await reveal(page, RUNMATE.id))
     .getByRole("button", { name: "찜하기" })
     .click();
   const prompt = page.getByRole("region", { name: "기관 팔로우 제안" });
@@ -457,5 +487,5 @@ test("member follow prompt: 찜 → 기관 팔로우 writes the follow with prom
   });
   expect(
     events.find((e) => e.name === "favorite_add")?.metadata.section_id,
-  ).toBe("deadline");
+  ).toMatch(/^(new|curated_)/); // v6.1: no 7일 안에 마감 row
 });

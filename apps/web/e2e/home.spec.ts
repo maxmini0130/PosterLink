@@ -24,12 +24,14 @@ test.describe("메인 화면", () => {
 });
 
 test.describe("home first visit", () => {
-  test("a new browser sees open posters and the 찜 guide, not an empty screen", async ({ page }) => {
+  test("a new browser sees open posters, not an empty screen (v6.1)", async ({ page }) => {
     await page.goto("/");
     await page.waitForLoadState("networkidle");
-    await expect(page.getByRole("region", { name: "지금 접수 중인 공고" })).toBeVisible();
-    await expect(page.getByText("찜해 두면 다음에 모아 보여드려요")).toBeVisible();
-    await expect(page.getByText("방문 이후")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "새로 올라온 공고" })).toBeVisible();
+    await expect(page.locator("[data-home-grid] [data-feed-card]").first()).toBeVisible();
+    // First visit: no "지난 방문 이후" and no favourite deadline line.
+    await expect(page.getByText("지난 방문 이후")).toHaveCount(0);
+    await expect(page.locator("[data-favorite-deadline-line]")).toHaveCount(0);
   });
 });
 
