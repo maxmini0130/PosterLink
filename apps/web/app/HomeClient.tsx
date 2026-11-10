@@ -19,6 +19,7 @@ import {
   HomeRegionBar,
   HomeSectionHead,
   HomeSubtitle,
+  RegionFallbackNote,
   SinceLastVisitButton,
 } from "./components/pl/HomeV61";
 import { loadPosterCards } from "./lib/posterCards";
@@ -41,6 +42,11 @@ import {
   PENDING_NOT_STORED_MESSAGE,
 } from "./lib/guestSession";
 import { loadHomeConditions, type HomeConditions } from "./lib/homeData";
+import {
+  chooseBrowseRegion,
+  readStoredBrowseRegion,
+} from "./lib/browseRegionClient";
+import type { BrowseRegion } from "../lib/browseRegion";
 import { recordVisitActivity } from "./lib/visitClock";
 import { supabase } from "./lib/supabase";
 import { trackProductEvent } from "../lib/productEvents";
@@ -71,6 +77,7 @@ function cameBackByHistory() {
 
 function conditionQuery(
   conditions: HomeConditions | null,
+  regionId: string | null,
   baseline: number | null,
   view: { chip: HomeChipId | null; fresh: boolean } = {
     chip: null,
@@ -78,8 +85,8 @@ function conditionQuery(
   },
 ) {
   const params = new URLSearchParams();
-  if (conditions?.interest.region)
-    params.set("region", conditions.interest.region.id);
+  // The browsed region (SPEC 8), not the profile region.
+  if (regionId) params.set("region", regionId);
   if (conditions?.interest.categories.length)
     params.set(
       "categories",
@@ -215,11 +222,25 @@ export default function Home({
   );
   const prompt = useFollowPromptOffer(followedIds);
 
+  /**
+   * The browsed region: this browser's last choice, else the profile (member)
+   * or interest (guest) region. `label` is null until the server names it.
+   */
+  const [browse, setBrowse] = useState<{
+    regionId: string;
+    label: string | null;
+  } | null>(null);
+  const regionId = browse?.regionId ?? null;
   const view = useMemo(() => ({ chip, fresh: freshOnly }), [chip, freshOnly]);
-  const queryKey = conditionQuery(conditions, baseline, view).toString();
+  const queryKey = conditionQuery(
+    conditions,
+    regionId,
+    baseline,
+    view,
+  ).toString();
   const fetchPages = useCallback(
     async (count: number, from: number) => {
-      const params = conditionQuery(conditions, baseline, view);
+      const params = conditionQuery(conditions, regionId, baseline, view);
       params.set("pages", String(count));
       params.set("from", String(from));
       const response = await fetch(`/api/home?${params}`, {
@@ -228,7 +249,7 @@ export default function Home({
       if (!response.ok) throw new Error("home");
       return (await response.json()) as HomeFeedResult & { from: number };
     },
-    [conditions, baseline, view],
+    [conditions, regionId, baseline, view],
   );
 
   // 찜 마감 줄 (SPEC 4.6): the favourites, wherever they are, judged the same
@@ -278,17 +299,26 @@ export default function Home({
     loadHomeConditions()
       .then((next) => {
         if (!active) return;
+        const stored = readStoredBrowseRegion(next.userId);
+        setBrowse(
+          stored ??
+            (next.interest.region
+              ? { regionId: next.interest.region.id, label: null }
+              : null),
+        );
         setConditions(next);
         setFavorites(new Set(next.favoriteIds));
       })
       .catch(() => {
-        if (active)
-          setConditions({
-            signedIn: false,
-            interest: { region: null, categories: [] },
-            favoriteIds: [],
-            institutions: [],
-          });
+        if (!active) return;
+        setBrowse(readStoredBrowseRegion(null));
+        setConditions({
+          signedIn: false,
+          userId: null,
+          interest: { region: null, categories: [] },
+          favoriteIds: [],
+          institutions: [],
+        });
       });
     return () => {
       active = false;
@@ -392,8 +422,15 @@ export default function Home({
   useCardImpressions(main, Boolean(feed));
 
   const signedIn = Boolean(conditions?.signedIn);
-  const interest = conditions?.interest;
-  const changeHref = signedIn ? "/mypage/edit" : "/interests";
+
+  // Picking a region changes only what is browsed here, never the profile.
+  function chooseRegion(region: BrowseRegion) {
+    if (!chooseBrowseRegion(conditions?.userId ?? null, region))
+      toast("이 기기에 기억하지 못해 이번 방문에만 적용돼요");
+    setBrowse(region);
+    setFreshOnly(false);
+    if (window.scrollY > 0) window.scrollTo({ top: 0 });
+  }
 
   async function toggle(card: HomeCard, sectionId: HomeSectionId) {
     const id = card.id;
@@ -473,11 +510,19 @@ export default function Home({
   };
 
   const layout = feed?.layout;
-  // "접수 중 N건": the chosen region's open posters (SPEC 7.1).
-  const intro = layout?.openTotal ?? summary?.activePosters ?? null;
+  // "접수 중 N건": the chosen region's open posters (SPEC 7.1). While a newly
+  // chosen region loads, the previous region's number is not shown.
+  const stale = Boolean(
+    browse?.label && feed && feed.scopeLabel !== browse.label,
+  );
+  const intro = stale
+    ? null
+    : (layout?.openTotal ?? summary?.activePosters ?? null);
   let position = 1;
   const freshSince = baseline !== null ? (layout?.freshSince ?? 0) : 0;
-  const scopeLabel = interest?.region?.name || feed?.scopeLabel || "서울 전체";
+  // The server names the region ("서울 전체", "서울 마포구"); a fresh choice
+  // shows its own name while the posters load.
+  const scopeLabel = browse?.label || feed?.scopeLabel || "서울 전체";
   const chips = layout ? visibleHomeChips(layout.chipCounts ?? {}) : [];
   // A chip hidden after the region changed falls back to 전체.
   const shownChip =
@@ -495,8 +540,19 @@ export default function Home({
         <h1 className="sr-only">공공기관 포스터 모아 보기</h1>
         <div className="md:flex md:items-start md:justify-between md:gap-6">
           <div className="min-w-0">
-            <HomeRegionBar scopeLabel={scopeLabel} changeHref={changeHref} />
+            <HomeRegionBar
+              scopeLabel={scopeLabel}
+              selectedId={regionId}
+              onChoose={chooseRegion}
+            />
             <HomeSubtitle openTotal={intro} />
+            {feed?.regionFallback && feed.scopeLabel === scopeLabel && (
+              <RegionFallbackNote
+                label={scopeLabel}
+                fallback={feed.regionFallback}
+                hasPosters={(layout?.openTotal ?? 0) > 0}
+              />
+            )}
           </div>
           {favoriteLine && (
             <div className="mt-3 md:mt-0">

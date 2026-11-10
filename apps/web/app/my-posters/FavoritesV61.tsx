@@ -15,7 +15,8 @@ import {
 import { cardOrganization, cardTitleText } from "../../lib/posterCardText";
 import { isPublicHttpUrl } from "../../lib/posterActionLinks";
 import { spokenDateTime } from "../../lib/deadlinePresentation";
-import type { HomeBlock } from "../../lib/homeFeed";
+import type { HomeCard } from "../../lib/homeFeed";
+import { loadBrowseRegionId } from "../lib/browseRegionClient";
 
 /**
  * v6.1 찜 (docs/design/v6.1/SPEC.md 7.4, 9): four groups, soonest first, the
@@ -220,36 +221,44 @@ function Group({
   );
 }
 
-/** "이번 주에 마감되는 공고" for an empty 찜 (the home's open posters, confirmed dates). */
+/**
+ * "이번 주에 마감되는 공고" for an empty 찜 (SPEC 7.4): confirmed deadlines
+ * closing by this Sunday in the browsed region (the one chosen on the home).
+ */
 function DueThisWeek({ actions }: { actions: Actions }) {
   const [items, setItems] = useState<FavoriteRowItem<FavoriteCard>[] | null>(
     null,
   );
+  const [scope, setScope] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
-    fetch("/api/home?pages=2", { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((feed: { layout?: { pages?: HomeBlock[][] } } | null) => {
-        if (!active) return;
-        const cards = (feed?.layout?.pages ?? [])
-          .flat()
-          .flatMap((block) => (block.kind === "orgs" ? [] : block.items))
-          .filter(
-            (card) =>
-              card.presentation.dday !== null && card.presentation.dday <= 6,
-          )
-          .sort(
-            (a, b) => (a.presentation.dday ?? 9) - (b.presentation.dday ?? 9),
-          )
-          .slice(0, 3);
-        setItems(
-          cards.map((card) => ({
-            card: card.card,
-            presentation: card.presentation,
-            expanded: false,
-          })),
-        );
+    loadBrowseRegionId()
+      .catch(() => null)
+      .then((regionId) => {
+        const params = new URLSearchParams({ pages: "1", due: "week" });
+        if (regionId) params.set("region", regionId);
+        return fetch(`/api/home?${params}`, { cache: "no-store" });
       })
+      .then((response) => (response.ok ? response.json() : null))
+      .then(
+        (
+          feed: {
+            scopeLabel?: string;
+            layout?: { dueWeek?: HomeCard[] };
+          } | null,
+        ) => {
+          if (!active) return;
+          const cards = feed?.layout?.dueWeek ?? [];
+          setScope(feed?.scopeLabel ?? null);
+          setItems(
+            cards.map((card) => ({
+              card: card.card,
+              presentation: card.presentation,
+              expanded: false,
+            })),
+          );
+        },
+      )
       .catch(() => active && setItems([]));
     return () => {
       active = false;
@@ -257,7 +266,15 @@ function DueThisWeek({ actions }: { actions: Actions }) {
   }, []);
   if (!items?.length) return null;
   return (
-    <Group id="fav-due-week" title="이번 주에 마감되는 공고">
+    <Group
+      id="fav-due-week"
+      title="이번 주에 마감되는 공고"
+      aside={
+        scope ? (
+          <span className="shrink-0 text-[12.5px] text-pl-meta">{scope}</span>
+        ) : null
+      }
+    >
       {items.map((item) => (
         <Row key={item.card.id} item={item} actions={actions} />
       ))}

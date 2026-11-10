@@ -377,3 +377,43 @@ test("pages are stable: page 2 continues where page 1 stopped", () => {
   const second = two.pages[1][0];
   assert.equal(second.kind === "new" && second.items.length, 12);
 });
+
+test("찜 '이번 주에 마감되는 공고': confirmed deadlines by Sunday, soonest first", () => {
+  // NOW is Tuesday 11-03; this week ends Sunday 11-08 (KST).
+  const closing = (id: string, days: number, verified = true) =>
+    poster({
+      id,
+      application: {
+        applicationStartAt: "2026-10-01T00:00:00Z",
+        applicationEndAt: new Date(NOW.getTime() + days * DAY).toISOString(),
+        deadlineType: "fixed",
+        posterStatus: "published",
+      },
+      card: {
+        id,
+        title: id,
+        image: "https://x.supabase.co/storage/v1/object/public/a.jpg",
+        deadlineVerification: verified
+          ? { deadlineStatus: "verified", receptionVerified: true }
+          : undefined,
+      },
+    });
+  const list = [
+    closing("sun", 5),
+    closing("wed", 1),
+    closing("next-mon", 6),
+    closing("unverified", 2, false),
+    poster(),
+  ];
+  const none = buildHomeLayout({ posters: list, now: NOW, upperRows: false });
+  assert.equal(none.dueWeek, undefined);
+  const layout = buildHomeLayout({
+    posters: list,
+    now: NOW,
+    upperRows: false,
+    dueWeekLimit: 4,
+  });
+  assert.deepEqual(ids(layout.dueWeek ?? []), ["wed", "sun"]);
+  // The feed is unchanged: these posters stay in "새로 올라온 공고".
+  assert.deepEqual(allIds(layout).sort(), allIds(none).sort());
+});

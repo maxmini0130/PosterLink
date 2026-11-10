@@ -9,6 +9,8 @@ export const dynamic = "force-dynamic";
  * pages. Reads public data with the anon key only.
  *   ?region=<uuid>&categories=<uuid,uuid>&follows=<uuid,..>&since=<ms>&pages=<1-20>&from=<1-20>
  *   &chip=<support|education|culture|jobs|contest>&fresh=1 (only posters after `since`)
+ *   &due=week (also layout.dueWeek: confirmed deadlines closing by Sunday)
+ * `region` is the browsed region (SPEC 8: not where the person lives).
  * Returns pages[from-1 .. pages-1]; `from=1` also returns the upper sections.
  */
 export async function GET(request: Request) {
@@ -36,6 +38,8 @@ export async function GET(request: Request) {
       pageCount: pages,
       chip: params.get("chip"),
       onlySince: params.get("fresh") === "1",
+      // 찜 "이번 주에 마감되는 공고" (SPEC 7.4).
+      dueWeekLimit: params.get("due") === "week" ? 4 : 0,
     });
     const { layout } = feed;
     return NextResponse.json(

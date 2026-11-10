@@ -18,7 +18,9 @@ const fixture = JSON.parse(
   readFileSync("e2e/fixtures/home-v5.json", "utf8"),
 ) as {
   rows: Array<{ id: string; title: string; organizer_id: string | null }>;
+  taxonomy: { regions: Array<{ id: string; name: string; level: string }> };
 };
+const MAPO_REGION = fixture.taxonomy.regions.find((r) => r.name === "마포구")!;
 const USER = "eeeeeeee-0000-4000-8000-000000000001";
 const byTitle = (title: string) =>
   fixture.rows.find((row) => row.title === title)!;
@@ -64,6 +66,15 @@ async function open(
         body: `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="${long ? 1800 : 800}"><rect width="100%" height="100%" fill="#e4d9b9"/><text x="40" y="200" font-size="56" fill="#1c2d4f">POSTER</text></svg>`,
       });
     }
+    // The app's own write endpoints (view and link-click counters) would
+    // reach a database through the server; answer them here too.
+    if (
+      !url.hostname.endsWith(".supabase.co") &&
+      url.pathname.startsWith("/api/") &&
+      req.method() !== "GET" &&
+      req.method() !== "HEAD"
+    )
+      return route.fulfill({ status: 204, body: "" });
     if (!url.hostname.endsWith(".supabase.co")) {
       if (
         /sentry\.io|google-analytics|googletagmanager|vercel\.live/.test(
@@ -110,6 +121,8 @@ async function open(
       );
     if (table === "user_visit_state" || single)
       return route.fulfill(json(null));
+    if (table === "regions")
+      return route.fulfill(json(fixture.taxonomy.regions));
     if (table === "notifications")
       return route.fulfill({
         ...json([]),
@@ -170,7 +183,7 @@ test("guest 390: v6.1 order, posters first, each poster once", async ({
   expect(sections).not.toContain("deadline");
   await expect(page.locator("[data-interest-prompt]")).toHaveCount(0);
   await expect(
-    page.getByRole("link", { name: /^둘러보는 지역: 서울 전체/ }),
+    page.getByRole("button", { name: /^둘러보는 지역: 서울 전체/ }),
   ).toBeVisible();
   await expect(
     page.getByText(/^지원·강좌·행사 · 접수 중 \d+건$/),
@@ -488,4 +501,89 @@ test("member follow prompt: 찜 → 기관 팔로우 writes the follow with prom
   expect(
     events.find((e) => e.name === "favorite_add")?.metadata.section_id,
   ).toMatch(/^(new|curated_)/); // v6.1: no 7일 안에 마감 row
+});
+
+for (const member of [false, true])
+  test(`${member ? "member" : "guest"} 390: the region title picks a browsing region in place`, async ({
+    page,
+  }) => {
+    const homeCalls: URLSearchParams[] = [];
+    page.on("request", (req) => {
+      const url = new URL(req.url());
+      if (url.pathname === "/api/home") homeCalls.push(url.searchParams);
+    });
+    await open(page, 390, { member });
+    const title = page.getByRole("button", { name: /^둘러보는 지역: / });
+    await expect(title).toContainText("서울 전체");
+    await title.click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet).toHaveAttribute("data-region-picker", "sheet");
+    await sheet.getByRole("button", { name: /^서울/ }).first().click();
+    await expect(
+      sheet.getByRole("button", { name: "서울 전체" }),
+    ).toHaveAttribute("aria-current", "true");
+    await sheet.getByRole("button", { name: "마포구" }).click();
+    await expect(sheet).toHaveCount(0);
+    await expect(page).toHaveURL(/\/$/);
+    await expect(title).toContainText("서울 마포구");
+    await expect(title).toBeFocused();
+    await expect
+      .poll(() => homeCalls.map((call) => call.get("region")))
+      .toContain(MAPO_REGION.id);
+    await expect(
+      page.getByText(/^지원·강좌·행사 · 접수 중 \d+건$/),
+    ).toBeVisible();
+    // Browsing never writes the profile or the interest conditions (a member's
+    // visit records, record_user_visit / link_visitor_identity, are unrelated).
+    expect(
+      writes.filter((write) => /profiles|user_interest/.test(write)),
+    ).toEqual([]);
+    expect(
+      await page.evaluate(() => localStorage.getItem("pl.guest_interest.v1")),
+    ).toBeNull();
+    await page.reload({ waitUntil: "networkidle" });
+    await expect(title).toContainText("서울 마포구");
+  });
+
+test("PC 1440: the region picker is a dropdown under the title", async ({
+  page,
+}) => {
+  await open(page, 1440);
+  const title = page.getByRole("button", { name: /^둘러보는 지역: / });
+  await title.click();
+  const panel = page.getByRole("dialog");
+  await expect(panel).toHaveAttribute("data-region-picker", "dropdown");
+  await expect(panel.getByRole("button", { name: "서울" })).toBeVisible();
+  const t = (await title.boundingBox())!;
+  const d = (await panel.boundingBox())!;
+  expect(d.y).toBeGreaterThanOrEqual(t.y + t.height);
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveCount(0);
+  await expect(title).toBeFocused();
+});
+
+test("390: a region without posters is still listed and says so", async ({
+  page,
+}) => {
+  await open(page, 390);
+  const title = page.getByRole("button", { name: /^둘러보는 지역: / });
+  await title.click();
+  const sheet = page.getByRole("dialog");
+  // Listed even without posters; a 시·도 without 구·군 applies at once.
+  await sheet.getByRole("button", { name: "부산" }).click();
+  await expect(title).toContainText("부산 전체");
+  // The fixture has no nationwide posters either, so the note does not
+  // promise them (with nationwide posters it adds "전국 공고를 보여 드려요.";
+  // browseRegion.test.ts covers which posters are listed).
+  const note = page.locator("[data-region-fallback=nation]");
+  await expect(note).toHaveText("아직 부산 공고가 없어요.");
+  await expect(page.locator("[data-home-grid] li")).toHaveCount(0);
+  mkdirSync(SHOTS, { recursive: true });
+  await page.screenshot({ path: `${SHOTS}/region-fallback-390.png` });
+  // Back to 서울 전체: the note goes away.
+  await title.click();
+  await sheet.getByRole("button", { name: /^서울/ }).first().click();
+  await sheet.getByRole("button", { name: "서울 전체" }).click();
+  await expect(title).toContainText("서울 전체");
+  await expect(page.locator("[data-region-fallback]")).toHaveCount(0);
 });

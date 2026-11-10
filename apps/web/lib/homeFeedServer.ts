@@ -5,6 +5,11 @@ import {
 } from "./publicDiscovery";
 import { getRegionScopeIds } from "./regionHelpers";
 import {
+  browsePosterScope,
+  browseRegionLabel,
+  type BrowseFallback,
+} from "./browseRegion";
+import {
   categoryScopeIds,
   CONTENT_TYPE_INTEREST,
   INTEREST_CATEGORY_CODES,
@@ -399,6 +404,8 @@ export type HomeRequest = {
   chip?: string | null;
   /** List only posters published after `since`. */
   onlySince?: boolean;
+  /** Also return the 찜 "이번 주에 마감되는 공고" (up to this many). */
+  dueWeekLimit?: number;
 };
 
 export type HomeShortcut = {
@@ -410,9 +417,14 @@ export type HomeShortcut = {
 
 export type HomeFeedResult = {
   layout: HomeLayout;
-  /** The region the home is scoped to (조건 or 서울 by default). */
+  /** The browsed region's title: "서울 전체", "서울 마포구", "전국". */
   scopeLabel: string;
   shortcuts: HomeShortcut[];
+  /**
+   * Set when the browsed region has no posters of its own: the list then
+   * shows the wider ones ("nation": 전국, "sido": its 시·도 and 전국).
+   */
+  regionFallback?: BrowseFallback | null;
 };
 
 type HomeSource = {
@@ -543,14 +555,16 @@ export async function loadHomeFeed(
       : null;
   const chosen = regionId ? regions.get(regionId)! : null;
   // Default scope: 서울 (first-target market). A chosen region keeps its 시·도.
+  // 전국 has no scope (every poster); its id gives getRegionScopeIds null.
   const sidoId =
-    chosen?.level === "sido"
+    chosen?.level === "sido" || chosen?.level === "nation"
       ? chosen.id
       : chosen?.level === "sigungu"
         ? (chosen.parent_id ?? null)
         : (taxonomy.regions.find((region) => region.code === "REG_SEOUL")?.id ??
           null);
-  const scope = getRegionScopeIds(sidoId, taxonomy.regions);
+  const defaultSidoId =
+    taxonomy.regions.find((region) => region.code === "REG_SEOUL")?.id ?? null;
   const { links, images, popularity } = source;
   const regionLinksBy = new Map<string, RegionLink[]>();
   for (const link of links.regionLinks)
@@ -564,12 +578,20 @@ export async function loadHomeFeed(
       ...(categoriesBy.get(link.poster_id) ?? []),
       link.category_id,
     ]);
-  const inScope = rows.filter((row) => {
-    const own = regionLinksBy.get(row.id) ?? [];
-    return (
-      !scope || !own.length || own.some((link) => scope.has(link.region_id))
-    );
+  // The browsed region decides the posters (SPEC 7.1: list, count, chips).
+  const browsed = browsePosterScope({
+    chosen,
+    defaultSidoId,
+    regions: taxonomy.regions,
+    posters: rows.map((row) => ({
+      id: row.id,
+      row,
+      regionIds: (regionLinksBy.get(row.id) ?? []).map(
+        (link) => link.region_id,
+      ),
+    })),
   });
+  const inScope = browsed.posters.map((item) => item.row);
   const posters = inScope.map((row) =>
     toHomePoster(row, {
       regions,
@@ -585,9 +607,9 @@ export async function loadHomeFeed(
     (id) => UUID.test(id) && categories.has(id),
   );
   const conditions: HomeConditions = {
-    regionScope: regionId
-      ? (getRegionScopeIds(regionId, taxonomy.regions) ?? new Set())
-      : new Set(),
+    // The browsed region already narrowed the posters above, so it no longer
+    // reorders them; only the interest categories do.
+    regionScope: new Set(),
     categoryScope: new Set(
       categoryIds.flatMap((id) => categoryScopeIds(id, taxonomy.categories)),
     ),
@@ -610,15 +632,14 @@ export async function loadHomeFeed(
     onlySince: request.onlySince === true,
     // v6.1 home: posters first, no rows above the feed.
     upperRows: false,
+    dueWeekLimit: Math.min(Math.max(request.dueWeekLimit ?? 0, 0), 12),
   });
   const sido = sidoId ? regions.get(sidoId) : null;
-  const scopeLabel = chosen
-    ? chosen.level === "sigungu"
-      ? chosen.name
-      : `${(chosen.name ?? "").replace(/특별시|광역시/, "")} 전체`
-    : sido
-      ? `${sido.name.replace(/특별시|광역시/, "")} 전체`
-      : "전체 지역";
+  const scopeLabel =
+    browseRegionLabel(
+      chosen ?? sido,
+      chosen?.level === "sigungu" ? sido : null,
+    ) ?? "전국";
   const order: readonly string[] = INTEREST_CATEGORY_CODES;
   const shortcuts = taxonomy.categories
     .filter((category) => order.includes(String(category.code)))
@@ -631,7 +652,12 @@ export async function loadHomeFeed(
       name: category.name,
       href: `/categories/${taxonomySlug(category, "CAT")}`,
     }));
-  return { layout, scopeLabel, shortcuts };
+  return {
+    layout,
+    scopeLabel,
+    shortcuts,
+    regionFallback: browsed.fallback,
+  };
 }
 
 export { HOME_PAGE_SIZE };

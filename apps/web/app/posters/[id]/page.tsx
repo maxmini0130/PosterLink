@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { getAppOrigin } from "../../../lib/siteUrl";
+import { posterRegionTag } from "../../../lib/browseRegion";
 import { resolvePosterImageGallery } from "../../../lib/posterImage";
 import { hasVerifiedPosterStructuredData } from "../../../lib/posterStructuredTrust";
 import { buildPosterStructuredSeoData } from "../../../lib/posterStructuredSeo";
@@ -321,6 +322,18 @@ const fetchPosterDetail = cache(async (id: string) => {
         .map((id) => regionMap[id])
         .filter(Boolean)
         .join(", ") || null,
+    // v6.1 tag (SPEC 7.2 "유형 / 지역 / 접수 상태"): "마포구", "서울", "전국".
+    regionTag: posterRegionTag(
+      regionIds.flatMap((id) =>
+        regions
+          .filter((region) => region.id === id && region.name)
+          .map((region) => ({
+            id: region.id,
+            name: region.name as string,
+            level: region.level,
+          })),
+      ),
+    ),
     images: images
       .map((image) => image.storage_path)
       .filter((path): path is string => Boolean(path)),

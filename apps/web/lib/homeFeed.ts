@@ -20,6 +20,10 @@ import { mixFeedImages } from "./posterFeed";
 import type { HomeEntry } from "./homeSections";
 import type { PlPosterCardData } from "../app/components/pl/PosterListCard";
 import { eventEnded, kstDateKey, type CardSchedule } from "./cardFacts";
+import { daysToSunday } from "./favoritesV61";
+
+/** Deadlines with evidence (SPEC 7.4 '마감일이 확인된 공고'). */
+const CONFIRMED_DEADLINE = new Set(["verified_time", "date_only"]);
 
 export const HOME_PAGE_SIZE = 12;
 export const ROW_LIMIT = 6;
@@ -115,6 +119,11 @@ export type HomeLayout = {
   chipCounts: Record<HomeChipId, number>;
   /** The chip the feed is narrowed to, if any. */
   chip: HomeChipId | null;
+  /**
+   * 찜 "이번 주에 마감되는 공고" (SPEC 7.4): confirmed deadlines closing by this
+   * Sunday (KST), soonest first. Only filled when asked for (`dueWeekLimit`).
+   */
+  dueWeek?: HomeCard[];
   /** True when the feed lists only posters published after `since`. */
   onlySince: boolean;
 };
@@ -273,6 +282,7 @@ export function buildHomeLayout({
   chip = null,
   onlySince = false,
   upperRows = true,
+  dueWeekLimit = 0,
 }: {
   posters: HomePoster[];
   now: Date;
@@ -295,6 +305,8 @@ export function buildHomeLayout({
    * posters then stay in the feed instead of being used up.
    */
   upperRows?: boolean;
+  /** How many "이번 주에 마감되는 공고" to return (0 = none). */
+  dueWeekLimit?: number;
 }): HomeLayout {
   const seenIds = new Set<string>();
   const open = posters
@@ -448,10 +460,24 @@ export function buildHomeLayout({
     }
     pages.push(blocks);
   }
+  // Not marked as used: the 찜 screen asks for these on their own.
+  const weekLeft = daysToSunday(now);
+  const dueWeek =
+    dueWeekLimit > 0
+      ? closing
+          .filter(
+            (poster) =>
+              CONFIRMED_DEADLINE.has(poster.presentation.state) &&
+              (poster.presentation.dday ?? 99) <= weekLeft,
+          )
+          .slice(0, dueWeekLimit)
+          .map(toCard)
+      : undefined;
   return {
     picks,
     deadline,
     followed,
+    ...(dueWeek ? { dueWeek } : {}),
     deadlineTotal: closing.length,
     // "접수 중 N건": the chosen region's open posters (SPEC 7.1).
     openTotal: open.filter(inRegion).length,

@@ -1,7 +1,9 @@
 "use client";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Bell, ChevronDown, ChevronRight, MapPin, Search } from "lucide-react";
+import { Bell, ChevronRight, Search } from "lucide-react";
+import type { BrowseRegion } from "../../../lib/browseRegion";
+import { RegionPicker } from "./RegionPicker";
 import type { HomeCard, HomeSectionId } from "../../../lib/homeFeed";
 import type { HomeChipId } from "../../../lib/homeChips";
 import type { FavoriteDeadlineLine } from "../../../lib/favoriteDeadlineLine";
@@ -20,29 +22,20 @@ import { cardDeadlineInput } from "../../../lib/posterDeadlineFields";
 /** Region title row; stays on screen while scrolling (SPEC 7.1). */
 export function HomeRegionBar({
   scopeLabel,
-  changeHref,
+  selectedId,
+  onChoose,
 }: {
   scopeLabel: string;
-  changeHref: string;
+  selectedId: string | null;
+  onChoose: (region: BrowseRegion) => void;
 }) {
   return (
     <div className="sticky top-0 z-20 -mx-4 flex h-12 items-center justify-between gap-2 bg-pl-paper/95 px-4 backdrop-blur md:static md:mx-0 md:h-auto md:bg-transparent md:px-0 md:backdrop-blur-none">
-      <Link
-        href={changeHref}
-        aria-label={`둘러보는 지역: ${scopeLabel}. 바꾸기`}
-        className="flex min-h-11 min-w-0 items-center gap-1.5 text-pl-ink"
-      >
-        <MapPin
-          size={22}
-          strokeWidth={2}
-          aria-hidden="true"
-          className="shrink-0"
-        />
-        <span className="truncate font-pl-serif text-[22px] font-bold leading-none md:text-[34px]">
-          {scopeLabel}
-        </span>
-        <ChevronDown size={18} aria-hidden="true" className="shrink-0" />
-      </Link>
+      <RegionPicker
+        label={scopeLabel}
+        selectedId={selectedId}
+        onChoose={onChoose}
+      />
       <div className="flex shrink-0 items-center md:hidden">
         <Link
           href="/posters"
@@ -69,6 +62,40 @@ export function HomeSubtitle({ openTotal }: { openTotal: number | null }) {
     <p className="text-[13px] text-pl-meta md:mt-2 md:text-[14px]">
       지원·강좌·행사
       {openTotal !== null && ` · 접수 중 ${openTotal.toLocaleString()}건`}
+    </p>
+  );
+}
+
+/**
+ * The browsed region has no posters of its own: say so, and that the list
+ * shows the wider ones ("부산 전체" → 전국; "서울 마포구" → 서울 전체·전국).
+ */
+export function RegionFallbackNote({
+  label,
+  fallback,
+  hasPosters,
+}: {
+  label: string;
+  fallback: "sido" | "nation";
+  /** False when the wider list is empty too: then only the first sentence. */
+  hasPosters: boolean;
+}) {
+  const place = label.replace(/ 전체$/, "");
+  const wider =
+    fallback === "nation" ? "전국" : `${label.split(" ")[0]} 전체·전국`;
+  return (
+    <p
+      role="status"
+      data-region-fallback={fallback}
+      className="mt-3 rounded-xl border border-pl-line bg-pl-card px-3.5 py-3 text-[14px] leading-6 text-pl-ink"
+    >
+      <strong className="font-semibold">아직 {place} 공고가 없어요.</strong>
+      {hasPosters && (
+        <>
+          {" "}
+          <span className="text-pl-sub">{wider} 공고를 보여 드려요.</span>
+        </>
+      )}
     </p>
   );
 }
