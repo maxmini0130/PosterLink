@@ -33,9 +33,16 @@
 - 실시간 조회 경로(공개 키, 읽기만)도 같은 결과(635 → 463 → 59).
 - 서울 전체 28건과 구 주민 한정 31건은 근거 문장을 전부 눈으로 확인했다. 첫 실행에서 '청년 및 은평구민 누구나'를 구 주민 한정으로 본 오판을 고쳐 review로 보냈다.
 
+## 운영 적용 (11-10 21:21 KST, 대표 승인 뒤 대표가 실행)
+
+- `--kinds=seoul_wide,gu_restricted`(기본), 범위 전체. 93개 쓰기 모두 성공: 서울 연결 추가 28, `basis` 65(eligibility 31, venue 23, related 7, institution 4).
+- 백업: `data/results/region-basis-backup-2026-11-10T12-21-49-421Z.json`.
+- 확인(읽기 전용): `poster_regions`에서 서울·eligibility 28, 구 연결 basis 65. 구에만 연결된 접수 중 공고 463 → 435.
+- 운영 홈(쓰기 차단 브라우저): 마포구 92 → 109건. 서울 연결이 생긴 26건 중 홈 조건(마감일 확인 상태, 행사 종료 여부 등)을 통과한 17건이 늘었다. 서울 전체 245건, 부산 전체 33건은 그대로.
+- 되돌리기: `node src/region-basis-backfill.js --rollback=data/results/region-basis-backup-2026-11-10T12-21-49-421Z.json --apply --confirm=REGION_BASIS_BACKFILL`
+
 ## 남은 작업
 
-- 대표 승인 뒤 운영 적용(사용자가 실행).
 - gu_preferred 8건, open 34건 처리 결정.
 - unknown 351건(서울시 산하 36건 포함): 원문에서 대상 문장을 다시 추출해야 판정 가능.
 - 크롤러가 새 공고에도 같은 판정으로 서울 연결·`basis`를 쓰도록 연결.
