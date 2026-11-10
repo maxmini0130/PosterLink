@@ -56,6 +56,20 @@ function toIsoDateTime(dateOnly) {
   return dateOnly ? normalizeIsoDate(`${dateOnly}T00:00:00.000Z`) : null;
 }
 
+const DATE_ONLY_VALUE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * A deadline known only by its date stays open through that whole day in
+ * Asia/Seoul. Stored as UTC midnight it would read as 09:00 and close then.
+ * Values that already carry a time are returned normalized, unchanged.
+ */
+export function toApplicationEndIso(value) {
+  const text = String(value ?? "").trim();
+  return DATE_ONLY_VALUE.test(text)
+    ? normalizeIsoDate(`${text}T23:59:59+09:00`)
+    : normalizeIsoDate(text);
+}
+
 function makeDateOnly(yearValue, monthValue, dayValue) {
   const year = Number(yearValue);
   const month = Number(monthValue);
@@ -604,6 +618,11 @@ export function buildStructuredPosterFields({
     sourceText: eventEvidenceText,
     yearHint,
   });
+  // Both the date-only input and a range inferred from the text have no time.
+  const applicationEndHasNoTime =
+    DATE_ONLY_VALUE.test(String(applicationEndAt ?? "").trim()) ||
+    (!normalizeIsoDate(applicationEndAt) &&
+      Boolean(inferredApplicationRange.applicationEndAt));
   const normalizedEndAt =
     normalizeIsoDate(applicationEndAt) ??
     inferredApplicationRange.applicationEndAt ??
@@ -699,7 +718,12 @@ export function buildStructuredPosterFields({
           sourceText,
         }),
     application_start_at: finalApplicationStartAt,
-    application_end_at: finalApplicationEndAt,
+    application_end_at:
+      applicationEndHasNoTime &&
+      finalApplicationEndAt &&
+      !singleEventDayApplicationFallback
+        ? toApplicationEndIso(finalApplicationEndAt.slice(0, 10))
+        : finalApplicationEndAt,
     event_start_at: normalizedEventStartAt,
     event_end_at: normalizedEventEndAt,
     eligibility_summary: eligibilitySummary,

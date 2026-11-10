@@ -3,7 +3,25 @@ import test from "node:test";
 
 import {
   inferSpecificTitle,
+  stripPortalMidnight,
 } from "./adapters/youth-seoul.js";
+
+test("the portal's 00:00 on a date-only notice is not kept as a time", () => {
+  assert.equal(
+    stripPortalMidnight("신청기간 2026-10-26 ~ 2026-11-12 00 : 00"),
+    "신청기간 2026-10-26 ~ 2026-11-12",
+  );
+  assert.equal(
+    stripPortalMidnight("신청기간 2026-05-08 ~ 2026-12-31 19 : 00 [ 선착순 마감 ]"),
+    "신청기간 2026-05-08 ~ 2026-12-31 19 : 00 [ 선착순 마감 ]",
+  );
+  // Only the application period line is touched.
+  assert.equal(
+    stripPortalMidnight("진행일정: 2026-11-12 00 : 00"),
+    "진행일정: 2026-11-12 00 : 00",
+  );
+  assert.equal(stripPortalMidnight("신청기간 상시"), "신청기간 상시");
+});
 import { shouldUseExternalNoticeDetail } from "./source-link-rules.js";
 
 test("application forms are links only, not canonical notice content", () => {

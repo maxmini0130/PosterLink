@@ -23,6 +23,8 @@
     "audit:date-periods": "node src/audit-date-period-mapping.js",
     "cleanup:stale-date-warnings": "node src/apply-stale-date-warning-cleanup.js",
     "apply:safe-missing-deadlines": "node src/apply-safe-missing-deadline-corrections.js",
+    "repair:date-only-deadlines": "node src/repair-date-only-deadlines.js",
+    "repair:summary-sentences": "node src/repair-summary-sentences.js",
     "apply:date-period-manual-corrections": "node src/apply-date-period-manual-corrections.js",
     "apply:contest-category-corrections": "node src/apply-contest-category-corrections.js",
     "apply:semantic-category-reclassification": "node src/reclassify-poster-categories.js",
