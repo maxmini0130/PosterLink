@@ -390,8 +390,7 @@ export default function AdminTrafficPage() {
     clientPlatforms.find((row) => row.key === "mobile_web")?.sessions ?? 0;
   const appSessions =
     clientPlatforms.find((row) => row.key === "app")?.sessions ?? 0;
-  const periodLabel =
-    days === 1 ? "오늘" : days === 365 ? "최근 1년" : `최근 ${days}일`;
+  const periodLabel = days === 1 ? "오늘" : `최근 ${days}일`;
   const scopeLabel = includeInternal
     ? "내부·자동 방문 포함"
     : "관리자·운영자·테스트·감지된 자동 접속 제외";

@@ -7,7 +7,11 @@ import {
   readTrafficTestBrowser,
 } from "../../lib/trafficTestBrowser";
 
-import { publicAnalyticsPath, sanitizedVisitQuery, safeReferrer } from "../../lib/analyticsPrivacy";
+import {
+  publicAnalyticsPath,
+  sanitizedVisitQuery,
+  safeReferrer,
+} from "../../lib/analyticsPrivacy";
 import { getSessionKey, getVisitorKey } from "../../lib/visitorIdentity";
 
 const AUTOMATION_SOURCE_KEY = "posterlink.automation_source";
