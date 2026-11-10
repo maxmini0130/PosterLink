@@ -26,9 +26,17 @@
 - 크롤러 테스트 345건 통과. 읽기 전용 운영 스냅샷으로 계획: 마감 24건, 요약 문장 3건.
 - Ignored Build Step 스크립트를 실제 커밋 7개와 이번 변경으로 시험(크롤러 전용·문서 전용은 건너뜀, 웹 변경·웹이 쓰는 파일 변경·재배포는 빌드).
 
+## 운영 보정 실행 (2026-11-10 12:50 KST, 사용자 직접 실행)
+
+- 마감 24건: 24/24 반영. 백업 `data/results/repair-date-only-deadlines-manifest-2026-11-10T03-50-26-032Z.json`.
+- 요약 문장 3건: 3/3 반영. 백업 `data/results/repair-summary-sentences-2026-11-10T03-51-12-722Z.json`.
+- 값 정정 2건(v6.1 작업 폴더, `deadline-verification-backfill.js --step=2 --existing-columns-only`): 강사단 `daae5af9` 마감 11-20 18:00, 교육 12-03 13:30~12-17 17:00. 취업 코칭 `2e812cc9` 마감 11-10 09:00(포스터 "11월 10일(화) 오전 9시까지" 확인). 백업은 v6.1 작업 폴더 `data/results/deadline-verification-step2-2026-11-10T03-51-21-022Z.json`.
+- 410b3a05: Supabase SQL 편집기로 `poster_status = closed`(1행).
+- 읽기 전용 확인: 24건 모두 23:59:59(24312656은 19:00), `cde477b0`은 11-10 23:59:59이고 운영 상세 화면에 "오늘 마감 D-Day"로 보임.
+- 남은 것: `980c16a1`, `f0065caf`의 `field_verification.readableNotice.summaryShort`에 예전 문장 사본이 남음. 웹 화면은 이 값을 읽지 않는다(`summary_short` 컬럼은 고쳐짐). 보정 대상에 넣을지는 별도 승인.
+
 ## 남은 작업
 
-- 운영 보정 실행(승인됨, 실행 환경 파일 확인 대기), 410b3a05 마감 처리.
 - 병합 뒤 Vercel 배포가 Ignored인지, Production이 그대로인지 확인.
 - 수집 수정이 배포될 때까지 `--daily` 보정.
 - 웹의 관리자 '크롤러 실행'은 건너뛴 배포 동안 예전 수집 코드를 쓴다.
