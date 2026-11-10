@@ -2,7 +2,8 @@
 /**
  * Replaces summary sentences that state a wrong deadline (SUMMARY_TEXT_FIXES
  * in date-only-deadline-manifest-20261110.js). Looks in summary_short,
- * summary_long, application_method and field_verification.readableNotice.facts.
+ * summary_long, application_method and the strings in
+ * field_verification.readableNotice (summaryShort, ...) and its facts.
  *
  * Dry-run unless --apply --confirm=REPAIR_SUMMARY_SENTENCES is given.
  *   --rollback=<file>   restores a backup this script wrote
@@ -52,19 +53,28 @@ export function planTextFix(row, fix) {
       after[column] = next;
     }
   }
-  const facts = row.field_verification?.readableNotice?.facts;
-  if (facts && typeof facts === "object") {
-    const changed = Object.entries(facts).filter(
-      ([, value]) => replaceAll(value, fix.from, fix.to) !== null,
-    );
-    if (changed.length) {
-      const verification = structuredClone(row.field_verification);
-      for (const [key, value] of changed)
-        verification.readableNotice.facts[key] = replaceAll(
-          value,
-          fix.from,
-          fix.to,
-        );
+  const notice = row.field_verification?.readableNotice;
+  const facts = notice?.facts;
+  if (notice && typeof notice === "object") {
+    const verification = structuredClone(row.field_verification);
+    let changed = false;
+    // readableNotice keeps copies of the summary (summaryShort, ...) next to facts.
+    for (const target of [
+      verification.readableNotice,
+      facts && typeof facts === "object"
+        ? verification.readableNotice.facts
+        : null,
+    ]) {
+      if (!target) continue;
+      for (const [key, value] of Object.entries(target)) {
+        const next = replaceAll(value, fix.from, fix.to);
+        if (next !== null) {
+          target[key] = next;
+          changed = true;
+        }
+      }
+    }
+    if (changed) {
       before.field_verification = row.field_verification;
       after.field_verification = verification;
     }
@@ -73,7 +83,7 @@ export function planTextFix(row, fix) {
   if (!fields.length) {
     const text = JSON.stringify([
       ...TEXT_COLUMNS.map((c) => row[c]),
-      facts ?? null,
+      notice ?? null,
     ]);
     return {
       id: fix.id,

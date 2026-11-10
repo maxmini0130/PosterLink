@@ -89,6 +89,35 @@ test("rollback restores only rows still holding the repaired text", () => {
   assert.equal(planRollback(edited, plan).action, "changed-since-repair");
 });
 
+test("fixes the summary copy kept in readableNotice when the columns are already fixed", () => {
+  const copyOnly = {
+    ...row,
+    summary_short: "특강입니다. 신청은 11월 12일(목)까지입니다.",
+    summary_long: "노트북 필요.",
+    field_verification: {
+      keep: 1,
+      readableNotice: {
+        summaryShort: "특강입니다. 신청 종료는 포털 기준 11월 12일 00시입니다.",
+        facts: { target: "청년" },
+      },
+    },
+  };
+  const plan = planTextFix(copyOnly, fix);
+  assert.equal(plan.action, "update");
+  assert.deepEqual(plan.fields, ["field_verification"]);
+  assert.equal(
+    plan.after.field_verification.readableNotice.summaryShort,
+    "특강입니다. 신청은 11월 12일(목)까지입니다.",
+  );
+  assert.deepEqual(plan.after.field_verification.readableNotice.facts, {
+    target: "청년",
+  });
+  assert.equal(
+    planTextFix({ ...copyOnly, ...plan.after }, fix).action,
+    "already",
+  );
+});
+
 test("text fixes point at posters in the deadline manifest", () => {
   const ids = new Set(
     [...DATE_ONLY_REPAIR_CHANGES, ...DATE_ONLY_REPAIR_KEEP].map(
