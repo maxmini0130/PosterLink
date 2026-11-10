@@ -22,6 +22,8 @@ import {
   type SignupFeature,
 } from "./productEventsCore";
 import { getSessionKey, getVisitorKey } from "./visitorIdentity";
+import * as Sentry from "@sentry/nextjs";
+import { createFailureGate, describeEventFailure } from "./productEventFailure";
 import { createIdentityLinker } from "./identityLinker";
 
 function client() {
@@ -49,11 +51,30 @@ export function trackProductEvent(
         p_metadata: sanitizeMetadata(options.metadata),
       })
       .then(
-        () => {},
-        () => {},
+        ({ error }) => {
+          if (error) reportEventFailure(name, error);
+        },
+        (error: unknown) => reportEventFailure(name, error),
       );
   } catch {
     /* storage or client unavailable */
+  }
+}
+
+const shouldReport = createFailureGate();
+
+/** A lost event is a warning in Sentry; the person's action is never interrupted. */
+function reportEventFailure(name: ProductEventName, error: unknown) {
+  try {
+    const failure = describeEventFailure(name, error);
+    if (!shouldReport(failure)) return;
+    Sentry.captureMessage("product_event_failed", {
+      level: "warning",
+      tags: { product_event: failure.event, error_code: failure.code },
+      extra: { message: failure.message },
+    });
+  } catch {
+    /* reporting must never throw */
   }
 }
 
