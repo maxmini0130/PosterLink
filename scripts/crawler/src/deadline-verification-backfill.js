@@ -91,7 +91,8 @@ export function receptionVerifiedByRule(row, today) {
 /**
  * A-1 keeps the dates of posters that existed when it was decided. A poster
  * collected later gets its status from where the crawler read the date
- * (portal field: date confirmed; text or summary: unverified), not from here.
+ * (portal field: date confirmed, and its time when the field states one;
+ * text or summary: unverified), not from here.
  */
 export const LEGACY_CUTOFF = "2026-11-10T00:00:00+09:00";
 

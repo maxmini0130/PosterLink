@@ -131,6 +131,7 @@ export const DEADLINE_VERIFICATION_OVERRIDES = [
     why: "2026-11-10 원문 대조: 포털 ~2026-12-31 19 : 00 (포스터에는 마감 표기 없음)",
     deadline_status: "verified",
     deadline_source: "portal",
+    deadline_time_verified: true,
   },
   {
     id: "87190372-a96c-4615-904f-6fb1e99c820b",

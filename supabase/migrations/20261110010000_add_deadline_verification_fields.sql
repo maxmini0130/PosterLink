@@ -11,7 +11,7 @@
 --     unknown type as "일정 확인 필요", so that move waits for the new screens).
 -- application_end_at stays the single deadline value. A date-only deadline is
 -- stored at 23:59:59 Asia/Seoul; deadline_time_verified says whether the time
--- part was confirmed from the notice, poster or application page.
+-- part was confirmed from the portal field, notice, poster or application page.
 --
 -- No policy change: the columns follow the existing posters RLS, and
 -- search_public_posters returns SETOF posters, so readers get them as they are.
@@ -33,7 +33,8 @@ ALTER TABLE public.posters DROP CONSTRAINT IF EXISTS posters_deadline_status_che
 ALTER TABLE public.posters ADD CONSTRAINT posters_deadline_status_check
   CHECK (deadline_status IN ('verified', 'unverified', 'conflict'));
 
--- portal: the official portal's application-period field (date only).
+-- portal: the official portal's structured application-period field. Its time
+--   counts only when the field states one; 00:00 and 23:59:59 are not times.
 -- notice / poster / apply_page: read by a person from that source.
 -- legacy: a date kept from before 2026-11-10 (A-1); the date is shown, never a time.
 ALTER TABLE public.posters DROP CONSTRAINT IF EXISTS posters_deadline_source_check;
@@ -47,7 +48,7 @@ ALTER TABLE public.posters ADD CONSTRAINT posters_deadline_time_verified_check
   CHECK (NOT deadline_time_verified OR (
     deadline_status = 'verified'
     AND application_end_at IS NOT NULL
-    AND deadline_source IN ('notice', 'poster', 'apply_page', 'operator')
+    AND deadline_source IN ('portal', 'notice', 'poster', 'apply_page', 'operator')
   ));
 
 ALTER TABLE public.posters DROP CONSTRAINT IF EXISTS posters_deadline_text_length_check;
@@ -73,7 +74,7 @@ CREATE INDEX IF NOT EXISTS posters_deadline_review_queue_idx
 COMMENT ON COLUMN public.posters.deadline_status IS
   'verified / unverified / conflict: whether the deadline date is confirmed (SPEC 4.1).';
 COMMENT ON COLUMN public.posters.deadline_time_verified IS
-  'True only when the time of application_end_at was read from the notice, poster or application page. A stored 23:59:59 alone means date only.';
+  'True only when the time of application_end_at was read from the portal field, notice, poster or application page. A stored 23:59:59 alone means date only.';
 COMMENT ON COLUMN public.posters.deadline_source IS
   'Where the deadline date (and time, if verified) was read: portal, notice, poster, apply_page, operator, legacy.';
 COMMENT ON COLUMN public.posters.reception_verified IS

@@ -81,11 +81,15 @@ test("a verified time needs a verified date and a readable source", async () => 
       "UPDATE posters SET deadline_time_verified = true WHERE title = 'old fixed'",
     ),
   );
-  // Not allowed: a portal or legacy date cannot carry a verified time.
+  // Not allowed: a legacy date cannot carry a verified time.
   await assert.rejects(
     db.exec(
       "UPDATE posters SET deadline_status = 'verified', deadline_source = 'legacy', deadline_time_verified = true WHERE title = 'old fixed'",
     ),
+  );
+  // Allowed: a portal field that states a time (K-Startup "2026-11-10 14:00").
+  await db.exec(
+    "UPDATE posters SET deadline_status = 'verified', deadline_source = 'portal', deadline_time_verified = true WHERE title = 'old fixed'",
   );
   await db.exec(
     "UPDATE posters SET deadline_status = 'verified', deadline_source = 'poster', deadline_time_verified = true WHERE title = 'old fixed'",

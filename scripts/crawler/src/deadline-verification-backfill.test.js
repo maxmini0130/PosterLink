@@ -121,7 +121,7 @@ test("overrides are well formed", () => {
     // A verified time always names where it was read.
     if (item.deadline_time_verified)
       assert.ok(
-        ["notice", "poster", "apply_page", "operator"].includes(
+        ["portal", "notice", "poster", "apply_page", "operator"].includes(
           item.deadline_source,
         ),
       );
