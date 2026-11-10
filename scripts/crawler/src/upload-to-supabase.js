@@ -63,7 +63,7 @@ import {
   resolveCanonicalSource,
   sanitizeKnownShortUrl,
 } from "./source-link-rules.js";
-import { buildStructuredPosterFields } from "./poster-structured-fields.js";
+import { buildStructuredPosterFields, toApplicationEndIso } from "./poster-structured-fields.js";
 import {
   buildCardFacts,
   buildCardFactsInputFromUpload,
@@ -1456,7 +1456,7 @@ async function upsertNoticeCandidate(post, {
     category_name: post.category ?? null,
     notice_date: toIsoOrNull(post.date ?? post.createdAt ?? post.publishedAt),
     application_start_at: deadlineParse?.applyStart ? toIsoOrNull(deadlineParse.applyStart) : null,
-    application_end_at: applyEndAt ? toIsoOrNull(applyEndAt) : null,
+    application_end_at: applyEndAt ? toApplicationEndIso(applyEndAt) : null,
     reason: "poster image missing; stored as notice candidate",
     quality_issues: quality?.issues ?? [],
     field_verification: enrichedFieldVerification,

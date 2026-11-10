@@ -39,6 +39,18 @@ function isInvalidDetailTitle(value) {
   );
 }
 
+/**
+ * The portal header shows "신청기간 2026-10-26 ~ 2026-11-12 00 : 00" for a
+ * notice that gives only a date. That 00:00 is not a time from the notice, so
+ * it is dropped before the text becomes evidence or a summary; a real time
+ * (e.g. "19 : 00") is kept.
+ */
+export function stripPortalMidnight(text) {
+  const value = String(text ?? "");
+  if (!/^\s*신청\s*기간/.test(value)) return value;
+  return value.replace(/(\d{4}-\d{2}-\d{2})\s*00\s*:\s*00(?!\s*:?\s*\d)/g, "$1");
+}
+
 export function choosePreferredDetailTitle(youthTitle, externalTitle) {
   const youth = cleanText(youthTitle);
   const external = cleanText(externalTitle);
@@ -198,7 +210,7 @@ export default {
     const overviewText = cleanText($(".feed-view .overview").first().text());
     const schedule = extractYouthSchedule($);
     const overviewEvidence = $(".feed-view .overview .info li")
-      .map((_, el) => cleanText($(el).text())).get()
+      .map((_, el) => stripPortalMidnight(cleanText($(el).text()))).get()
       .filter((value) => value && value !== "진행일정");
     if (schedule) overviewEvidence.push(`진행일정: ${schedule} (Asia/Seoul)`);
     const detailText = cleanText($(".feed-view .detail").first().text());
