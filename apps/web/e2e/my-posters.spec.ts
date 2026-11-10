@@ -220,7 +220,7 @@ test("guest: this browser's favorites, no account tabs, 찜 취소", async ({
   await expect(
     page
       .getByRole("navigation", { name: "주요 탐색" })
-      .getByRole("link", { name: "내 공고" }),
+      .getByRole("link", { name: "찜", exact: true }),
   ).toHaveAttribute("aria-current", "page");
 });
 
@@ -308,7 +308,7 @@ test("PC account menu opens, moves with keys and closes", async ({ page }) => {
   await expect(
     page
       .getByRole("navigation", { name: "주요 메뉴" })
-      .getByRole("link", { name: "내 공고" }),
+      .getByRole("link", { name: "찜", exact: true }),
   ).toHaveAttribute("aria-current", "page");
 });
 

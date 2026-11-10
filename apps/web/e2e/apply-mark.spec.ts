@@ -108,3 +108,45 @@ test("return prompt: asked once after the application page, hides the bar button
   }
   test.skip(!found, "no open poster with an application page on the home");
 });
+
+test("찜: applied posters gather in 신청한 공고, and undo puts them back", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/", { waitUntil: "networkidle" });
+  const ids = await page
+    .locator("[data-home-grid] [data-feed-card]")
+    .evaluateAll((els) =>
+      els.slice(0, 3).map((el) => (el as HTMLElement).dataset.feedCard!),
+    );
+  test.skip(ids.length < 3, "not enough open posters on the home");
+  await page.evaluate((list) => {
+    const now = Date.now();
+    localStorage.setItem(
+      "pl.guest_favorites.v1",
+      JSON.stringify({
+        v: 1,
+        items: list.map((posterId, i) => ({ posterId, savedAt: now - i })),
+      }),
+    );
+    localStorage.setItem(
+      "pl.guest_applied.v1",
+      JSON.stringify({ v: 1, items: [{ posterId: list[0], appliedAt: now }] }),
+    );
+  }, ids);
+  await page.goto("/my-posters", { waitUntil: "networkidle" });
+  await expect(
+    page.getByRole("heading", { name: "찜", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/^접수 중 \d+건 · 이번 주 마감 \d+건$/),
+  ).toBeVisible();
+  const applied = page.locator('[data-fav-group="fav-applied"]');
+  await expect(
+    applied.locator(`[data-favorite-row="${ids[0]}"]`),
+  ).toBeVisible();
+  await applied.getByRole("button", { name: "되돌리기" }).click();
+  await expect(applied).toHaveCount(0);
+  // Still a favourite: the row moved, it did not disappear.
+  await expect(page.locator(`[data-favorite-row="${ids[0]}"]`)).toBeVisible();
+});

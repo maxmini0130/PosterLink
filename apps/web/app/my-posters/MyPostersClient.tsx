@@ -45,16 +45,26 @@ import {
   type UserStatus,
 } from "../../lib/myPosters";
 import { trackProductEvent } from "../../lib/productEvents";
-import { getDeadlineDisplay } from "../../lib/deadlineDisplay";
+import { readGuestApplied } from "../../lib/appliedPosters";
+import { markApplied, unmarkApplied } from "../lib/appliedClient";
+import { saveGuestFavorite } from "../lib/guestSession";
+import { showActionToast } from "../components/pl/actionToast";
+import { FavoritesV61, type FavoriteCard } from "./FavoritesV61";
 
 type Favorite = { card: PlPosterCardData; status: UserStatus };
 type Institution = { id: string; name: string; slug: string };
-type Tab = "favorites" | "applied" | "following";
+type Tab = "favorites" | "following";
 
 type State =
   | { phase: "loading" }
   | { phase: "error" }
-  | { phase: "guest"; cards: PlPosterCardData[]; count: number }
+  | {
+      phase: "guest";
+      /** This browser's favourites and 신청했어요 marks (a mark alone also shows). */
+      entries: Array<{ card: FavoriteCard; applied: boolean }>;
+      favoriteIds: ReadonlySet<string>;
+      count: number;
+    }
   | {
       phase: "member";
       userId: string;
@@ -142,10 +152,20 @@ async function loadMember(userId: string): Promise<State> {
 }
 
 async function loadGuest(): Promise<State> {
-  const ids = readGuestFavorites(guestLocal).map((item) => item.posterId);
+  const favoriteIds = readGuestFavorites(guestLocal).map(
+    (item) => item.posterId,
+  );
+  const appliedIds = readGuestApplied(guestLocal).map((item) => item.posterId);
+  const ids = [...new Set([...favoriteIds, ...appliedIds])];
   const cards = await loadPosterCards(ids);
   if (!cards) return { phase: "error" };
-  return { phase: "guest", cards, count: ids.length };
+  const applied = new Set(appliedIds);
+  return {
+    phase: "guest",
+    entries: cards.map((card) => ({ card, applied: applied.has(card.id) })),
+    favoriteIds: new Set(favoriteIds),
+    count: favoriteIds.length,
+  };
 }
 
 export function MyPostersClient() {
@@ -192,21 +212,51 @@ export function MyPostersClient() {
     };
   }, [load]);
 
-  const removeGuest = (posterId: string) => {
-    forgetGuestFavorite(posterId);
-    trackProductEvent("favorite_remove", {
+  const toggleGuestFavorite = (posterId: string) => {
+    if (state.phase !== "guest") return;
+    const saved = state.favoriteIds.has(posterId);
+    if (saved) forgetGuestFavorite(posterId);
+    else if (!saveGuestFavorite(posterId)) {
+      toast.error("이 기기에 저장하지 못했어요");
+      return;
+    }
+    trackProductEvent(saved ? "favorite_remove" : "favorite_add", {
       posterId,
       metadata: { screen: "favorites", logged_in: false },
     });
-    setState((current) =>
-      current.phase === "guest"
-        ? {
-            ...current,
-            cards: current.cards.filter((card) => card.id !== posterId),
-            count: current.count - 1,
-          }
-        : current,
+    void load();
+  };
+
+  // v6.1 신청 표시 from a row (SPEC 5, 9 "찜 이동"). The groups are read again
+  // after the write, so the row moves at once.
+  const mark = async (posterId: string) => {
+    let ok = false;
+    await write(async () => {
+      setBusyId(posterId);
+      ok = await markApplied(posterId, "favorites");
+      setBusyId(null);
+    });
+    if (!ok) {
+      toast.error("표시를 저장하지 못했어요. 잠시 후 다시 시도해 주세요.");
+      return;
+    }
+    await load();
+    showActionToast(
+      "'신청한 공고'로 옮겼어요",
+      { label: "되돌리기", onClick: () => void unmark(posterId) },
+      { id: "fav-moved" },
     );
+  };
+
+  const unmark = async (posterId: string) => {
+    let ok = false;
+    await write(async () => {
+      setBusyId(posterId);
+      ok = await unmarkApplied(posterId, "favorites");
+      setBusyId(null);
+    });
+    if (!ok) toast.error("되돌리지 못했어요. 잠시 후 다시 시도해 주세요.");
+    await load();
   };
 
   const removeMember = (userId: string, posterId: string) =>
@@ -234,44 +284,6 @@ export function MyPostersClient() {
             ...current,
             favorites: current.favorites.filter(
               (entry) => entry.card.id !== posterId,
-            ),
-          }
-        : current,
-    );
-  };
-
-  const setApplied = (userId: string, posterId: string, status: UserStatus) =>
-    write(() => setAppliedNow(userId, posterId, status));
-
-  const setAppliedNow = async (
-    userId: string,
-    posterId: string,
-    status: UserStatus,
-  ) => {
-    setBusyId(posterId);
-    const { error } = await supabase
-      .from("favorites")
-      .update({
-        user_status: status,
-        user_status_updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", userId)
-      .eq("poster_id", posterId);
-    setBusyId(null);
-    if (error) {
-      toast.error("표시를 저장하지 못했어요. 잠시 후 다시 시도해 주세요.");
-      return;
-    }
-    trackProductEvent("apply_status_set", {
-      posterId,
-      metadata: { screen: "favorites", status, logged_in: true },
-    });
-    setState((current) =>
-      current.phase === "member"
-        ? {
-            ...current,
-            favorites: current.favorites.map((entry) =>
-              entry.card.id === posterId ? { ...entry, status } : entry,
             ),
           }
         : current,
@@ -309,13 +321,14 @@ export function MyPostersClient() {
             }}
             busyId={busyId}
             onRemove={(posterId) => void removeMember(state.userId, posterId)}
-            onApply={(posterId, status) =>
-              void setApplied(state.userId, posterId, status)
-            }
+            onMark={(posterId) => void mark(posterId)}
+            onUnmark={(posterId) => void unmark(posterId)}
           />
         ) : (
           <>
-            <h1 className="font-pl-serif text-[23px] font-bold">내 공고</h1>
+            {state.phase !== "guest" && (
+              <h1 className="font-pl-serif text-[26px] font-bold">찜</h1>
+            )}
             {state.phase === "loading" && (
               <p className="mt-6 text-sm text-pl-sub" role="status">
                 불러오는 중이에요…
@@ -331,7 +344,10 @@ export function MyPostersClient() {
             {state.phase === "guest" && (
               <GuestView
                 state={state}
-                onRemove={removeGuest}
+                busyId={busyId}
+                onToggleFavorite={toggleGuestFavorite}
+                onMark={(posterId) => void mark(posterId)}
+                onUnmark={(posterId) => void unmark(posterId)}
                 onSignIn={signIn}
               />
             )}
@@ -346,77 +362,65 @@ export function MyPostersClient() {
 
 function GuestView({
   state,
-  onRemove,
+  busyId,
+  onToggleFavorite,
+  onMark,
+  onUnmark,
   onSignIn,
 }: {
   state: Extract<State, { phase: "guest" }>;
-  onRemove: (posterId: string) => void;
+  busyId: string | null;
+  onToggleFavorite: (posterId: string) => void;
+  onMark: (posterId: string) => void;
+  onUnmark: (posterId: string) => void;
   onSignIn: () => void;
 }) {
   return (
-    <div className="mt-5 space-y-6">
-      <section
-        aria-labelledby="guest-keep"
-        className="rounded-xl border border-pl-line bg-pl-card p-4"
-      >
-        <h2 id="guest-keep" className="text-[15px] font-bold">
-          이 기기에 찜한 공고 {state.count}개
-        </h2>
-        <p className="mt-1 text-sm leading-6 text-pl-sub">
-          계정에 보관하면 다른 기기에서도 이어서 보고, 마감 알림과 신청 표시도
-          쓸 수 있어요.
-        </p>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={onSignIn}
-            className="min-h-[48px] rounded-lg bg-kakao px-5 font-bold text-kakao-text"
-          >
-            카카오로 계속하기
-          </button>
-          <Link
-            href="/login"
-            className="inline-flex min-h-[44px] items-center text-sm font-medium underline underline-offset-2"
-          >
-            다른 방법으로 로그인
-          </Link>
-        </div>
-      </section>
-
-      {state.cards.length > 0 ? (
-        <ul className="grid gap-2.5 md:grid-cols-[repeat(auto-fill,minmax(340px,1fr))]">
-          {state.cards.map((card) => (
-            <li key={card.id}>
-              <PosterListCard
-                poster={card}
-                source="favorites"
-                badge="이 기기에 저장됨"
-                footer={
-                  <button
-                    type="button"
-                    onClick={() => onRemove(card.id)}
-                    className="inline-flex min-h-[44px] items-center text-sm text-pl-sub underline underline-offset-2"
-                  >
-                    찜 취소
-                  </button>
-                }
-              />
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <GuideCard
-          title="아직 찜한 공고가 없어요"
-          action={{ href: "/posters", label: "공고 둘러보기" }}
+    <div className="space-y-6">
+      <FavoritesV61
+        entries={state.entries}
+        actions={{
+          favoriteIds: state.favoriteIds,
+          busyId,
+          onToggleFavorite,
+          onMark,
+          onUnmark,
+        }}
+      />
+      {state.entries.length > 0 && (
+        <section
+          aria-labelledby="guest-keep"
+          className="rounded-xl border border-pl-line bg-pl-card p-4"
         >
-          마음에 드는 공고를 찜해 두면 여기에서 모아 볼 수 있어요.
-        </GuideCard>
+          <h2 id="guest-keep" className="m-0 text-[15px] font-bold">
+            이 기기에 찜한 공고 {state.count}개
+          </h2>
+          <p className="m-0 mt-1 text-sm leading-6 text-pl-sub">
+            계정에 보관하면 다른 기기에서도 이어서 볼 수 있어요. 신청 표시도
+            함께 옮겨져요.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={onSignIn}
+              className="min-h-[48px] rounded-lg bg-kakao px-5 font-bold text-kakao-text"
+            >
+              카카오로 계속하기
+            </button>
+            <Link
+              href="/login"
+              className="inline-flex min-h-[44px] items-center text-sm font-medium underline underline-offset-2"
+            >
+              다른 방법으로 로그인
+            </Link>
+          </div>
+        </section>
       )}
     </div>
   );
 }
 
-const TAB_ORDER: Tab[] = ["favorites", "applied", "following"];
+const TAB_ORDER: Tab[] = ["favorites", "following"];
 
 function MemberView({
   state,
@@ -428,7 +432,8 @@ function MemberView({
   onDiscardUnmoved,
   busyId,
   onRemove,
-  onApply,
+  onMark,
+  onUnmark,
 }: {
   state: Extract<State, { phase: "member" }>;
   tab: Tab;
@@ -439,120 +444,73 @@ function MemberView({
   onDiscardUnmoved: () => void;
   busyId: string | null;
   onRemove: (posterId: string) => void;
-  onApply: (posterId: string, status: UserStatus) => void;
+  onMark: (posterId: string) => void;
+  onUnmark: (posterId: string) => void;
 }) {
-  const applied = state.favorites.filter((entry) => entry.status === "applied");
   const tabs: Array<{ key: Tab; label: string; count: number }> = [
     { key: "favorites", label: "찜", count: state.favorites.length },
-    ...(state.applySupported
-      ? [{ key: "applied" as const, label: "신청 표시", count: applied.length }]
-      : []),
-    { key: "following", label: "팔로우 기관", count: state.institutions.length },
+    {
+      key: "following",
+      label: "팔로우 기관",
+      count: state.institutions.length,
+    },
   ];
-  const visible = tabs.some((entry) => entry.key === tab) ? tab : "favorites";
+  const visible = tab;
 
   const onTabKey = (event: KeyboardEvent<HTMLButtonElement>) => {
     if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
     event.preventDefault();
-    const keys = TAB_ORDER.filter((key) =>
-      tabs.some((entry) => entry.key === key),
-    );
-    const index = keys.indexOf(visible);
+    const index = TAB_ORDER.indexOf(visible);
     const next =
-      keys[
-        (index + (event.key === "ArrowRight" ? 1 : -1) + keys.length) %
-          keys.length
+      TAB_ORDER[
+        (index + (event.key === "ArrowRight" ? 1 : -1) + TAB_ORDER.length) %
+          TAB_ORDER.length
       ];
     setTab(next);
     document.getElementById(`my-tab-${next}`)?.focus();
   };
 
-  const card = (entry: Favorite, showRecordNote = false) => {
-    const note = noDateNote(
-      getDeadlineDisplay(cardApplicationInput(entry.card)),
-    );
-    return (
-      <PosterListCard
-        poster={entry.card}
-        source="favorites"
-        footer={
-          <div className="flex flex-col gap-2">
-            {note && <p className="text-xs text-pl-sub">{note}</p>}
-            {showRecordNote && entry.status === "applied" && (
-              <p className="text-xs text-pl-sub">
-                내가 직접 표시한 기록이에요. 공고가 끝나도 그대로 남아요.
-              </p>
-            )}
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              {state.applySupported ? (
-                <ApplyMark
-                  marked={entry.status === "applied"}
-                  busy={busyId === entry.card.id}
-                  onMark={() => onApply(entry.card.id, "applied")}
-                  onUnmark={() => onApply(entry.card.id, "interested")}
-                />
-              ) : (
-                <span />
-              )}
-              <button
-                type="button"
-                disabled={busyId === entry.card.id}
-                onClick={() => onRemove(entry.card.id)}
-                className="inline-flex min-h-[44px] items-center text-sm text-pl-sub underline underline-offset-2 disabled:opacity-60"
-              >
-                찜 취소
-              </button>
-            </div>
-          </div>
-        }
-      />
-    );
-  };
-
   return (
     <>
-      <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-end md:justify-between">
-        <h1 className="order-1 font-pl-serif text-[23px] font-bold xl:text-[28px]">
-          내 공고
-        </h1>
-        {mergedCount !== null && (
-          <div
-            role="status"
-            className="order-2 flex items-center justify-between gap-3 rounded-xl bg-pl-ink px-4 py-3 text-sm text-white md:order-3 md:w-full"
+      {mergedCount !== null && (
+        <div
+          role="status"
+          className="mb-4 flex items-center justify-between gap-3 rounded-xl bg-pl-ink px-4 py-3 text-sm text-white"
+        >
+          <span>이 기기에 찜한 공고 {mergedCount}개를 계정으로 옮겼어요</span>
+          <button
+            type="button"
+            aria-label="안내 닫기"
+            onClick={onDismissNotice}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg"
           >
-            <span>이 기기에 찜한 공고 {mergedCount}개를 계정으로 옮겼어요</span>
-            <button
-              type="button"
-              aria-label="안내 닫기"
-              onClick={onDismissNotice}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg"
-            >
-              <X size={18} aria-hidden="true" />
-            </button>
-          </div>
-        )}
-        {unmovedCount > 0 && (
-          <div
-            role="status"
-            className="order-2 flex flex-col gap-2 rounded-xl border border-pl-line bg-pl-card px-4 py-3 text-sm text-pl-ink sm:flex-row sm:items-center sm:justify-between md:order-4 md:w-full"
+            <X size={18} aria-hidden="true" />
+          </button>
+        </div>
+      )}
+      {unmovedCount > 0 && (
+        <div
+          role="status"
+          className="mb-4 flex flex-col gap-2 rounded-xl border border-pl-line bg-pl-card px-4 py-3 text-sm text-pl-ink sm:flex-row sm:items-center sm:justify-between"
+        >
+          <span>
+            이 기기에 찜한 공고 {unmovedCount}개는 삭제되었거나 지금 볼 수 없는
+            공고라 계정으로 옮기지 못했어요.
+          </span>
+          <button
+            type="button"
+            onClick={onDiscardUnmoved}
+            className="inline-flex min-h-[44px] shrink-0 items-center self-start rounded-lg border border-pl-line px-3 font-medium sm:self-auto"
           >
-            <span>
-              이 기기에 찜한 공고 {unmovedCount}개는 삭제되었거나 지금 볼 수
-              없는 공고라 계정으로 옮기지 못했어요.
-            </span>
-            <button
-              type="button"
-              onClick={onDiscardUnmoved}
-              className="inline-flex min-h-[44px] shrink-0 items-center self-start rounded-lg border border-pl-line px-3 font-medium sm:self-auto"
-            >
-              이 기기에서 지우기
-            </button>
-          </div>
-        )}
+            이 기기에서 지우기
+          </button>
+        </div>
+      )}
+      {state.institutions.length > 0 && (
         <div
           role="tablist"
-          aria-label="내 공고 목록"
-          className="order-3 flex gap-1 overflow-x-auto md:order-2"
+          aria-label="찜 목록"
+          className="mb-4 flex gap-1 overflow-x-auto"
         >
           {tabs.map((entry) => (
             <button
@@ -575,100 +533,57 @@ function MemberView({
             </button>
           ))}
         </div>
-      </div>
+      )}
 
       <div
         id="my-panel-favorites"
-        role="tabpanel"
-        aria-labelledby="my-tab-favorites"
+        role={state.institutions.length > 0 ? "tabpanel" : undefined}
+        aria-labelledby={
+          state.institutions.length > 0 ? "my-tab-favorites" : undefined
+        }
         hidden={visible !== "favorites"}
-        className="mt-6 space-y-7"
       >
-        {state.favorites.length === 0 ? (
-          <GuideCard
-            title="아직 찜한 공고가 없어요"
-            action={{ href: "/posters", label: "공고 둘러보기" }}
-          >
-            마음에 드는 공고를 찜해 두면 접수 상태별로 모아 보여드려요.
-          </GuideCard>
-        ) : (
-          groupByReception(state.favorites, (entry) =>
-            cardApplicationInput(entry.card),
-          ).map((group) => (
-            <section key={group.key} aria-labelledby={`group-${group.key}`}>
-              <SectionHeader
-                id={`group-${group.key}`}
-                title={`${group.label} ${group.items.length}`}
-              />
-              <ul className="grid gap-2.5 md:grid-cols-[repeat(auto-fill,minmax(340px,1fr))]">
-                {group.items.map(({ item }) => (
-                  <li key={item.card.id}>{card(item)}</li>
-                ))}
-              </ul>
-            </section>
-          ))
-        )}
+        <FavoritesV61
+          entries={state.favorites.map((entry) => ({
+            card: entry.card,
+            applied: entry.status === "applied",
+          }))}
+          actions={{
+            favoriteIds: new Set(state.favorites.map((entry) => entry.card.id)),
+            busyId,
+            onToggleFavorite: onRemove,
+            onMark,
+            onUnmark,
+          }}
+        />
       </div>
-
-      {state.applySupported && (
-        <div
-          id="my-panel-applied"
-          role="tabpanel"
-          aria-labelledby="my-tab-applied"
-          hidden={visible !== "applied"}
-          className="mt-6"
-        >
-          {applied.length === 0 ? (
-            <GuideCard title="신청 표시한 공고가 없어요">
-              신청을 마친 공고에 직접 &lsquo;신청했어요&rsquo;를 표시해 두면
-              여기에서 모아 볼 수 있어요.
-            </GuideCard>
-          ) : (
-            <ul className="grid gap-2.5 md:grid-cols-[repeat(auto-fill,minmax(340px,1fr))]">
-              {applied.map((entry) => (
-                <li key={entry.card.id}>{card(entry, true)}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
 
       <div
         id="my-panel-following"
         role="tabpanel"
         aria-labelledby="my-tab-following"
         hidden={visible !== "following"}
-        className="mt-6"
       >
-        {state.institutions.length === 0 ? (
-          <GuideCard
-            title="자주 보는 기관을 팔로우해 보세요"
-            action={{ href: "/institutions", label: "기관 둘러보기" }}
-          >
-            팔로우한 기관의 새 공고를 모아 볼 수 있어요.
-          </GuideCard>
-        ) : (
-          <ul className="grid gap-2.5 md:grid-cols-[repeat(auto-fill,minmax(340px,1fr))]">
-            {state.institutions.map((institution) => (
-              <li
-                key={institution.id}
-                className="flex items-center gap-3 rounded-xl border border-pl-line bg-pl-card p-3"
+        <ul className="grid gap-2.5 md:grid-cols-[repeat(auto-fill,minmax(340px,1fr))]">
+          {state.institutions.map((institution) => (
+            <li
+              key={institution.id}
+              className="flex items-center gap-3 rounded-xl border border-pl-line bg-pl-card p-3"
+            >
+              <Link
+                href={`/institutions/${institution.slug}`}
+                className="min-w-0 flex-1 truncate text-[15px] font-bold underline-offset-2 hover:underline"
               >
-                <Link
-                  href={`/institutions/${institution.slug}`}
-                  className="min-w-0 flex-1 truncate text-[15px] font-bold underline-offset-2 hover:underline"
-                >
-                  {institution.name}
-                </Link>
-                <InstitutionFollowButton
-                  institutionId={institution.id}
-                  returnPath={RETURN_TO}
-                  variant="pl"
-                />
-              </li>
-            ))}
-          </ul>
-        )}
+                {institution.name}
+              </Link>
+              <InstitutionFollowButton
+                institutionId={institution.id}
+                returnPath={RETURN_TO}
+                variant="pl"
+              />
+            </li>
+          ))}
+        </ul>
       </div>
     </>
   );

@@ -424,7 +424,7 @@ test("full flow on a phone: guest 찜 → later → 내 공고 → sign-in → m
   await page.getByRole("button", { name: "뒤로 가기" }).click();
   await page
     .getByRole("navigation", { name: "주요 탐색" })
-    .getByRole("link", { name: "내 공고" })
+    .getByRole("link", { name: "찜", exact: true })
     .click();
   await expect(
     page.getByRole("heading", { name: "이 기기에 찜한 공고 1개" }),

@@ -63,7 +63,7 @@ export function Header() {
           <HeaderNavLink href="/posters" label="찾기" current={pathname === "/posters"} />
           <HeaderNavLink
             href="/my-posters"
-            label="내 공고"
+            label="찜"
             current={pathname.startsWith("/my-posters") || pathname.startsWith("/favorites")}
           />
           <HeaderNavLink href="/institutions" label="기관 찾기" current={pathname.startsWith("/institutions")} />
