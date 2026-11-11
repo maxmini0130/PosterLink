@@ -67,17 +67,31 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Cache CLIP model/pip cache
+      # Model weights only. The pip cache is no longer kept: it held 2.6GB of
+      # old CUDA wheels that were restored every run and never used, because
+      # the unpinned requirements resolve to newer versions anyway.
+      - name: Cache CLIP model weights
         uses: actions/cache@v4
         with:
           path: |
-            ~/.cache/pip
             ~/.cache/huggingface
             ~/.cache/clip
-          key: clip-deps-${{ runner.os }}-${{ hashFiles('scripts/crawler/ml/requirements.txt') }}
+          key: clip-models-v2-${{ runner.os }}-${{ hashFiles('scripts/crawler/ml/requirements.txt') }}
 
+      - name: Disk before CLIP install
+        run: df -h / | tail -1
+
+      # The runner has no GPU. The default PyPI torch pulls ~3GB of CUDA/NVIDIA
+      # wheels (~10GB with the pip cache and unpacked files), which filled the
+      # runner disk ("No space left on device", 2026-09/10). Install the CPU
+      # build first (~200MB); the rest of the requirements then keep it.
+      # clip_classify.py / predict_poster.py fall back to CPU when CUDA is absent.
       - name: Install CLIP triage dependencies (SNS_INGESTION.md Phase 2 Stage 2)
-        run: pip install -r ml/requirements.txt
+        run: |
+          pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          pip install --no-cache-dir -r ml/requirements.txt
+          python -c "import torch, open_clip; print('torch', torch.__version__, 'cuda', torch.cuda.is_available())"
+          df -h / | tail -1
 
       - name: Validate crawler secrets
         run: |

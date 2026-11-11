@@ -39,6 +39,13 @@ python -m venv .venv
 pip install -r ml/requirements.txt
 ```
 
+Without a GPU (and in GitHub Actions), install the CPU build of torch first. The default PyPI build pulls about 3GB of CUDA wheels:
+
+```bash
+pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+pip install -r ml/requirements.txt
+```
+
 On macOS/Linux:
 
 ```bash
