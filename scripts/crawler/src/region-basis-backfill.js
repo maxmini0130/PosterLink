@@ -8,6 +8,8 @@
  *   node src/region-basis-backfill.js                            live dry-run
  *   node src/region-basis-backfill.js --apply --confirm=REGION_BASIS_BACKFILL
  *   node src/region-basis-backfill.js --rollback=<backup.json> [--apply --confirm=…]
+ *   node src/region-basis-backfill.js --residency [--apply --confirm=…]
+ *       구 주민 한정 posters: record 거주만 / 거주·생활권 / 애매함 (planResidency)
  *
  * Options:
  *   --kinds=seoul_wide,gu_restricted   decisions to write (default). Add
@@ -152,6 +154,54 @@ export function planPoster(
   return plan;
 }
 
+/**
+ * --residency: posters whose 구 link already says 'eligibility' (구 주민 한정)
+ * get the decision recorded with who the limit lets in (거주만 / 거주·생활권 /
+ * 애매함), so the screen can say which. Links are never changed here. A poster
+ * the rules no longer read as gu_restricted is listed for a person instead.
+ */
+export function planResidency(row) {
+  const limited = (row.links ?? []).filter(
+    (link) => link.level === "sigungu" && link.basis === "eligibility",
+  );
+  if (!limited.length) return null;
+  const decision = classifyRegionEligibility(targetTexts(row));
+  const plan = {
+    id: row.id,
+    title: row.title,
+    organizer: row.organizer_name ?? null,
+    group: organizerGroup(row.organizer_name),
+    gus: limited.map((link) => link.name),
+    kind: decision.kind,
+    residency: decision.residency ?? null,
+    residencyEvidence: decision.residencyEvidence ?? null,
+    evidence: decision.evidence,
+    actions: [],
+    skipped: null,
+  };
+  if (decision.kind !== "gu_restricted") {
+    plan.skipped = "needs_person";
+    return plan;
+  }
+  if (row.recorded_eligibility?.residency) {
+    plan.skipped = "already_recorded";
+    return plan;
+  }
+  plan.actions.push({
+    op: "record",
+    code: "field_verification.cardFacts.regionEligibility",
+    value: {
+      kind: decision.kind,
+      gus: decision.gus,
+      residency: decision.residency,
+      residencyEvidence: decision.residencyEvidence,
+      evidence: decision.evidence,
+      rules: REGION_ELIGIBILITY_RULES_VERSION,
+    },
+  });
+  return plan;
+}
+
 /** field_verification with the decision recorded (or removed when null). */
 export function withRecordedEligibility(fieldVerification, value) {
   const verification = { ...(fieldVerification ?? {}) };
@@ -177,6 +227,9 @@ export function summarize(plans) {
   return {
     posters: plans.length,
     byKind: count(plans, "kind"),
+    ...(plans.some((plan) => "residency" in plan)
+      ? { byResidency: count(plans, "residency") }
+      : {}),
     byGroup,
     toWrite: plans.filter((plan) => plan.actions.length).length,
     seoulLinksAdded: actions.filter((a) => a.op === "insert").length,
@@ -291,8 +344,10 @@ async function writeReport(dir, stamp, plans, summary) {
     "organizer",
     "gus",
     "kind",
+    "residency",
     "skipped",
     "actions",
+    "residency_evidence",
     "evidence",
     "title",
   ];
@@ -303,6 +358,7 @@ async function writeReport(dir, stamp, plans, summary) {
       plan.organizer,
       plan.gus.join("·"),
       plan.kind,
+      plan.residency ?? "",
       plan.skipped,
       plan.actions
         .map((a) =>
@@ -311,6 +367,7 @@ async function writeReport(dir, stamp, plans, summary) {
             : `${a.op === "insert" ? "+" : "="}${a.code}:${a.basis}`,
         )
         .join(" "),
+      plan.residencyEvidence ?? "",
       plan.evidence,
       plan.title,
     ]
@@ -436,11 +493,12 @@ async function main() {
   const scope = args.scope ?? "all";
   const outDir = args.out ? path.resolve(String(args.out)) : RESULTS_DIR;
 
+  const residencyMode = Boolean(args.residency);
   const supabase = args.snapshot ? null : await createSupabase();
   if (args.rollback) return rollback(supabase, String(args.rollback), apply);
 
-  let seoulRegionId = args["seoul-id"] ?? null;
-  if (supabase) {
+  let seoulRegionId = args["seoul-id"] ?? (residencyMode ? "unused" : null);
+  if (supabase && !residencyMode) {
     const { data, error } = await supabase
       .from("regions")
       .select("id")
@@ -456,12 +514,23 @@ async function main() {
     ? (await readSnapshot(String(args.snapshot))).map(toPlanRow)
     : await readLive(supabase);
   const plans = rows
-    .map((row) => planPoster(row, { seoulRegionId, kinds, scope }))
+    .map((row) =>
+      residencyMode
+        ? planResidency(row)
+        : planPoster(row, { seoulRegionId, kinds, scope }),
+    )
     .filter(Boolean);
   const summary = summarize(plans);
   console.log(
-    `rules ${REGION_ELIGIBILITY_RULES_VERSION} · kinds ${kinds.join(",")} · scope ${scope}`,
+    residencyMode
+      ? `rules ${REGION_ELIGIBILITY_RULES_VERSION} · residency (구 주민 한정 재판정)`
+      : `rules ${REGION_ELIGIBILITY_RULES_VERSION} · kinds ${kinds.join(",")} · scope ${scope}`,
   );
+  if (residencyMode)
+    for (const plan of plans)
+      console.log(
+        `  ${plan.id.slice(0, 8)} ${plan.gus.join("·")} ${plan.skipped ? `[${plan.skipped}] ${plan.kind}` : plan.residency} | ${plan.residencyEvidence ?? plan.evidence ?? ""}`,
+      );
   console.log(JSON.stringify(summary, null, 2));
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const report = await writeReport(outDir, stamp, plans, summary);

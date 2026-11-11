@@ -223,10 +223,31 @@ test("residents of one 구 only: that 구 and 서울 전체, never another 구",
 });
 
 test("region conditions are shown only from data", () => {
-  assert.deepEqual(posterRegionCondition({ onlyNames: ["강북구"] }), {
+  const only = (residency?: string) =>
+    posterRegionCondition({
+      onlyNames: ["성동구"],
+      eligibility:
+        residency === undefined
+          ? null
+          : { kind: "gu_restricted", gus: ["성동구"], residency },
+    });
+  assert.deepEqual(only("resident"), {
     kind: "only",
-    text: "강북구 주민만 신청 가능",
+    text: "성동구 주민만 신청 가능",
+    short: "성동구 주민만",
   });
+  assert.deepEqual(only("life_area"), {
+    kind: "only",
+    text: "성동구 거주·생활권만 신청 가능",
+    short: "성동구 거주·생활권만",
+  });
+  // Unclear, or no decision recorded: only the 구 limit, never "주민만".
+  for (const condition of [only("unclear"), only()])
+    assert.deepEqual(condition, {
+      kind: "only",
+      text: "성동구 한정 · 세부 자격은 원문 확인",
+      short: "성동구 한정",
+    });
   // Not repeated while browsing that 구.
   assert.equal(
     posterRegionCondition({ onlyNames: ["강북구"], browsingGuName: "강북구" }),
@@ -235,31 +256,35 @@ test("region conditions are shown only from data", () => {
   assert.deepEqual(
     posterRegionCondition({
       onlyNames: [],
-      eligibility: { kind: "gu_preferred", gus: ["강동구", "송파구"] },
+      eligibility: { kind: "gu_preferred", gus: ["마포구", "서대문구"] },
     }),
-    { kind: "preferred", text: "강동구·송파구 거주·생활권" },
+    {
+      kind: "preferred",
+      text: "마포구·서대문구 거주·생활권",
+      short: "마포·서대문 생활권 우대",
+    },
+  );
+  assert.deepEqual(
+    posterRegionCondition({
+      onlyNames: [],
+      eligibility: { kind: "gu_preferred", gus: ["용산구"] },
+    })?.short,
+    "용산구 생활권 우대",
+  );
+  // A one-syllable 구 keeps its 구.
+  assert.equal(
+    posterRegionCondition({
+      onlyNames: ["중구", "성동구"],
+      eligibility: { kind: "gu_restricted", residency: "resident" },
+    })?.short,
+    "중구·성동 주민만",
   );
   // 우대 without a named 구, other kinds and bad data: nothing.
-  assert.equal(
-    posterRegionCondition({
-      onlyNames: [],
-      eligibility: { kind: "gu_preferred", gus: [] },
-    }),
-    null,
-  );
-  assert.equal(
-    posterRegionCondition({
-      onlyNames: [],
-      eligibility: { kind: "seoul_wide", gus: [] },
-    }),
-    null,
-  );
-  assert.equal(
-    posterRegionCondition({
-      onlyNames: [],
-      eligibility: { kind: "gu_preferred", gus: ["<b>"] },
-    }),
-    null,
-  );
+  for (const eligibility of [
+    { kind: "gu_preferred", gus: [] },
+    { kind: "seoul_wide", gus: [] },
+    { kind: "gu_preferred", gus: ["<b>"] },
+  ])
+    assert.equal(posterRegionCondition({ onlyNames: [], eligibility }), null);
   assert.equal(posterRegionCondition({ onlyNames: [] }), null);
 });

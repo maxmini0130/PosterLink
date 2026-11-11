@@ -348,7 +348,8 @@ const fetchPosterDetail = cache(async (id: string) => {
           })),
       ),
     ),
-    // SPEC 8 / 7.2: "○○구 주민만 신청 가능" or "[우대] ○○구 거주·생활권".
+    // SPEC 8 / 7.2: "○○구 주민만 신청 가능", "○○구 거주·생활권만 신청 가능",
+    // "○○구 한정 · 세부 자격은 원문 확인" or "[우대] ○○구 거주·생활권".
     regionCondition: posterRegionCondition({
       onlyNames: regionLinks
         .filter((link) => link.basis === "eligibility")

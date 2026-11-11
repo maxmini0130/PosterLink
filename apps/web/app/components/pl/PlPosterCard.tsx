@@ -7,12 +7,13 @@ import { cardOrganization, cardTitleText } from "../../../lib/posterCardText";
 import { PosterArt } from "./PosterArt";
 import { DeadlinePill, DeadlineStamp } from "./DeadlineParts";
 import type { PlPosterCardData } from "./PosterListCard";
-import { PlBadge } from "./PlControls";
 import type { RegionCondition } from "../../../lib/browseRegion";
 
 /**
- * Region condition before the title (SPEC 8): "강북구 주민만 신청 가능", or
- * an outlined 우대 tag (SPEC 7.2) with "강북구 거주·생활권".
+ * Region condition before the title (SPEC 8), in its short card wording:
+ * "성동구 주민만", "성동구 거주·생활권만", "마포·서대문 생활권 우대". It is
+ * never cut off: a long one wraps to a second line. The full wording is on
+ * the detail and in the accessible name.
  */
 export function RegionConditionLine({
   condition,
@@ -24,10 +25,14 @@ export function RegionConditionLine({
   return (
     <p
       data-region-condition={condition.kind}
-      className={`m-0 mb-0.5 truncate text-[12px] font-semibold leading-[1.5] text-pl-ink ${className}`}
+      className={`m-0 mb-0.5 break-keep text-[12px] font-semibold leading-[1.4] text-pl-ink ${className}`}
     >
-      {condition.kind === "preferred" && <PlBadge>우대</PlBadge>}
-      {condition.text}
+      <span className="sr-only">
+        {condition.kind === "preferred"
+          ? `우대: ${condition.text}`
+          : condition.text}
+      </span>
+      <span aria-hidden="true">{condition.short}</span>
     </p>
   );
 }
