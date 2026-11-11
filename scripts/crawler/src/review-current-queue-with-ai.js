@@ -5,6 +5,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { CATEGORY_CODE_BY_LABEL } from "./poster-category-classifier.js";
+import { hasActiveImageConfidenceHold } from "./image-confidence-hold.js";
 
 function todayInKst() {
   const parts = new Intl.DateTimeFormat("en", {
@@ -290,6 +291,8 @@ async function buildPlan(rows, batchSize = REVIEW_BATCH_SIZE) {
     const blockingDateIssues = issueCodes(verification, "dateIssues")
       .filter((code) => AUTO_APPROVAL_BLOCKING_DATE_ISSUES.has(code));
     const blockingDuplicateIssues = issueCodes(verification, "duplicateIssues");
+    // Held by the daily image confidence gate: only a person releases it.
+    const imageHold = row && hasActiveImageConfidenceHold(row) ? ["image-confidence-hold"] : [];
     return {
       id: decision.id,
       title: row?.title ?? "",
@@ -320,8 +323,9 @@ async function buildPlan(rows, batchSize = REVIEW_BATCH_SIZE) {
         && normalizedDecision.concerns.length === 0
         && blockingDateIssues.length === 0
         && blockingDuplicateIssues.length === 0
+        && imageHold.length === 0
         && nextCodes.length > 0,
-      auto_approval_blockers: [...blockingDateIssues, ...blockingDuplicateIssues],
+      auto_approval_blockers: [...blockingDateIssues, ...blockingDuplicateIssues, ...imageHold],
     };
   });
 }
