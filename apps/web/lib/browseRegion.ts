@@ -144,14 +144,16 @@ export type BrowseFallback = "sido" | "nation";
  * - 전국: every poster.
  * - A 시·도: posters linked to it, its 구·군 or 전국.
  * - A 구·군: posters linked to it, to its 시·도 or to 전국. A poster linked to
- *   another 구 *and* to 서울 stays in: the 서울 link is the only sign in the data
- *   that anyone in 서울 can apply (`poster_regions.basis` is not filled yet, so a
- *   venue 구 cannot be told from an eligibility 구).
+ *   another 구 *and* to 서울 stays in: the 서울 link means anyone in 서울 can
+ *   apply.
+ * - Residents of some 구 only (`onlyIds`: 구 links whose basis is
+ *   'eligibility', SPEC 8): such a poster shows in those 구 and in 서울 전체
+ *   (with "○○구 주민만 신청 가능"), never in another 구.
  * - A region with no posters of its own still lists the wider ones and says so
  *   (`fallback`): a 시·도 shows nationwide posters, a 구 its 시·도 and 전국.
  */
 export function browsePosterScope<
-  P extends { id: string; regionIds: string[] },
+  P extends { id: string; regionIds: string[]; onlyIds?: string[] },
 >(input: {
   chosen: RegionLike | null;
   defaultSidoId: string | null;
@@ -187,9 +189,47 @@ export function browsePosterScope<
     };
   const scope = getRegionScopeIds(chosen.id, regions) ?? new Set<string>();
   return {
-    posters: posters.filter((p) => p.regionIds.some((id) => scope.has(id))),
+    posters: posters.filter((p) =>
+      chosen.level === "sigungu" && p.onlyIds?.length
+        ? p.onlyIds.includes(chosen.id)
+        : p.regionIds.some((id) => scope.has(id)),
+    ),
     fallback: hasOwn ? null : "sido",
   };
+}
+
+/** "○○구 주민만 신청 가능" or "[우대] ○○구 거주·생활권" (SPEC 8, 7.2). */
+export type RegionCondition = { kind: "only" | "preferred"; text: string };
+
+/**
+ * The region condition a card or the detail shows.
+ * - only: the poster's 구 links with basis 'eligibility'. Not repeated while
+ *   browsing that very 구.
+ * - preferred: the recorded crawler decision (field_verification.cardFacts.
+ *   regionEligibility) of kind gu_preferred, with the preferred 구 named.
+ * Nothing is guessed: without data there is no condition.
+ */
+export function posterRegionCondition(input: {
+  onlyNames: string[];
+  eligibility?: { kind?: unknown; gus?: unknown } | null;
+  browsingGuName?: string | null;
+}): RegionCondition | null {
+  const only = [...new Set(input.onlyNames.filter(Boolean))];
+  if (only.length) {
+    if (input.browsingGuName && only.includes(input.browsingGuName))
+      return null;
+    return { kind: "only", text: `${only.join("·")} 주민만 신청 가능` };
+  }
+  const decision = input.eligibility;
+  const gus = Array.isArray(decision?.gus)
+    ? decision.gus.filter(
+        (name): name is string =>
+          typeof name === "string" && /^[가-힣]{1,4}구$/.test(name),
+      )
+    : [];
+  if (decision?.kind === "gu_preferred" && gus.length)
+    return { kind: "preferred", text: `${gus.join("·")} 거주·생활권` };
+  return null;
 }
 
 /**

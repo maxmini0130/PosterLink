@@ -7,6 +7,7 @@ import { getRegionScopeIds } from "./regionHelpers";
 import {
   browsePosterScope,
   browseRegionLabel,
+  posterRegionCondition,
   type BrowseFallback,
 } from "./browseRegion";
 import {
@@ -64,6 +65,8 @@ const BASE_COLUMNS = [
   "primary_category_code:field_verification->classification->>primaryCategory",
   "fv_regions:field_verification->classification->regions",
   "audiences:field_verification->classification->audiences",
+  // Who may apply, by region, as the crawler decided (region-eligibility.js).
+  "fv_region_eligibility:field_verification->cardFacts->regionEligibility",
 ].join(",");
 
 /** Columns of 20261103010000 (not applied everywhere yet). */
@@ -93,6 +96,7 @@ type Row = DeadlineVerificationRow & {
   primary_category_code: string | null;
   fv_regions: unknown;
   audiences: unknown;
+  fv_region_eligibility?: unknown;
   benefit_summary?: string | null;
   benefit_kind?: string | null;
   event_schedule_kind?: string | null;
@@ -245,6 +249,12 @@ async function loadOrgSuggestions(
     .sort((a, b) => b.recentCount - a.recentCount);
 }
 
+function asObjectOrNull(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
 function asEvidence(value: unknown): RegionEvidence[] {
   return Array.isArray(value)
     ? value.filter(
@@ -283,6 +293,8 @@ function toHomePoster(
     images: Map<string, Array<Record<string, unknown>>>;
     popularity: number;
     now: Date;
+    /** The browsed 구 (a condition is not repeated inside it). */
+    browsingGuName?: string | null;
   },
 ): HomePoster {
   const cardRegions: CardRegion[] = context.regionLinks.flatMap((link) => {
@@ -371,6 +383,13 @@ function toHomePoster(
       posterStatus: row.poster_status,
       organizerId: row.organizer_id,
       deadlineVerification: deadlineVerificationFromRow(row),
+      regionCondition: posterRegionCondition({
+        onlyNames: cardRegions
+          .filter((r) => r.level === "sigungu" && r.basis === "eligibility")
+          .map((r) => r.name),
+        eligibility: asObjectOrNull(row.fv_region_eligibility),
+        browsingGuName: context.browsingGuName ?? null,
+      }),
       metaLine: cardMetaLine(
         regionPhrase(
           cardRegions,
@@ -589,9 +608,18 @@ export async function loadHomeFeed(
       regionIds: (regionLinksBy.get(row.id) ?? []).map(
         (link) => link.region_id,
       ),
+      // 구 links whose basis is 'eligibility': residents of that 구 only.
+      onlyIds: (regionLinksBy.get(row.id) ?? [])
+        .filter(
+          (link) =>
+            link.basis === "eligibility" &&
+            regions.get(link.region_id)?.level === "sigungu",
+        )
+        .map((link) => link.region_id),
     })),
   });
   const inScope = browsed.posters.map((item) => item.row);
+  const browsingGuName = chosen?.level === "sigungu" ? chosen.name : null;
   const posters = inScope.map((row) =>
     toHomePoster(row, {
       regions,
@@ -601,6 +629,7 @@ export async function loadHomeFeed(
       images,
       popularity: popularity.get(row.id) ?? 0,
       now,
+      browsingGuName,
     }),
   );
   const categoryIds = (request.categoryIds ?? []).filter(

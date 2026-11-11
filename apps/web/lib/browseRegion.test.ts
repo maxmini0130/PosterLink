@@ -6,6 +6,7 @@ import {
   browseRegionLabel,
   browseRegionOwner,
   browsePosterScope,
+  posterRegionCondition,
   posterRegionTag,
   readBrowseRegion,
   saveBrowseRegion,
@@ -196,4 +197,69 @@ test("a region without its own posters says so and shows the wider ones", () => 
     ids: ["gangbuk+seoul", "seoul", "nation"],
     fallback: "sido",
   });
+});
+
+test("residents of one 구 only: that 구 and 서울 전체, never another 구", () => {
+  const posters = [
+    ...POSTERS,
+    // 강북구민 only, also linked to 서울 (as some 구 office posters are).
+    {
+      id: "gangbuk-residents",
+      regionIds: ["gangbuk", "seoul"],
+      onlyIds: ["gangbuk"],
+    },
+  ];
+  const ids = (chosen: string | null) =>
+    browsePosterScope({
+      chosen: REGIONS.find((r) => r.id === chosen) ?? null,
+      defaultSidoId: "seoul",
+      regions: REGIONS,
+      posters,
+    }).posters.map((p) => p.id);
+  assert.ok(ids("gangbuk").includes("gangbuk-residents"));
+  assert.ok(!ids("mapo").includes("gangbuk-residents"));
+  assert.ok(ids(null).includes("gangbuk-residents"));
+  assert.ok(ids("seoul").includes("gangbuk-residents"));
+});
+
+test("region conditions are shown only from data", () => {
+  assert.deepEqual(posterRegionCondition({ onlyNames: ["강북구"] }), {
+    kind: "only",
+    text: "강북구 주민만 신청 가능",
+  });
+  // Not repeated while browsing that 구.
+  assert.equal(
+    posterRegionCondition({ onlyNames: ["강북구"], browsingGuName: "강북구" }),
+    null,
+  );
+  assert.deepEqual(
+    posterRegionCondition({
+      onlyNames: [],
+      eligibility: { kind: "gu_preferred", gus: ["강동구", "송파구"] },
+    }),
+    { kind: "preferred", text: "강동구·송파구 거주·생활권" },
+  );
+  // 우대 without a named 구, other kinds and bad data: nothing.
+  assert.equal(
+    posterRegionCondition({
+      onlyNames: [],
+      eligibility: { kind: "gu_preferred", gus: [] },
+    }),
+    null,
+  );
+  assert.equal(
+    posterRegionCondition({
+      onlyNames: [],
+      eligibility: { kind: "seoul_wide", gus: [] },
+    }),
+    null,
+  );
+  assert.equal(
+    posterRegionCondition({
+      onlyNames: [],
+      eligibility: { kind: "gu_preferred", gus: ["<b>"] },
+    }),
+    null,
+  );
+  assert.equal(posterRegionCondition({ onlyNames: [] }), null);
 });

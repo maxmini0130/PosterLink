@@ -80,6 +80,7 @@ import {
 import { usePosterClock } from "../../../lib/usePosterClock";
 import { isInstitutionHomepage, isPublicHttpUrl } from "../../../lib/posterActionLinks";
 import { posterRegionDisplay } from "../../../lib/posterRegionDisplay";
+import type { RegionCondition } from "../../../lib/browseRegion";
 import { FieldReportButton } from "./FieldReportButton";
 import { ClosedPosterAlertCta, type AlertDefaults } from "./ClosedPosterAlertCta";
 import { trackAlertEvent } from "../../../lib/alertAnalytics";
@@ -133,6 +134,8 @@ export type PosterDetailPoster = DeadlineVerificationRow & {
   regionName?: string | null;
   /** Short v6.1 tag: "마포구", "서울", "전국" (null when unknown). */
   regionTag?: string | null;
+  /** "○○구 주민만 신청 가능" / "[우대] ○○구 거주·생활권", from data only. */
+  regionCondition?: RegionCondition | null;
   images?: string[];
 };
 
@@ -1216,6 +1219,7 @@ export function PosterDetailClient({
   const summaryCard = (
     <DetailSummaryCard
       eligibility={eligibility}
+      condition={poster.regionCondition ?? null}
       recruitment={poster.recruitment_count || null}
       presentation={presentation}
       fee={fee}
