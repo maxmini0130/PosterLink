@@ -1,37 +1,40 @@
 #!/usr/bin/env node
 /**
- * Sends published posters whose image check is low confidence (or has no
- * model confidence) back to the review queue, one poster at a time, so the
- * daily quality gate does not fail the whole run for them.
- * Rules: image-confidence-hold.js.
+ * Sends published posters that fail a quality check back to the review
+ * queue, one poster at a time, so the daily quality gate does not fail the
+ * whole run for them. Rules: quality-gate-hold.js (image confidence,
+ * non-poster image, quality-gate reject, pending deadline correction).
  *
- *   node src/hold-low-confidence-images.js                       # dry-run
- *   node src/hold-low-confidence-images.js --apply --confirm=IMAGE_CONFIDENCE_HOLD [--max=10]
- *   node src/hold-low-confidence-images.js --rollback=<report.json> [--apply --confirm=…]
+ *   node src/hold-quality-gate-posters.js                       # dry-run
+ *   node src/hold-quality-gate-posters.js --apply --confirm=QUALITY_GATE_HOLD [--max=10]
+ *   node src/hold-quality-gate-posters.js --rollback=<report.json> [--apply --confirm=…]
  *
- * --max: more targets than this means something systemic (a model outage, a
- * bad backfill); nothing is written and the command fails.
+ * --max: more posters to hold than this means something systemic (a model
+ * outage, a bad backfill); nothing is written and the command fails.
  * The report doubles as the backup: it keeps each poster's previous status and
- * field_verification. Rollback restores only posters still held by that run.
+ * field_verification. Rollback restores only posters still held by that run
+ * (reports of the earlier hold-low-confidence-images.js too).
  */
 import "./load-env.js";
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
+import { imageConfidenceHoldOf } from "./image-confidence-hold.js";
 import {
-  IMAGE_CONFIDENCE_HOLD_RULES,
-  holdReasonText,
-  imageConfidenceHoldOf,
-  planImageConfidenceHold,
-  withImageConfidenceHold,
-} from "./image-confidence-hold.js";
+  QUALITY_GATE_HOLD_RULES,
+  planQualityGateHold,
+  qualityGateHoldOf,
+  withQualityGateHold,
+} from "./quality-gate-hold.js";
 
-export const APPLY_CONFIRM = "IMAGE_CONFIDENCE_HOLD";
+export const APPLY_CONFIRM = "QUALITY_GATE_HOLD";
 const DEFAULT_MAX = 10;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Reports land in scripts/crawler/data/results, which the workflow uploads.
 const CRAWLER_ROOT = path.resolve(__dirname, "..");
+export const POSTER_COLUMNS =
+  "id,title,poster_status,exposure_tier,thumbnail_url,source_key,source_org_name,summary_short,summary_long,application_end_at,created_at,published_at,updated_at,field_verification";
 
 function parseArgs(argv) {
   return Object.fromEntries(
@@ -55,17 +58,14 @@ function createSupabase() {
   });
 }
 
-async function fetchPublished(supabase) {
+export async function fetchPublishedPosters(supabase) {
   const rows = [];
   const pageSize = 1000;
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabase
       .from("posters")
-      .select(
-        "id,title,poster_status,thumbnail_url,published_at,updated_at,field_verification",
-      )
+      .select(POSTER_COLUMNS)
       .eq("poster_status", "published")
-      .not("thumbnail_url", "is", null)
       .order("id")
       .range(offset, offset + pageSize - 1);
     if (error) throw error;
@@ -75,19 +75,15 @@ async function fetchPublished(supabase) {
   return rows;
 }
 
-/** The held posters of a run, with what is needed to undo each. */
+/** The posters a run holds, with the plan for each. */
 export function planHolds(rows) {
   return rows
-    .map((row) => ({ row, plan: planImageConfidenceHold(row) }))
+    .map((row) => ({ row, plan: planQualityGateHold(row) }))
     .filter(({ plan }) => plan.action === "hold");
 }
 
 function line(row, plan) {
-  const conf =
-    plan.confidence === null || plan.confidence === undefined
-      ? "없음"
-      : plan.confidence;
-  return `${row.id.slice(0, 8)} | ${plan.reason} | 신뢰도 ${conf} | 출처 ${plan.model ?? plan.source ?? "-"} | ${String(row.title ?? "").slice(0, 60)}`;
+  return `${row.id.slice(0, 8)} | ${plan.reasons.map((reason) => reason.code).join(",")} | ${String(row.title ?? "").slice(0, 60)}`;
 }
 
 async function summaryNote(text) {
@@ -95,6 +91,14 @@ async function summaryNote(text) {
   await fs
     .appendFile(process.env.GITHUB_STEP_SUMMARY, `${text}\n`, "utf-8")
     .catch(() => {});
+}
+
+function heldAtOf(fieldVerification) {
+  return (
+    qualityGateHoldOf(fieldVerification)?.heldAt ??
+    imageConfidenceHoldOf(fieldVerification)?.heldAt ??
+    null
+  );
 }
 
 async function rollback(supabase, file, apply) {
@@ -111,9 +115,9 @@ async function rollback(supabase, file, apply) {
       .eq("id", item.id)
       .maybeSingle();
     if (error) throw error;
-    const hold = imageConfidenceHoldOf(current?.field_verification);
     const stillHeld =
-      current?.poster_status === "review" && hold?.heldAt === item.heldAt;
+      current?.poster_status === "review" &&
+      heldAtOf(current?.field_verification) === item.heldAt;
     console.log(
       `  ${item.id.slice(0, 8)} ${stillHeld ? "restore to published" : `skip (now ${current?.poster_status ?? "missing"})`}`,
     );
@@ -150,20 +154,20 @@ async function main() {
     CRAWLER_ROOT,
     String(
       args.output ||
-        `data/results/image-confidence-hold-${now.replace(/[:.]/g, "-")}.json`,
+        `data/results/quality-gate-hold-${now.replace(/[:.]/g, "-")}.json`,
     ),
   );
 
-  const rows = await fetchPublished(supabase);
+  const rows = await fetchPublishedPosters(supabase);
   const holds = planHolds(rows);
   console.log(
-    `[image-hold] ${IMAGE_CONFIDENCE_HOLD_RULES} | published with image ${rows.length} | to hold ${holds.length} | max ${max} | ${apply ? "apply" : "dry-run"}`,
+    `[quality-hold] ${QUALITY_GATE_HOLD_RULES} | published ${rows.length} | to hold ${holds.length} | max ${max} | ${apply ? "apply" : "dry-run"}`,
   );
   for (const { row, plan } of holds) console.log(`  ${line(row, plan)}`);
 
   const report = {
     generated_at: now,
-    rules: IMAGE_CONFIDENCE_HOLD_RULES,
+    rules: QUALITY_GATE_HOLD_RULES,
     runId,
     mode: apply ? "apply" : "dry-run",
     scanned: rows.length,
@@ -172,11 +176,11 @@ async function main() {
     items: holds.map(({ row, plan }) => ({
       id: row.id,
       title: row.title,
-      reason: plan.reason,
-      reasonText: holdReasonText(plan),
-      confidence: plan.confidence ?? null,
-      source: plan.source ?? null,
-      model: plan.model ?? null,
+      reasons: plan.reasons.map(({ code, text, fingerprint }) => ({
+        code,
+        text,
+        fingerprint,
+      })),
       heldAt: now,
       written: false,
       previous: {
@@ -190,7 +194,7 @@ async function main() {
     await fs.mkdir(path.dirname(output), { recursive: true });
     await fs.writeFile(output, JSON.stringify(report, null, 2), "utf-8");
     await summaryNote(
-      `### 이미지 신뢰도 보류: 대상 ${holds.length}건이 상한 ${max}건을 넘어 쓰지 않았습니다\n원인(모델 장애, 잘못된 재분류 등)을 먼저 확인하세요.`,
+      `### 품질 보류: 대상 ${holds.length}건이 상한 ${max}건을 넘어 쓰지 않았습니다\n원인(모델 장애, 잘못된 재분류 등)을 먼저 확인하세요.`,
     );
     throw new Error(
       `${holds.length} posters to hold exceeds --max=${max}; nothing written. Report: ${output}`,
@@ -204,11 +208,10 @@ async function main() {
         .from("posters")
         .update({
           poster_status: "review",
-          field_verification: withImageConfidenceHold(
-            row.field_verification,
-            plan,
-            { now, runId },
-          ),
+          field_verification: withQualityGateHold(row.field_verification, plan, {
+            now,
+            runId,
+          }),
         })
         .eq("id", row.id)
         .eq("poster_status", "published")
@@ -230,15 +233,15 @@ async function main() {
   await fs.mkdir(path.dirname(output), { recursive: true });
   await fs.writeFile(output, JSON.stringify(report, null, 2), "utf-8");
   console.log(
-    `[image-hold] ${apply ? `held ${written}` : "dry-run: nothing written"} | report ${output}`,
+    `[quality-hold] ${apply ? `held ${written}` : "dry-run: nothing written"} | report ${output}`,
   );
   if (apply && holds.length) {
     await summaryNote(
       [
-        `### 이미지 신뢰도 보류: ${written}건을 검수 대기로 보냈습니다`,
+        `### 품질 보류: ${written}건을 검수 대기로 보냈습니다`,
         ...report.items.map(
           (item) =>
-            `- ${item.written ? "" : "(쓰지 못함) "}\`${item.id}\` ${item.title} — ${item.reasonText}`,
+            `- ${item.written ? "" : "(쓰지 못함) "}\`${item.id}\` ${item.title} — ${item.reasons.map((reason) => reason.text).join(" / ")}`,
         ),
       ].join("\n"),
     );

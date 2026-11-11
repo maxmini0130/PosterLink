@@ -8,7 +8,7 @@ import {
   summarizeImageConfidence,
   withImageConfidenceHold,
 } from "./image-confidence-hold.js";
-import { planHolds } from "./hold-low-confidence-images.js";
+import { planHolds } from "./hold-quality-gate-posters.js";
 
 const cls = (value) => ({ posterImageOcr: { imageClassification: value } });
 const poster = (id, fv, extra = {}) => ({

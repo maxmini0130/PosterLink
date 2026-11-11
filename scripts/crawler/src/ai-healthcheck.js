@@ -12,6 +12,8 @@ import {
 } from "./ai-healthcheck-gates.js";
 import { isLikelyApplicationLink } from "./source-link-rules.js";
 import { summarizeImageConfidence } from "./image-confidence-hold.js";
+import { summarizeQualityGate } from "./quality-gate-hold.js";
+import { fetchPublishedPosters } from "./hold-quality-gate-posters.js";
 
 const DEFAULT_OUTPUT = "data/results/ai-healthcheck.json";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -47,7 +49,10 @@ Quality gate options:
                                   score that were not held for review)
   --max-application-source-keys=0
   --max-field-correction-candidates=0
-  --max-public-nonposter-reject-candidates=0`);
+  --max-public-nonposter-reject-candidates=0
+                                 (these and --max-public-image-nonposters count
+                                  published posters left unheld by
+                                  hold-quality-gate-posters.js)`);
   process.exit(0);
 }
 
@@ -150,7 +155,7 @@ async function measureImageAiCoverage() {
   const publicNonposterRows = nonposterRows.filter((row) => isPublicExposureTier(row.exposure_tier));
   // Low confidence is judged per poster (image-confidence-hold.js): a public
   // poster with a low or missing model score is held for review by
-  // hold-low-confidence-images.js before this check. What still counts is a
+  // hold-quality-gate-posters.js before this check. What still counts is a
   // public one left unheld; review posters are already waiting for a person,
   // and a missing score is unknown, not 0.
   const confidence = summarizeImageConfidence(rows);
@@ -287,6 +292,14 @@ async function main() {
   const kpiReport = await readJson(kpiOutput);
   const correctionsReport = await readJson(correctionsOutput);
   const nonpostersReport = await readJson(cleanupOutput);
+  // Per-poster gate (quality-gate-hold.js): hold-quality-gate-posters.js runs
+  // first and sends each failing published poster to review. The gate counts
+  // what is still published and unheld; posters in review wait for a person
+  // and are not public. The all-status counts stay as information.
+  const qualityHold = summarizeQualityGate(
+    await fetchPublishedPosters(createSupabase()),
+  );
+  const pendingHold = (code) => qualityHold.by_reason[code] ?? 0;
 
   const summary = {
     embedding_coverage_percent: kpi.embedding_coverage_percent,
@@ -295,14 +308,18 @@ async function main() {
     review_queue_reject_candidates: kpi.review_queue_reject_candidates,
     image_ai_coverage_percent: imageAi.coverage_percent,
     image_ai_nonposter_count: imageAi.nonposter_image_count,
-    image_ai_public_nonposter_count: imageAi.public_nonposter_image_count,
+    image_ai_public_nonposter_count: pendingHold("public_nonposter"),
+    image_ai_public_nonposter_all_statuses: imageAi.public_nonposter_image_count,
     image_ai_low_confidence_count: imageAi.low_confidence_count,
     application_source_key_count: sourceLinks.application_source_key_count,
-    field_correction_candidates: corrections.correction_count,
+    field_correction_candidates: pendingHold("field_correction"),
+    field_correction_candidates_all_statuses: corrections.correction_count,
     nonposter_reject_candidates: nonposters.reject_count,
-    public_nonposter_reject_candidates: (nonpostersReport.rows ?? [])
+    public_nonposter_reject_candidates: pendingHold("nonposter_reject"),
+    public_nonposter_reject_candidates_all_statuses: (nonpostersReport.rows ?? [])
       .filter((row) => isPublicExposureTier(row.exposure_tier))
       .length,
+    quality_hold_skipped: qualityHold.skipped,
     golden_set_labeled_rows: goldenSet?.labeled_rows ?? null,
     golden_set_macro_accuracy: goldenSet?.macro_accuracy_label ?? null,
   };
@@ -326,6 +343,7 @@ async function main() {
       kpi: kpiReport.summary ?? kpiReport,
       image_ai: imageAi,
       source_links: sourceLinks,
+      quality_gate_hold: qualityHold,
       field_correction_sample: correctionsReport.rows?.slice(0, 10) ?? [],
       nonposter_sample: nonpostersReport.rows?.slice(0, 10) ?? [],
       golden_set: goldenSet,
