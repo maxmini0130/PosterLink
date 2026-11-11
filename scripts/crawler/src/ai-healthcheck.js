@@ -11,6 +11,7 @@ import {
   evaluateHealthcheckGates,
 } from "./ai-healthcheck-gates.js";
 import { isLikelyApplicationLink } from "./source-link-rules.js";
+import { summarizeImageConfidence } from "./image-confidence-hold.js";
 
 const DEFAULT_OUTPUT = "data/results/ai-healthcheck.json";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -42,7 +43,8 @@ Quality gate options:
   --min-image-coverage=20
   --max-review-reject-candidates=0
   --max-public-image-nonposters=0
-  --max-image-low-confidence=0
+  --max-image-low-confidence=0   (public posters with a low or missing model
+                                  score that were not held for review)
   --max-application-source-keys=0
   --max-field-correction-candidates=0
   --max-public-nonposter-reject-candidates=0`);
@@ -129,7 +131,7 @@ async function measureImageAiCoverage() {
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabase
       .from("posters")
-      .select("id,title,poster_status,thumbnail_url,field_verification,exposure_tier")
+      .select("id,title,poster_status,thumbnail_url,published_at,field_verification,exposure_tier")
       .in("poster_status", ["published", "review"])
       .not("thumbnail_url", "is", null)
       .range(offset, offset + pageSize - 1);
@@ -146,10 +148,12 @@ async function measureImageAiCoverage() {
   const checkedRows = rows.filter((row) => getImageClassification(row));
   const nonposterRows = checkedRows.filter((row) => getImageClassification(row).isPoster === false);
   const publicNonposterRows = nonposterRows.filter((row) => isPublicExposureTier(row.exposure_tier));
-  const lowConfidenceRows = checkedRows.filter((row) => {
-    const confidence = Number(getImageClassification(row).confidence ?? 0);
-    return Number.isFinite(confidence) && confidence < 0.55;
-  });
+  // Low confidence is judged per poster (image-confidence-hold.js): a public
+  // poster with a low or missing model score is held for review by
+  // hold-low-confidence-images.js before this check. What still counts is a
+  // public one left unheld; review posters are already waiting for a person,
+  // and a missing score is unknown, not 0.
+  const confidence = summarizeImageConfidence(rows);
 
   return {
     image_rows: rows.length,
@@ -157,7 +161,15 @@ async function measureImageAiCoverage() {
     coverage_percent: percent(checkedRows.length, rows.length),
     nonposter_image_count: nonposterRows.length,
     public_nonposter_image_count: publicNonposterRows.length,
-    low_confidence_count: lowConfidenceRows.length,
+    low_confidence_count: confidence.public_needs_hold,
+    confidence_breakdown: {
+      low: confidence.low,
+      unscored: confidence.unscored,
+      manual_review_without_score: confidence.manual,
+      released_by_person: confidence.released_by_person,
+      review_low_or_unscored: confidence.review_low_or_unscored,
+    },
+    public_low_confidence_sample: confidence.public_needs_hold_sample,
     nonposter_sample: nonposterRows.slice(0, 10).map((row) => ({
       id: row.id,
       title: row.title,

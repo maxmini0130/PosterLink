@@ -2,7 +2,9 @@ name: Daily Crawler
 
 on:
   schedule:
-    - cron: "0 1 * * *" # Every day 01:00 UTC = 10:00 KST
+    # 00:37 UTC = 09:37 KST. Off the hour on purpose: GitHub delays on-the-hour
+    # schedules most (01:00 runs started 6-7 hours late in 2026-11).
+    - cron: "37 0 * * *"
   workflow_dispatch:
     inputs:
       source:
@@ -214,7 +216,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # A public poster whose image check is low confidence, or has no model
+      # confidence, goes back to the review queue on its own; the run does not
+      # fail for it. More than IMAGE_HOLD_MAX at once is treated as systemic
+      # (nothing written, the job fails). The report is the rollback backup.
+      - name: Hold low-confidence images for review
+        run: |
+          node src/hold-low-confidence-images.js \
+            --apply --confirm=IMAGE_CONFIDENCE_HOLD \
+            --max="$IMAGE_HOLD_MAX" \
+            --output="data/results/image-confidence-hold-${GITHUB_RUN_ID}.json"
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          IMAGE_HOLD_MAX: ${{ vars.IMAGE_HOLD_MAX || '10' }}
+
       - name: Run AI quality gate
+        if: ${{ !cancelled() }}
         run: |
           node src/ai-healthcheck.js \
             --enforce \
@@ -234,5 +252,9 @@ jobs:
         if: always()
         with:
           name: crawler-quality-gate-${{ github.run_id }}
-          path: scripts/crawler/data/results/
-          retention-days: 7
+          # The healthcheck writes under the repo root, the image hold report
+          # (its rollback backup) under scripts/crawler.
+          path: |
+            scripts/crawler/data/results/
+            data/results/
+          retention-days: 30
