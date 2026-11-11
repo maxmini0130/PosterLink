@@ -1,0 +1,1006 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PosterLink v6.1 참조 화면</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=Noto+Serif+KR:wght@700&display=swap">
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<main class="doc">
+<h1>PosterLink v6.1 참조 화면</h1>
+<p class="lead">시안의 화면과 컴포넌트를 정적 HTML/CSS로 옮긴 참조입니다. 치수·색·글자 크기·문구는 이 파일의 값을 기준으로 삼습니다. 포스터 자리는 자리표시자이고, 실제 포스터가 들어간 모습은 <code>screens/</code>의 이미지를 보세요. 날짜와 D-day는 2026.11.9(월) 기준 예시입니다. 규칙과 상태 정의는 <code>SPEC.md</code>가 우선합니다.</p>
+
+<h2 id="cards">1. 공고 카드 상태 (마감 표시 기준)</h2>
+<p class="note">모바일 2열 카드(폭 173px) 기준입니다. 표시 문구는 SPEC.md 4장의 규칙에서 나옵니다.</p>
+<div class="states phone-like">
+  <div class="state-group"><div class="state-title">날짜와 시각 확인 → 확인된 시각까지 표시</div><div class="state-row"><div class="state"><div style="width:173px"><article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><span class="stamp">D-2</span><button class="fav" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">11.11(수) 23:59까지</div>
+    <h3 class="card-title">또오리랑 가죽공방 모집</h3>
+    <p class="card-elig">서울 생활권 만 19~39세 청년</p>
+    <p class="card-org">서울청년센터 양천</p>
+  </div>
+</article></div><div class="state-cap"><b>원문에 23:59가 있는 공고</b><span>포스터: ~11.11.(수) 23:59</span><span class="do">2열 카드에서는 24시간 표기</span></div></div><div class="state"><div style="width:173px"><article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><span class="stamp">D-3</span><button class="fav" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">11.12(목) 오후 6시까지</div>
+    <h3 class="card-title">신혼부부 매입임대주택 입주자 모집</h3>
+    <p class="card-elig">서울 거주 무주택 신혼부부</p>
+    <p class="card-org">강북구청</p>
+  </div>
+</article></div><div class="state-cap"><b>시각이 정각인 공고</b><span>포스터: 접수 ~11.12.(목) 18시</span><span class="do">확인된 시각 기준으로 적용</span></div></div></div></div>
+  <div class="state-group"><div class="state-title">날짜만 확인 → 날짜 기준 도장, 하루 전 안내까지</div><div class="state-row"><div class="state"><div style="width:173px"><article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">11.15(일)까지</div>
+    <h3 class="card-title">일하는 청년을 위한 포인트 노동법</h3>
+    <p class="card-elig">일하는 청년</p>
+    <p class="card-org">서울청년센터 은평</p>
+  </div>
+</article></div><div class="state-cap"><b>날짜만 수집한 공고</b><span>공고문: ~11.15(일), 시각 없음</span><span class="do">11.12부터 D-3 도장</span></div></div><div class="state"><div style="width:173px"><article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><span class="stamp" style="font-size:12px">오늘</span><button class="fav" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">오늘이 마감일 · 시각 확인</div>
+    <h3 class="card-title">싱글데이: 싱글말고 위글</h3>
+    <p class="card-elig">서초구 거주&#8288;·&#8288;생활권 1인가구</p>
+    <p class="card-org">서초1인가구지원센터</p>
+  </div>
+</article></div><div class="state-cap"><b>마감 당일</b><span>공고문: 모집 ~11.09.(월)</span><span class="do">남은 시간·자정은 쓰지 않음</span></div></div></div></div>
+  <div class="state-group"><div class="state-title">회차별 접수 → 공고 전체 마감으로 쓰지 않음</div><div class="state-row"><div class="state"><div style="width:173px"><article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">각 클래스 전날까지 접수</div>
+    <h3 class="card-title">현직자 멘토링 송파 잡톡 참여자 모집</h3>
+    <p class="card-elig">39세 이하 청년 누구나</p>
+    <p class="card-org">송파구청</p>
+  </div>
+</article></div><div class="state-cap"><b>조건이 확인된 공고</b><span>포스터: 신청 ~각 클래스 D-1</span><span class="do">‘12.13까지’로 쓰지 않음</span></div></div><div class="state"><div style="width:173px"><article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill pill--muted">회차별 접수 조건 확인</div>
+    <h3 class="card-title">집 보는 수업 &lt;&#8288;보여줘! 강북홈즈&#8288;&gt;</h3>
+    <p class="card-elig">만 19~39세 청년</p>
+    <p class="card-org">서울청년센터 강북</p>
+  </div>
+</article></div><div class="state-cap"><b>조건 확인 전</b><span>신청 페이지: 접수 ~11.19 0시</span><span class="do">회차별 마감은 확인 뒤 표시</span></div></div></div></div>
+  <div class="state-group"><div class="state-title">마감일 미확인·출처 충돌 → 도장·D-day·알림 보류</div><div class="state-row"><div class="state"><div style="width:173px"><article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill pill--muted">접수 여부 확인</div>
+    <h3 class="card-title">길에서 만나는 노동의 역사 탐방</h3>
+    <p class="card-elig">서울에서 일하거나 거주하는 노동자</p>
+    <p class="card-org">서울노동권익센터</p>
+  </div>
+</article></div><div class="state-cap"><b>접수 여부도 확인 전</b><span>공고문: 신청 ‘상시’, 탐방 ~10.23</span><span class="do">‘접수 중’ 대신 이 표시</span></div></div><div class="state"><div style="width:173px"><article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill pill--muted">마감일은 공고문에서 확인</div>
+    <h3 class="card-title">청소년 자원봉사교육 강사단 양성교육</h3>
+    <p class="card-elig">마포구 거주&#8288;·&#8288;활동자</p>
+    <p class="card-org">마포구청</p>
+  </div>
+</article></div><div class="state-cap"><b>출처 충돌 · 확인 전</b><span>서비스 값 12.3 = 교육 시작일</span><span class="do">‘접수 중’ 배지는 유지</span></div></div><div class="state"><div style="width:173px"><article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">11.20(금) 오후 6시까지</div>
+    <h3 class="card-title">청소년 자원봉사교육 강사단 양성교육</h3>
+    <p class="card-elig">마포구 거주&#8288;·&#8288;활동자</p>
+    <p class="card-org">마포구청</p>
+  </div>
+</article></div><div class="state-cap"><b>같은 공고 · 확인 후</b><span>포스터: 모집 ~11.20.(금) 18:00</span><span class="do">접수 마감·교육 시작일 따로</span></div></div></div></div>
+  <div class="state-group"><div class="state-title">이용자 상태</div><div class="state-row"><div class="state"><div style="width:173px"><article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜 해제"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill pill--applied"><svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청했어요</div>
+    <h3 class="card-title">또오리랑 가죽공방 모집</h3>
+    <p class="card-elig">서울 생활권 만 19~39세 청년</p>
+    <p class="card-org">서울청년센터 양천</p>
+  </div>
+</article></div><div class="state-cap"><b>신청 표시한 공고</b><span>도장·D-day 숨김</span><span class="do">홈 마감 안내에서 제외</span></div></div><div class="state"><div style="width:173px"><article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><span class="stamp">D-3</span><button class="fav" aria-label="찜 해제"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">11.12(목) 오후 6시까지</div>
+    <h3 class="card-title">신혼부부 매입임대주택 입주자 모집</h3>
+    <p class="card-elig">서울 거주 무주택 신혼부부</p>
+    <p class="card-org">강북구청</p>
+  </div>
+</article></div><div class="state-cap"><b>찜한 공고</b><span>하트 채움</span><span class="do">도장은 D-3부터 당일까지</span></div></div></div></div>
+</div>
+
+<h2>2. 모바일 홈 (390×844)</h2>
+<div class="row">
+<figure class="shot" id="m-home-first"><figcaption>홈 · 첫 방문 (찜 마감 줄·지난 방문 버튼 없음)</figcaption><div class="phone">
+  <div style="padding:16px 16px 0">
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="serif" style="font-size:21px;display:flex;align-items:center;gap:4px"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>서울 전체<svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px;" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <button class="chip" style="padding:4px 10px;font-size:12px">대상 전체<svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px;" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <span style="flex:1"></span><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+    </div>
+    <div class="muted" style="margin-top:3px">지원·강좌·행사 · 접수 중 166건</div>
+
+    <div class="chips" style="display:flex;gap:7px;margin-top:12px;overflow:hidden"><button class="chip is-on">전체</button><button class="chip">지원·혜택</button><button class="chip">교육·강좌</button><button class="chip">문화·행사</button><button class="chip">일자리</button><button class="chip">공모전</button></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 10px">
+      <h2 class="serif" style="font-size:18px">새로 올라온 공고</h2>
+
+    </div>
+    <div class="grid2">
+      <article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><span class="stamp">D-2</span><button class="fav" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">11.11(수) 23:59까지</div>
+    <h3 class="card-title">또오리랑 가죽공방 모집</h3>
+    <p class="card-elig">서울 생활권 만 19~39세 청년</p>
+    <p class="card-org">서울청년센터 양천</p>
+  </div>
+</article>
+      <article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">각 클래스 전날까지 접수</div>
+    <h3 class="card-title">현직자 멘토링 송파 잡톡 참여자 모집</h3>
+    <p class="card-elig">39세 이하 청년 누구나</p>
+    <p class="card-org">송파구청</p>
+  </div>
+</article>
+      <article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><span class="stamp">D-3</span><button class="fav" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">11.12(목) 오후 6시까지</div>
+    <h3 class="card-title">신혼부부 매입임대주택 입주자 모집</h3>
+    <p class="card-elig">서울 거주 무주택 신혼부부</p>
+    <p class="card-org">강북구청</p>
+  </div>
+</article>
+      <article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">11.20(금) 오후 6시까지</div>
+    <h3 class="card-title">SM엔터테인먼트 오픈이노베이션 밋업</h3>
+    <p class="card-elig">초기창업패키지 선정&#8288;·&#8288;졸업기업</p>
+    <p class="card-org">씨엔티테크</p>
+  </div>
+</article>
+    </div>
+  </div>
+  <nav class="tabbar"><div class="is-on"><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>홈</div><div class=""><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>찾기</div><div class=""><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>찜</div><div class=""><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>마이</div></nav>
+</div></figure>
+<figure class="shot" id="m-home-return"><figcaption>홈 · 다시 방문 (찜 마감 줄, 지난 방문 이후 N건)</figcaption><div class="phone">
+  <div style="padding:16px 16px 0">
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="serif" style="font-size:21px;display:flex;align-items:center;gap:4px"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>서울 전체<svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px;" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <button class="chip" style="padding:4px 10px;font-size:12px">대상 전체<svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px;" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <span style="flex:1"></span><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+    </div>
+    <div class="muted" style="margin-top:3px">지원·강좌·행사 · 접수 중 166건</div>
+    <a class="card" style="margin-top:10px;padding:7px 12px;display:flex;align-items:center;gap:10px"><span class="stamp stamp--inline">D-3</span><span style="flex:1;font-size:14px;font-weight:600">찜한 공고 1건 · 목요일 마감</span><svg class="ic" viewBox="0 0 24 24" style="width:18px;height:18px;color:var(--faint)" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></a>
+    <div class="chips" style="display:flex;gap:7px;margin-top:12px;overflow:hidden"><button class="chip is-on">전체</button><button class="chip">지원·혜택</button><button class="chip">교육·강좌</button><button class="chip">문화·행사</button><button class="chip">일자리</button><button class="chip">공모전</button></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 10px">
+      <h2 class="serif" style="font-size:18px">새로 올라온 공고</h2>
+      <button style="border:1px solid var(--ink);border-radius:14px;padding:4px 10px;font-size:12.5px;font-weight:600;display:inline-flex;align-items:center;gap:2px">지난 방문 이후 14건<svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px;" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></button>
+    </div>
+    <div class="grid2">
+      <article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜 해제"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill pill--applied"><svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청했어요</div>
+    <h3 class="card-title">또오리랑 가죽공방 모집</h3>
+    <p class="card-elig">서울 생활권 만 19~39세 청년</p>
+    <p class="card-org">서울청년센터 양천</p>
+  </div>
+</article>
+      <article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜 해제"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">각 클래스 전날까지 접수</div>
+    <h3 class="card-title">현직자 멘토링 송파 잡톡 참여자 모집</h3>
+    <p class="card-elig">39세 이하 청년 누구나</p>
+    <p class="card-org">송파구청</p>
+  </div>
+</article>
+      <article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><span class="stamp">D-3</span><button class="fav" aria-label="찜 해제"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">11.12(목) 오후 6시까지</div>
+    <h3 class="card-title">신혼부부 매입임대주택 입주자 모집</h3>
+    <p class="card-elig">서울 거주 무주택 신혼부부</p>
+    <p class="card-org">강북구청</p>
+  </div>
+</article>
+      <article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">11.20(금) 오후 6시까지</div>
+    <h3 class="card-title">SM엔터테인먼트 오픈이노베이션 밋업</h3>
+    <p class="card-elig">초기창업패키지 선정&#8288;·&#8288;졸업기업</p>
+    <p class="card-org">씨엔티테크</p>
+  </div>
+</article>
+    </div>
+  </div>
+  <nav class="tabbar"><div class="is-on"><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>홈</div><div class=""><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>찾기</div><div class=""><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>찜</div><div class=""><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>마이</div></nav>
+</div></figure>
+<figure class="shot" id="m-home-sticky"><figcaption>홈 · 스크롤 중 머리글</figcaption><div class="phone">
+  <header style="position:absolute;left:0;right:0;top:0;z-index:3;background:var(--paper);border-bottom:1px solid var(--line);padding:11px 16px 10px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="serif" style="font-size:17px;display:flex;align-items:center;gap:3px"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px;" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>서울 전체<svg class="ic" viewBox="0 0 24 24" style="width:15px;height:15px;" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <button class="chip" style="padding:3px 9px;font-size:11.5px">대상 전체<svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px;" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <span style="flex:1"></span><svg class="ic" viewBox="0 0 24 24" style="width:21px;height:21px;" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><svg class="ic" viewBox="0 0 24 24" style="width:21px;height:21px;" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+    </div>
+  </header>
+  <div class="grid2" style="padding:0 16px;margin-top:-62px">
+    <article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><span class="stamp">D-3</span><button class="fav" aria-label="찜 해제"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">11.12(목) 오후 6시까지</div>
+    <h3 class="card-title">신혼부부 매입임대주택 입주자 모집</h3>
+    <p class="card-elig">서울 거주 무주택 신혼부부</p>
+    <p class="card-org">강북구청</p>
+  </div>
+</article>
+    <article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">11.20(금) 오후 6시까지</div>
+    <h3 class="card-title">SM엔터테인먼트 오픈이노베이션 밋업</h3>
+    <p class="card-elig">초기창업패키지 선정&#8288;·&#8288;졸업기업</p>
+    <p class="card-org">씨엔티테크</p>
+  </div>
+</article>
+    <article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜 해제"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">11.26(목) 오후 1시까지</div>
+    <h3 class="card-title">공유주방 25기 및 제조주방 13기 모집</h3>
+    <p class="card-elig">서울 소재 F&amp;B 스타트업</p>
+    <p class="card-org">서울경제진흥원</p>
+  </div>
+</article>
+    <article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">각 클래스 전날까지 접수</div>
+    <h3 class="card-title">현직자 멘토링 송파 잡톡 참여자 모집</h3>
+    <p class="card-elig">39세 이하 청년 누구나</p>
+    <p class="card-org">송파구청</p>
+  </div>
+</article>
+    <article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">11.22(일)까지</div>
+    <h3 class="card-title">시각장애학생 멘토링교실 자원봉사자 모집</h3>
+    <p class="card-elig">대학생&#8288;·&#8288;성인</p>
+    <p class="card-org">성북시각장애인복지관</p>
+  </div>
+</article>
+    <article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">11.15(일)까지</div>
+    <h3 class="card-title">일하는 청년을 위한 포인트 노동법</h3>
+    <p class="card-elig">일하는 청년</p>
+    <p class="card-org">서울청년센터 은평</p>
+  </div>
+</article>
+  </div>
+  <nav class="tabbar"><div class="is-on"><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>홈</div><div class=""><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>찾기</div><div class=""><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>찜</div><div class=""><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>마이</div></nav>
+</div></figure>
+</div>
+
+<h2>3. 모바일 상세</h2>
+<div class="row">
+<figure class="shot" id="m-detail-open"><figcaption>상세 · 날짜와 시각이 확인된 공고</figcaption><div class="phone">
+  <header class="topbar"><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg><span style="font-size:15px;font-weight:600">공고 상세</span><svg class="ic" viewBox="0 0 24 24" style="width:21px;height:21px;" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></header>
+  <div class="hero" style="height:280px"><div class="ph">포스터 미리보기 · 화면 높이의 40% 이하</div><div class="hero-fade"></div><button class="hero-zoom"><svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px;" aria-hidden="true"><path d="M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7"/></svg>크게 보기</button></div>
+  <div style="padding:13px 16px 0">
+    <div style="display:flex;gap:6px"><span class="tag is-on">문화·행사</span><span class="tag">양천구</span><span class="tag">접수 중</span></div>
+    <h1 class="serif c3" style="font-size:19px;line-height:1.38;margin-top:9px">서울청년센터 양천&lt;&#8288;또오리랑 가죽공방&#8288;&gt; 모집</h1>
+
+    <section class="card" style="margin-top:11px">
+      <div class="cell"><div class="cell-k"><span>대상</span><span>회당 10명</span></div><div class="cell-v l1">서울 생활권 만 19~39세 청년 누구나</div><div class="pref" style="font-size:13px;margin-top:2px"><span class="badge">우대</span>신규 참여자</div></div>
+      <div style="display:grid;grid-template-columns:1.32fr 1fr;border-top:1px solid var(--line)">
+        <div class="cell"><div class="cell-k"><span>신청 마감</span><span>D-2</span></div><div class="cell-v">11.11(수) 밤 11시 59분까지</div><div class="cap">조기 마감될 수 있어요</div></div>
+        <div class="cell" style="border-left:1px solid var(--line)"><div class="cell-k">비용</div><div class="cell-v unknown">공고문에서 확인</div></div>
+      </div>
+      <div class="cell" style="border-top:1px solid var(--line)"><div class="cell-k">진행</div><div class="cell-v l1">11.19(목)·20(금)·26(목)·27(금) 중 1회</div><div class="cap">저녁 7~9시 · 서울청년센터 양천 2층</div></div>
+    </section>
+    <div class="muted" style="font-size:12px;margin-top:8px;display:flex;align-items:center;gap:3px">출처 청년몽땅정보통 · <a style="color:var(--ink);font-weight:600;display:inline-flex;align-items:center">공식 공고문 보기<svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px;" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></a></div>
+    <h2 class="serif" style="font-size:16px;margin:13px 0 8px">비슷한 접수 중 공고</h2>
+  </div>
+
+  <div class="actionbar">
+    <button class="btn" style="flex:none;width:46px" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:21px;height:21px;fill:currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
+    <button class="btn" style="flex:none;padding:0 12px;font-size:14px;gap:4px;color:var(--ink-soft)"><svg class="ic" viewBox="0 0 24 24" style="width:15px;height:15px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청했어요</button>
+    <a class="btn btn--primary" style="flex:1;font-size:15px;gap:6px">신청 페이지로 이동<svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px;" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
+  </div>
+</div></figure>
+<figure class="shot" id="m-detail-prompt"><figcaption>상세 · 신청 페이지에서 돌아왔을 때 한 번 묻기</figcaption><div class="phone">
+  <header class="topbar"><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg><span style="font-size:15px;font-weight:600">공고 상세</span><svg class="ic" viewBox="0 0 24 24" style="width:21px;height:21px;" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></header>
+  <div class="hero" style="height:280px"><div class="ph">포스터 미리보기 · 화면 높이의 40% 이하</div><div class="hero-fade"></div><button class="hero-zoom"><svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px;" aria-hidden="true"><path d="M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7"/></svg>크게 보기</button></div>
+  <div style="padding:13px 16px 0">
+    <div style="display:flex;gap:6px"><span class="tag is-on">문화·행사</span><span class="tag">양천구</span><span class="tag">접수 중</span></div>
+    <h1 class="serif c3" style="font-size:19px;line-height:1.38;margin-top:9px">서울청년센터 양천&lt;&#8288;또오리랑 가죽공방&#8288;&gt; 모집</h1>
+
+    <section class="card" style="margin-top:11px">
+      <div class="cell"><div class="cell-k"><span>대상</span><span>회당 10명</span></div><div class="cell-v l1">서울 생활권 만 19~39세 청년 누구나</div><div class="pref" style="font-size:13px;margin-top:2px"><span class="badge">우대</span>신규 참여자</div></div>
+      <div style="display:grid;grid-template-columns:1.32fr 1fr;border-top:1px solid var(--line)">
+        <div class="cell"><div class="cell-k"><span>신청 마감</span><span>D-2</span></div><div class="cell-v">11.11(수) 밤 11시 59분까지</div><div class="cap">조기 마감될 수 있어요</div></div>
+        <div class="cell" style="border-left:1px solid var(--line)"><div class="cell-k">비용</div><div class="cell-v unknown">공고문에서 확인</div></div>
+      </div>
+      <div class="cell" style="border-top:1px solid var(--line)"><div class="cell-k">진행</div><div class="cell-v l1">11.19(목)·20(금)·26(목)·27(금) 중 1회</div><div class="cap">저녁 7~9시 · 서울청년센터 양천 2층</div></div>
+    </section>
+    <div class="muted" style="font-size:12px;margin-top:8px;display:flex;align-items:center;gap:3px">출처 청년몽땅정보통 · <a style="color:var(--ink);font-weight:600;display:inline-flex;align-items:center">공식 공고문 보기<svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px;" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></a></div>
+    <h2 class="serif" style="font-size:16px;margin:13px 0 8px">비슷한 접수 중 공고</h2>
+  </div>
+  <div class="sheet" role="dialog" aria-label="신청 여부 확인"><div style="font-size:15.5px;font-weight:700">신청을 마치셨나요?</div><div class="muted" style="font-size:13px;margin-top:3px">신청했다고 표시하면 이 공고의 마감 알림이 꺼져요.</div><div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn--primary" style="flex:1;height:42px;font-size:14.5px;gap:5px"><svg class="ic" viewBox="0 0 24 24" style="width:15px;height:15px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청했어요</button><button class="btn" style="flex:1;height:42px;font-size:14.5px;color:var(--ink-soft)">아직이에요</button></div></div>
+  <div class="actionbar">
+    <button class="btn" style="flex:none;width:46px" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:21px;height:21px;fill:currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
+
+    <a class="btn btn--primary" style="flex:1;font-size:15px;gap:6px">신청 페이지로 이동<svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px;" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
+  </div>
+</div></figure>
+<figure class="shot" id="m-detail-applied"><figcaption>상세 · ‘신청했어요’로 표시한 뒤</figcaption><div class="phone">
+  <header class="topbar"><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg><span style="font-size:15px;font-weight:600">공고 상세</span><svg class="ic" viewBox="0 0 24 24" style="width:21px;height:21px;" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></header>
+  <div class="hero" style="height:280px"><div class="ph">포스터 미리보기 · 화면 높이의 40% 이하</div><div class="hero-fade"></div><button class="hero-zoom"><svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px;" aria-hidden="true"><path d="M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7"/></svg>크게 보기</button></div>
+  <div style="padding:13px 16px 0">
+    <div style="display:flex;gap:6px"><span class="tag is-on">문화·행사</span><span class="tag">양천구</span><span class="tag">접수 중</span></div>
+    <h1 class="serif c3" style="font-size:19px;line-height:1.38;margin-top:9px">서울청년센터 양천&lt;&#8288;또오리랑 가죽공방&#8288;&gt; 모집</h1>
+    <div class="okbar" style="margin-top:10px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;display:inline-flex;align-items:center;gap:4px"><svg class="ic" viewBox="0 0 24 24" style="width:15px;height:15px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청한 공고예요</span><button class="undo">되돌리기</button></div><div style="margin-top:1px;font-size:12.5px">마감 알림을 껐어요 · 선정 안내 11.12(목) 오후 3시 예정</div></div>
+    <section class="card" style="margin-top:11px">
+      <div class="cell"><div class="cell-k"><span>대상</span><span>회당 10명</span></div><div class="cell-v l1">서울 생활권 만 19~39세 청년 누구나</div><div class="pref" style="font-size:13px;margin-top:2px"><span class="badge">우대</span>신규 참여자</div></div>
+      <div style="display:grid;grid-template-columns:1.32fr 1fr;border-top:1px solid var(--line)">
+        <div class="cell"><div class="cell-k"><span>신청 마감</span></div><div class="cell-v">11.11(수) 밤 11시 59분까지</div><div class="cap">조기 마감될 수 있어요</div></div>
+        <div class="cell" style="border-left:1px solid var(--line)"><div class="cell-k">비용</div><div class="cell-v unknown">공고문에서 확인</div></div>
+      </div>
+      <div class="cell" style="border-top:1px solid var(--line)"><div class="cell-k">진행</div><div class="cell-v l1">11.19(목)·20(금)·26(목)·27(금) 중 1회</div><div class="cap">저녁 7~9시 · 서울청년센터 양천 2층</div></div>
+    </section>
+    <div class="muted" style="font-size:12px;margin-top:8px;display:flex;align-items:center;gap:3px">출처 청년몽땅정보통 · <a style="color:var(--ink);font-weight:600;display:inline-flex;align-items:center">공식 공고문 보기<svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px;" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></a></div>
+    <h2 class="serif" style="font-size:16px;margin:13px 0 8px">비슷한 접수 중 공고</h2>
+  </div>
+
+  <div class="actionbar">
+    <button class="btn" style="flex:none;width:46px" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:21px;height:21px;fill:currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
+    <button class="btn btn--applied" style="flex:none;padding:0 12px;font-size:14px;gap:4px"><svg class="ic" viewBox="0 0 24 24" style="width:15px;height:15px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청했어요</button>
+    <a class="btn btn--outline" style="flex:1;font-size:15px;gap:6px">신청 페이지로 이동<svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px;" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
+  </div>
+</div></figure>
+</div>
+<div class="row" style="margin-top:22px">
+<figure class="shot" id="m-detail-dateonly"><figcaption>상세 · 날짜만 확인된 공고</figcaption><div class="phone">
+  <header class="topbar"><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg><span style="font-size:15px;font-weight:600">공고 상세</span><svg class="ic" viewBox="0 0 24 24" style="width:21px;height:21px;" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></header>
+  <div class="hero" style="height:300px"><div class="ph">포스터 미리보기 · 화면 높이의 40% 이하</div><div class="hero-fade"></div><button class="hero-zoom"><svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px;" aria-hidden="true"><path d="M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7"/></svg>크게 보기</button></div>
+  <div style="padding:13px 16px 0">
+    <div style="display:flex;gap:6px"><span class="tag is-on">교육·강좌</span><span class="tag">은평구</span><span class="tag">접수 중</span></div>
+    <h1 class="serif c3" style="font-size:19px;line-height:1.38;margin-top:9px">서울청년센터은평 X 서울노동권익센터 &lt;&#8288;일하는 청년을 위한 포인트 노동법&#8288;&gt; 수강생 모집</h1>
+    <section class="card" style="margin-top:11px">
+      <div class="cell"><div class="cell-k"><span>대상</span><span>모집 30명</span></div><div class="cell-v l1">근로계약을 맺고 일하는 청년</div><div class="pref" style="font-size:13px;margin-top:2px"><span class="badge badge--must">필수</span>1·2회차 모두 참여</div></div>
+      <div style="display:grid;grid-template-columns:1.32fr 1fr;border-top:1px solid var(--line)">
+        <div class="cell"><div class="cell-k"><span>신청 마감</span><span>D-6</span></div><div class="cell-v">11.15(일)까지</div><div class="cap">마감 시각은 공고문에서 확인</div></div>
+        <div class="cell" style="border-left:1px solid var(--line)"><div class="cell-k">비용</div><div class="cell-v unknown">공고문에서 확인</div></div>
+      </div>
+      <div class="cell" style="border-top:1px solid var(--line)"><div class="cell-k">진행</div><div class="cell-v l1">11.18(수)·11.20(금) 저녁 7~9시</div><div class="cap">서울청년센터 은평 · 추첨 선발</div></div>
+    </section>
+    <div class="muted" style="font-size:12px;margin-top:8px;display:flex;align-items:center;gap:3px">출처 청년몽땅정보통 · <a style="color:var(--ink);font-weight:600;display:inline-flex;align-items:center">공식 공고문 보기<svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px;" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></a></div>
+    <h2 class="serif" style="font-size:16px;margin:13px 0 8px">비슷한 접수 중 공고</h2>
+  </div>
+  <div class="actionbar">
+    <button class="btn" style="flex:none;width:46px" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:21px;height:21px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
+    <button class="btn" style="flex:none;padding:0 12px;font-size:14px;gap:4px;color:var(--ink-soft)"><svg class="ic" viewBox="0 0 24 24" style="width:15px;height:15px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청했어요</button>
+    <a class="btn btn--primary" style="flex:1;font-size:15px;gap:6px">신청 페이지로 이동<svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px;" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
+  </div>
+</div></figure>
+<figure class="shot" id="m-detail-sessions"><figcaption>상세 · 회차마다 접수가 끝나는 공고</figcaption><div class="phone">
+  <header class="topbar"><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg><span style="font-size:15px;font-weight:600">공고 상세</span><svg class="ic" viewBox="0 0 24 24" style="width:21px;height:21px;" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></header>
+  <div class="hero" style="height:296px"><div class="ph">포스터 미리보기 · 화면 높이의 40% 이하</div><div class="hero-fade"></div><button class="hero-zoom"><svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px;" aria-hidden="true"><path d="M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7"/></svg>크게 보기</button></div>
+  <div style="padding:13px 16px 0">
+    <div style="display:flex;gap:6px"><span class="tag is-on">문화·행사</span><span class="tag">송파구</span><span class="tag">접수 중</span></div>
+    <h1 class="serif c3" style="font-size:19px;line-height:1.38;margin-top:9px">송파구청 &lt;&#8288;2026 송파 현직자 멘토링 송파 잡톡(Job Talk)」 참여자 모집&#8288;&gt;</h1>
+    <section class="card" style="margin-top:11px">
+      <div class="cell"><div class="cell-k"><span>대상</span><span>모집 직무별 10명 내외</span></div><div class="cell-v">39세 이하 청년 누구나<span class="pref" style="font-size:13px;margin-left:8px"><span class="badge">우대</span>송파구민</span></div></div>
+      <div style="display:grid;grid-template-columns:1.7fr 1fr;border-top:1px solid var(--line)">
+        <div class="cell"><div class="cell-k"><span>신청 마감</span><span>마지막 접수 12.13(일)</span></div><div class="cell-v">각 클래스 전날까지</div><div class="cap l1">11.11(수) 클래스는 11.10(화)까지</div></div>
+        <div class="cell" style="border-left:1px solid var(--line)"><div class="cell-k">비용</div><div class="cell-v unknown">공고문에서 확인</div></div>
+      </div>
+      <div class="cell" style="border-top:1px solid var(--line)"><div class="cell-k">진행</div><div class="cell-v l1">매주 월·수 저녁 7~9시 · 송파청년센터</div><div class="cap l1">11.9(월)~12.14(월) · 직무·회차를 골라 신청</div></div>
+    </section>
+    <div class="muted" style="font-size:12px;margin-top:8px;display:flex;align-items:center;gap:3px">출처 청년몽땅정보통 · <a style="color:var(--ink);font-weight:600;display:inline-flex;align-items:center">공식 공고문 보기<svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px;" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></a></div>
+    <h2 class="serif" style="font-size:16px;margin:13px 0 8px">비슷한 접수 중 공고</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div class="card" style="display:flex;gap:9px;padding:8px"><div class="thumb" style="width:44px;height:60px;border-radius:5px;border:0"><div class="ph"></div></div><div style="min-width:0"><div class="l1" style="font-size:11.5px;font-weight:700;line-height:1.4">서울 생활권 청년</div><div class="c2" style="font-size:12.5px;font-weight:600;line-height:1.35;margin-top:1px">전문가 1:1 취업상담</div></div></div><div class="card" style="display:flex;gap:9px;padding:8px"><div class="thumb" style="width:44px;height:60px;border-radius:5px;border:0"><div class="ph"></div></div><div style="min-width:0"><div class="l1" style="font-size:11.5px;font-weight:700;line-height:1.4">도봉구 취업준비청년</div><div class="c2" style="font-size:12.5px;font-weight:600;line-height:1.35;margin-top:1px">NCS 대비 특강</div></div></div></div>
+  </div>
+  <div class="actionbar">
+    <button class="btn" style="flex:none;width:46px" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:21px;height:21px;fill:currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
+    <button class="btn" style="flex:none;padding:0 12px;font-size:14px;gap:4px;color:var(--ink-soft)"><svg class="ic" viewBox="0 0 24 24" style="width:15px;height:15px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청했어요</button>
+    <a class="btn btn--primary" style="flex:1;font-size:15px;gap:6px">신청 페이지로 이동<svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px;" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
+  </div>
+</div></figure>
+<figure class="shot" id="m-detail-unverified"><figcaption>상세 · 접수 마감이 확인되기 전 (찜한 직후 안내)</figcaption><div class="phone">
+  <header class="topbar"><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg><span style="font-size:15px;font-weight:600">공고 상세</span><svg class="ic" viewBox="0 0 24 24" style="width:21px;height:21px;" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></header>
+  <div class="hero" style="height:338px"><div class="ph">포스터 미리보기 · 화면 높이의 40% 이하</div><div class="hero-fade"></div><button class="hero-zoom"><svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px;" aria-hidden="true"><path d="M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7"/></svg>크게 보기</button></div>
+  <div style="padding:13px 16px 0">
+    <div style="display:flex;gap:6px"><span class="tag is-on">교육·강좌</span><span class="tag">마포구</span><span class="tag">접수 중</span></div>
+    <h1 class="serif c3" style="font-size:19px;line-height:1.38;margin-top:9px">마포구 청소년 자원봉사교육 강사단 양성교육 모집</h1>
+    <div class="muted" style="font-size:12.5px;margin-top:3px">마포구청</div>
+    <section class="card" style="margin-top:11px">
+      <div class="cell"><div class="cell-k">신청 마감</div><div class="cell-v unknown">공고문에서 확인</div><div class="cap">마감일이 서로 다르게 올라와 있어 확인하고 있어요. 확인 전에는 <span style="white-space:nowrap">D-day와</span> 마감 알림을 표시하지 않아요.</div></div>
+      <a class="cell" style="border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between"><span style="font-size:13.5px;font-weight:600">대상·비용·일정은 포스터와 공고문에서 확인</span><svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px;color:var(--faint)" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></a>
+    </section>
+  </div>
+  <div class="snackbar" role="status"><b style="font-weight:700">찜했어요.</b> 마감일 확인 전이라 마감 알림은 없어요.</div>
+  <div class="actionbar">
+    <button class="btn" style="flex:none;width:46px" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:21px;height:21px;fill:currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
+    <button class="btn" style="flex:none;padding:0 12px;font-size:14px;gap:4px;color:var(--ink-soft)"><svg class="ic" viewBox="0 0 24 24" style="width:15px;height:15px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청했어요</button>
+    <a class="btn btn--primary" style="flex:1;font-size:15px;gap:6px">공식 공고 확인하기<svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px;" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
+  </div>
+</div></figure>
+<figure class="shot" id="m-detail-closed"><figcaption>상세 · 마감된 공고 → 비슷한 접수 중 공고</figcaption><div class="phone">
+  <header class="topbar"><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg><span style="font-size:15px;font-weight:600">공고 상세</span><svg class="ic" viewBox="0 0 24 24" style="width:21px;height:21px;" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></header>
+  <div style="padding:14px 16px 0">
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;gap:6px"><span class="tag">교육·강좌</span><span class="tag">종로구</span><span class="tag is-closed">접수 종료</span></div>
+        <h1 class="serif c3" style="font-size:17px;line-height:1.4;margin-top:8px;color:var(--ink-soft)">종로구 1인가구지원센터 &lt;&#8288;안심 전&#8288;·&#8288;월세 클래스&#8288;&gt; 참여자 모집</h1>
+      </div>
+      <div class="thumb" style="width:74px;height:104px;border-radius:8px;opacity:.75"><div class="ph"></div></div>
+    </div>
+    <div style="margin-top:12px;background:var(--ink);color:#fff;border-radius:10px;padding:11px 13px;font-size:14px;font-weight:600">이 공고는 8월 17일에 접수가 끝났어요</div>
+    <h2 class="serif" style="font-size:18px;margin:18px 0 2px">지금 접수 중인 비슷한 공고</h2>
+    <div class="muted" style="font-size:12.5px">집 구하기·임대차 계약 주제 · 1인가구 대상 공고는 지금 없어요</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:13px 0 8px"><span style="font-size:13.5px;font-weight:700">같은 주제 · 대상이 다른 공고</span><span class="muted" style="font-size:12px;display:inline-flex;align-items:center;gap:3px"><svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px;" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>서울 다른 구까지 넓혀 찾음</span></div>
+    <div style="display:grid;gap:8px">
+      <div class="card" style="padding:10px">
+  <div style="display:flex;gap:11px">
+    <div class="thumb" style="width:56px;height:78px;border-radius:6px;"><div class="ph"></div></div>
+    <div style="min-width:0;flex:1">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div class="pill pill--muted" style="margin-bottom:4px">회차별 접수 조건은 신청 페이지에서 확인</div><svg class="ic" viewBox="0 0 24 24" style="width:19px;height:19px;flex:none;margin-top:1px;color:var(--faint)" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+      <div style="font-size:13px;font-weight:700;line-height:1.5;display:flex;flex-wrap:wrap;align-items:baseline;gap:0 8px"><span>만 19~39세 청년</span><span class="pref"><span class="badge">우대</span>강북구 거주·생활권</span></div>
+      <div class="c2" style="font-size:14px;font-weight:600;line-height:1.4;margin-top:1px">집 보는 수업 &lt;&#8288;보여줘! 강북홈즈&#8288;&gt; 모집</div>
+      <div class="muted l1" style="font-size:12.5px;margin-top:2px">11.17(화)~19(목) · 서울청년센터 강북</div>
+    </div>
+  </div>
+</div>
+      <div class="card" style="padding:10px">
+  <div style="display:flex;gap:11px">
+    <div class="thumb" style="width:56px;height:78px;border-radius:6px;"><div class="ph"></div></div>
+    <div style="min-width:0;flex:1">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div class="pill" style="margin-bottom:4px">매월 선착순 예약</div><svg class="ic" viewBox="0 0 24 24" style="width:19px;height:19px;flex:none;margin-top:1px;color:var(--faint)" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+      <div style="font-size:13px;font-weight:700;line-height:1.5;display:flex;flex-wrap:wrap;align-items:baseline;gap:0 8px"><span class="pref"><span class="badge">우선</span>강북구 연립·다세대 거주자</span></div>
+      <div class="c2" style="font-size:14px;font-weight:600;line-height:1.4;margin-top:1px">빌라관리사무소 무료법률상담실</div>
+      <div class="muted l1" style="font-size:12.5px;margin-top:2px">매월 셋째 목요일 오전 상담 · 강북구청</div>
+    </div>
+  </div>
+</div>
+    </div>
+    <a class="card" style="margin-top:8px;padding:12px;display:flex;align-items:center;justify-content:space-between;font-size:13.5px;font-weight:600">접수 중인 주거 공고 모두 보기<svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px;color:var(--faint)" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></a>
+    <button class="btn btn--outline" style="margin-top:12px;width:100%;height:44px;font-size:14px;gap:6px;background:transparent"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px;" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>비슷한 공고 받기</button>
+    <button class="muted" style="margin-top:12px;width:100%;font-size:13px;display:flex;align-items:center;justify-content:center;gap:3px">마감된 공고 내용 보기<svg class="ic" viewBox="0 0 24 24" style="width:15px;height:15px;" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button>
+  </div>
+  <nav class="tabbar"><div class=""><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>홈</div><div class=""><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>찾기</div><div class=""><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>찜</div><div class=""><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>마이</div></nav>
+</div></figure>
+</div>
+
+<h2>4. 모바일 찜</h2>
+<div class="row">
+<figure class="shot" id="m-fav"><figcaption>찜 · 네 묶음</figcaption><div class="phone">
+  <div style="padding:16px 16px 0">
+    <div style="display:flex;align-items:center;justify-content:space-between"><h1 class="serif" style="font-size:21px">찜</h1><span class="muted" style="font-size:12.5px">마감이 가까운 순</span></div>
+    <div class="muted" style="margin-top:3px">접수 중 5건 · 이번 주 마감 1건</div>
+    <div style="display:grid;gap:8px;margin-top:12px">
+      <div class="card" style="padding:10px">
+  <div style="display:flex;gap:11px">
+    <div style="position:relative;flex:none"><div class="thumb" style="width:56px;height:78px;border-radius:6px;"><div class="ph"></div></div><span class="stamp stamp--row">D-3</span></div>
+    <div style="min-width:0;flex:1">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div class="pill" style="margin-bottom:4px">11.12(목) 오후 6시까지</div><svg class="ic" viewBox="0 0 24 24" style="width:19px;height:19px;flex:none;margin-top:1px;fill:currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+      <div class="c2" style="font-size:14px;font-weight:600;line-height:1.4">신혼부부 매입임대주택 입주자 모집</div>
+      <div class="muted l1" style="font-size:12.5px;margin-top:2px">서울 거주 무주택 신혼부부 · 강북구청</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:10px"><span class="btn btn--outline" style="flex:1;height:36px;border-radius:9px;font-size:13px;gap:5px">공식 공고 확인하기<svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px;" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></span><span class="btn" style="flex:none;height:36px;border-radius:9px;padding:0 12px;font-size:13px;gap:4px;color:var(--muted)"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청했어요</span></div>
+</div>
+      <div class="card" style="padding:10px">
+  <div style="display:flex;gap:11px">
+    <div style="position:relative;flex:none"><div class="thumb" style="width:56px;height:78px;border-radius:6px;"><div class="ph"></div></div></div>
+    <div style="min-width:0;flex:1">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div class="pill" style="margin-bottom:4px">11.26(목) 오후 1시까지 · D-17</div><svg class="ic" viewBox="0 0 24 24" style="width:19px;height:19px;flex:none;margin-top:1px;fill:currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+      <div class="c2" style="font-size:14px;font-weight:600;line-height:1.4">공유주방 25기 및 제조주방 13기 모집</div>
+      <div class="muted l1" style="font-size:12.5px;margin-top:2px">서울 소재 F&amp;B 스타트업 · 서울경제진흥원</div>
+    </div>
+  </div>
+
+</div>
+    </div>
+    <div class="divider">마감 알림이 없는 공고 3건</div>
+    <div style="display:grid;gap:8px">
+      <div class="card" style="padding:9px 10px;display:flex;gap:10px">
+  <div class="thumb" style="width:44px;height:60px;border-radius:5px;"><div class="ph"></div></div>
+  <div style="min-width:0;flex:1">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <span class="pill" style="margin-bottom:0">각 클래스 전날까지 접수</span>
+      <svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px;fill:currentColor;flex:none" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+    </div>
+    <div class="l1" style="font-size:13.5px;font-weight:600;margin-top:3px">현직자 멘토링 송파 잡톡 참여자 모집</div>
+    <div class="muted l1" style="font-size:12px;margin-top:1px">39세 이하 청년 누구나 · 송파구청</div>
+
+  </div>
+</div>
+      <div class="card" style="padding:9px 10px;display:flex;gap:10px">
+  <div class="thumb" style="width:44px;height:60px;border-radius:5px;"><div class="ph"></div></div>
+  <div style="min-width:0;flex:1">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <span class="pill pill--muted" style="margin-bottom:0">회차별 접수 조건은 신청 페이지에서 확인</span>
+      <svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px;fill:currentColor;flex:none" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+    </div>
+    <div class="l1" style="font-size:13.5px;font-weight:600;margin-top:3px">집 보는 수업 &lt;&#8288;보여줘! 강북홈즈&#8288;&gt; 모집</div>
+    <div class="muted l1" style="font-size:12px;margin-top:1px">만 19~39세 청년 · 서울청년센터 강북</div>
+
+  </div>
+</div>
+      <div class="card" style="padding:9px 10px;display:flex;gap:10px">
+  <div class="thumb" style="width:44px;height:60px;border-radius:5px;"><div class="ph"></div></div>
+  <div style="min-width:0;flex:1">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <span class="pill" style="margin-bottom:0">정원 마감 때까지</span>
+      <svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px;fill:currentColor;flex:none" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+    </div>
+    <div class="l1" style="font-size:13.5px;font-weight:600;margin-top:3px">종로 청년생활 아카데미 참여자 모집</div>
+    <div class="muted l1" style="font-size:12px;margin-top:1px">만 39세 이하 청년 · 종로구</div>
+
+  </div>
+</div>
+    </div>
+    <div class="divider">신청한 공고 2건</div>
+    <div style="display:grid;gap:8px">
+      <div class="card" style="padding:9px 10px;display:flex;gap:10px">
+  <div class="thumb" style="width:44px;height:60px;border-radius:5px;"><div class="ph"></div></div>
+  <div style="min-width:0;flex:1">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <span style="font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:3px;color:var(--ok)"><svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청했어요</span>
+      <span class="undo">되돌리기</span>
+    </div>
+    <div class="l1" style="font-size:13.5px;font-weight:600;margin-top:1px">또오리랑 가죽공방 모집</div>
+    <div class="muted l1" style="font-size:12px;margin-top:1px">11.12(목) 오후 3시 선정 안내 예정</div>
+
+  </div>
+</div>
+      <div class="card" style="padding:9px 10px;display:flex;gap:10px">
+  <div class="thumb" style="width:44px;height:60px;border-radius:5px;"><div class="ph"></div></div>
+  <div style="min-width:0;flex:1">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <span style="font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:3px;color:var(--ok)"><svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청했어요</span>
+      <span class="undo">되돌리기</span>
+    </div>
+    <div class="l1" style="font-size:13.5px;font-weight:600;margin-top:1px">복지법률 토론회 &lt;&#8288;육아휴직제도 현실과 과제&#8288;&gt;</div>
+    <div class="muted l1" style="font-size:12px;margin-top:1px">11.13(금) 진행 · 서초구 변호사회관</div>
+
+  </div>
+</div>
+    </div>
+    <div class="divider">마감된 공고 1건</div>
+    <div class="card" style="padding:9px 10px;display:flex;gap:10px;background:var(--closed-bg)">
+  <div class="thumb" style="width:44px;height:60px;border-radius:5px;opacity:.7"><div class="ph"></div></div>
+  <div style="min-width:0;flex:1">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <span style="font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:3px;color:var(--muted)">8.17 마감</span>
+
+    </div>
+    <div class="l1" style="font-size:13.5px;font-weight:600;margin-top:1px;color:var(--muted)">안심 전&#8288;·&#8288;월세 클래스 참여자 모집</div>
+
+    <div style="font-size:12.5px;font-weight:700;margin-top:3px;display:flex;align-items:center;gap:1px">비슷한 접수 중 공고 2건 보기<svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px;" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></div>
+  </div>
+</div>
+  </div>
+
+  <nav class="tabbar"><div class=""><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>홈</div><div class=""><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>찾기</div><div class="is-on"><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>찜</div><div class=""><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>마이</div></nav>
+</div></figure>
+<figure class="shot" id="m-fav-moved"><figcaption>찜 · ‘신청했어요’를 누른 직후</figcaption><div class="phone">
+  <div style="padding:16px 16px 0">
+    <div style="display:flex;align-items:center;justify-content:space-between"><h1 class="serif" style="font-size:21px">찜</h1><span class="muted" style="font-size:12.5px">마감이 가까운 순</span></div>
+    <div class="muted" style="margin-top:3px">접수 중 5건 · 이번 주 마감 1건</div>
+    <div style="display:grid;gap:8px;margin-top:12px">
+      <div class="card" style="padding:10px">
+  <div style="display:flex;gap:11px">
+    <div style="position:relative;flex:none"><div class="thumb" style="width:56px;height:78px;border-radius:6px;"><div class="ph"></div></div><span class="stamp stamp--row">D-3</span></div>
+    <div style="min-width:0;flex:1">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div class="pill" style="margin-bottom:4px">11.12(목) 오후 6시까지</div><svg class="ic" viewBox="0 0 24 24" style="width:19px;height:19px;flex:none;margin-top:1px;fill:currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+      <div class="c2" style="font-size:14px;font-weight:600;line-height:1.4">신혼부부 매입임대주택 입주자 모집</div>
+      <div class="muted l1" style="font-size:12.5px;margin-top:2px">서울 거주 무주택 신혼부부 · 강북구청</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:10px"><span class="btn btn--outline" style="flex:1;height:36px;border-radius:9px;font-size:13px;gap:5px">공식 공고 확인하기<svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px;" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></span><span class="btn" style="flex:none;height:36px;border-radius:9px;padding:0 12px;font-size:13px;gap:4px;color:var(--muted)"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청했어요</span></div>
+</div>
+      <div class="card" style="padding:10px">
+  <div style="display:flex;gap:11px">
+    <div style="position:relative;flex:none"><div class="thumb" style="width:56px;height:78px;border-radius:6px;"><div class="ph"></div></div></div>
+    <div style="min-width:0;flex:1">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div class="pill" style="margin-bottom:4px">11.26(목) 오후 1시까지 · D-17</div><svg class="ic" viewBox="0 0 24 24" style="width:19px;height:19px;flex:none;margin-top:1px;fill:currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+      <div class="c2" style="font-size:14px;font-weight:600;line-height:1.4">공유주방 25기 및 제조주방 13기 모집</div>
+      <div class="muted l1" style="font-size:12.5px;margin-top:2px">서울 소재 F&amp;B 스타트업 · 서울경제진흥원</div>
+    </div>
+  </div>
+
+</div>
+    </div>
+    <div class="divider">마감 알림이 없는 공고 3건</div>
+    <div style="display:grid;gap:8px">
+      <div class="card" style="padding:9px 10px;display:flex;gap:10px">
+  <div class="thumb" style="width:44px;height:60px;border-radius:5px;"><div class="ph"></div></div>
+  <div style="min-width:0;flex:1">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <span class="pill" style="margin-bottom:0">각 클래스 전날까지 접수</span>
+      <svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px;fill:currentColor;flex:none" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+    </div>
+    <div class="l1" style="font-size:13.5px;font-weight:600;margin-top:3px">현직자 멘토링 송파 잡톡 참여자 모집</div>
+    <div class="muted l1" style="font-size:12px;margin-top:1px">39세 이하 청년 누구나 · 송파구청</div>
+
+  </div>
+</div>
+      <div class="card" style="padding:9px 10px;display:flex;gap:10px">
+  <div class="thumb" style="width:44px;height:60px;border-radius:5px;"><div class="ph"></div></div>
+  <div style="min-width:0;flex:1">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <span class="pill pill--muted" style="margin-bottom:0">회차별 접수 조건은 신청 페이지에서 확인</span>
+      <svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px;fill:currentColor;flex:none" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+    </div>
+    <div class="l1" style="font-size:13.5px;font-weight:600;margin-top:3px">집 보는 수업 &lt;&#8288;보여줘! 강북홈즈&#8288;&gt; 모집</div>
+    <div class="muted l1" style="font-size:12px;margin-top:1px">만 19~39세 청년 · 서울청년센터 강북</div>
+
+  </div>
+</div>
+      <div class="card" style="padding:9px 10px;display:flex;gap:10px">
+  <div class="thumb" style="width:44px;height:60px;border-radius:5px;"><div class="ph"></div></div>
+  <div style="min-width:0;flex:1">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <span class="pill" style="margin-bottom:0">정원 마감 때까지</span>
+      <svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px;fill:currentColor;flex:none" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+    </div>
+    <div class="l1" style="font-size:13.5px;font-weight:600;margin-top:3px">종로 청년생활 아카데미 참여자 모집</div>
+    <div class="muted l1" style="font-size:12px;margin-top:1px">만 39세 이하 청년 · 종로구</div>
+
+  </div>
+</div>
+    </div>
+    <div class="divider">신청한 공고 2건</div>
+    <div style="display:grid;gap:8px">
+      <div class="card" style="padding:9px 10px;display:flex;gap:10px">
+  <div class="thumb" style="width:44px;height:60px;border-radius:5px;"><div class="ph"></div></div>
+  <div style="min-width:0;flex:1">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <span style="font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:3px;color:var(--ok)"><svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청했어요</span>
+      <span class="undo">되돌리기</span>
+    </div>
+    <div class="l1" style="font-size:13.5px;font-weight:600;margin-top:1px">또오리랑 가죽공방 모집</div>
+    <div class="muted l1" style="font-size:12px;margin-top:1px">11.12(목) 오후 3시 선정 안내 예정</div>
+
+  </div>
+</div>
+      <div class="card" style="padding:9px 10px;display:flex;gap:10px">
+  <div class="thumb" style="width:44px;height:60px;border-radius:5px;"><div class="ph"></div></div>
+  <div style="min-width:0;flex:1">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <span style="font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:3px;color:var(--ok)"><svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청했어요</span>
+      <span class="undo">되돌리기</span>
+    </div>
+    <div class="l1" style="font-size:13.5px;font-weight:600;margin-top:1px">복지법률 토론회 &lt;&#8288;육아휴직제도 현실과 과제&#8288;&gt;</div>
+    <div class="muted l1" style="font-size:12px;margin-top:1px">11.13(금) 진행 · 서초구 변호사회관</div>
+
+  </div>
+</div>
+    </div>
+    <div class="divider">마감된 공고 1건</div>
+    <div class="card" style="padding:9px 10px;display:flex;gap:10px;background:var(--closed-bg)">
+  <div class="thumb" style="width:44px;height:60px;border-radius:5px;opacity:.7"><div class="ph"></div></div>
+  <div style="min-width:0;flex:1">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <span style="font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:3px;color:var(--muted)">8.17 마감</span>
+
+    </div>
+    <div class="l1" style="font-size:13.5px;font-weight:600;margin-top:1px;color:var(--muted)">안심 전&#8288;·&#8288;월세 클래스 참여자 모집</div>
+
+    <div style="font-size:12.5px;font-weight:700;margin-top:3px;display:flex;align-items:center;gap:1px">비슷한 접수 중 공고 2건 보기<svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px;" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></div>
+  </div>
+</div>
+  </div>
+  <div class="snackbar" role="status" style="display:flex;align-items:center;justify-content:space-between;bottom:78px"><span>‘신청한 공고’로 옮겼어요</span><button style="font-weight:700;text-decoration:underline;text-underline-offset:3px">되돌리기</button></div>
+  <nav class="tabbar"><div class=""><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>홈</div><div class=""><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>찾기</div><div class="is-on"><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>찜</div><div class=""><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>마이</div></nav>
+</div></figure>
+<figure class="shot" id="m-fav-empty"><figcaption>찜 · 처음 열었을 때</figcaption><div class="phone">
+  <div style="padding:16px 16px 0">
+    <h1 class="serif" style="font-size:21px">찜</h1>
+    <div class="card" style="margin-top:12px;padding:22px 18px 20px;text-align:center">
+      <div style="display:flex;justify-content:center"><svg class="ic" viewBox="0 0 24 24" style="width:30px;height:30px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+      <div class="serif" style="font-size:17px;margin-top:8px">아직 찜한 공고가 없어요</div>
+      <div class="muted" style="font-size:13px;margin-top:5px;line-height:1.55">공고의 ♡를 누르면 여기에 모이고,<br>마감이 가까운 순서로 정리돼요.</div>
+      <a class="btn btn--primary" style="margin:14px auto 0;height:42px;font-size:14px;width:170px">공고 둘러보기</a>
+    </div>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin:20px 0 9px"><h2 class="serif" style="font-size:17px">이번 주에 마감되는 공고</h2><span class="muted" style="font-size:12.5px">서울 전체</span></div>
+    <div style="display:grid;gap:8px">
+      <div class="card" style="padding:10px">
+  <div style="display:flex;gap:11px">
+    <div style="position:relative;flex:none"><div class="thumb" style="width:56px;height:78px;border-radius:6px;"><div class="ph"></div></div><span class="stamp stamp--row">D-1</span></div>
+    <div style="min-width:0;flex:1">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div class="pill" style="margin-bottom:4px">11.10(화) 오전 9시까지</div><svg class="ic" viewBox="0 0 24 24" style="width:19px;height:19px;flex:none;margin-top:1px;color:var(--faint)" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+      <div class="c2" style="font-size:14px;font-weight:600;line-height:1.4">채용담당자의 취업 코칭</div>
+      <div class="muted l1" style="font-size:12.5px;margin-top:2px">만 19~39세 청년 · 용산청년지음</div>
+    </div>
+  </div>
+
+</div>
+      <div class="card" style="padding:10px">
+  <div style="display:flex;gap:11px">
+    <div style="position:relative;flex:none"><div class="thumb" style="width:56px;height:78px;border-radius:6px;"><div class="ph"></div></div><span class="stamp stamp--row">D-2</span></div>
+    <div style="min-width:0;flex:1">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div class="pill" style="margin-bottom:4px">11.11(수) 밤 11시 59분까지</div><svg class="ic" viewBox="0 0 24 24" style="width:19px;height:19px;flex:none;margin-top:1px;color:var(--faint)" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+      <div class="c2" style="font-size:14px;font-weight:600;line-height:1.4">또오리랑 가죽공방 모집</div>
+      <div class="muted l1" style="font-size:12.5px;margin-top:2px">서울 생활권 만 19~39세 청년 · 서울청년센터 양천</div>
+    </div>
+  </div>
+
+</div>
+      <div class="card" style="padding:10px">
+  <div style="display:flex;gap:11px">
+    <div style="position:relative;flex:none"><div class="thumb" style="width:56px;height:78px;border-radius:6px;"><div class="ph"></div></div><span class="stamp stamp--row">D-3</span></div>
+    <div style="min-width:0;flex:1">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div class="pill" style="margin-bottom:4px">11.12(목) 오후 6시까지</div><svg class="ic" viewBox="0 0 24 24" style="width:19px;height:19px;flex:none;margin-top:1px;color:var(--faint)" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+      <div class="c2" style="font-size:14px;font-weight:600;line-height:1.4">신혼부부 매입임대주택 입주자 모집</div>
+      <div class="muted l1" style="font-size:12.5px;margin-top:2px">서울 거주 무주택 신혼부부 · 강북구청</div>
+    </div>
+  </div>
+
+</div>
+      <div class="card" style="padding:10px">
+  <div style="display:flex;gap:11px">
+    <div style="position:relative;flex:none"><div class="thumb" style="width:56px;height:78px;border-radius:6px;"><div class="ph"></div></div></div>
+    <div style="min-width:0;flex:1">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div class="pill" style="margin-bottom:4px">11.15(일)까지 · D-6</div><svg class="ic" viewBox="0 0 24 24" style="width:19px;height:19px;flex:none;margin-top:1px;color:var(--faint)" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+      <div class="c2" style="font-size:14px;font-weight:600;line-height:1.4">일하는 청년을 위한 포인트 노동법</div>
+      <div class="muted l1" style="font-size:12.5px;margin-top:2px">일하는 청년 · 서울청년센터 은평</div>
+    </div>
+  </div>
+
+</div>
+    </div>
+  </div>
+  <nav class="tabbar"><div class=""><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>홈</div><div class=""><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>찾기</div><div class="is-on"><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>찜</div><div class=""><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px;" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>마이</div></nav>
+</div></figure>
+</div>
+
+<h2>5. PC (1440×900 첫 화면)</h2>
+<div class="row">
+<figure class="shot" id="pc-home"><figcaption>PC 홈 · 4열</figcaption><div class="pc">
+  <header class="pc-header"><div class="wrap">
+    <a class="serif pc-logo">PosterLink</a>
+    <div class="pc-search"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px;" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>공고·기관 이름으로 찾기</div>
+    <span style="flex:1"></span>
+    <a class="pc-nav is-on">홈</a><a class="pc-nav">찾기</a><a class="pc-nav">찜</a><a class="pc-nav">마이</a>
+    <svg class="ic" viewBox="0 0 24 24" style="width:21px;height:21px;" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+  </div></header>
+  <div class="wrap" style="padding-top:28px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="serif" style="font-size:28px;display:flex;align-items:center;gap:6px"><svg class="ic" viewBox="0 0 24 24" style="width:25px;height:25px;" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>서울 전체<svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <button class="chip" style="padding:6px 13px;font-size:13.5px">대상 전체<svg class="ic" viewBox="0 0 24 24" style="width:15px;height:15px;" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <span style="flex:1"></span>
+      <a class="card" style="padding:8px 14px;display:flex;align-items:center;gap:10px;width:320px"><span class="stamp stamp--inline" style="width:36px;height:36px;font-size:11.5px">D-3</span><span style="flex:1;font-size:14.5px;font-weight:600">찜한 공고 1건 · 목요일 마감</span><svg class="ic" viewBox="0 0 24 24" style="width:18px;height:18px;color:var(--faint)" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></a>
+    </div>
+    <div class="muted" style="margin-top:2px;font-size:14px">지원·강좌·행사 · 접수 중 166건</div>
+    <div style="display:flex;gap:8px;margin-top:18px"><button class="chip is-on">전체</button><button class="chip">지원·혜택</button><button class="chip">교육·강좌</button><button class="chip">문화·행사</button><button class="chip">일자리</button><button class="chip">공모전</button></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:26px 0 14px">
+      <h2 class="serif" style="font-size:22px">새로 올라온 공고</h2>
+      <button style="border:1px solid var(--ink);border-radius:16px;padding:5px 13px;font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;gap:3px">지난 방문 이후 14건<svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px;" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></button>
+    </div>
+    <div class="grid4">
+      <article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜 해제"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill pill--applied"><svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청했어요</div>
+    <h3 class="card-title">또오리랑 가죽공방 모집</h3>
+    <p class="card-elig">서울 생활권 만 19~39세 청년</p>
+    <p class="card-org">서울청년센터 양천</p>
+  </div>
+</article>
+      <article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜 해제"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">각 클래스 전날까지 접수</div>
+    <h3 class="card-title">현직자 멘토링 송파 잡톡 참여자 모집</h3>
+    <p class="card-elig">39세 이하 청년 누구나</p>
+    <p class="card-org">송파구청</p>
+  </div>
+</article>
+      <article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><span class="stamp">D-3</span><button class="fav" aria-label="찜 해제"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">11.12(목) 오후 6시까지</div>
+    <h3 class="card-title">신혼부부 매입임대주택 입주자 모집</h3>
+    <p class="card-elig">서울 거주 무주택 신혼부부</p>
+    <p class="card-org">강북구청</p>
+  </div>
+</article>
+      <article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">11.20(금) 오후 6시까지</div>
+    <h3 class="card-title">SM엔터테인먼트 오픈이노베이션 밋업</h3>
+    <p class="card-elig">초기창업패키지 선정&#8288;·&#8288;졸업기업</p>
+    <p class="card-org">씨엔티테크</p>
+  </div>
+</article>
+      <article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜 해제"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">11.26(목) 오후 1시까지</div>
+    <h3 class="card-title">공유주방 25기 및 제조주방 13기 모집</h3>
+    <p class="card-elig">서울 소재 F&amp;B 스타트업</p>
+    <p class="card-org">서울경제진흥원</p>
+  </div>
+</article>
+      <article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">11.15(일)까지</div>
+    <h3 class="card-title">일하는 청년을 위한 포인트 노동법</h3>
+    <p class="card-elig">일하는 청년</p>
+    <p class="card-org">서울청년센터 은평</p>
+  </div>
+</article>
+      <article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">11.13(금)까지</div>
+    <h3 class="card-title">몸과 마음을 잇는 마음비움테라피2</h3>
+    <p class="card-elig">고립&#8288;·&#8288;은둔을 겪는 서울시민</p>
+    <p class="card-org">서울시복지재단</p>
+  </div>
+</article>
+      <article class="card pcard">
+  <div class="poster"><div class="ph">포스터</div><button class="fav" aria-label="찜"><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
+  <div class="pcard-body">
+    <div class="pill">11.22(일)까지</div>
+    <h3 class="card-title">시각장애학생 멘토링교실 자원봉사자 모집</h3>
+    <p class="card-elig">대학생&#8288;·&#8288;성인</p>
+    <p class="card-org">성북시각장애인복지관</p>
+  </div>
+</article>
+    </div>
+  </div>
+</div></figure>
+<figure class="shot" id="pc-detail"><figcaption>PC 상세 · 왼쪽 포스터, 오른쪽 신청 정보</figcaption><div class="pc">
+  <header class="pc-header"><div class="wrap">
+    <a class="serif pc-logo">PosterLink</a>
+    <div class="pc-search"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px;" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>공고·기관 이름으로 찾기</div>
+    <span style="flex:1"></span>
+    <a class="pc-nav">홈</a><a class="pc-nav">찾기</a><a class="pc-nav">찜</a><a class="pc-nav">마이</a>
+    <svg class="ic" viewBox="0 0 24 24" style="width:21px;height:21px;" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+  </div></header>
+  <div class="wrap" style="padding-top:12px">
+    <div style="display:flex;align-items:center;justify-content:space-between;height:40px;color:var(--muted);font-size:14px"><a style="display:inline-flex;align-items:center;gap:4px"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px;" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>목록으로</a><button style="display:inline-flex;align-items:center;gap:6px"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px;" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>공유</button></div>
+    <div style="display:grid;grid-template-columns:480px 1fr;gap:48px;margin-top:6px;align-items:start">
+      <div style="position:relative;height:744px;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:var(--poster-bg)">
+        <div class="ph">포스터 · 긴 포스터는 위쪽부터</div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:120px;background:linear-gradient(rgba(241,238,228,0),rgba(241,238,228,.98) 58%)"></div>
+        <span class="muted" style="position:absolute;left:16px;bottom:19px;font-size:13px">긴 포스터라 위쪽만 보여요</span>
+        <button style="position:absolute;right:14px;bottom:13px;background:#fff;border:1px solid var(--line-strong);border-radius:17px;padding:6px 14px;font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;gap:6px"><svg class="ic" viewBox="0 0 24 24" style="width:15px;height:15px;" aria-hidden="true"><path d="M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7"/></svg>포스터 전체 보기</button>
+      </div>
+      <div style="padding-top:2px">
+        <div style="display:flex;gap:7px"><span class="tag is-on" style="font-size:13px;padding:4px 11px">교육·강좌</span><span class="tag" style="font-size:13px;padding:4px 11px">용산구</span><span class="tag" style="font-size:13px;padding:4px 11px">접수 중</span></div>
+        <h1 class="serif" style="font-size:27px;line-height:1.38;margin-top:12px;letter-spacing:-.3px">용산청년지음 &lt;&#8288;[N잡 컴퍼니] 나의 경험을 강의로, 강사 생존 키트&#8288;&gt; 참여자 모집</h1>
+        <div class="muted" style="font-size:14px;margin-top:6px">용산일자리카페(용산청년지음)</div>
+        <section class="card" style="margin-top:16px">
+          <div class="pcell"><div class="pcell-k"><span>대상</span><span>모집 6명</span></div><div class="pcell-v">강사 활동을 꿈꾸는 만 19~39세 청년</div><div style="font-size:14.5px;font-weight:500;line-height:1.45;margin-top:1px;color:var(--ink-soft)"><span class="badge">우대</span>용산구민·용산일자리카페 참여자<span style="display:inline-block;width:16px"></span><span class="badge badge--must">필수</span>전 회차 참석</div></div>
+          <div style="display:grid;grid-template-columns:1.25fr 1fr 1.15fr;border-top:1px solid var(--line)">
+            <div class="pcell"><div class="pcell-k"><span>신청 마감</span><span>D-10</span></div><div class="pcell-v">11.19(목) 오전 9시까지</div></div>
+            <div class="pcell" style="border-left:1px solid var(--line)"><div class="pcell-k">비용</div><div class="pcell-v ok">전액 무료</div></div>
+            <div class="pcell" style="border-left:1px solid var(--line)"><div class="pcell-k">진행</div><div class="pcell-v">11.25(수)~11.30(월)</div></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1.6fr;border-top:1px solid var(--line)">
+            <div class="pcell"><div class="pcell-k">장소</div><div class="pcell-v">용산청년지음 미팅룸3</div></div>
+            <div class="pcell" style="border-left:1px solid var(--line)"><div class="pcell-k">신청 방법</div><div class="pcell-v">미니인턴 &gt; M클래스 &gt; 강사 생존에서 신청</div><div class="cap">11/19 개별 문자 안내</div></div>
+          </div>
+        </section>
+        <div style="display:flex;gap:10px;margin-top:16px">
+          <a class="btn btn--primary" style="flex:1;height:52px;font-size:16.5px;gap:7px">신청 페이지로 이동<svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px;" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
+          <button class="btn" style="height:52px;padding:0 17px;font-size:15px;gap:6px;color:var(--ink-soft)"><svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청했어요</button>
+          <button class="btn" style="height:52px;padding:0 17px;font-size:15px;gap:6px"><svg class="ic" viewBox="0 0 24 24" style="width:18px;height:18px;" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>찜</button>
+        </div>
+        <div class="muted" style="font-size:12.5px;margin-top:9px">신청을 마친 뒤 ‘신청했어요’로 표시하면 마감 알림에서 빠지고 찜의 ‘신청한 공고’에 모여요. 언제든 되돌릴 수 있어요.</div>
+        <div class="muted" style="font-size:12.5px;margin-top:4px;display:flex;align-items:center;gap:3px">출처 청년몽땅정보통 · 11.9 확인 · <a style="color:var(--ink);font-weight:600;display:inline-flex;align-items:center">공식 공고문 보기<svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px;" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></a></div>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;margin:24px 0 9px"><h2 class="serif" style="font-size:18px">비슷한 접수 중 공고</h2><span class="muted" style="font-size:12.5px;display:inline-flex;align-items:center;gap:3px"><svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px;" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> 같은 주제(강사 활동) · 대상이 다른 공고 · 서울 다른 구까지 넓혀 찾음</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="card" style="padding:10px;display:flex;gap:11px"><div class="thumb" style="width:50px;height:70px;border-radius:6px;"><div class="ph"></div></div><div style="min-width:0;flex:1"><div class="pill" style="margin-bottom:4px">11.20(금) 오후 6시까지 · D-11</div><div class="l1" style="font-size:13.5px;font-weight:700">마포구 거주·활동자 대상<span class="pref" style="margin-left:8px"><span class="badge">우대</span>강의 경력</span></div><div class="l1" style="font-size:14.5px;font-weight:600;margin-top:1px">청소년 자원봉사교육 강사단 양성교육</div><div class="muted l1" style="font-size:12.5px;margin-top:1px">교육 12.3(목)~12.17(목) · 마포구청</div></div></div>
+          <div class="card" style="padding:10px;display:flex;gap:11px"><div class="thumb" style="width:50px;height:70px;border-radius:6px;"><div class="ph"></div></div><div style="min-width:0;flex:1"><div class="pill" style="margin-bottom:4px">12.31(목)까지 · D-52</div><div class="l1" style="font-size:13.5px;font-weight:700">문화예술 분야 전문강사</div><div class="l1" style="font-size:14.5px;font-weight:600;margin-top:1px">문화예술 전문강사 인력풀 모집</div><div class="muted l1" style="font-size:12.5px;margin-top:1px">강남구 복지기관 연계 · 강남복지재단</div></div></div>
+        </div>
+        <a style="margin-top:10px;font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:2px">접수 중인 교육·강좌 모두 보기<svg class="ic" viewBox="0 0 24 24" style="width:15px;height:15px;" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></a>
+      </div>
+    </div>
+  </div>
+</div></figure>
+<figure class="shot" id="pc-fav"><figcaption>PC 찜</figcaption><div class="pc">
+  <header class="pc-header"><div class="wrap">
+    <a class="serif pc-logo">PosterLink</a>
+    <div class="pc-search"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px;" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>공고·기관 이름으로 찾기</div>
+    <span style="flex:1"></span>
+    <a class="pc-nav">홈</a><a class="pc-nav">찾기</a><a class="pc-nav is-on">찜</a><a class="pc-nav">마이</a>
+    <svg class="ic" viewBox="0 0 24 24" style="width:21px;height:21px;" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+  </div></header>
+  <div class="wrap" style="padding-top:28px">
+    <div style="display:flex;align-items:baseline;gap:14px"><h1 class="serif" style="font-size:28px">찜</h1><span class="muted" style="font-size:14px">접수 중 5건 · 이번 주 마감 1건</span></div>
+    <div style="display:grid;grid-template-columns:1fr 360px;gap:40px;margin-top:20px;align-items:start">
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px"><h2 style="font-size:14px;font-weight:700">마감일이 확인된 공고 2건</h2><span class="muted" style="font-size:13px">마감이 가까운 순</span></div>
+        <div style="display:grid;gap:10px">
+          <div class="card" style="padding:14px 16px;display:flex;gap:16px;align-items:center">
+  <div style="position:relative;flex:none"><div class="thumb" style="width:66px;height:92px;border-radius:7px;"><div class="ph"></div></div><span class="stamp stamp--row" style="left:-7px;top:-7px;width:38px;height:38px;font-size:12px">D-3</span></div>
+  <div style="min-width:0;flex:1"><div class="pill">11.12(목) 오후 6시까지</div><div class="l1" style="font-size:16.5px;font-weight:600">신혼부부 매입임대주택 입주자 모집</div><div class="muted l1" style="font-size:13.5px;margin-top:3px">서울 거주 무주택 신혼부부 · 강북구청</div></div>
+  <div style="flex:none;display:flex;gap:8px;align-items:center"><a class="btn btn--outline" style="height:40px;padding:0 14px;font-size:14px;gap:5px">공식 공고 확인하기<svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px;" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a><button class="btn" style="height:40px;padding:0 12px;font-size:14px;gap:4px;color:var(--ink-soft)"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청했어요</button><svg class="ic" viewBox="0 0 24 24" style="width:21px;height:21px;fill:currentColor;margin-left:4px" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+</div>
+          <div class="card" style="padding:14px 16px;display:flex;gap:16px;align-items:center">
+  <div style="position:relative;flex:none"><div class="thumb" style="width:66px;height:92px;border-radius:7px;"><div class="ph"></div></div></div>
+  <div style="min-width:0;flex:1"><div class="pill">11.26(목) 오후 1시까지 · D-17</div><div class="l1" style="font-size:16.5px;font-weight:600">공유주방 25기 및 제조주방 13기 모집</div><div class="muted l1" style="font-size:13.5px;margin-top:3px">서울 소재 F&amp;B 스타트업 · 서울경제진흥원</div></div>
+  <div style="flex:none;display:flex;gap:8px;align-items:center"><a class="btn btn--outline" style="height:40px;padding:0 14px;font-size:14px;gap:5px">신청 페이지로 이동<svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px;" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a><button class="btn" style="height:40px;padding:0 12px;font-size:14px;gap:4px;color:var(--ink-soft)"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청했어요</button><svg class="ic" viewBox="0 0 24 24" style="width:21px;height:21px;fill:currentColor;margin-left:4px" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+</div>
+        </div>
+        <div style="height:24px"></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px"><h2 style="font-size:14px;font-weight:700">마감 알림이 없는 공고 3건</h2><span class="muted" style="font-size:13px">회차별 접수·정원 마감</span></div>
+        <div style="display:grid;gap:8px">
+          <div class="card" style="padding:11px 16px;display:flex;gap:14px;align-items:center">
+  <div class="thumb" style="width:46px;height:64px;border-radius:6px;"><div class="ph"></div></div>
+  <div style="min-width:0;flex:1"><div class="pill" style="margin-bottom:4px">각 클래스 전날까지 접수</div><div class="l1" style="font-size:15.5px;font-weight:600">현직자 멘토링 송파 잡톡 참여자 모집</div><div class="muted l1" style="font-size:13px;margin-top:2px">39세 이하 청년 누구나 · 송파구청</div></div>
+  <div style="flex:none;display:flex;gap:8px;align-items:center"><button class="btn" style="height:36px;padding:0 12px;font-size:13.5px;gap:4px;color:var(--ink-soft)"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청했어요</button><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor;margin-left:4px" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+</div>
+          <div class="card" style="padding:11px 16px;display:flex;gap:14px;align-items:center">
+  <div class="thumb" style="width:46px;height:64px;border-radius:6px;"><div class="ph"></div></div>
+  <div style="min-width:0;flex:1"><div class="pill pill--muted" style="margin-bottom:4px">회차별 접수 조건은 신청 페이지에서 확인</div><div class="l1" style="font-size:15.5px;font-weight:600">집 보는 수업 &lt;&#8288;보여줘! 강북홈즈&#8288;&gt; 모집</div><div class="muted l1" style="font-size:13px;margin-top:2px">만 19~39세 청년 · 서울청년센터 강북</div></div>
+  <div style="flex:none;display:flex;gap:8px;align-items:center"><button class="btn" style="height:36px;padding:0 12px;font-size:13.5px;gap:4px;color:var(--ink-soft)"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청했어요</button><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor;margin-left:4px" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+</div>
+          <div class="card" style="padding:11px 16px;display:flex;gap:14px;align-items:center">
+  <div class="thumb" style="width:46px;height:64px;border-radius:6px;"><div class="ph"></div></div>
+  <div style="min-width:0;flex:1"><div class="pill" style="margin-bottom:4px">정원 마감 때까지</div><div class="l1" style="font-size:15.5px;font-weight:600">종로 청년생활 아카데미 참여자 모집</div><div class="muted l1" style="font-size:13px;margin-top:2px">만 39세 이하 청년 · 종로구</div></div>
+  <div style="flex:none;display:flex;gap:8px;align-items:center"><button class="btn" style="height:36px;padding:0 12px;font-size:13.5px;gap:4px;color:var(--ink-soft)"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청했어요</button><svg class="ic" viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor;margin-left:4px" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+</div>
+        </div>
+      </div>
+      <aside>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px"><h2 style="font-size:14px;font-weight:700">신청한 공고 2건</h2></div>
+        <div style="display:grid;gap:8px">
+          <div class="card" style="padding:12px;display:flex;gap:11px">
+  <div class="thumb" style="width:50px;height:70px;border-radius:6px;"><div class="ph"></div></div>
+  <div style="min-width:0;flex:1">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;gap:3px;color:var(--ok)"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청했어요</span><button class="undo" style="font-size:12.5px">되돌리기</button></div>
+    <div class="c2" style="font-size:14.5px;font-weight:600;line-height:1.4;margin-top:2px">또오리랑 가죽공방 모집</div>
+    <div class="muted l1" style="font-size:12.5px;margin-top:2px">11.12(목) 오후 3시 선정 안내 예정</div>
+
+  </div>
+</div>
+          <div class="card" style="padding:12px;display:flex;gap:11px">
+  <div class="thumb" style="width:50px;height:70px;border-radius:6px;"><div class="ph"></div></div>
+  <div style="min-width:0;flex:1">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;gap:3px;color:var(--ok)"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px;" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>신청했어요</span><button class="undo" style="font-size:12.5px">되돌리기</button></div>
+    <div class="c2" style="font-size:14.5px;font-weight:600;line-height:1.4;margin-top:2px">복지법률 토론회 &lt;&#8288;육아휴직제도 현실과 과제&#8288;&gt;</div>
+    <div class="muted l1" style="font-size:12.5px;margin-top:2px">11.13(금) 진행 · 서초구 변호사회관</div>
+
+  </div>
+</div>
+        </div>
+        <div class="muted" style="font-size:12.5px;margin-top:7px">신청한 공고는 홈의 마감 알림에서 빠져요.</div>
+        <div style="height:26px"></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px"><h2 style="font-size:14px;font-weight:700">마감된 공고 1건</h2></div>
+        <div class="card" style="padding:12px;display:flex;gap:11px;background:var(--closed-bg)">
+  <div class="thumb" style="width:50px;height:70px;border-radius:6px;opacity:.7"><div class="ph"></div></div>
+  <div style="min-width:0;flex:1">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;gap:3px;color:var(--muted)">8.17 마감</span></div>
+    <div class="c2" style="font-size:14.5px;font-weight:600;line-height:1.4;margin-top:2px;color:var(--muted)">안심 전&#8288;·&#8288;월세 클래스 참여자 모집</div>
+
+    <a style="font-size:13px;font-weight:700;margin-top:4px;display:flex;align-items:center;gap:1px">비슷한 접수 중 공고 2건 보기<svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px;" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></a>
+  </div>
+</div>
+      </aside>
+    </div>
+  </div>
+</div></figure>
+</div>
+</main>
+</body>
+</html>
