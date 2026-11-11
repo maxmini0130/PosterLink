@@ -1,0 +1,162 @@
+{
+ "_about": "시안에 쓴 실제 공고(2026-11-09 기준). id는 서비스의 공고 id. stored_*는 그때 서비스에 있던 값, evidence는 포스터·공식 공고문·신청 페이지에서 읽은 내용, expected_state는 SPEC.md 4.2의 상태. card_title·eligibility·card_org는 시안에 쓴 카드 문구 예시.",
+ "postings": [
+  {
+   "key": "leather",
+   "id": "56a42e3b-b0b6-43d9-98d6-dfb4a0310859",
+   "title": "서울청년센터 양천<또오리랑 가죽공방> 모집",
+   "org": "서울청년센터 양천",
+   "stored_deadline": "2026-11-11T14:59:00+00:00",
+   "source": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=75455",
+   "evidence": "모집기간 ~2026.11.11.(수) 23:59까지, 조기 마감될 수 있음. 선정 안내 2026.11.12.(목) 15:00 예정. 진행 11.19·20·26·27 19:00~21:00",
+   "card_title": "또오리랑 가죽공방 모집",
+   "eligibility": "서울 생활권 만 19~39세 청년",
+   "card_org": "서울청년센터 양천",
+   "expected_state": "verified_time"
+  },
+  {
+   "key": "sinhon",
+   "id": "86d33f6a-bd33-47e9-a56b-3a81e636be7e",
+   "title": "강북구청<2026년 강북구 신혼부부 매입임대주택 1~4차 잔여세대 입주자>모집",
+   "org": "강북구청·서울주택도시개발공사",
+   "stored_deadline": "2026-11-12T09:00:00+00:00",
+   "stored_meta_line": "강북구 관련 · 신혼부부",
+   "evidence": "포스터: 접수 2026.11.2.(월)~11.12.(목) 18시. 대상: 서울 거주 무주택 (예비)신혼부부 등",
+   "card_title": "신혼부부 매입임대주택 입주자 모집",
+   "eligibility": "서울 거주 무주택 신혼부부",
+   "card_org": "강북구청",
+   "expected_state": "verified_time",
+   "note": "기존 정보 줄의 '강북구 관련'은 강북구 주민만 신청할 수 있다는 오해를 줍니다"
+  },
+  {
+   "key": "kitchen",
+   "id": "76077cd2-088e-46c5-ace2-2d009fe772ae",
+   "title": "2026년도 키친인큐베이터 개별·공유주방 25기 및 제조주방 13기 모집",
+   "org": "서울경제진흥원·서울창업허브 공덕 키친인큐베이터",
+   "stored_deadline": "2026-11-26T04:00:00+00:00",
+   "source": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn=179653",
+   "evidence": "신청기간 2026.11.02(월) 09:00 ~ 2026.11.26(목) 13:00까지",
+   "card_title": "공유주방 25기 및 제조주방 13기 모집",
+   "eligibility": "서울 소재 F&B 스타트업",
+   "card_org": "서울경제진흥원",
+   "expected_state": "verified_time"
+  },
+  {
+   "key": "njob",
+   "id": "25ba66a3-561e-4c29-bb2b-4cda2b4526dd",
+   "title": "용산청년지음 <[N잡 컴퍼니] 나의 경험을 강의로, 강사 생존 키트> 참여자 모집",
+   "org": "용산일자리카페(용산청년지음)",
+   "stored": "접수 기간 2026.11.05 ~ 2026.11.19",
+   "evidence": "포스터: 모집기간 11월 19일(목) 오전 9시까지. 용산구민 우대, 전 회차 필수 참석",
+   "expected_state": "verified_time"
+  },
+  {
+   "key": "coach",
+   "id": "2e812cc9-ca30-4825-bc0a-ca225e4286cc",
+   "title": "용산청년지음 <[커리어 플러스] 글로벌 기업 출신 채용담당자의 취업 코칭> 참여자 모집",
+   "stored": "마감일 확인 필요",
+   "source": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=75362",
+   "evidence": "포스터: 11월 10일(화) 오전 9시까지",
+   "card_title": "채용담당자의 취업 코칭",
+   "eligibility": "만 19~39세 청년",
+   "card_org": "용산청년지음",
+   "expected_state": "verified_time",
+   "note": "마감이 있는데 서비스에는 빠져 있던 사례"
+  },
+  {
+   "key": "labor",
+   "id": "29b0ca07-2272-42bc-9eff-d5a8b54d7d81",
+   "title": "서울청년센터은평 X 서울노동권익센터 < 일하는 청년을 위한 포인트 노동법 > 수강생 모집",
+   "org": "서울청년센터 은평·서울노동권익센터",
+   "stored_deadline": "2026-11-15T14:59:59+00:00",
+   "source": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=75456",
+   "evidence": "모집 기간 2026년 11월 2일(월) ~ 11월 15일(일). 마감 시각은 적혀 있지 않음",
+   "card_title": "일하는 청년을 위한 포인트 노동법",
+   "eligibility": "일하는 청년",
+   "card_org": "서울청년센터 은평",
+   "expected_state": "date_only"
+  },
+  {
+   "key": "single",
+   "id": "ae76f5b3-a35a-4918-8beb-a0cf93db3a67",
+   "title": "서초1인가구지원센터 <2026 싱글데이: 싱글말고 위글> 참여자 모집",
+   "source": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=75669",
+   "evidence": "모집기간 2026.10.19.(월) ~ 11.09.(월). 시각 없음",
+   "card_title": "싱글데이: 싱글말고 위글",
+   "eligibility": "서초구 거주·생활권 1인가구",
+   "card_org": "서초1인가구지원센터",
+   "expected_state": "date_only"
+  },
+  {
+   "key": "jobtalk",
+   "id": "80a5419d-059e-4c58-8f99-7323931339ca",
+   "title": "송파구청 <2026 송파 현직자 멘토링 송파 잡톡(Job Talk)」 참여자 모집>",
+   "org": "송파구청 경제진흥과",
+   "stored_deadline": "2026-12-13T14:59:59+00:00",
+   "evidence": "포스터: 신청기간 2026.10.19 ~ 각 클래스 D-1. 일정 11.09(월)~12.14(월) 매주 월·수 19:00~21:00",
+   "card_title": "현직자 멘토링 송파 잡톡 참여자 모집",
+   "eligibility": "39세 이하 청년 누구나",
+   "card_org": "송파구청",
+   "expected_state": "per_session"
+  },
+  {
+   "key": "house",
+   "id": "309c3c02-ee56-4ff5-ab50-f15623510f5a",
+   "title": "집 보는 수업! ㅣ서울청년센터 강북<🏠보여줘!강북홈즈 모집 >",
+   "stored": "11.19 마감 · D-10",
+   "source": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=75368",
+   "apply_page": "https://yeyak.seoul.go.kr/web/reservation/selectReservView.do?rsv_svc_id=S261028162731232636&locale=ko",
+   "evidence": "신청 페이지: 접수기간 2026.10.28 00:00 ~ 2026.11.19 00:00, '이용예정 당일 0시 까지'. 행사 11.17(화)~19(목) 매일 13:00/18:00. 포스터에는 접수 마감이 없음",
+   "expected_state": "per_session_unverified",
+   "note": "저장된 마감일이 행사 마지막 날과 같음. 회차별 마감은 기관 확인 필요"
+  },
+  {
+   "key": "jongno",
+   "id": "edf8d799-e82f-429d-817a-1acea78aaf74",
+   "title": "종로구 <2026 종로 청년생활 아카데미> 참여자 모집",
+   "stored": "소진 시 마감",
+   "source": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=74459",
+   "evidence": "모집기간 2026. 9. 28.(월) ~ 정원 마감 때까지",
+   "expected_state": "label",
+   "label": "정원 마감 때까지"
+  },
+  {
+   "key": "law",
+   "id": "70bd7f86-13eb-4c8f-8512-de2fcb5641c1",
+   "title": "강북구청 <2026년 빌라관리사무소 무료법률상담실>",
+   "stored": "12.31 마감 · D-52",
+   "source": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=71230",
+   "evidence": "매월 셋째주 목요일 오전 10~12시 변호사 상담. 선착순 사전예약. 연립·다세대 거주 강북구민 우선 상담(아파트 거주자는 공석 시 추가 접수)",
+   "expected_state": "label",
+   "label": "매월 선착순 예약",
+   "residency": "preferred"
+  },
+  {
+   "key": "gangsa",
+   "id": "daae5af9-8046-4718-ac32-beb2997634ff",
+   "title": "[2026년 마포구 청소년 자원봉사교육 강사단 양성교육 모집]",
+   "stored": "12.03 마감 · D-24",
+   "evidence": "포스터: 모집기간 2026.11.2.(월)~11.20.(금) 18:00 마감. 교육기간 2026.12.3.(목)~12.17.(목). 대상: 마포구에서 거주·활동하는 자",
+   "expected_state": "확인 전 unverified(conflict) → 확인 뒤 verified_time 11.20 18:00",
+   "residency": "resident_or_active",
+   "note": "저장된 마감일이 교육 시작일. 마포구청 공지 페이지는 확인하지 못했고 포스터만 봤음"
+  },
+  {
+   "key": "tour",
+   "id": "0d8bc7f3-6d9e-4ddd-a957-44d10dd2bfc6",
+   "title": "서울노동권익센터 <길에서 만나는 노동의 역사 '독립운동·민주화운동의 역사' 탐방 프로그램> 안내",
+   "stored": "마감일 확인 필요 (접수 중인 공고로 노출)",
+   "source": "https://youth.seoul.go.kr/infoData/sprtInfo/view.do?key=2309130006&sprtInfoId=69893",
+   "evidence": "신청기간 '상시'. 탐방 일정 5/15, 6/12, 9/18, 10/23 (모두 지남)",
+   "expected_state": "reception_unknown"
+  },
+  {
+   "key": "closed",
+   "id": "bda8eaef-ea31-46db-8a74-3826e02b14c7",
+   "title": "종로구 1인가구지원센터 <안심 전·월세 클래스> 참여자 모집",
+   "stored": "접수 기간 2026.08.17까지 (종료)",
+   "expected_state": "closed",
+   "note": "마감 상세 시안의 공고. 주제 '집 구하기·임대차 계약', 대상 1인가구"
+  }
+ ]
+}
