@@ -198,37 +198,85 @@ export function browsePosterScope<
   };
 }
 
-/** "○○구 주민만 신청 가능" or "[우대] ○○구 거주·생활권" (SPEC 8, 7.2). */
-export type RegionCondition = { kind: "only" | "preferred"; text: string };
+/**
+ * A poster's region condition (SPEC 8, 7.2). `text` is the full wording (the
+ * detail), `short` the card wording, which is never cut off:
+ * - 거주만:        "성동구 주민만 신청 가능" / "성동구 주민만"
+ * - 거주·생활권:   "성동구 거주·생활권만 신청 가능" / "성동구 거주·생활권만"
+ * - not decided:   "성동구 한정 · 세부 자격은 원문 확인" / "성동구 한정"
+ * - 우대:          "[우대] 마포구·서대문구 거주·생활권" / "마포·서대문 생활권 우대"
+ */
+export type RegionCondition = {
+  kind: "only" | "preferred";
+  text: string;
+  short: string;
+};
+
+const GU_NAME = /^[가-힣]{1,4}구$/;
+
+/** "성동구"; two or more: "마포·서대문" (a one-syllable 구 such as 중구 stays whole). */
+function shortGuNames(names: string[]) {
+  if (names.length === 1) return names[0];
+  return names
+    .map((name) => (name.length > 2 ? name.replace(/구$/, "") : name))
+    .join("·");
+}
 
 /**
  * The region condition a card or the detail shows.
- * - only: the poster's 구 links with basis 'eligibility'. Not repeated while
- *   browsing that very 구.
- * - preferred: the recorded crawler decision (field_verification.cardFacts.
- *   regionEligibility) of kind gu_preferred, with the preferred 구 named.
+ * - only: the poster's 구 links with basis 'eligibility'. Who that lets in
+ *   comes from the recorded crawler decision (field_verification.cardFacts.
+ *   regionEligibility.residency): 거주만 or 거주·생활권. Without one, or when
+ *   it is unclear, only the 구 limit is stated. Not repeated while browsing
+ *   that very 구.
+ * - preferred: the recorded decision of kind gu_preferred, with the preferred
+ *   구 named.
  * Nothing is guessed: without data there is no condition.
  */
 export function posterRegionCondition(input: {
   onlyNames: string[];
-  eligibility?: { kind?: unknown; gus?: unknown } | null;
+  eligibility?: { kind?: unknown; gus?: unknown; residency?: unknown } | null;
   browsingGuName?: string | null;
 }): RegionCondition | null {
+  const decision = input.eligibility;
   const only = [...new Set(input.onlyNames.filter(Boolean))];
   if (only.length) {
     if (input.browsingGuName && only.includes(input.browsingGuName))
       return null;
-    return { kind: "only", text: `${only.join("·")} 주민만 신청 가능` };
+    const full = only.join("·");
+    const short = shortGuNames(only);
+    const residency =
+      decision?.kind === "gu_restricted" ? decision.residency : null;
+    if (residency === "resident")
+      return {
+        kind: "only",
+        text: `${full} 주민만 신청 가능`,
+        short: `${short} 주민만`,
+      };
+    if (residency === "life_area")
+      return {
+        kind: "only",
+        text: `${full} 거주·생활권만 신청 가능`,
+        short: `${short} 거주·생활권만`,
+      };
+    return {
+      kind: "only",
+      text: `${full} 한정 · 세부 자격은 원문 확인`,
+      short: `${short} 한정`,
+    };
   }
-  const decision = input.eligibility;
   const gus = Array.isArray(decision?.gus)
     ? decision.gus.filter(
         (name): name is string =>
-          typeof name === "string" && /^[가-힣]{1,4}구$/.test(name),
+          typeof name === "string" && GU_NAME.test(name),
       )
     : [];
   if (decision?.kind === "gu_preferred" && gus.length)
-    return { kind: "preferred", text: `${gus.join("·")} 거주·생활권` };
+    return {
+      kind: "preferred",
+      text: `${gus.join("·")} 거주·생활권`,
+      short: `${shortGuNames(gus)} 생활권 우대`,
+    };
   return null;
 }
 

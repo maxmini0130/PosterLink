@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   planPoster,
+  planResidency,
   summarize,
   toPlanRow,
   withRecordedEligibility,
@@ -176,4 +177,42 @@ test("the decision is recorded once, and can be removed again", () => {
     version: 2,
   });
   assert.equal(fv.cardFacts.regionEligibility, undefined);
+});
+
+test("--residency: records who a 구 limit lets in, never touches links", () => {
+  const limited = (text, extra = {}) =>
+    planResidency(
+      row({
+        eligibility_summary: text,
+        links: [gu("성동구", "REG_SEOUL_SEONGDONG", "eligibility")],
+        ...extra,
+      }),
+    );
+  const life = limited("성동구 거주 또는 성동구 학교·직장 생활권 청년");
+  assert.equal(life.residency, "life_area");
+  assert.deepEqual(
+    life.actions.map((a) => a.op),
+    ["record"],
+  );
+  assert.equal(life.actions[0].value.residency, "life_area");
+  assert.equal(life.actions[0].value.kind, "gu_restricted");
+  assert.equal(limited("성동구민 누구나").residency, "resident");
+  assert.equal(limited("성동구 거주 및 활동 청년").actions[0].value.residency, "unclear");
+  // Already recorded with residency: left alone.
+  assert.equal(
+    limited("성동구민", {
+      recorded_eligibility: { kind: "gu_restricted", residency: "resident" },
+    }).skipped,
+    "already_recorded",
+  );
+  // The rules no longer read a limit: a person decides, nothing written.
+  const changed = limited("청년 누구나");
+  assert.equal(changed.skipped, "needs_person");
+  assert.equal(changed.actions.length, 0);
+  // Posters without a 구 eligibility link are not in this mode.
+  assert.equal(
+    planResidency(row({ eligibility_summary: "성동구민" })),
+    null,
+  );
+  assert.deepEqual(summarize([life]).byResidency, { life_area: 1 });
 });

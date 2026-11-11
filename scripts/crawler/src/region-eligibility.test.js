@@ -246,3 +246,45 @@ test("구 우대 names the preferred 구, also when written without 구", () => 
   // Not a 구 name: nothing guessed.
   assert.deepEqual(gus("학교 생활권 등 우대"), []);
 });
+
+test("구 주민 한정: 거주만, 거주·생활권, 애매함", () => {
+  const residency = (text) => classifyRegionEligibility([text]).residency;
+  // 거주만
+  for (const text of [
+    "금천구 주민",
+    "중랑구민 12명 ✔ 교육",
+    "마포구민 누구나. 성별 제한 없음. 회차별 20명 선착순.",
+    "금천구에 거주하는 만 19세~39세 청년",
+    "여성합창단20~54세·시니어합창단55~70세 영등포구 거주 여성. 성량·음악성 등 기본자질, 사회봉사정신, 건강상 활동 가능자.",
+    "강남구 거주자 중 '그냥드림서비스 이용자 자가 점검 체크리스트' 항목에 하나 이상 해당되는 가구",
+    "우울, 불안 등 정신과적 상담이 필요한 서초구민",
+  ])
+    assert.equal(residency(text), "resident", text);
+  // 거주·생활권: school, work or activity there counts too.
+  for (const text of [
+    "공고일 기준 성동구 거주 또는 성동구 학교·직장 생활권 만19~39세 청년.",
+    "만 19~39세 강북구 거주 청년 또는 강북구 소재 대학 재학·휴학생.",
+    "금천구 거주 청년 또는 금천구 소재 사업장 청년 노동자, 월 평균임금 300만원 이하",
+    "영등포구 거주·생활권 만 19~39세 청년 100명.",
+    "동대문구 거주 또는 활동 청년으로 구성된 1~4인 팀.",
+    "노원구에 거주 또는 생활 기반이 있는 만 19~39세 청년",
+    "성북구 거주자 및 생활권자",
+  ])
+    assert.equal(residency(text), "life_area", text);
+  // 애매함: both or either? another group alongside?
+  for (const text of [
+    "만 19세 ~ 39세 성북구 거주 및 활동 1인가구 청년 10명",
+    "강동구민 청년, 서울청년센터 강동 이용 청년 (선착순 15명)",
+  ])
+    assert.equal(residency(text), "unclear", text);
+  const decision = classifyRegionEligibility([
+    "공고일 기준 성동구 거주 또는 성동구 학교·직장 생활권 만19~39세 청년. 만 나이를 우선 안내",
+  ]);
+  assert.equal(decision.kind, "gu_restricted");
+  assert.equal(
+    decision.residencyEvidence,
+    "성동구 거주 또는 성동구 학교·직장 생활권 만19~39세 청년",
+  );
+  // Other kinds carry no residency.
+  assert.equal(classifyRegionEligibility(["송파구민 우대"]).residency, undefined);
+});

@@ -8,6 +8,10 @@
  *                    거주", "서울시 소재 기업", "서울시민", "서울 청년".
  *   gu_restricted    residents (or people active) of a 구 only: "강북구민",
  *                    "금천구 주민", "영등포구 거주 청년", "마포구민 누구나".
+ *                    `residency` says who: "resident" (거주만), "life_area"
+ *                    (거주·생활권: "거주 또는 활동", "소재 대학 재학") or
+ *                    "unclear" ("거주 및 활동", another group alongside), which
+ *                    a person checks.
  *   gu_preferred     open, with a 구 preferred: "송파구민 우대", "강동·송파
  *                    생활권 등 우대", "마포구·서대문구 거주자 우선".
  *   open             no regional limit stated: "청년 누구나", "제한없음".
@@ -20,7 +24,7 @@
 
 import { SEOUL_SIGUNGU_REGIONS } from "./region-rules.js";
 
-export const REGION_ELIGIBILITY_RULES_VERSION = "region-eligibility-20261110";
+export const REGION_ELIGIBILITY_RULES_VERSION = "region-eligibility-20261111";
 
 const GU_NAMES = new Set(SEOUL_SIGUNGU_REGIONS.map(([, name]) => name));
 const GU_NAME_BY_CODE = new Map(
@@ -143,6 +147,43 @@ function evidence(text) {
   return compact(text).slice(0, MAX_EVIDENCE);
 }
 
+// Ways in besides living there: school, work, activity, "생활권".
+const LIFE_AREA =
+  "(?:생활\\s*권|생활\\s*기반|활동|재학|휴학|재직|직장|학교|대학|사업장|근무|노동자)";
+const RESIDENT = "(?:거주|구민|주민)";
+// "거주 또는 활동", "거주·생활권", "거주 청년 또는 강북구 소재 대학",
+// "거주자 및 생활권자": a second, separate way in.
+const LIFE_AREA_OR = new RegExp(
+  `${RESIDENT}(?:자|하는|하거나)?[가-힣\\s]{0,6}?\\s*(?:또는|이나|혹은|·|,)\\s*(?:${GU}\\s*)?(?:에\\s*)?(?:소재\\s*)?(?:[가-힣]{0,3}\\s*)?${LIFE_AREA}`,
+);
+const LIFE_AREA_PERSONS = new RegExp(
+  `${RESIDENT}자\\s*및\\s*(?:${GU}\\s*)?${LIFE_AREA}[가-힣]*자`,
+);
+// "거주 및 활동 1인가구 청년": both, or either? A person decides.
+const RESIDENT_AND = new RegExp(`${RESIDENT}\\s*및\\s*${LIFE_AREA}`);
+// Only the 구 named, as a place of work or study ("강북구 소재 대학 재학생").
+const LIFE_AREA_ONLY = new RegExp(`${GU}\\s*(?:에\\s*)?(?:소재|내)\\s*${LIFE_AREA}`);
+// "강동구민 청년, 서울청년센터 강동 이용 청년": another group that is not a 구.
+const OTHER_GROUP = /[,，]\s*[^,，.]{0,24}(?:이용|회원)\s*(?:하는\s*)?(?:청년|자|주민|가구)/;
+
+/**
+ * Who a 구 limit lets in (SPEC 8): "resident" (거주만: 구민·주민·거주),
+ * "life_area" (거주·생활권: school or work there counts too) or "unclear".
+ * Reads the clause that holds the first 구 limit.
+ */
+export function classifyResidency(text, from = 0) {
+  const rest = String(text ?? "").slice(from);
+  const end = rest.search(/\.(?:\s|$)|\s\/\s/);
+  const clause = compact(end >= 0 ? rest.slice(0, end) : rest).slice(0, 140);
+  if (OTHER_GROUP.test(clause)) return { residency: "unclear", clause };
+  if (LIFE_AREA_OR.test(clause) || LIFE_AREA_PERSONS.test(clause))
+    return { residency: "life_area", clause };
+  if (RESIDENT_AND.test(clause)) return { residency: "unclear", clause };
+  if (new RegExp(RESIDENT).test(clause)) return { residency: "resident", clause };
+  if (LIFE_AREA_ONLY.test(clause)) return { residency: "life_area", clause };
+  return { residency: "unclear", clause };
+}
+
 /**
  * @returns {{kind: string, evidence: string|null, gus: string[]}}
  *   gus: the 구 names a gu_restricted / gu_preferred decision refers to.
@@ -196,10 +237,15 @@ export function classifyRegionEligibility(texts) {
     const alongside = /(?:및|또는|이나|혹은)\s*$/.test(
       cleaned.slice(Math.max(0, first.at - 6), first.at),
     );
+    if (openElsewhere || alongside)
+      return { kind: "review", evidence: evidence(joined), gus };
+    const residency = classifyResidency(cleaned, first.at);
     return {
-      kind: openElsewhere || alongside ? "review" : "gu_restricted",
+      kind: "gu_restricted",
       evidence: evidence(joined),
       gus,
+      residency: residency.residency,
+      residencyEvidence: evidence(residency.clause),
     };
   }
   if (preferred.length || AREA_PREFERENCE.test(cleaned)) {
