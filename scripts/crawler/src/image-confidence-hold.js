@@ -18,7 +18,7 @@
  *
  * A hold is not repeated once a person approved the poster again after it
  * (published_at later than the hold) for the same image check. Pure functions;
- * the CLI is hold-low-confidence-images.js.
+ * the CLI is hold-quality-gate-posters.js.
  */
 
 export const IMAGE_CONFIDENCE_HOLD_RULES = "image-confidence-hold-20261111";
