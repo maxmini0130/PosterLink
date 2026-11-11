@@ -106,7 +106,7 @@ export function FeedCard({
         className="mt-2 flex flex-col gap-[3px] px-0.5 text-pl-ink"
       >
         <Heading
-          className={`line-clamp-2 break-keep font-bold leading-[1.4] ${row ? "text-[13.5px]" : "text-[14px] md:text-[15px]"}`}
+          className={`line-clamp-2 break-keep [overflow-wrap:anywhere] font-bold leading-[1.4] ${row ? "text-[13.5px]" : "text-[14px] md:text-[15px]"}`}
         >
           {poster.title}
         </Heading>

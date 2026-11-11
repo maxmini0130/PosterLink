@@ -8,12 +8,11 @@ import {
 } from "./posterCardText";
 
 const WJ = "⁠";
-const NBSP = " ";
 
-test("brackets lose their inner spaces and never start or end a line alone", () => {
+test("brackets lose their inner spaces and never sit alone at a line edge; the space before one can break", () => {
   assert.equal(
     cardTitleText("집 보는 수업 < 보여줘! 강북홈즈 >"),
-    `집 보는 수업${NBSP}<${WJ}보여줘! 강북홈즈${WJ}>`,
+    `집 보는 수업 <${WJ}보여줘! 강북홈즈${WJ}>`,
   );
   assert.equal(
     cardTitleText("  또오리랑   가죽공방 모집 "),
