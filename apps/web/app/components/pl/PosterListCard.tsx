@@ -134,7 +134,7 @@ export function PosterListCard({
             </p>
           )}
           <h3
-            className={`mt-1 line-clamp-2 break-keep text-[14px] font-semibold leading-[1.4] ${
+            className={`mt-1 line-clamp-2 break-keep [overflow-wrap:anywhere] text-[14px] font-semibold leading-[1.4] ${
               presentation.state === "closed"
                 ? "text-pl-ink-soft"
                 : "text-pl-ink"
@@ -191,7 +191,7 @@ export function PosterMiniCard({
             imageStatus={poster.imageStatus}
           />
         </div>
-        <h3 className="line-clamp-3 break-keep text-[13px] font-semibold leading-[1.38] text-pl-ink">
+        <h3 className="line-clamp-3 break-keep [overflow-wrap:anywhere] text-[13px] font-semibold leading-[1.38] text-pl-ink">
           {title}
         </h3>
       </div>
@@ -263,7 +263,7 @@ export function PosterTileCard({
             <span className="truncate">{meta}</span>
           </p>
         )}
-        <h3 className="line-clamp-2 break-keep text-[14px] font-semibold leading-[1.4] text-pl-ink">
+        <h3 className="line-clamp-2 break-keep [overflow-wrap:anywhere] text-[14px] font-semibold leading-[1.4] text-pl-ink">
           {title}
         </h3>
         <p className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-0.5 pt-1">

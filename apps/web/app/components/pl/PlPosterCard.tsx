@@ -25,7 +25,7 @@ export function RegionConditionLine({
   return (
     <p
       data-region-condition={condition.kind}
-      className={`m-0 mb-0.5 break-keep text-[12px] font-semibold leading-[1.4] text-pl-ink ${className}`}
+      className={`m-0 mb-0.5 break-keep [overflow-wrap:anywhere] text-[12px] font-semibold leading-[1.4] text-pl-ink ${className}`}
     >
       <span className="sr-only">
         {condition.kind === "preferred"
@@ -132,13 +132,13 @@ export function PlPosterCard({
           <RegionConditionLine condition={poster.regionCondition} />
         )}
         <Heading
-          className={`line-clamp-2 h-[39px] break-keep text-[14px] font-semibold leading-[1.4] ${
+          className={`line-clamp-2 h-[39px] break-keep [overflow-wrap:anywhere] text-[14px] font-semibold leading-[1.4] ${
             presentation.state === "closed" ? "text-pl-ink-soft" : ""
           }`}
         >
           {title}
         </Heading>
-        <p className="mt-1 line-clamp-2 min-h-[35px] break-keep text-[12.5px] leading-[1.4] text-pl-ink md:line-clamp-1 md:min-h-[17.5px]">
+        <p className="mt-1 line-clamp-2 min-h-[35px] break-keep [overflow-wrap:anywhere] text-[12.5px] leading-[1.4] text-pl-ink md:line-clamp-1 md:min-h-[17.5px]">
           {poster.eligibility ?? ""}
         </p>
         <p className="mt-px truncate text-xs leading-[1.4] text-pl-meta">

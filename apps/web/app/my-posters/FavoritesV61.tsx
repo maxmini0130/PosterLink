@@ -122,7 +122,7 @@ function Row({
           <Link
             href={href}
             data-poster-source="favorites"
-            className={`mt-1 line-clamp-2 break-keep text-[14.5px] font-semibold leading-[1.4] ${
+            className={`mt-1 line-clamp-2 break-keep [overflow-wrap:anywhere] text-[14.5px] font-semibold leading-[1.4] ${
               muted ? "text-pl-ink-soft" : "text-pl-ink"
             }`}
           >
