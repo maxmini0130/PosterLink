@@ -10,7 +10,7 @@
 | `reference/build_reference.mjs` | 화면과 컴포넌트의 구조(템플릿 함수). 컴포넌트로 옮길 때 이 파일을 읽습니다 |
 | `reference/reference.css` | 색·크기 값과 컴포넌트 스타일 |
 | `reference/index.html` | 위 둘로 만든 참조 화면. 브라우저로 열어 봅니다 |
-| `screens/*.png` | 실제 포스터가 들어간 시안. 모바일 13장, PC 3장, 카드 상태 2장 |
+| `screens/*.webp` | 실제 포스터가 들어간 시안. 모바일 13장, PC 3장, 카드 상태 2장 |
 | `fixtures/deadline-cases.json` | 마감 표시 검수 사례 20개 |
 | `fixtures/sample-postings.json` | 시안에 쓴 실제 공고 14건의 id와 원문 근거 |
 

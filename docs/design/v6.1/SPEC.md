@@ -207,7 +207,7 @@
 
 - 행사 장소는 카드에 쓰지 않습니다(상세와 찜의 '진행'에만).
 - 짧은 제목과 신청 자격은 사람이 확인한 값만 씁니다. 누가 언제 채울지는 12장 A-5.
-- 상태 예시는 `reference/index.html`의 1번 묶음과 `screens/cards-deadline-*.png`.
+- 상태 예시는 `reference/index.html`의 1번 묶음과 `screens/cards-deadline-*.webp`.
 
 ## 7. 화면
 
@@ -217,9 +217,9 @@
 
 | 상태 | 참조 | 이미지 |
 |---|---|---|
-| 첫 방문 | `mHomeFirst` | `m-home-first.png` |
-| 다시 방문 | `mHomeReturn` | `m-home-return.png` |
-| 스크롤 중 | `mHomeSticky` | `m-home-sticky.png` |
+| 첫 방문 | `mHomeFirst` | `m-home-first.webp` |
+| 다시 방문 | `mHomeReturn` | `m-home-return.webp` |
+| 스크롤 중 | `mHomeSticky` | `m-home-sticky.webp` |
 
 위에서부터
 1. 지역 제목(명조, "서울 전체 ⌄") + "대상 전체 ⌄" + 검색, 알림 아이콘
@@ -237,12 +237,12 @@
 
 | 상태 | 참조 | 이미지 |
 |---|---|---|
-| 날짜·시각 확인 | `mDetailLeather('open')` | `m-detail-open.png` |
-| 돌아왔을 때 안내 | `mDetailLeather('prompt')` | `m-detail-prompt.png` |
-| 신청 표시 뒤 | `mDetailLeather('applied')` | `m-detail-applied.png` |
-| 날짜만 확인 | `mDetailDateOnly` | `m-detail-dateonly.png` |
-| 회차별 접수 | `mDetailSessions` | `m-detail-sessions.png` |
-| 마감일 미확인 + 찜한 직후 | `mDetailUnverified` | `m-detail-unverified.png` |
+| 날짜·시각 확인 | `mDetailLeather('open')` | `m-detail-open.webp` |
+| 돌아왔을 때 안내 | `mDetailLeather('prompt')` | `m-detail-prompt.webp` |
+| 신청 표시 뒤 | `mDetailLeather('applied')` | `m-detail-applied.webp` |
+| 날짜만 확인 | `mDetailDateOnly` | `m-detail-dateonly.webp` |
+| 회차별 접수 | `mDetailSessions` | `m-detail-sessions.webp` |
+| 마감일 미확인 + 찜한 직후 | `mDetailUnverified` | `m-detail-unverified.webp` |
 
 위에서부터
 1. 상단 바(뒤로, "공고 상세", 공유)
@@ -264,7 +264,7 @@
 
 ### 7.3 모바일 상세 (마감)
 
-참조 `mDetailClosed`, 이미지 `m-detail-closed.png`.
+참조 `mDetailClosed`, 이미지 `m-detail-closed.webp`.
 
 1. 작은 포스터 + 태그("접수 종료") + 흐린 제목
 2. 남색 배너 "이 공고는 8월 17일에 접수가 끝났어요"
@@ -278,9 +278,9 @@
 
 | 상태 | 참조 | 이미지 |
 |---|---|---|
-| 목록 | `mFav()` | `m-fav.png` |
-| 신청했어요를 누른 직후 | `mFav({snackbar:true})` | `m-fav-moved.png` |
-| 찜한 공고 없음 | `mFavEmpty` | `m-fav-empty.png` |
+| 목록 | `mFav()` | `m-fav.webp` |
+| 신청했어요를 누른 직후 | `mFav({snackbar:true})` | `m-fav-moved.webp` |
+| 찜한 공고 없음 | `mFavEmpty` | `m-fav-empty.webp` |
 
 - 머리: "찜", "마감이 가까운 순", "접수 중 N건 · 이번 주 마감 N건"(신청함 제외, 이번 주는 월~일).
 - 묶음 넷, 이 순서로. 비어 있는 묶음은 제목도 숨깁니다.
@@ -294,9 +294,9 @@
 
 | 화면 | 참조 | 이미지 |
 |---|---|---|
-| 홈 | `pcHome` | `pc-home.png` |
-| 상세 | `pcDetail` | `pc-detail.png` |
-| 찜 | `pcFav` | `pc-fav.png` |
+| 홈 | `pcHome` | `pc-home.webp` |
+| 상세 | `pcDetail` | `pc-detail.webp` |
+| 찜 | `pcFav` | `pc-fav.webp` |
 
 - **머리글**: 로고(명조) + 검색 + 홈 / 찾기 / 찜 / 마이 + 알림. 기존의 '기관 찾기', '포스터 제보' 위치는 12장 A-4.
 - **홈**: 모바일과 같은 순서, 4열. 찜 마감 줄은 지역 제목 오른쪽. 1440×900에서 첫 줄 카드의 제목과 정보가 다 보여야 합니다.
@@ -369,7 +369,7 @@
 
 **3단계 — 공통 요소**
 - 색·글꼴 값, 공고 카드, 마감 표시, 도장, 꼬리표, 버튼. 찾기 목록의 마감 표시도 같은 함수로.
-- 완료: 카드 상태 모음이 `screens/cards-deadline-*.png`와 같음.
+- 완료: 카드 상태 모음이 `screens/cards-deadline-*.webp`와 같음.
 
 **4단계 — 홈** (모바일, PC)
 - 완료: 7.1, 7.5의 조건. 첫 방문에는 찜 마감 줄과 '지난 방문 이후'가 없음.
