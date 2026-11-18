@@ -273,6 +273,30 @@ export function findCollectionSource(sources, context = {}) {
   return bestSource;
 }
 
+// Sources the scheduled (all-sites) crawl runs besides the static site list.
+// "error" is included: a source whose last run failed or was partial (one
+// upstream timeout is enough) must be retried, otherwise it is never crawled
+// again and can never recover to "active" (bizinfo stopped on 2026-10-28 this
+// way). planned / paused / retired sources and manual ones are not run.
+export const SCHEDULED_SOURCE_STATUSES = new Set(["active", "error"]);
+
+export function mergeScheduledCollectionSourceSites(staticSites, collectionSources) {
+  const merged = [...staticSites];
+  const siteIds = new Set(merged.map((site) => site.id));
+
+  for (const source of collectionSources ?? []) {
+    if (!SCHEDULED_SOURCE_STATUSES.has(source.status) || source.collection_method === "manual") continue;
+
+    for (const site of resolveSitesForCollectionSource(source, staticSites)) {
+      if (!site?.id || siteIds.has(site.id)) continue;
+      siteIds.add(site.id);
+      merged.push(site);
+    }
+  }
+
+  return merged;
+}
+
 function createEmptyStats(source) {
   return {
     source,
