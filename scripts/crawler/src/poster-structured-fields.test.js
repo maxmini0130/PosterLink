@@ -497,3 +497,22 @@ test("a day-only deadline takes the closing time the notice states", async () =>
   const plain = buildStructuredPosterFields({ applicationEndAt: "2026-11-21", sourceText: "신청기간 2026-11-16 ~ 2026-11-21" });
   assert.equal(plain.application_end_at, "2026-11-21T14:59:59.000Z");
 });
+
+test("contact and fee come from labeled lines in the notice body", async () => {
+  const { extractContactInfo, extractParticipationFee } = await import("./poster-structured-fields.js");
+  assert.equal(extractContactInfo("문의 서울청년센터 은평 조이 매니저 02-351-3711 [ 서울청년센터"), "서울청년센터 은평 조이 매니저 02-351-3711");
+  assert.equal(extractContactInfo("문의: 중랑구 사회적경제지원센터 (☎ 02-2094-1302"), "중랑구 사회적경제지원센터 (☎ 02-2094-1302)");
+  assert.equal(extractContactInfo("문의 전화번호: 02-901-2647 접수"), "02-901-2647");
+  // no label, or a malformed number, is not used
+  assert.equal(extractContactInfo("본문 02-123-4567 아무 표시 없음"), null);
+  assert.equal(extractContactInfo("기타문의: 070-77153-3893(가비 매니저)"), null);
+
+  assert.equal(extractParticipationFee("참가비 무료, 다과 제공"), "무료");
+  assert.equal(extractParticipationFee("■ 비용: 10,000원 ■ 신청"), "10,000원");
+  assert.equal(extractParticipationFee("수강료 80,000원 0원 판매금액"), null);
+
+  const fields = buildStructuredPosterFields({ sourceText: "모집규모 : 15개사 내외\n문의: G-Space 사업담당자 055-386-3043\n입주비용: 무료" });
+  assert.equal(fields.recruitment_count, "15개사 내외");
+  assert.equal(fields.contact_info, "G-Space 사업담당자 055-386-3043");
+  assert.equal(fields.participation_fee, "무료");
+});
