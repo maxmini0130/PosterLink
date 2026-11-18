@@ -278,10 +278,13 @@ export const sites = [
     name: "마포구노동자종합지원센터",
     domain: "https://mapolabor.org",
     adapter: "mapo-labor",
+    // The board named 공지사항 is /community/notice. /community/news is the
+    // 센터소식 board (activity reports); it produced 0 posters in 14 days, every
+    // post rejected as news-board-without-action (checked 2026-11-19).
     boards: [
       {
         name: "공지사항",
-        url: "https://mapolabor.org/community/news",
+        url: "https://mapolabor.org/community/notice",
         category: "노동",
       },
     ],
