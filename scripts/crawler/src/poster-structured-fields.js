@@ -112,6 +112,55 @@ export function toEventIso(value, { hadTime, schedule, edge }) {
   return normalizeIsoDate(`${day}T${time}:00+09:00`);
 }
 
+// A date token as notices write it: 2026. 11. 21. / 2026-11-21 / 11. 21. / 11/21 / 11월 21일.
+const NOTICE_DATE = String.raw`(?:(\d{4})\s*[.\-/년]\s*)?(\d{1,2})\s*[.\-/월]\s*(\d{1,2})\s*[.일]?`;
+const WEEKDAY = String.raw`(?:\s*\(\s*[월화수목금토일]\s*\))?`;
+const PERIOD_LABEL = String.raw`(?:신청|접수|모집)\s*(?:기간|일시|기한)\s*[:：]?`;
+// "접수기간: 2026. 11. 23.(월) 10:00 ~ 12. 14.(월) 17:00"
+const PERIOD_END_TIME = new RegExp(
+  `${PERIOD_LABEL}[^~]{0,60}~\\s*${NOTICE_DATE}${WEEKDAY}\\s*(\\d{1,2})\\s*:\\s*(\\d{2})`,
+  "g",
+);
+// "신청기간 : 11. 09.(월) ~ 11. 23.(월) 평일 09:00 ~ 18:00" (daily hours: the last day closes at the end time)
+const PERIOD_END_DAILY_HOURS = new RegExp(
+  `${PERIOD_LABEL}[^~]{0,60}~\\s*${NOTICE_DATE}${WEEKDAY}\\s*(?:평일|매일)?\\s*\\d{1,2}\\s*:\\s*\\d{2}\\s*~\\s*(\\d{1,2})\\s*:\\s*(\\d{2})`,
+  "g",
+);
+
+/**
+ * The closing time a notice states for its application period when the
+ * deadline is otherwise known only by its day (YYYY-MM-DD, Asia/Seoul).
+ * Only a time on the same month/day as the deadline counts; "00:00" is the
+ * portal's no-time placeholder and is ignored. Returns "HH:MM" or null.
+ */
+export function extractDeadlineTime(text, deadlineDay) {
+  const day = String(deadlineDay ?? "");
+  if (!DATE_ONLY_VALUE.test(day)) return null;
+  const month = Number(day.slice(5, 7));
+  const date = Number(day.slice(8, 10));
+  const source = compactText(text, 12000) ?? "";
+  for (const pattern of [PERIOD_END_DAILY_HOURS, PERIOD_END_TIME]) {
+    pattern.lastIndex = 0;
+    let match;
+    while ((match = pattern.exec(source)) !== null) {
+      const [, year, m, d, hh, mm] = match;
+      if (Number(m) !== month || Number(d) !== date) continue;
+      if (year && Number(year) !== Number(day.slice(0, 4))) continue;
+      const hours = Number(hh);
+      const minutes = Number(mm);
+      if (hours > 23 || minutes > 59 || (hours === 0 && minutes === 0)) continue;
+      return `${pad2(hours)}:${pad2(minutes)}`;
+    }
+  }
+  return null;
+}
+
+/** A day-only deadline at the time the notice states, else 23:59:59 KST. */
+function deadlineAtStatedTime(day, text) {
+  const time = extractDeadlineTime(text, day);
+  return time ? normalizeIsoDate(`${day}T${time}:00+09:00`) : toApplicationEndIso(day);
+}
+
 function hasExplicitTime(value) {
   const text = String(value ?? "").trim();
   return Boolean(text) && !DATE_ONLY_VALUE.test(text) && Boolean(normalizeIsoDate(text));
@@ -866,7 +915,7 @@ export function buildStructuredPosterFields({
       applicationEndHasNoTime &&
       finalApplicationEndAt &&
       !singleEventDayApplicationFallback
-        ? toApplicationEndIso(finalApplicationEndAt.slice(0, 10))
+        ? deadlineAtStatedTime(finalApplicationEndAt.slice(0, 10), sourceEvidenceText)
         : finalApplicationEndAt,
     event_start_at: toEventIso(normalizedEventStartAt, {
       hadTime: hasExplicitTime(eventStartAt) && normalizedEventStartAt === normalizeIsoDate(eventStartAt),
