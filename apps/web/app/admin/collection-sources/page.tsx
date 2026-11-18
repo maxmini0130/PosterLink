@@ -207,7 +207,7 @@ function statusTone(status: string) {
   return "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-200";
 }
 
-type SourceHealthLevel = "attention" | "watch" | "healthy" | "planned";
+type SourceHealthLevel = "attention" | "low_yield" | "watch" | "healthy" | "planned";
 
 type SourceHealth = {
   level: SourceHealthLevel;
@@ -251,6 +251,7 @@ type SourceEditForm = {
 const HEALTH_FILTER_OPTIONS = [
   ["all", "전체 건강도"],
   ["attention", "점검 필요"],
+  ["low_yield", "수확 낮음"],
   ["watch", "주의"],
   ["healthy", "정상"],
   ["planned", "예정/수동"],
@@ -873,12 +874,29 @@ function diagnoseSource(source: CollectionSource, runs: CollectionSourceRun[]): 
     actions.push("고급 설정이 비어 있습니다. 최소 adapter, selectors, pagination을 점검용으로 채우는 것이 좋습니다.");
   }
 
+  // Crawl passed posts but the upload quality gate dropped every one of them.
+  const latestCrawl = runs.find((run) => run.run_phase === "crawl") ?? null;
+  const latestUpload = runs.find((run) => run.run_phase === "upload") ?? null;
+  const uploadDroppedAll = Boolean(
+    latestCrawl && latestUpload &&
+    latestCrawl.valid_count > 0 && latestUpload.valid_count === 0 &&
+    Date.parse(latestUpload.created_at) >= Date.parse(latestCrawl.created_at),
+  );
+  if (uploadDroppedAll) {
+    actions.unshift(
+      `수집 단계를 통과한 ${formatNumber(latestCrawl!.valid_count)}건이 업로드 품질 검사에서 모두 제외됐습니다. 업로드 실행의 제외 사유(예: 기관 자체 채용공고)를 확인하세요.`,
+    );
+  }
+  if (health.level === "low_yield") {
+    actions.push("수집은 정상입니다. 게시판에 모집 공고가 적은지, 다른 게시판이 더 적합한지 확인하세요.");
+  }
+
   if (actions.length === 0) {
     actions.push(health.level === "healthy" ? "현재 특별한 조치가 필요 없습니다." : health.reasons[0] ?? "상태를 확인하세요.");
   }
 
   const isCritical = health.level === "attention" || source.consecutive_error_count > 0 || latestRun?.run_status === "error" || latestRunIsStale;
-  const isWarning = health.level === "watch" || source.status === "planned" || latestRun?.checked_count === 0;
+  const isWarning = health.level === "watch" || health.level === "low_yield" || uploadDroppedAll || source.status === "planned" || latestRun?.checked_count === 0;
 
   return {
     level: isCritical ? "critical" : isWarning ? "warning" : "ok",
@@ -920,20 +938,35 @@ function getSourceHealth(source: CollectionSource): SourceHealth {
     hoursSinceSuccess === null || hoursSinceSuccess >= Math.max(intervalHours * 2, 48)
   );
 
+  // Technical problems (the source is not being collected properly) need a
+  // person now. A low valid rate or missing fields while runs succeed is a
+  // yield question about the board itself, shown separately as 수확 낮음.
   if (source.status === "error" || source.status === "blocked") reasons.push(statusLabel(source.status));
   if (source.consecutive_error_count > 0) reasons.push(`${source.consecutive_error_count}회 연속 오류`);
   if (source.last_run_status === "error" || source.last_run_status === "partial") reasons.push(`최근 실행 ${source.last_run_status}`);
   if (isStale) reasons.push(`마지막 성공 ${formatElapsedHours(hoursSinceSuccess)}`);
-  if (checkedCount >= 5 && validRate < 40) reasons.push(`유효율 ${Math.round(validRate)}%`);
-  if (checkedCount >= 5 && missingRate >= 30) reasons.push(`필수정보 누락 ${Math.round(missingRate)}%`);
+
+  const yieldReasons: string[] = [];
+  if (checkedCount >= 5 && validRate < 40) yieldReasons.push(`유효율 ${Math.round(validRate)}%`);
+  if (checkedCount >= 5 && missingRate >= 30) yieldReasons.push(`필수정보 누락 ${Math.round(missingRate)}%`);
 
   if (reasons.length > 0) {
     return {
       level: "attention",
       label: "점검 필요",
       tone: "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-200",
-      reasons,
+      reasons: [...reasons, ...yieldReasons],
       weight: 100 + reasons.length,
+    };
+  }
+
+  if (yieldReasons.length > 0) {
+    return {
+      level: "low_yield",
+      label: "수확 낮음",
+      tone: "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200",
+      reasons: yieldReasons,
+      weight: 60 + yieldReasons.length,
     };
   }
 
@@ -1648,7 +1681,12 @@ export default function AdminCollectionSourcesPage() {
             ? `영향 ${formatNumber(runHealthSummary.staleSources)}곳 · 실행 중 ${formatNumber(runHealthSummary.running)}건`
             : "현재 지연 없음"}
         />
-        <MetricCard icon={Search} label="점검 필요" value={summary?.needs_attention ?? 0} sub="오류·장기 미수집·저품질" />
+        <MetricCard
+          icon={Search}
+          label="점검 필요"
+          value={summary?.needs_attention ?? 0}
+          sub={`오류·장기 미수집 · 수확 낮음 ${formatNumber(summary?.low_quality ?? 0)}곳 별도`}
+        />
         <MetricCard icon={Clock} label="예정 기관" value={summary?.planned ?? 0} sub="아직 연결 전" />
       </section>
 
