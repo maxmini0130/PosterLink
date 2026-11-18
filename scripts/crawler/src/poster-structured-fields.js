@@ -710,7 +710,9 @@ export function inferStructuredDeadlineType({
   periodText,
   sourceText,
 } = {}) {
-  const text = `${periodText ?? ""} ${sourceText ?? ""}`;
+  // A separator keeps wording from matching across the two values: the period
+  // "상시" followed by "신청기간 …" must not read as "상시 신청".
+  const text = `${periodText ?? ""} / ${sourceText ?? ""}`;
   const explicit = normalizeStructuredDeadlineType(deadlineType);
   if (explicit !== "unknown") {
     if (hasOpenEndedDeadlineEvidence(explicit, text)) return explicit;

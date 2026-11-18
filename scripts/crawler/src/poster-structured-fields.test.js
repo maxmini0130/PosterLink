@@ -497,3 +497,10 @@ test("a day-only deadline takes the closing time the notice states", async () =>
   const plain = buildStructuredPosterFields({ applicationEndAt: "2026-11-21", sourceText: "신청기간 2026-11-16 ~ 2026-11-21" });
   assert.equal(plain.application_end_at, "2026-11-21T14:59:59.000Z");
 });
+
+test("a portal 상시 header next to 신청기간 is not read as 상시 신청", () => {
+  const sourceText = "신청기간 상시 대상 제한없음 담당기관 기타 (동대문구청) 진행일정: 2026-11-20 11:00 ~ 16:00 (Asia/Seoul)";
+  assert.equal(inferStructuredDeadlineType({ applicationEndAt: "2026-11-20T14:59:59.000Z", periodText: "상시", sourceText }), "fixed");
+  assert.equal(inferStructuredDeadlineType({ periodText: "상시", sourceText: "참여자를 상시 모집합니다" }), "ongoing");
+  assert.equal(inferStructuredDeadlineType({ periodText: "상시모집", sourceText: "안내" }), "ongoing");
+});
