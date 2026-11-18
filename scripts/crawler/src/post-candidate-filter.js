@@ -258,6 +258,14 @@ const TITLE_EXCLUDE_RULES = [
     reason: "budget/expense disclosure is not a poster notice",
   },
   {
+    // Governance meeting notices and minutes ("운영위원회 개최 공고", "운영위원회
+    // 결과 보고") are not opportunities. Calls for members ("운영위원 모집") are
+    // not matched: the pattern needs 운영위원회 followed by 개최/결과/회의/공지/공고.
+    name: "committee-meeting-notice",
+    pattern: /운영\s*위원회\s*(?:개최|결과|회의|공지|공고)/i,
+    reason: "governance committee meeting notice or minutes is not a poster notice",
+  },
+  {
     name: "job-document-notice",
     pattern: /채용\s*서류\s*(?:반환|청구|접수|안내)|이의신청서|반환\s*신청서/i,
     reason: "job administrative document notice",

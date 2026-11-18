@@ -70,6 +70,51 @@ function collectImages($, root, postUrl) {
   return images;
 }
 
+// Detail pages live under the board path: /community/news/post?seq=N for the
+// 센터소식 cards, /community/notice/post?seq=N for the 공지사항 table.
+function detailUrlFor(boardUrl, seq) {
+  const board = new URL(boardUrl, BASE_URL);
+  const path = board.pathname.replace(/\/+$/, "").replace(/\/post$/, "");
+  return new URL(`${path}/post?seq=${seq}`, board.origin).href;
+}
+
+/**
+ * List rows on one board page. The 센터소식 board renders cards (.item-box);
+ * the 공지사항 board renders a table whose title cell links to
+ * javascript:Page.goView(seq).
+ */
+export function parseMapoLaborListPage($, pageUrl, boardUrl = pageUrl) {
+  const posts = [];
+  const push = (seq, title, imageSrc) => {
+    if (!seq || !title) return;
+    const url = detailUrlFor(boardUrl, seq);
+    posts.push({
+      title,
+      url,
+      sourceUrl: url,
+      date: "",
+      images: imageSrc && isLikelyContentImage(imageSrc) ? [resolveUrl(pageUrl, imageSrc)] : [],
+      attachments: [],
+    });
+  };
+
+  $(".item-box").each((_, item) => {
+    const $item = $(item);
+    const seq = extractSeq($item.find("a[href*='Page.goView']").first().attr("href"));
+    const title = compactText($item.find(".item-box-desc h3, h3").first().text());
+    push(seq, title, $item.find("figure img, img").first().attr("src"));
+  });
+
+  if (posts.length === 0) {
+    $("tbody tr").each((_, row) => {
+      const $link = $(row).find("a[href*='Page.goView']").first();
+      push(extractSeq($link.attr("href")), compactText($link.text()), null);
+    });
+  }
+
+  return posts;
+}
+
 export default {
   name: "mapo-labor",
 
@@ -82,24 +127,7 @@ export default {
       const $ = await fetchPage(pageUrl);
       if (!$) break;
 
-      const pagePosts = [];
-      $(".item-box").each((_, item) => {
-        const $item = $(item);
-        const href = $item.find("a[href*='Page.goView']").first().attr("href");
-        const seq = extractSeq(href);
-        const title = compactText($item.find(".item-box-desc h3, h3").first().text());
-        if (!seq || !title) return;
-
-        const imageSrc = $item.find("figure img, img").first().attr("src");
-        pagePosts.push({
-          title,
-          url: resolveUrl(pageUrl, `/community/news/post?seq=${seq}`),
-          sourceUrl: resolveUrl(pageUrl, `/community/news/post?seq=${seq}`),
-          date: "",
-          images: imageSrc && isLikelyContentImage(imageSrc) ? [resolveUrl(pageUrl, imageSrc)] : [],
-          attachments: [],
-        });
-      });
+      const pagePosts = parseMapoLaborListPage($, pageUrl, boardUrl);
 
       posts.push(...pagePosts);
       if (pagePosts.length === 0) break;
