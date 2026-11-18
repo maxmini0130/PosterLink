@@ -65,6 +65,14 @@ import {
 } from "./source-link-rules.js";
 import { buildStructuredPosterFields, toApplicationEndIso } from "./poster-structured-fields.js";
 import {
+  SOURCE_REVIEW_ISSUE_CODES,
+  buildSourceApplicationStatusRecord,
+  isDistinctSameSourceItem,
+  planSourceApplicationStatusUpdate,
+  shouldSkipNewClosedPost,
+  sourceReviewIssuesOf,
+} from "./source-application-status.js";
+import {
   buildCardFacts,
   buildCardFactsInputFromUpload,
   isMissingCardFactColumnError,
@@ -1226,6 +1234,8 @@ const QUALITY_ISSUE_FIELD_CODES = new Set([
   "low-image-confidence",
   "low-content-match-confidence",
   "text-notice-no-image",
+  // Issues an adapter reads from the source (source-application-status.js).
+  ...SOURCE_REVIEW_ISSUE_CODES,
 ]);
 
 function mergeQualityIssuesIntoFieldVerification(verification = {}, quality = {}) {
@@ -1274,7 +1284,10 @@ function enrichOrganizationVerification(verification = {}, post = {}, sourceUrl 
     verification.sourceOrgName ??
     null
   );
+  // An organizer an adapter reads from a structured source field (for
+  // example the 기관 column of a course list) wins over a model's reading.
   const organizerName = normalizeOrgInfoText(
+    post.organizerName ??
     existing.organizerName ??
     verification.organizerName ??
     verification.correctedOrgName
@@ -2017,6 +2030,36 @@ async function cleanupExcludedCrawlerReviews() {
   }
 }
 
+/**
+ * A post whose source says 신청마감: close a published poster with the same
+ * source key, flag a review poster, and create nothing when none exists.
+ * The update is compare-and-set on the status read here.
+ */
+async function applyClosedSourceApplicationStatus(post, sourceKey, sourceUrl) {
+  const sourceKeyCandidates = [...new Set([sourceKey, sourceUrl].filter(Boolean))];
+  const { data: existing, error } = await supabase
+    .from("posters")
+    .select("id, poster_status, field_verification")
+    .in("source_key", sourceKeyCandidates)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`existing_lookup:${error.message}`);
+  if (!existing?.id) return { action: "missing", posterId: null };
+
+  const plan = planSourceApplicationStatusUpdate(existing, post);
+  if (Object.keys(plan.updates).length === 0) return { action: plan.action, posterId: existing.id };
+
+  const { data: updated, error: updateError } = await supabase
+    .from("posters")
+    .update(plan.updates)
+    .eq("id", existing.id)
+    .eq("poster_status", plan.expectedStatus)
+    .select("id");
+  if (updateError) throw new Error(`status_update:${updateError.message}`);
+  if (!updated?.length) return { action: "status_changed_concurrently", posterId: existing.id };
+  return { action: plan.action, posterId: existing.id };
+}
+
 async function uploadToSupabase(filePath) {
   const raw = await fs.readFile(filePath, "utf-8");
   const posts = JSON.parse(raw);
@@ -2076,6 +2119,33 @@ async function uploadToSupabase(filePath) {
       continue;
     }
 
+    // The source itself says the application is closed (e.g. 신청마감 on a
+    // course page): close or flag the existing record, never create one.
+    if (shouldSkipNewClosedPost(post)) {
+      try {
+        const result = await applyClosedSourceApplicationStatus(post, sourceKey, sourceUrl);
+        if (result.action === "missing") {
+          skip++;
+          collectionStats.recordRejected(post, "source_application_closed");
+          process.stdout.write("c");
+        } else {
+          skip++;
+          collectionStats.recordDuplicate(post);
+          skippedSourceKeys.push(sourceKey);
+          process.stdout.write("C");
+          if (result.action !== "unchanged") {
+            console.log(`\n  원문 신청마감 반영(${result.action}): ${post.title} — ${result.posterId}`);
+          }
+        }
+      } catch (error) {
+        fail++;
+        collectionStats.recordFailed(post, `source_application_closed:${error.message}`);
+        process.stdout.write("!");
+        console.error(`\n  원문 신청마감 반영 실패: ${post.title} — ${error.message}`);
+      }
+      continue;
+    }
+
     const postWithSourceLinks = sourceResolution.derivedLinks.length
       ? {
           ...post,
@@ -2108,7 +2178,7 @@ async function uploadToSupabase(filePath) {
     const duplicateSearchCandidates = duplicateCandidates.filter((row) => !(
       row.duplicateTargetType === "notice_candidate" &&
       normalizeSourceKey(row.source_key ?? row.sourceUrl ?? row.url) === sourceKey
-    ));
+    ) && !isDistinctSameSourceItem(post, row.source_key ?? row.sourceUrl ?? row.url, sourceUrl));
     // 계산해두고 이 post의 나머지 처리(중복 매칭 + notice_sightings 저장)에서 재사용한다
     // (다운로드+로컬 phash 계산 비용을 한 번만 지불).
     const currentImagePhash = sourceImages[0] ? await computeImagePhash(sourceImages[0]) : null;
@@ -2147,6 +2217,12 @@ async function uploadToSupabase(filePath) {
         quality.decision = "review";
       }
       quality.issue_score += duplicateIssue.severity === "high" ? 5 : 3;
+    }
+    const adapterReviewIssues = sourceReviewIssuesOf(post);
+    if (adapterReviewIssues.length > 0) {
+      quality.issues.push(...adapterReviewIssues);
+      quality.issue_score += adapterReviewIssues.length * 3;
+      if (quality.decision === "pass") quality.decision = "review";
     }
     if (quality.decision === "reject") {
       skip++;
@@ -2305,6 +2381,7 @@ async function uploadToSupabase(filePath) {
       sourceOrgName,
     }));
 
+    const sourceApplicationStatus = buildSourceApplicationStatusRecord(post);
     const posterRecord = sanitizeForPostgrest({
       title: readableInfo.title,
       source_org_name: sourceOrgName,
@@ -2321,6 +2398,7 @@ async function uploadToSupabase(filePath) {
         ...posterFieldVerification,
         cardFacts: cardFacts.evidence,
         deadlineProvenance: deadlineDecision.record,
+        ...(sourceApplicationStatus ? { sourceApplicationStatus } : {}),
       },
       embedding: embeddingToPgVector(embedding),
     });
@@ -2444,6 +2522,15 @@ async function uploadToSupabase(filePath) {
         (nextHasPosterImageOcr && !existingHasPosterImageOcr)
       ) {
         updates.field_verification = posterRecord.field_verification;
+      }
+      // Record a changed source application state (open -> waitlist, ...).
+      // Closed states take the early path above.
+      const statusPlan = planSourceApplicationStatusUpdate(
+        { ...existingPoster, field_verification: updates.field_verification ?? existingPoster.field_verification },
+        post,
+      );
+      if (statusPlan.updates.field_verification) {
+        updates.field_verification = statusPlan.updates.field_verification;
       }
       if (Object.keys(updates).length > 0) {
         const { error: updateError } = await supabase.from("posters").update(updates).eq("id", existingPoster.id);
