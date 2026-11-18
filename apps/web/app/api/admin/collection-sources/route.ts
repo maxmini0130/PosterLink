@@ -266,9 +266,52 @@ function summarize(rows: any[]) {
   };
 }
 
-async function loadRecentRuns(admin: ReturnType<typeof adminClient>, sourceIds: string[]) {
+// The page diagnoses every source from its own latest runs, and also lists the
+// newest runs overall. A single "latest 30 runs" query covered only the ~15
+// sources that ran last (each daily run writes crawl + upload rows), so the
+// other active sources showed "no run history" and were flagged for urgent
+// checks although they had run the same day. Load both.
+const RECENT_RUN_LIMIT = 30;
+const RUNS_PER_SOURCE = 3;
+const PER_SOURCE_CONCURRENCY = 8;
+
+type SourceRunRef = { id?: string | null; last_collected_at?: string | null; last_run_status?: string | null };
+
+async function loadRecentRuns(admin: ReturnType<typeof adminClient>, sources: SourceRunRef[]) {
+  const sourceIds = sources.map((source) => source.id).filter((id): id is string => Boolean(id));
   if (sourceIds.length === 0) return [];
 
+  const recent = await queryRuns(admin, sourceIds, RECENT_RUN_LIMIT);
+  if (recent === null) return [];
+
+  const covered = new Set(recent.map((run) => run.source_id));
+  // Only sources that have ever run can have history; planned ones are skipped.
+  const missing = sources
+    .filter((source) => source.id && !covered.has(source.id) && (source.last_collected_at || source.last_run_status))
+    .map((source) => source.id as string);
+  const perSource: RunRow[] = [];
+  for (let i = 0; i < missing.length; i += PER_SOURCE_CONCURRENCY) {
+    const batch = await Promise.all(
+      missing
+        .slice(i, i + PER_SOURCE_CONCURRENCY)
+        .map((id) => queryRuns(admin, [id], RUNS_PER_SOURCE)),
+    );
+    for (const rows of batch) perSource.push(...(rows ?? []));
+  }
+
+  const byId = new Map<string, RunRow>();
+  for (const run of [...recent, ...perSource]) byId.set(run.id, run);
+  return [...byId.values()].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+}
+
+type RunRow = { id: string; source_id: string | null; created_at: string } & Record<string, unknown>;
+
+/** Runs newest first, or null when the run history table is missing. */
+async function queryRuns(
+  admin: ReturnType<typeof adminClient>,
+  sourceIds: string[],
+  limit: number,
+): Promise<RunRow[] | null> {
   const { data, error } = await admin
     .from("collection_source_runs")
     .select([
@@ -294,11 +337,11 @@ async function loadRecentRuns(admin: ReturnType<typeof adminClient>, sourceIds: 
     ].join(","))
     .in("source_id", sourceIds)
     .order("created_at", { ascending: false })
-    .limit(30);
+    .limit(limit);
 
-  if (isMissingRunHistoryError(error)) return [];
+  if (isMissingRunHistoryError(error)) return null;
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []) as unknown as RunRow[];
 }
 
 export async function GET(request: NextRequest) {
@@ -337,7 +380,7 @@ export async function GET(request: NextRequest) {
   const sources = data ?? [];
   let recentRuns: any[] = [];
   try {
-    recentRuns = await loadRecentRuns(admin, sources.map((source: any) => source.id).filter(Boolean));
+    recentRuns = await loadRecentRuns(admin, sources as SourceRunRef[]);
   } catch (runError: any) {
     return NextResponse.json({ error: runError.message }, { status: 500 });
   }
