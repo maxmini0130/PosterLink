@@ -192,13 +192,22 @@ function getImages(row = {}) {
   ].filter(Boolean);
 }
 
-function getSourceUrls(row = {}) {
-  const links = Array.isArray(row.poster_links)
+// The row's own source address: the identity of the notice it was made from.
+function getOwnSourceUrls(row = {}) {
+  return [row.source_key, row.sourceUrl, row.url].filter(Boolean);
+}
+
+// Notice links attached to the row. A merge adds the merged notice's links
+// here, so a match is evidence, never identity: treating these as identity let
+// one wrong merge pull every later notice with that link into the same poster
+// (2026-11-19: a 강북구 course row had collected ten other notices' links).
+function getLinkedNoticeUrls(row = {}) {
+  return Array.isArray(row.poster_links)
     ? row.poster_links
       .filter((link) => !link?.link_type || link.link_type === "official_notice")
       .map((link) => link.url)
+      .filter(Boolean)
     : [];
-  return [row.source_key, row.sourceUrl, row.url, ...links].filter(Boolean);
 }
 
 function getApplicationUrls(row = {}) {
@@ -238,7 +247,8 @@ function getAttachmentHashes(row = {}) {
 export function buildDuplicateFingerprint(row = {}) {
   const org = normalizePosterOrg(row.source_org_name ?? row.org ?? row.site);
   const title = normalizePosterTitle(row.title, org);
-  const sourceUrls = new Set(getSourceUrls(row).map(normalizeSourceUrl).filter(Boolean));
+  const sourceUrls = new Set(getOwnSourceUrls(row).map(normalizeSourceUrl).filter(Boolean));
+  const linkedNoticeUrls = new Set(getLinkedNoticeUrls(row).map(normalizeSourceUrl).filter(Boolean));
   const applicationUrls = new Set(getApplicationUrls(row).map(normalizeSourceUrl).filter(Boolean));
   const attachmentHashes = new Set(getAttachmentHashes(row));
   const images = new Set(getImages(row).map(normalizeImageIdentity).filter(Boolean));
@@ -252,6 +262,7 @@ export function buildDuplicateFingerprint(row = {}) {
     org,
     deadline,
     sourceUrls,
+    linkedNoticeUrls,
     applicationUrls,
     attachmentHashes,
     images,
@@ -274,6 +285,15 @@ export function scorePosterDuplicate(candidate = {}, existing = {}) {
       candidate: candidateFp,
       existing: existingFp,
     };
+  }
+
+  // The candidate's own source is one of the notice links already attached to
+  // the existing row (an earlier merge or a cross-posted notice): strong
+  // evidence, but the other signals must still agree.
+  const linkedSourceMatched = [...candidateFp.sourceUrls].some((url) => existingFp.linkedNoticeUrls.has(url));
+  if (linkedSourceMatched) {
+    score += 40;
+    matched.push("linked-notice-url");
   }
 
   const imageMatched = [...candidateFp.images].some((image) => existingFp.images.has(image));
@@ -349,8 +369,13 @@ export function scorePosterDuplicate(candidate = {}, existing = {}) {
     phashMatched &&
     titleSimilarity >= 0.72 &&
     (orgSimilarity >= 0.65 || matched.includes("deadline") || applicationUrlMatched);
+  // One image is often reused across a series (an institution's course
+  // template, a default thumbnail): an image match alone with an unrelated
+  // title is not the same notice.
+  const imageWithoutTitle = (imageMatched || phashMatched) && titleSimilarity < 0.45 && !attachmentMatched;
   const highScoreCanMerge =
     score >= 90 &&
+    !imageWithoutTitle &&
     !sharedApplicationWithoutNoticeIdentity &&
     (!phashMatched || imageMatched || attachmentMatched || applicationUrlMatched || orgSimilarity >= 0.65 || matched.includes("deadline"));
 
