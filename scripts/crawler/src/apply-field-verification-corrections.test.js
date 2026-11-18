@@ -177,3 +177,105 @@ test("stale past-year correctedDeadline is suppressed", () => {
     },
   ]);
 });
+
+// 2026-11-19: a model guess older than a person's source review, or one that
+// reads the event day as the deadline, must not count as a correction.
+const songpaLike = (overrides = {}) => ({
+  application_end_at: "2026-11-20T14:59:59+00:00",
+  event_start_at: "2026-11-24T10:00:00+00:00",
+  event_end_at: "2026-11-25T12:00:00+00:00",
+  created_at: "2026-11-18T09:08:00+00:00",
+  source_org_name: "청년몽땅정보통",
+  ...overrides,
+  field_verification: {
+    checkedAt: "2026-11-18T09:08:10.308Z",
+    confidence: 0.45,
+    correctedDeadline: "2026-11-24",
+    deadlineMatches: false,
+    dateIssues: [{ code: "deadline-mismatch" }],
+    dateQuality: {
+      decision: "review",
+      normalizedDeadline: "2026-11-24",
+      suggestedDeadline: "2026-11-25",
+    },
+    ...(overrides.field_verification ?? {}),
+  },
+});
+
+test("person source review after the AI check suppresses the old deadline guess", () => {
+  const correction = getCorrection(
+    songpaLike({
+      event_start_at: null,
+      event_end_at: null,
+      field_verification: {
+        sourceReview20261118b: {
+          reviewer: "Claude source review",
+          reviewedAt: "2026-11-18T13:15:37.433Z",
+        },
+      },
+    }),
+    0.85,
+  );
+  assert.deepEqual(correction.changes, []);
+  assert.deepEqual(correction.updates, {});
+  assert.equal(
+    correction.suppressed[0].reason,
+    "person_reviewed_after_ai_check",
+  );
+});
+
+test("a person review made before the AI check does not suppress it", () => {
+  const correction = getCorrection(
+    songpaLike({
+      event_start_at: null,
+      event_end_at: null,
+      field_verification: {
+        sourceReview20261112: {
+          reviewer: "Claude source review",
+          reviewedAt: "2026-11-12T03:00:00Z",
+        },
+      },
+    }),
+    0.85,
+  );
+  assert.deepEqual(correction.updates, { application_end_at: "2026-11-24" });
+});
+
+test("a model reviewer does not count as a person review", () => {
+  const correction = getCorrection(
+    songpaLike({
+      event_start_at: null,
+      event_end_at: null,
+      field_verification: {
+        sourceReview20261118b: {
+          reviewer: "ai-queue",
+          reviewedAt: "2026-11-18T13:15:37.433Z",
+        },
+      },
+    }),
+    0.85,
+  );
+  assert.deepEqual(correction.updates, { application_end_at: "2026-11-24" });
+});
+
+test("event day proposed as the deadline is suppressed", () => {
+  const correction = getCorrection(songpaLike(), 0.85);
+  assert.deepEqual(correction.changes, []);
+  assert.equal(
+    correction.suppressed[0].reason,
+    "corrected_deadline_is_event_date",
+  );
+});
+
+test("a later date outside the event days stays actionable", () => {
+  const correction = getCorrection(
+    songpaLike({
+      field_verification: {
+        correctedDeadline: "2026-11-22",
+        dateQuality: { decision: "review" },
+      },
+    }),
+    0.85,
+  );
+  assert.deepEqual(correction.updates, { application_end_at: "2026-11-22" });
+});
