@@ -65,6 +65,7 @@ import {
 } from "./source-link-rules.js";
 import { buildStructuredPosterFields, toApplicationEndIso } from "./poster-structured-fields.js";
 import { filterSupplementalLinksForNotice } from "./youth-seoul-links.js";
+import { clearedImageUrls } from "./review-image-clear.js";
 import {
   buildCardFacts,
   buildCardFactsInputFromUpload,
@@ -2395,7 +2396,13 @@ async function uploadToSupabase(filePath) {
       } else if (existingPoster.summary_long && looksMojibake(existingPoster.summary_long)) {
         updates.summary_long = null;
       }
-      if (posterRecord.thumbnail_url && existingPoster.thumbnail_url !== posterRecord.thumbnail_url) {
+      // An image the review cleanup cleared as a non-poster is not put back.
+      const clearedImages = new Set(clearedImageUrls(existingPoster.field_verification));
+      if (
+        posterRecord.thumbnail_url &&
+        existingPoster.thumbnail_url !== posterRecord.thumbnail_url &&
+        !clearedImages.has(posterRecord.thumbnail_url)
+      ) {
         updates.thumbnail_url = posterRecord.thumbnail_url;
       }
       if (existingPoster.source_key !== sourceKey) {
@@ -2461,7 +2468,14 @@ async function uploadToSupabase(filePath) {
         const { error: updateError } = await supabase.from("posters").update(updates).eq("id", existingPoster.id);
         if (updateError) throw updateError;
       }
-      await syncPosterImages(existingPoster.id, postWithStoredImages, sourceUrl, posterRecord.field_verification?.posterImageOcr?.imageClassification);
+      await syncPosterImages(
+        existingPoster.id,
+        clearedImages.size > 0
+          ? { ...postWithStoredImages, images: (postWithStoredImages.images ?? []).filter((imageUrl) => !clearedImages.has(imageUrl)) }
+          : postWithStoredImages,
+        sourceUrl,
+        posterRecord.field_verification?.posterImageOcr?.imageClassification,
+      );
       await assignPosterCategories(existingPoster.id, post, categoryMap, classification);
       await assignPosterRegions(existingPoster.id, post, regionMap, classification, cardFacts.regionBasis);
       await assignPosterAudiences(existingPoster.id, classification, audienceMap);
