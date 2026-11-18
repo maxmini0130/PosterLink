@@ -656,13 +656,21 @@ function extractEligibilitySummary(text) {
   return extractAudienceBeforeCount(source);
 }
 
-function matchLabeledTarget(source) {
-  const match = source.match(
-    /(?:모집\s*)?대상\s*[:：]?\s*(.{1,180}?)(?=\s*(?:🎯|📢|🔗|📆|🚩|모집\s*기간|신청|일정|장소|문의|$))/,
-  );
-  if (!match) return null;
+// The youth portal header shows an empty "대상" followed by "담당기관 …": that
+// next header is not the target (52 of 256 stored targets read like this).
+const PORTAL_HEADER_START = /^(?:담당\s*기관|진행\s*일정|신청\s*기간|접수\s*기간|상세\s*정보)/u;
 
-  return compactText(match[1], 300);
+function matchLabeledTarget(source) {
+  const pattern =
+    /(?:모집\s*)?대상\s*[:：]?\s*(.{1,180}?)(?=\s*(?:🎯|📢|🔗|📆|🚩|모집\s*기간|신청|일정|장소|문의|$))/g;
+  let match;
+  while ((match = pattern.exec(source)) !== null) {
+    const value = compactText(match[1], 300);
+    if (value && !PORTAL_HEADER_START.test(value)) return value;
+    // Look again right after this label: a later "모집대상: …" may be inside the skipped text.
+    pattern.lastIndex = match.index + match[0].indexOf("대상") + 2;
+  }
+  return null;
 }
 
 function extractEventLocation(text) {
@@ -1038,4 +1046,148 @@ export function buildStructuredPosterFields({
       ? Math.max(0, Math.min(1, confidence))
       : null,
   };
+}
+
+// ── Poster OCR fills for image-only notices (2026-11-19) ─────────────────
+//
+// Some notices put everything in the poster image (에코마일리지: the body is a
+// title and a placeholder). The crawler already transcribes the chosen poster
+// (poster-ocr.js, post.posterOcr) but only the relevance router read it.
+// Here that transcription fills 대상 / 모집기간 / 문의 when the body has no
+// value for them. Each value comes from a labeled line only (the same
+// extractors the body uses), is recorded with source "ocr" and a lowered
+// confidence, and the poster is kept for a person (ocrFactsNeedPersonReview).
+
+export const OCR_FILL_RULES = "poster-ocr-fill-20261119";
+export const OCR_MIN_CONFIDENCE = 0.6;
+// Field confidence for a value read from the image, never above this.
+export const OCR_FIELD_CONFIDENCE_CAP = 0.5;
+const IMAGE_ONLY_BODY_MAX_CHARS = 80;
+
+// Portal overview lines and placeholders that are not notice body text.
+const OVERVIEW_LINE =
+  /^\s*(?:신청\s*기간|접수\s*기간|모집\s*기간|대\s*상|담당\s*기관|진행\s*일정|상세\s*정보|신청\s*링크|모집\s*인원|담당기관\s*바로가기).*$/gmu;
+const IMAGE_ONLY_PLACEHOLDER = /상세\s*내용은\s*이미지로\s*제공됩니다\.?[^\n]*/gu;
+
+function letterCount(value) {
+  return (String(value ?? "").match(/[\p{L}\p{N}]/gu) ?? []).length;
+}
+
+/**
+ * True when the notice body says almost nothing beyond the title and the
+ * portal header, i.e. its content lives in the poster image.
+ */
+export function isImageOnlyBody(sourceText, title = "") {
+  let text = String(sourceText ?? "")
+    .replace(IMAGE_ONLY_PLACEHOLDER, " ")
+    .replace(OVERVIEW_LINE, " ")
+    .replace(/https?:\/\/\S+/g, " ");
+  const head = compactText(title, 300);
+  if (head) text = text.split(head).join(" ");
+  return letterCount(text) < IMAGE_ONLY_BODY_MAX_CHARS;
+}
+
+/** The usable OCR transcription of the poster, or null. */
+export function usablePosterOcr(posterOcr) {
+  const ocr = asObject(posterOcr);
+  const text = String(ocr.ocrText ?? "").trim();
+  const confidence = Number(ocr.confidence);
+  if (!ocr.hasReadableText || !text || letterCount(text) < 20) return null;
+  if (!Number.isFinite(confidence) || confidence < OCR_MIN_CONFIDENCE) return null;
+  return {
+    text: text.slice(0, 4000),
+    confidence,
+    model: ocr.model ?? null,
+    checkedAt: ocr.checkedAt ?? null,
+  };
+}
+
+const OCR_PERIOD_LABEL = /(?:모집|신청|접수)\s*(?:기간|일시|기한)/u;
+
+/**
+ * Values to add from the poster OCR text, for fields the body left empty.
+ * Returns null when nothing is filled.
+ *
+ * @param structured  buildStructuredPosterFields result (body-derived)
+ * @param posterOcr   post.posterOcr ({ocrText, hasReadableText, confidence, model, checkedAt})
+ * @param sourceText  title + body the structured fields were read from
+ */
+export function buildOcrFieldFills({ structured = {}, posterOcr, sourceText = "", title = "" } = {}) {
+  const ocr = usablePosterOcr(posterOcr);
+  if (!ocr || !isImageOnlyBody(sourceText, title)) return null;
+  const text = compactText(ocr.text, 4000) ?? "";
+  const columns = {};
+  const fields = {};
+  const record = (column, value, evidence) => {
+    columns[column] = value;
+    fields[column] = { value, evidence: compactText(evidence, 240) };
+  };
+
+  if (!structured.eligibility_summary) {
+    const target = sanitizeNoticeFactValue(matchLabeledTarget(text), "target");
+    if (target) {
+      const at = Math.max(0, text.indexOf(target));
+      record("eligibility_summary", compactText(target, 2000), text.slice(Math.max(0, at - 20), at + target.length));
+    }
+  }
+
+  if (!structured.application_end_at && !structured.application_start_at && OCR_PERIOD_LABEL.test(text)) {
+    // A year must be written somewhere (poster or body); none is invented.
+    const yearHint = inferYearHint(text, sourceText);
+    const range = yearHint ? inferApplicationDateRangeFromPeriod(text, { yearHint }) : {};
+    const evidenceAt = text.search(OCR_PERIOD_LABEL);
+    const evidence = text.slice(evidenceAt, evidenceAt + 120);
+    if (range.applicationEndAt) {
+      const day = range.applicationEndAt.slice(0, 10);
+      record("application_end_at", deadlineAtStatedTime(day, text), evidence);
+    }
+    if (range.applicationStartAt && range.applicationStartAt !== range.applicationEndAt) {
+      record("application_start_at", toEventIso(range.applicationStartAt, { hadTime: false, schedule: null, edge: "start" }), evidence);
+    }
+  }
+
+  if (!structured.contact_info) {
+    const contact = sanitizeNoticeFactValue(extractContactInfo(text), "contact");
+    if (contact) record("contact_info", compactText(contact, 1000), contact);
+  }
+
+  if (Object.keys(columns).length === 0) return null;
+  if (columns.application_end_at && (!structured.deadline_type || structured.deadline_type === "unknown")) {
+    columns.deadline_type = "fixed";
+  }
+  const fieldConfidence = Math.min(ocr.confidence, OCR_FIELD_CONFIDENCE_CAP);
+  const current = Number(structured.data_confidence);
+  columns.data_confidence = Number.isFinite(current) ? Math.min(current, fieldConfidence) : fieldConfidence;
+  columns.verification_status = "needs_review";
+  return {
+    columns,
+    record: {
+      rules: OCR_FILL_RULES,
+      source: "ocr",
+      model: ocr.model,
+      ocrConfidence: ocr.confidence,
+      fieldConfidence,
+      checkedAt: ocr.checkedAt,
+      needsPersonReview: true,
+      fields,
+    },
+  };
+}
+
+/** True when OCR-derived values wait for a person (blocks AI auto-approval). */
+export function ocrFactsNeedPersonReview(fieldVerification) {
+  return asObject(asObject(fieldVerification).ocrFacts).needsPersonReview === true;
+}
+
+/** "대상: … · 기간: … · 문의: …" from OCR fills, for an image-only notice without a summary of facts. */
+export function ocrFactsSummaryLine(fills) {
+  const fields = asObject(fills?.record?.fields);
+  const day = (iso) => (iso ? new Date(Date.parse(iso) + 9 * 60 * 60 * 1000).toISOString().slice(0, 10) : null);
+  const period = [day(fields.application_start_at?.value), day(fields.application_end_at?.value)].filter(Boolean);
+  const parts = [
+    fields.eligibility_summary?.value ? `대상: ${fields.eligibility_summary.value}` : null,
+    period.length ? `기간: ${period.length === 2 ? `${period[0]} ~ ${period[1]}` : `~ ${period[0]}`}` : null,
+    fields.contact_info?.value ? `문의: ${fields.contact_info.value}` : null,
+  ].filter(Boolean);
+  return parts.length ? Array.from(parts.join(" · ")).slice(0, 300).join("") : null;
 }

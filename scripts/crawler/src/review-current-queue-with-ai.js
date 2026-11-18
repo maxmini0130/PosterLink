@@ -6,6 +6,8 @@ import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { CATEGORY_CODE_BY_LABEL } from "./poster-category-classifier.js";
 import { hasActiveQualityGateHold } from "./quality-gate-hold.js";
+import { isClearedToTextNotice } from "./review-image-clear.js";
+import { ocrFactsNeedPersonReview } from "./poster-structured-fields.js";
 
 function todayInKst() {
   const parts = new Intl.DateTimeFormat("en", {
@@ -294,6 +296,11 @@ async function buildPlan(rows, batchSize = REVIEW_BATCH_SIZE) {
     // Held by the daily quality gate (image confidence, non-poster image,
     // quality reject, deadline correction): only a person releases it.
     const imageHold = row && hasActiveQualityGateHold(row) ? ["quality-gate-hold"] : [];
+    // A notice whose non-poster image was cleared continues as a text notice;
+    // text notices are approved by a person, not by this queue.
+    if (row && isClearedToTextNotice(verification)) imageHold.push("image-cleared-text-notice");
+    // Values read from the poster image (OCR) are checked by a person before publishing.
+    if (row && ocrFactsNeedPersonReview(verification)) imageHold.push("ocr-derived-fields");
     return {
       id: decision.id,
       title: row?.title ?? "",

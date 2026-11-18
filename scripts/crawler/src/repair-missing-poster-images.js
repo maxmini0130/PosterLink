@@ -124,7 +124,7 @@ async function syncPosterImages(row, images) {
 async function main() {
   let query = supabase
     .from("posters")
-    .select("id, title, thumbnail_url, source_key, poster_status, poster_links(url, is_primary), poster_images(storage_path)")
+    .select("id, title, thumbnail_url, source_key, poster_status, field_verification, poster_links(url, is_primary), poster_images(storage_path)")
     .eq("poster_status", "review")
     .limit(limit);
 
@@ -134,6 +134,8 @@ async function main() {
   const rows = (data ?? [])
     .map((row) => ({ ...row, sourceUrl: getPrimarySourceUrl(row) }))
     .filter((row) => isMissingOrInvalidImage(row.thumbnail_url) || hasNoImageRows(row))
+    // Cleared as a non-poster by the review cleanup (review-image-clear.js): a person restores it.
+    .filter((row) => !row.field_verification?.imageCleanup?.clearedAt)
     .filter((row) => row.sourceUrl)
     .filter((row) => !sourceFilter || row.sourceUrl.includes(sourceFilter));
   let checked = 0;
