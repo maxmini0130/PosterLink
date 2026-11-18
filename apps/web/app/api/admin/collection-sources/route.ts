@@ -105,7 +105,9 @@ function getSourceHealthFlags(row: any) {
     || row.last_run_status === "partial";
   const lowQuality = checkedCount >= 5 && validRate < 40;
   const missingRequired = checkedCount >= 5 && missingRate >= 30;
-  const needsAttention = errored || stale || lowQuality || missingRequired;
+  // Low valid rate / missing fields while runs succeed are a yield question
+  // (counted as low_quality), not a broken source that needs a person now.
+  const needsAttention = errored || stale;
 
   return {
     due,
