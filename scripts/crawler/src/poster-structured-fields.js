@@ -560,9 +560,55 @@ function extractTargetAgeRange(text) {
   };
 }
 
+// A whole number only: "070-77153-3893" (a typo in a notice) is not cut to "070-7715".
+const PHONE = String.raw`(?<!\d)(?:0\d{1,2}[-)\s.]?\d{3,4}[-.\s]\d{4}|1\d{3}-\d{4}|\d{3,4}-\d{4})(?![\d-])`;
+const CONTACT_LINE = new RegExp(
+  String.raw`(?:문\s*의(?:\s*처)?|연\s*락\s*처|☎|📞)\s*[:：)\]]?\s*((?:(?!문\s*의|신청|접수|대상|장소|일시|기간)[^\n]){0,50}?${PHONE}(?:\s*[,~/·]\s*(?:${PHONE}|\d{3,4}))*)`,
+);
+
+/**
+ * Contact from a labeled line ("문의: 서울청년센터 은평 조이 매니저 02-351-3711").
+ * Only a phone number written after a 문의/연락처 label counts; an unlabeled
+ * number anywhere in the page is not used.
+ */
+export function extractContactInfo(text) {
+  const source = compactText(text, 12000) ?? "";
+  const match = source.match(CONTACT_LINE);
+  if (!match) return null;
+  let value = match[1]
+    .replace(/^[\s:：\-–]+/, "")
+    .replace(/^(?:전화\s*)?번호\s*[:：]\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  // "중랑구 사회적경제지원센터 (☎ 02-2094-1302" → close the bracket the match cut.
+  const open = (value.match(/\(/g) ?? []).length - (value.match(/\)/g) ?? []).length;
+  if (open > 0) value = `${value}${")".repeat(open)}`;
+  return value.length >= 7 ? value.slice(0, 120) : null;
+}
+
+const FEE_LINE =
+  /(?:참가비|참여비|참가\s*비용|수강료|교육비|이용료|재료비|비용|참가료)\s*[:：]?\s*(무료|전액\s*무료|(?:\d{1,3}(?:,\d{3})+|\d{1,7})\s*원)/;
+
+/** Fee from a labeled line: "참가비 무료", "수강료 : 10,000원". */
+export function extractParticipationFee(text) {
+  const source = compactText(text, 12000) ?? "";
+  const match = source.match(FEE_LINE);
+  if (!match) return null;
+  // "수강료 80,000원 0원" (list and sale price on a shop page): which one applies is unclear.
+  const after = source.slice(match.index + match[0].length, match.index + match[0].length + 12);
+  if (/^\s*(?:\d{1,3}(?:,\d{3})+|\d{1,7})\s*원/.test(after)) return null;
+  return /무료/.test(match[1]) ? "무료" : match[1].replace(/\s+/g, "");
+}
+
 function extractRecruitmentCount(text) {
   const source = compactText(text, 12000) ?? "";
   if (!source) return null;
+
+  // "모집규모 : 15개사 내외", "선발규모: 2개사 내외"
+  const scale = source.match(
+    /(?:모집|선발|지원)\s*규모\s*[:：]?\s*(\d{1,4})\s*(명|팀|가구|개사|기관)(\s*내외)?/,
+  );
+  if (scale) return `${scale[1]}${scale[2]}${scale[3] ? " 내외" : ""}`;
 
   const labeled = source.match(
     /(?:(?:모집|참가|참여|교육|신청|선발|수강)\s*(?:대상|인원|정원)|모집정원|정원|대상)\s*[:：]?\s*.{0,80}?(\d{1,4})\s*(명|팀|가구|가족|개사|기관|명\s*내외)/,
@@ -976,7 +1022,12 @@ export function buildStructuredPosterFields({
       "application",
       4000,
     ),
-    contact_info: firstSafeFactText([trustedFacts.contact], "contact", 1000),
+    contact_info: firstSafeFactText(
+      [trustedFacts.contact, extractContactInfo(sourceEvidenceText)],
+      "contact",
+      1000,
+    ),
+    participation_fee: extractParticipationFee(sourceEvidenceText),
     event_location: firstSafeFactText(
       [trustedFacts.location, inferredEventLocation],
       "location",
