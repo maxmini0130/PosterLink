@@ -64,6 +64,7 @@ import {
   sanitizeKnownShortUrl,
 } from "./source-link-rules.js";
 import { buildStructuredPosterFields, toApplicationEndIso } from "./poster-structured-fields.js";
+import { filterSupplementalLinksForNotice } from "./youth-seoul-links.js";
 import {
   buildCardFacts,
   buildCardFactsInputFromUpload,
@@ -2130,7 +2131,17 @@ async function uploadToSupabase(filePath) {
       skip++;
       collectionStats.recordDuplicate(post);
       skippedSourceKeys.push(sourceKey);
-      await addSupplementalPosterLinks(duplicateMatch.row.id, linkEntries);
+      // A sibling notice from the same portal keeps its own links (youth-seoul-links.js).
+      const supplemental = filterSupplementalLinksForNotice({
+        targetRow: duplicateMatch.row,
+        sourceUrl,
+        linkEntries,
+        incomingTitle: post.title ?? null,
+      });
+      if (supplemental.dropped.length > 0) {
+        console.log(`\n  Supplemental links skipped (${supplemental.reason}): ${supplemental.dropped.length} from ${sourceUrl}`);
+      }
+      await addSupplementalPosterLinks(duplicateMatch.row.id, supplemental.links);
       await assignPosterCategories(duplicateMatch.row.id, post, categoryMap, classification);
       await assignPosterRegions(duplicateMatch.row.id, post, regionMap, classification);
       await assignPosterAudiences(duplicateMatch.row.id, classification, audienceMap);
