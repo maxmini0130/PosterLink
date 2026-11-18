@@ -1,0 +1,82 @@
+{
+  "note": "Golden-set accuracy of the current crawler code (npm run golden:baseline). CI fails when a field drops below it.",
+  "fixture_built_at": "2026-11-18T17:31:32.085Z",
+  "rows": 266,
+  "fields": {
+    "title": {
+      "correct": 181,
+      "total": 266,
+      "accuracy": 68
+    },
+    "organizer_name": {
+      "correct": 174,
+      "total": 266,
+      "accuracy": 65.4
+    },
+    "deadline_type": {
+      "correct": 201,
+      "total": 266,
+      "accuracy": 75.6
+    },
+    "application_end_at (day)": {
+      "correct": 198,
+      "total": 266,
+      "accuracy": 74.4
+    },
+    "application_end_at (minute)": {
+      "correct": 118,
+      "total": 266,
+      "accuracy": 44.4
+    },
+    "application_start_at (day)": {
+      "correct": 196,
+      "total": 266,
+      "accuracy": 73.7
+    },
+    "event_start_at (day)": {
+      "correct": 223,
+      "total": 266,
+      "accuracy": 83.8
+    },
+    "event_start_at (minute)": {
+      "correct": 126,
+      "total": 266,
+      "accuracy": 47.4
+    },
+    "event_end_at (day)": {
+      "correct": 207,
+      "total": 266,
+      "accuracy": 77.8
+    },
+    "event_end_at (minute)": {
+      "correct": 116,
+      "total": 266,
+      "accuracy": 43.6
+    },
+    "thumbnail_url": {
+      "correct": 250,
+      "total": 266,
+      "accuracy": 94
+    },
+    "links (no wrong link)": {
+      "correct": 235,
+      "total": 266,
+      "accuracy": 88.3
+    },
+    "links (exact set)": {
+      "correct": 208,
+      "total": 266,
+      "accuracy": 78.2
+    },
+    "categories": {
+      "correct": 163,
+      "total": 266,
+      "accuracy": 61.3
+    },
+    "audiences": {
+      "correct": 228,
+      "total": 266,
+      "accuracy": 85.7
+    }
+  }
+}
