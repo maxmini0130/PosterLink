@@ -138,7 +138,7 @@ const GENERIC_TITLE_PATTERNS = [
   /^\uC11C\uC6B8\uD2B9\uBCC4\uC2DC\s+\S+\uAD6C$/i,
 ];
 
-const REJECT_CODES = new Set([
+export const QUALITY_REJECT_CODES = new Set([
   "missing-title",
   "generic-title",
   "breadcrumb-title",
@@ -410,7 +410,6 @@ export function evaluatePosterQuality(input = {}, options = {}) {
   const org = compact(input.source_org_name ?? input.org ?? input.site);
   const rawSummary = String(input.summary_long ?? input.summary_short ?? input.content ?? "");
   const summary = compact(rawSummary);
-  const isTextNotice = input.noticeOnly === true || input.contentMode === "text_notice" || options.contentMode === "text_notice";
   const sourceKey = normalizeUrl(options.sourceKey ?? input.source_key ?? input.sourceUrl ?? input.url);
   const thumbnail = normalizeUrl(input.thumbnail_url);
   const images = unique([
@@ -419,6 +418,12 @@ export function evaluatePosterQuality(input = {}, options = {}) {
     ...(Array.isArray(input.images) ? input.images : []),
     ...(Array.isArray(input.poster_images) ? input.poster_images.map(getImageUrl) : []),
   ].map(normalizeUrl));
+  // A review notice whose non-poster image was cleared (review-image-clear.js)
+  // continues as a text notice while it has no image.
+  const isTextNotice = input.noticeOnly === true
+    || input.contentMode === "text_notice"
+    || options.contentMode === "text_notice"
+    || (images.length === 0 && input.field_verification?.imageCleanup?.contentMode === "text_notice");
   const links = unique([
     ...(options.links ?? []),
     ...(options.linkEntries ?? []).map(getLinkUrl),
@@ -601,7 +606,7 @@ export function evaluatePosterQuality(input = {}, options = {}) {
   );
   const decision = issues.some((issue) => (
     (issue.decision === "reject" && !isReviewOnlyRejectCode(issue))
-    || (REJECT_CODES.has(issue.code) && !isReviewOnlyRejectCode(issue))
+    || (QUALITY_REJECT_CODES.has(issue.code) && !isReviewOnlyRejectCode(issue))
   ))
     ? "reject"
     : issues.length > 0

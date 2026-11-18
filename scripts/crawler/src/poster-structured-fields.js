@@ -155,6 +155,35 @@ export function extractDeadlineTime(text, deadlineDay) {
   return null;
 }
 
+const SEOUL_DISTRICTS =
+  "강남|강동|강북|강서|관악|광진|구로|금천|노원|도봉|동대문|동작|마포|서대문|서초|성동|성북|송파|양천|영등포|용산|은평|종로|중구|중랑";
+const YOUTH_CENTER_BRANCH = new RegExp(
+  `서울청년센터\\s*[\\[(]?\\s*(${SEOUL_DISTRICTS})(\\s*신림동쓰리룸)?`,
+);
+// Names that say where a notice was collected, not who runs the program.
+const GENERIC_ORGANIZER = /^(?:서울청년센터|청년몽땅정보통|서울시\s*청년몽땅정보통)$/;
+// "양천외국인주민센터 <세계요리나눔…>", "영등포구청 <드론산업…>": the issuing body
+// written before the program name.
+const TITLE_PREFIX_ORGANIZER =
+  /^\s*\[?\s*([가-힣A-Za-z0-9·()]+(?:\s+[가-힣A-Za-z0-9·()]+){0,3}?(?:센터|구청|시청|재단|도서관|복지관|학교|협회|공단|공사|진흥원|청|위원회|문화의집|가족센터))\s*\]?\s*[<\[「《〈]/;
+
+/**
+ * The organizer when the extracted name is only a collection placeholder.
+ * The youth portal fills 담당기관 with a bare "서울청년센터" for many notices:
+ * the branch ("서울청년센터 성동") or the real issuer written at the start of
+ * the title is used instead. Any other name is returned unchanged.
+ */
+export function refineOrganizerName(name, title) {
+  const current = compactText(name, 300);
+  if (current && !GENERIC_ORGANIZER.test(current)) return current;
+  const text = compactText(title, 300) ?? "";
+  const branch = text.match(YOUTH_CENTER_BRANCH);
+  if (branch) return `서울청년센터 ${branch[1]}${branch[2] ? ` ${branch[2].trim()}` : ""}`;
+  const prefix = text.match(TITLE_PREFIX_ORGANIZER);
+  if (prefix && !/서울청년센터|청년몽땅정보통/.test(prefix[1])) return prefix[1].trim();
+  return current;
+}
+
 /** A day-only deadline at the time the notice states, else 23:59:59 KST. */
 function deadlineAtStatedTime(day, text) {
   const time = extractDeadlineTime(text, day);
@@ -531,9 +560,55 @@ function extractTargetAgeRange(text) {
   };
 }
 
+// A whole number only: "070-77153-3893" (a typo in a notice) is not cut to "070-7715".
+const PHONE = String.raw`(?<!\d)(?:0\d{1,2}[-)\s.]?\d{3,4}[-.\s]\d{4}|1\d{3}-\d{4}|\d{3,4}-\d{4})(?![\d-])`;
+const CONTACT_LINE = new RegExp(
+  String.raw`(?:문\s*의(?:\s*처)?|연\s*락\s*처|☎|📞)\s*[:：)\]]?\s*((?:(?!문\s*의|신청|접수|대상|장소|일시|기간)[^\n]){0,50}?${PHONE}(?:\s*[,~/·]\s*(?:${PHONE}|\d{3,4}))*)`,
+);
+
+/**
+ * Contact from a labeled line ("문의: 서울청년센터 은평 조이 매니저 02-351-3711").
+ * Only a phone number written after a 문의/연락처 label counts; an unlabeled
+ * number anywhere in the page is not used.
+ */
+export function extractContactInfo(text) {
+  const source = compactText(text, 12000) ?? "";
+  const match = source.match(CONTACT_LINE);
+  if (!match) return null;
+  let value = match[1]
+    .replace(/^[\s:：\-–]+/, "")
+    .replace(/^(?:전화\s*)?번호\s*[:：]\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  // "중랑구 사회적경제지원센터 (☎ 02-2094-1302" → close the bracket the match cut.
+  const open = (value.match(/\(/g) ?? []).length - (value.match(/\)/g) ?? []).length;
+  if (open > 0) value = `${value}${")".repeat(open)}`;
+  return value.length >= 7 ? value.slice(0, 120) : null;
+}
+
+const FEE_LINE =
+  /(?:참가비|참여비|참가\s*비용|수강료|교육비|이용료|재료비|비용|참가료)\s*[:：]?\s*(무료|전액\s*무료|(?:\d{1,3}(?:,\d{3})+|\d{1,7})\s*원)/;
+
+/** Fee from a labeled line: "참가비 무료", "수강료 : 10,000원". */
+export function extractParticipationFee(text) {
+  const source = compactText(text, 12000) ?? "";
+  const match = source.match(FEE_LINE);
+  if (!match) return null;
+  // "수강료 80,000원 0원" (list and sale price on a shop page): which one applies is unclear.
+  const after = source.slice(match.index + match[0].length, match.index + match[0].length + 12);
+  if (/^\s*(?:\d{1,3}(?:,\d{3})+|\d{1,7})\s*원/.test(after)) return null;
+  return /무료/.test(match[1]) ? "무료" : match[1].replace(/\s+/g, "");
+}
+
 function extractRecruitmentCount(text) {
   const source = compactText(text, 12000) ?? "";
   if (!source) return null;
+
+  // "모집규모 : 15개사 내외", "선발규모: 2개사 내외"
+  const scale = source.match(
+    /(?:모집|선발|지원)\s*규모\s*[:：]?\s*(\d{1,4})\s*(명|팀|가구|개사|기관)(\s*내외)?/,
+  );
+  if (scale) return `${scale[1]}${scale[2]}${scale[3] ? " 내외" : ""}`;
 
   const labeled = source.match(
     /(?:(?:모집|참가|참여|교육|신청|선발|수강)\s*(?:대상|인원|정원)|모집정원|정원|대상)\s*[:：]?\s*.{0,80}?(\d{1,4})\s*(명|팀|가구|가족|개사|기관|명\s*내외)/,
@@ -581,13 +656,21 @@ function extractEligibilitySummary(text) {
   return extractAudienceBeforeCount(source);
 }
 
-function matchLabeledTarget(source) {
-  const match = source.match(
-    /(?:모집\s*)?대상\s*[:：]?\s*(.{1,180}?)(?=\s*(?:🎯|📢|🔗|📆|🚩|모집\s*기간|신청|일정|장소|문의|$))/,
-  );
-  if (!match) return null;
+// The youth portal header shows an empty "대상" followed by "담당기관 …": that
+// next header is not the target (52 of 256 stored targets read like this).
+const PORTAL_HEADER_START = /^(?:담당\s*기관|진행\s*일정|신청\s*기간|접수\s*기간|상세\s*정보)/u;
 
-  return compactText(match[1], 300);
+function matchLabeledTarget(source) {
+  const pattern =
+    /(?:모집\s*)?대상\s*[:：]?\s*(.{1,180}?)(?=\s*(?:🎯|📢|🔗|📆|🚩|모집\s*기간|신청|일정|장소|문의|$))/g;
+  let match;
+  while ((match = pattern.exec(source)) !== null) {
+    const value = compactText(match[1], 300);
+    if (value && !PORTAL_HEADER_START.test(value)) return value;
+    // Look again right after this label: a later "모집대상: …" may be inside the skipped text.
+    pattern.lastIndex = match.index + match[0].indexOf("대상") + 2;
+  }
+  return null;
 }
 
 function extractEventLocation(text) {
@@ -710,7 +793,9 @@ export function inferStructuredDeadlineType({
   periodText,
   sourceText,
 } = {}) {
-  const text = `${periodText ?? ""} ${sourceText ?? ""}`;
+  // A separator keeps wording from matching across the two values: the period
+  // "상시" followed by "신청기간 …" must not read as "상시 신청".
+  const text = `${periodText ?? ""} / ${sourceText ?? ""}`;
   const explicit = normalizeStructuredDeadlineType(deadlineType);
   if (explicit !== "unknown") {
     if (hasOpenEndedDeadlineEvidence(explicit, text)) return explicit;
@@ -744,6 +829,7 @@ export function buildStructuredPosterFields({
   eventStartAt,
   eventEndAt,
   sourceText,
+  title,
   fallbackOrganizerName,
   target,
   supportScale,
@@ -880,14 +966,17 @@ export function buildStructuredPosterFields({
   const inferredEventLocation = extractEventLocation(sourceEvidenceText);
 
   return {
-    organizer_name: firstText(
-      [
-        organization.organizerName,
-        organization.displayOrgName,
-        verification.correctedOrgName,
-        fallbackOrganizerName,
-      ],
-      300,
+    organizer_name: refineOrganizerName(
+      firstText(
+        [
+          organization.organizerName,
+          organization.displayOrgName,
+          verification.correctedOrgName,
+          fallbackOrganizerName,
+        ],
+        300,
+      ),
+      title ?? String(sourceText ?? "").split("\n")[0],
     ),
     application_organization_name: firstText(
       [
@@ -941,7 +1030,12 @@ export function buildStructuredPosterFields({
       "application",
       4000,
     ),
-    contact_info: firstSafeFactText([trustedFacts.contact], "contact", 1000),
+    contact_info: firstSafeFactText(
+      [trustedFacts.contact, extractContactInfo(sourceEvidenceText)],
+      "contact",
+      1000,
+    ),
+    participation_fee: extractParticipationFee(sourceEvidenceText),
     event_location: firstSafeFactText(
       [trustedFacts.location, inferredEventLocation],
       "location",
@@ -952,4 +1046,148 @@ export function buildStructuredPosterFields({
       ? Math.max(0, Math.min(1, confidence))
       : null,
   };
+}
+
+// ── Poster OCR fills for image-only notices (2026-11-19) ─────────────────
+//
+// Some notices put everything in the poster image (에코마일리지: the body is a
+// title and a placeholder). The crawler already transcribes the chosen poster
+// (poster-ocr.js, post.posterOcr) but only the relevance router read it.
+// Here that transcription fills 대상 / 모집기간 / 문의 when the body has no
+// value for them. Each value comes from a labeled line only (the same
+// extractors the body uses), is recorded with source "ocr" and a lowered
+// confidence, and the poster is kept for a person (ocrFactsNeedPersonReview).
+
+export const OCR_FILL_RULES = "poster-ocr-fill-20261119";
+export const OCR_MIN_CONFIDENCE = 0.6;
+// Field confidence for a value read from the image, never above this.
+export const OCR_FIELD_CONFIDENCE_CAP = 0.5;
+const IMAGE_ONLY_BODY_MAX_CHARS = 80;
+
+// Portal overview lines and placeholders that are not notice body text.
+const OVERVIEW_LINE =
+  /^\s*(?:신청\s*기간|접수\s*기간|모집\s*기간|대\s*상|담당\s*기관|진행\s*일정|상세\s*정보|신청\s*링크|모집\s*인원|담당기관\s*바로가기).*$/gmu;
+const IMAGE_ONLY_PLACEHOLDER = /상세\s*내용은\s*이미지로\s*제공됩니다\.?[^\n]*/gu;
+
+function letterCount(value) {
+  return (String(value ?? "").match(/[\p{L}\p{N}]/gu) ?? []).length;
+}
+
+/**
+ * True when the notice body says almost nothing beyond the title and the
+ * portal header, i.e. its content lives in the poster image.
+ */
+export function isImageOnlyBody(sourceText, title = "") {
+  let text = String(sourceText ?? "")
+    .replace(IMAGE_ONLY_PLACEHOLDER, " ")
+    .replace(OVERVIEW_LINE, " ")
+    .replace(/https?:\/\/\S+/g, " ");
+  const head = compactText(title, 300);
+  if (head) text = text.split(head).join(" ");
+  return letterCount(text) < IMAGE_ONLY_BODY_MAX_CHARS;
+}
+
+/** The usable OCR transcription of the poster, or null. */
+export function usablePosterOcr(posterOcr) {
+  const ocr = asObject(posterOcr);
+  const text = String(ocr.ocrText ?? "").trim();
+  const confidence = Number(ocr.confidence);
+  if (!ocr.hasReadableText || !text || letterCount(text) < 20) return null;
+  if (!Number.isFinite(confidence) || confidence < OCR_MIN_CONFIDENCE) return null;
+  return {
+    text: text.slice(0, 4000),
+    confidence,
+    model: ocr.model ?? null,
+    checkedAt: ocr.checkedAt ?? null,
+  };
+}
+
+const OCR_PERIOD_LABEL = /(?:모집|신청|접수)\s*(?:기간|일시|기한)/u;
+
+/**
+ * Values to add from the poster OCR text, for fields the body left empty.
+ * Returns null when nothing is filled.
+ *
+ * @param structured  buildStructuredPosterFields result (body-derived)
+ * @param posterOcr   post.posterOcr ({ocrText, hasReadableText, confidence, model, checkedAt})
+ * @param sourceText  title + body the structured fields were read from
+ */
+export function buildOcrFieldFills({ structured = {}, posterOcr, sourceText = "", title = "" } = {}) {
+  const ocr = usablePosterOcr(posterOcr);
+  if (!ocr || !isImageOnlyBody(sourceText, title)) return null;
+  const text = compactText(ocr.text, 4000) ?? "";
+  const columns = {};
+  const fields = {};
+  const record = (column, value, evidence) => {
+    columns[column] = value;
+    fields[column] = { value, evidence: compactText(evidence, 240) };
+  };
+
+  if (!structured.eligibility_summary) {
+    const target = sanitizeNoticeFactValue(matchLabeledTarget(text), "target");
+    if (target) {
+      const at = Math.max(0, text.indexOf(target));
+      record("eligibility_summary", compactText(target, 2000), text.slice(Math.max(0, at - 20), at + target.length));
+    }
+  }
+
+  if (!structured.application_end_at && !structured.application_start_at && OCR_PERIOD_LABEL.test(text)) {
+    // A year must be written somewhere (poster or body); none is invented.
+    const yearHint = inferYearHint(text, sourceText);
+    const range = yearHint ? inferApplicationDateRangeFromPeriod(text, { yearHint }) : {};
+    const evidenceAt = text.search(OCR_PERIOD_LABEL);
+    const evidence = text.slice(evidenceAt, evidenceAt + 120);
+    if (range.applicationEndAt) {
+      const day = range.applicationEndAt.slice(0, 10);
+      record("application_end_at", deadlineAtStatedTime(day, text), evidence);
+    }
+    if (range.applicationStartAt && range.applicationStartAt !== range.applicationEndAt) {
+      record("application_start_at", toEventIso(range.applicationStartAt, { hadTime: false, schedule: null, edge: "start" }), evidence);
+    }
+  }
+
+  if (!structured.contact_info) {
+    const contact = sanitizeNoticeFactValue(extractContactInfo(text), "contact");
+    if (contact) record("contact_info", compactText(contact, 1000), contact);
+  }
+
+  if (Object.keys(columns).length === 0) return null;
+  if (columns.application_end_at && (!structured.deadline_type || structured.deadline_type === "unknown")) {
+    columns.deadline_type = "fixed";
+  }
+  const fieldConfidence = Math.min(ocr.confidence, OCR_FIELD_CONFIDENCE_CAP);
+  const current = Number(structured.data_confidence);
+  columns.data_confidence = Number.isFinite(current) ? Math.min(current, fieldConfidence) : fieldConfidence;
+  columns.verification_status = "needs_review";
+  return {
+    columns,
+    record: {
+      rules: OCR_FILL_RULES,
+      source: "ocr",
+      model: ocr.model,
+      ocrConfidence: ocr.confidence,
+      fieldConfidence,
+      checkedAt: ocr.checkedAt,
+      needsPersonReview: true,
+      fields,
+    },
+  };
+}
+
+/** True when OCR-derived values wait for a person (blocks AI auto-approval). */
+export function ocrFactsNeedPersonReview(fieldVerification) {
+  return asObject(asObject(fieldVerification).ocrFacts).needsPersonReview === true;
+}
+
+/** "대상: … · 기간: … · 문의: …" from OCR fills, for an image-only notice without a summary of facts. */
+export function ocrFactsSummaryLine(fills) {
+  const fields = asObject(fills?.record?.fields);
+  const day = (iso) => (iso ? new Date(Date.parse(iso) + 9 * 60 * 60 * 1000).toISOString().slice(0, 10) : null);
+  const period = [day(fields.application_start_at?.value), day(fields.application_end_at?.value)].filter(Boolean);
+  const parts = [
+    fields.eligibility_summary?.value ? `대상: ${fields.eligibility_summary.value}` : null,
+    period.length ? `기간: ${period.length === 2 ? `${period[0]} ~ ${period[1]}` : `~ ${period[0]}`}` : null,
+    fields.contact_info?.value ? `문의: ${fields.contact_info.value}` : null,
+  ].filter(Boolean);
+  return parts.length ? Array.from(parts.join(" · ")).slice(0, 300).join("") : null;
 }
