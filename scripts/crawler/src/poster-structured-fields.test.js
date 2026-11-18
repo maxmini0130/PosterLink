@@ -477,3 +477,23 @@ test("the portal's 00:00 ~ 00:00 placeholder is not an event time", () => {
   assert.equal(fields.event_start_at, "2026-11-24T15:00:00.000Z");
   assert.equal(fields.event_end_at, "2026-12-01T15:00:00.000Z");
 });
+
+test("a day-only deadline takes the closing time the notice states", async () => {
+  const { extractDeadlineTime } = await import("./poster-structured-fields.js");
+  assert.equal(extractDeadlineTime("신청일시 : 2026. 11. 16.(월) 18:00 ~ 2026. 11. 21.(토) 12:00모집방법", "2026-11-21"), "12:00");
+  assert.equal(extractDeadlineTime("모집기간: 2026-11-17 09:00 ~ 2026-11-27 17:00 대상인원", "2026-11-27"), "17:00");
+  assert.equal(extractDeadlineTime("▷ 접수기간: 2026. 11. 23.(월) 10:00 ~ 12. 14.(월) 17:00", "2026-12-14"), "17:00");
+  assert.equal(extractDeadlineTime("-신청기간 : 11. 09.(월) ~ 11. 23.(월) 평일 09:00 ~ 18:00", "2026-11-23"), "18:00");
+  // the portal's 00:00 placeholder, another day, or a non-period time are not used
+  assert.equal(extractDeadlineTime("신청기간 2026-11-16 ~ 2026-11-24 00:00", "2026-11-24"), null);
+  assert.equal(extractDeadlineTime("모집기간: 2026-11-17 09:00 ~ 2026-11-26 17:00", "2026-11-27"), null);
+  assert.equal(extractDeadlineTime("신청기간 : 11. 01. ~ 11. 20. / 행사 11. 20. 14:00", "2026-11-20"), null);
+
+  const fields = buildStructuredPosterFields({
+    applicationEndAt: "2026-11-21",
+    sourceText: "신청일시 : 2026. 11. 16.(월) 18:00 ~ 2026. 11. 21.(토) 12:00",
+  });
+  assert.equal(fields.application_end_at, "2026-11-21T03:00:00.000Z");
+  const plain = buildStructuredPosterFields({ applicationEndAt: "2026-11-21", sourceText: "신청기간 2026-11-16 ~ 2026-11-21" });
+  assert.equal(plain.application_end_at, "2026-11-21T14:59:59.000Z");
+});
