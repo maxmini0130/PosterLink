@@ -42,6 +42,7 @@ import { kstWeekMonday } from "../../../lib/homeFeed";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const PAGE_SIZE = 24;
+const SEARCH_FEEDBACK_MIN_MS = 600;
 
 type PosterStatus = "review" | "published" | "rejected" | "draft" | "closed";
 type PosterMediaFilter = "" | "poster_image" | "text_notice";
@@ -807,6 +808,9 @@ export default function AdminPostersPage() {
   const [appliedFilters, setAppliedFilters] = useState<PosterSearchFilters>(EMPTY_FILTERS);
   // 조회·초기화 버튼은 조건이 그대로여도 목록을 다시 불러와야 한다(다른 화면이나 스크립트가 바꾼 상태 반영).
   const [searchRequestId, setSearchRequestId] = useState(0);
+  // 조회가 아주 빨리 끝나도 눌렀다는 표시가 보이도록 최소 시간 동안 스피너를 유지한다.
+  const [searchFeedback, setSearchFeedback] = useState(false);
+  const searchFeedbackTimerRef = useRef<number | null>(null);
   const [focusedPosterId, setFocusedPosterId] = useState<string | null>(null);
   const [aiReviewStatus, setAiReviewStatus] = useState<AiReviewStatus | null>(null);
   const [aiReviewStatusLoading, setAiReviewStatusLoading] = useState(false);
@@ -1288,13 +1292,30 @@ export default function AdminPostersPage() {
     });
   };
 
+  const showSearchFeedback = () => {
+    if (searchFeedbackTimerRef.current !== null) window.clearTimeout(searchFeedbackTimerRef.current);
+    setSearchFeedback(true);
+    searchFeedbackTimerRef.current = window.setTimeout(() => {
+      searchFeedbackTimerRef.current = null;
+      setSearchFeedback(false);
+    }, SEARCH_FEEDBACK_MIN_MS);
+  };
+
+  useEffect(() => () => {
+    if (searchFeedbackTimerRef.current !== null) window.clearTimeout(searchFeedbackTimerRef.current);
+  }, []);
+
+  const searchBusy = loading || searchFeedback;
+
   const applySearchFilters = () => {
+    showSearchFeedback();
     setPage(0);
     setAppliedFilters(draftFilters);
     setSearchRequestId((id) => id + 1);
   };
 
   const resetSearchFilters = () => {
+    showSearchFeedback();
     setDraftFilters(EMPTY_FILTERS);
     setAppliedFilters(EMPTY_FILTERS);
     setPage(0);
@@ -1771,10 +1792,16 @@ export default function AdminPostersPage() {
             type="button"
             onClick={applySearchFilters}
             disabled={loading}
+            aria-busy={searchBusy}
+            data-testid="admin-poster-search-button"
             className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Search size={16} />
-            조회
+            {searchBusy ? (
+              <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+            ) : (
+              <Search size={16} aria-hidden="true" />
+            )}
+            {searchBusy ? "조회 중" : "조회"}
           </button>
           <button
             type="button"
