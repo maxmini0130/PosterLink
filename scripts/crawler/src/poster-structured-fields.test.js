@@ -41,14 +41,15 @@ test("an existing 09:00 value is not mistaken for a date-only deadline", () => {
   assert.equal(fields.application_end_at, "2026-11-19T00:00:00.000Z");
 });
 
-test("a date-only event day is stored at Seoul midnight, start date unchanged", () => {
+test("date-only start and event days are stored at Seoul midnight", () => {
   const fields = buildStructuredPosterFields({
     applicationStartAt: "2026-11-02",
     applicationEndAt: "2026-11-19",
     eventStartAt: "2026-11-28",
     eventEndAt: "2026-11-28",
   });
-  assert.equal(fields.application_start_at, "2026-11-02T00:00:00.000Z");
+  assert.equal(fields.application_start_at, "2026-11-01T15:00:00.000Z");
+  assert.equal(seoulDay(fields.application_start_at), "2026-11-02");
   // UTC midnight would read as 09:00 KST; Seoul midnight keeps the day and no false time.
   assert.equal(fields.event_start_at, "2026-11-27T15:00:00.000Z");
   assert.equal(fields.event_end_at, "2026-11-27T15:00:00.000Z");
@@ -169,7 +170,7 @@ test("first-come single-day event notices reuse the event day for application an
   });
 
   assert.equal(fields.deadline_type, "fixed");
-  assert.equal(fields.application_start_at.slice(0, 10), "2026-09-16");
+  assert.equal(seoulDay(fields.application_start_at), "2026-09-16");
   assert.equal(fields.application_end_at.slice(0, 10), "2026-09-16");
   assert.equal(seoulDay(fields.event_start_at), "2026-09-16");
   assert.equal(seoulDay(fields.event_end_at), "2026-09-16");
@@ -201,7 +202,7 @@ test("library movie notices use OCR event day when application period is an inva
   });
 
   assert.equal(fields.deadline_type, "fixed");
-  assert.equal(fields.application_start_at.slice(0, 10), "2026-09-16");
+  assert.equal(seoulDay(fields.application_start_at), "2026-09-16");
   assert.equal(fields.application_end_at.slice(0, 10), "2026-09-16");
   assert.equal(seoulDay(fields.event_start_at), "2026-09-16");
   assert.equal(seoulDay(fields.event_end_at), "2026-09-16");
@@ -214,7 +215,7 @@ test("first-come fallback does not override notices with an explicit application
       "신청기간 2026.09.01 ~ 2026.09.10 선착순 접수 행사일시 2026.09.16 영화 상영",
   });
 
-  assert.equal(fields.application_start_at.slice(0, 10), "2026-09-01");
+  assert.equal(seoulDay(fields.application_start_at), "2026-09-01");
   assert.equal(fields.application_end_at.slice(0, 10), "2026-09-16");
   assert.equal(seoulDay(fields.event_start_at), "2026-09-16");
   assert.equal(seoulDay(fields.event_end_at), "2026-09-16");
@@ -238,7 +239,7 @@ test("open-ended first-come library notices keep start date and event date separ
   });
 
   assert.equal(fields.deadline_type, "until_exhausted");
-  assert.equal(fields.application_start_at.slice(0, 10), "2026-09-04");
+  assert.equal(seoulDay(fields.application_start_at), "2026-09-04");
   assert.equal(fields.application_end_at, null);
   assert.equal(seoulDay(fields.event_start_at), "2026-09-15");
   assert.equal(seoulDay(fields.event_end_at), "2026-09-15");
@@ -271,7 +272,7 @@ test("history exploration notices extract labeled dates, location, grade ages, c
   });
 
   assert.equal(fields.deadline_type, "until_exhausted");
-  assert.equal(fields.application_start_at.slice(0, 10), "2026-09-01");
+  assert.equal(seoulDay(fields.application_start_at), "2026-09-01");
   assert.equal(fields.application_end_at.slice(0, 10), "2026-09-06");
   assert.equal(seoulDay(fields.event_start_at), "2026-09-12");
   assert.equal(seoulDay(fields.event_end_at), "2026-09-12");
@@ -306,7 +307,7 @@ test("counseling program notices extract attached emoji labels and event ranges"
   });
 
   assert.equal(fields.deadline_type, "fixed");
-  assert.equal(fields.application_start_at.slice(0, 10), "2026-09-03");
+  assert.equal(seoulDay(fields.application_start_at), "2026-09-03");
   assert.equal(fields.application_end_at.slice(0, 10), "2026-09-20");
   assert.equal(seoulDay(fields.event_start_at), "2026-10-06");
   assert.equal(seoulDay(fields.event_end_at), "2026-11-24");
@@ -433,4 +434,46 @@ test("a labeled participant line fills target and count only from the notice", (
     sourceText: "모집대상: 관내 거주 청년 신청방법: 온라인 참가인원: 서울시민 20명",
   });
   assert.equal(labeled.eligibility_summary, "관내 거주 청년");
+});
+
+test("a period with only an end date has no start", () => {
+  const fields = buildStructuredPosterFields({
+    applicationEndAt: "2026-11-18",
+    readableFacts: { period: "~ 2026-11-18" },
+    sourceText: "신청기간 ~ 2026-11-18 대상 담당기관 서울청년센터 진행일정: 2026-11-25 19:00 ~ 20:30 (Asia/Seoul)",
+  });
+  assert.equal(fields.application_start_at, null);
+  assert.equal(seoulDay(fields.application_end_at), "2026-11-18");
+});
+
+test("a 상시 period does not borrow the event day as its start", () => {
+  const fields = buildStructuredPosterFields({
+    readableFacts: { period: "상시" },
+    sourceText: "신청기간 상시 대상 제한없음 담당기관 기타 (동대문구청) 진행일정: 2026-11-20 11:00 ~ 16:00 (Asia/Seoul)",
+  });
+  assert.equal(fields.application_start_at, null);
+  // The event day still ends the listing, as before, so the notice closes.
+  assert.equal(seoulDay(fields.application_end_at), "2026-11-20");
+  assert.equal(fields.event_start_at, "2026-11-20T02:00:00.000Z");
+});
+
+test("a 진행일정 date range with a daily time range sets both ends", () => {
+  const fields = buildStructuredPosterFields({
+    applicationEndAt: "2026-11-27",
+    readableFacts: { period: "2026-11-17 ~ 2026-11-27" },
+    sourceText: "신청기간 2026-11-17 ~ 2026-11-27 진행일정: 2026-12-03 ~ 2026-12-17 14:00 ~ 16:00 (Asia/Seoul)",
+  });
+  assert.equal(fields.event_start_at, "2026-12-03T05:00:00.000Z");
+  assert.equal(fields.event_end_at, "2026-12-17T07:00:00.000Z");
+  assert.equal(seoulDay(fields.application_start_at), "2026-11-17");
+});
+
+test("the portal's 00:00 ~ 00:00 placeholder is not an event time", () => {
+  const fields = buildStructuredPosterFields({
+    applicationEndAt: "2026-11-21",
+    readableFacts: { period: "2026-11-16 ~ 2026-11-21" },
+    sourceText: "신청기간 2026-11-16 ~ 2026-11-21 진행일정: 2026-11-25 ~ 2026-12-02 00:00 ~ 00:00 (Asia/Seoul)",
+  });
+  assert.equal(fields.event_start_at, "2026-11-24T15:00:00.000Z");
+  assert.equal(fields.event_end_at, "2026-12-01T15:00:00.000Z");
 });
