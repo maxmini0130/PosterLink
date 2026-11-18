@@ -83,7 +83,7 @@ jobs:
             --apply \
             --output="scripts/crawler/data/results/ai-review-images-${GITHUB_RUN_ID}.json"
 
-      - name: Exclude confirmed non-poster images
+      - name: Hold quality-gate reject candidates for a person
         if: ${{ env.THOROUGH_REVIEW == 'true' }}
         run: |
           node src/cleanup-review-nonposters.js \
