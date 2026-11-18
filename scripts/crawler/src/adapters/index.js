@@ -14,6 +14,7 @@ import kesco from "./kesco.js";
 import mapoEmploy from "./mapo-employ.js";
 import ccfsm from "./ccfsm.js";
 import mapoLabor from "./mapo-labor.js";
+import fiftyPlusEducation from "./fifty-plus-education.js";
 
 const adapters = {
   "generic-board": genericBoard,
@@ -31,6 +32,7 @@ const adapters = {
   "mapo-employ": mapoEmploy,
   "ccfsm": ccfsm,
   "mapo-labor": mapoLabor,
+  "50plus-education": fiftyPlusEducation,
 
   "seoul-city": genericBoard,
   "mfmc": genericBoard,

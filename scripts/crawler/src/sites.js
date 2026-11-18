@@ -480,6 +480,30 @@ export const sites = [
       },
     ],
   },
+  // ──────────────────────────────────────────────
+  // 20. 서대문50플러스센터 강좌(수강신청) — 서울시50플러스포털
+  // ──────────────────────────────────────────────
+  // The portal is the collection source (site name); the organizer of each
+  // course is the center (adapters/fifty-plus-education.js, FIFTY_PLUS_CENTERS).
+  // Notice identity = education-detail.do?id=<course id>.
+  {
+    id: "sdm-50plus",
+    name: "서울시50플러스포털",
+    domain: "https://www.50plus.or.kr",
+    adapter: "50plus-education",
+    analyzeAttachments: false,
+    boards: [
+      {
+        name: "서대문50플러스센터 수강신청",
+        url: "https://www.50plus.or.kr/sdm/education.do",
+        category: "교육",
+        // 모집중(state=JOIN) pages until empty, then the first pages of the
+        // full list for recently closed courses.
+        openListMaxPages: 5,
+        allListMaxPages: 3,
+      },
+    ],
+  },
   {
     id: "youth-seoul",
     name: "청년몽땅정보통",

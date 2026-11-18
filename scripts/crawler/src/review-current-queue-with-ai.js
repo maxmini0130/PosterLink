@@ -6,6 +6,7 @@ import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { CATEGORY_CODE_BY_LABEL } from "./poster-category-classifier.js";
 import { hasActiveQualityGateHold } from "./quality-gate-hold.js";
+import { blockingQualityIssueCodes } from "./source-application-status.js";
 import { isClearedToTextNotice } from "./review-image-clear.js";
 import { ocrFactsNeedPersonReview } from "./poster-structured-fields.js";
 
@@ -293,6 +294,9 @@ async function buildPlan(rows, batchSize = REVIEW_BATCH_SIZE) {
     const blockingDateIssues = issueCodes(verification, "dateIssues")
       .filter((code) => AUTO_APPROVAL_BLOCKING_DATE_ISSUES.has(code));
     const blockingDuplicateIssues = issueCodes(verification, "duplicateIssues");
+    // Facts the source did not state (eligibility, period, organizer, status)
+    // or a source that says 신청마감: a person decides.
+    const blockingQualityIssues = blockingQualityIssueCodes(verification);
     // Held by the daily quality gate (image confidence, non-poster image,
     // quality reject, deadline correction): only a person releases it.
     const imageHold = row && hasActiveQualityGateHold(row) ? ["quality-gate-hold"] : [];
@@ -331,9 +335,10 @@ async function buildPlan(rows, batchSize = REVIEW_BATCH_SIZE) {
         && normalizedDecision.concerns.length === 0
         && blockingDateIssues.length === 0
         && blockingDuplicateIssues.length === 0
+        && blockingQualityIssues.length === 0
         && imageHold.length === 0
         && nextCodes.length > 0,
-      auto_approval_blockers: [...blockingDateIssues, ...blockingDuplicateIssues, ...imageHold],
+      auto_approval_blockers: [...blockingDateIssues, ...blockingDuplicateIssues, ...blockingQualityIssues, ...imageHold],
     };
   });
 }
