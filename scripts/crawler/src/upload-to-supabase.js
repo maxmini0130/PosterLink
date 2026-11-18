@@ -63,7 +63,14 @@ import {
   resolveCanonicalSource,
   sanitizeKnownShortUrl,
 } from "./source-link-rules.js";
-import { buildStructuredPosterFields, toApplicationEndIso } from "./poster-structured-fields.js";
+import {
+  buildOcrFieldFills,
+  buildStructuredPosterFields,
+  isImageOnlyBody,
+  ocrFactsSummaryLine,
+  toApplicationEndIso,
+  usablePosterOcr,
+} from "./poster-structured-fields.js";
 import { filterSupplementalLinksForNotice } from "./youth-seoul-links.js";
 import { clearedImageUrls } from "./review-image-clear.js";
 import {
@@ -2277,20 +2284,43 @@ async function uploadToSupabase(filePath) {
 
     // ── 1. posters 테이블 upsert ─────────────────────────────
     const readableInfo = await enrichReadableNoticeInfoWithLlm(buildReadableNoticeInfo(postWithStoredImages), postWithStoredImages);
-    const summaryShort = readableInfo.summaryShort;
     const summaryLong = readableInfo.summaryLong || posterImageInsight?.posterTextSummary || null;
     const posterFieldVerification = mergeReadableNoticeIntoFieldVerification(fieldVerification, postWithStoredImages, readableInfo);
-    const embedding = await embedPosterText({ title: readableInfo.title, summaryShort, summaryLong });
+    const structuredSourceText = `${post.title ?? ""}\n${post.content ?? ""}`;
     const structuredFields = buildStructuredPosterFields({
       fieldVerification: posterFieldVerification,
       readableFacts: readableInfo.facts,
       applicationEndAt: finalDeadline,
       eventStartAt: post.eventStartAt ?? post.event_start_at ?? null,
       eventEndAt: post.eventEndAt ?? post.event_end_at ?? null,
-      sourceText: `${post.title ?? ""}\n${post.content ?? ""}`,
+      sourceText: structuredSourceText,
       title: readableInfo.title ?? post.title ?? null,
       fallbackOrganizerName: verifiedOrgName,
     });
+    // Image-only notice: the poster OCR made at crawl time (poster-ocr.js) fills
+    // 대상/모집기간/문의 the body lacks, marked source "ocr"; the poster then
+    // waits for a person (ocrFacts.needsPersonReview).
+    const structuredTitle = readableInfo.title ?? post.title ?? "";
+    const posterOcr = usablePosterOcr(post.posterOcr);
+    if (posterOcr && isImageOnlyBody(structuredSourceText, structuredTitle)) {
+      posterFieldVerification.posterImageOcr = {
+        ...(posterFieldVerification.posterImageOcr ?? {}),
+        ocr: posterOcr,
+      };
+    }
+    const ocrFills = buildOcrFieldFills({
+      structured: structuredFields,
+      posterOcr: post.posterOcr,
+      sourceText: structuredSourceText,
+      title: structuredTitle,
+    });
+    if (ocrFills) {
+      Object.assign(structuredFields, ocrFills.columns);
+      posterFieldVerification.ocrFacts = ocrFills.record;
+    }
+    const bodyHasFacts = ["target", "period", "contact"].some((key) => readableInfo.facts?.[key]);
+    const summaryShort = (ocrFills && !bodyHasFacts && ocrFactsSummaryLine(ocrFills)) || readableInfo.summaryShort;
+    const embedding = await embedPosterText({ title: readableInfo.title, summaryShort, summaryLong });
     // v6.1: confirmed only while the stored value still matches the portal field.
     const deadlineDecision = decideDeadlineVerification({
       portal: post.portalDeadline ?? null,
@@ -2298,6 +2328,7 @@ async function uploadToSupabase(filePath) {
         { path: post.deadlineOrigin ?? "adapter", value: post.deadline },
         { path: "field_verification", value: verifiedDeadline },
         { path: "date_quality", value: finalDeadline },
+        ...(ocrFills?.columns.application_end_at ? [{ path: "poster_ocr", value: ocrFills.columns.application_end_at }] : []),
         { path: "structured_fields", value: structuredFields.application_end_at },
       ],
       finalValue: structuredFields.application_end_at,
@@ -2411,7 +2442,10 @@ async function uploadToSupabase(filePath) {
       if (!existingPoster.embedding && posterRecord.embedding) {
         updates.embedding = posterRecord.embedding;
       }
-      if (!existingPoster.application_end_at && posterRecord.application_end_at) {
+      // OCR-derived values are only written with their ocrFacts record on a new
+      // poster; an existing poster is not filled from them silently.
+      const fromOcr = (field) => ocrFills?.columns?.[field] !== undefined;
+      if (!existingPoster.application_end_at && posterRecord.application_end_at && !fromOcr("application_end_at")) {
         updates.application_end_at = posterRecord.application_end_at;
       }
       if (supportsStructuredPosterFields) {
@@ -2428,14 +2462,15 @@ async function uploadToSupabase(filePath) {
           "event_location",
           "data_confidence",
         ]) {
-          if (existingPoster[field] == null && posterRecord[field] != null) {
+          if (existingPoster[field] == null && posterRecord[field] != null && !fromOcr(field)) {
             updates[field] = posterRecord[field];
           }
         }
         if (
           (!existingPoster.deadline_type || existingPoster.deadline_type === "unknown") &&
           posterRecord.deadline_type &&
-          posterRecord.deadline_type !== "unknown"
+          posterRecord.deadline_type !== "unknown" &&
+          !fromOcr("deadline_type")
         ) {
           updates.deadline_type = posterRecord.deadline_type;
         }
