@@ -5,6 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import { evaluatePosterQuality, summarizeQualityIssues } from "./poster-quality-gate.js";
+import { hasSameCleanupHold, withReviewCleanupHold } from "./review-cleanup-hold.js";
 
 const DEFAULT_OUTPUT = "data/results/review-nonposter-cleanup.json";
 const DEFAULT_LIMIT = 1000;
@@ -23,6 +24,8 @@ if (args.help || args.h) {
   node src/cleanup-review-nonposters.js [--limit=1000] [--statuses=review] [--output=data/results/review-nonposter-cleanup.json] [--apply]
 
 Re-evaluates crawler-created posters with the current quality gate.
+Rows the gate would reject stay in review with the issues recorded and a
+quality gate hold (no automatic approval). Only a person rejects a poster.
 Without --apply, only writes a dry-run report.`);
   process.exit(0);
 }
@@ -35,40 +38,6 @@ function createSupabase() {
   }
 
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
-}
-
-function mergeQualityIssues(fieldVerification = {}, quality) {
-  const existingIssues = Array.isArray(fieldVerification.qualityIssues)
-    ? fieldVerification.qualityIssues
-    : [];
-  const nextIssues = (quality.issues ?? []).map((issue) => ({
-    code: issue.code,
-    severity: issue.severity,
-    reason: issue.reason,
-    evidence: issue.evidence,
-    decision: issue.decision,
-  }));
-  const seen = new Set();
-  const qualityIssues = [...existingIssues, ...nextIssues].filter((issue) => {
-    const key = `${issue.code}:${issue.evidence ?? ""}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-
-  return {
-    ...fieldVerification,
-    decision: "rejected",
-    reason: [fieldVerification.reason, summarizeQualityIssues(quality)]
-      .filter(Boolean)
-      .join(" | ")
-      .slice(0, 1000),
-    qualityIssues,
-    cleanup: {
-      ...(fieldVerification.cleanup ?? {}),
-      reviewNonposterCleanupAt: new Date().toISOString(),
-    },
-  };
 }
 
 async function fetchReviewRows(supabase, limit, statuses) {
@@ -129,18 +98,21 @@ async function main() {
     reason: summarizeQualityIssues(quality, 6),
   }));
 
+  // Hold, never reject: a person decides (2026-11-19, review-cleanup-hold.js).
+  const toHold = rejected.filter(({ row, quality }) => !hasSameCleanupHold(row.field_verification, quality));
+  let held = 0;
   if (apply) {
-    for (const { row, quality } of rejected) {
-      const { error } = await supabase
+    const now = new Date().toISOString();
+    const runId = process.env.GITHUB_RUN_ID ?? null;
+    for (const { row, quality } of toHold) {
+      const { data, error } = await supabase
         .from("posters")
-        .update({
-          poster_status: "rejected",
-          rejection_reason: `quality_gate_cleanup:${summarizeQualityIssues(quality, 6)}`.slice(0, 1000),
-          field_verification: mergeQualityIssues(row.field_verification ?? {}, quality),
-        })
+        .update({ field_verification: withReviewCleanupHold(row.field_verification ?? {}, quality, { now, runId }) })
         .eq("id", row.id)
-        .in("poster_status", statuses);
+        .in("poster_status", statuses)
+        .select("id");
       if (error) throw error;
+      held += data?.length ?? 0;
     }
   }
 
@@ -150,6 +122,8 @@ async function main() {
     statuses,
     scanned_count: rows.length,
     reject_count: rejected.length,
+    hold_count: toHold.length,
+    held_count: held,
     rows: reportRows,
   };
 
@@ -161,6 +135,8 @@ async function main() {
     mode: report.mode,
     scanned_count: report.scanned_count,
     reject_count: report.reject_count,
+    hold_count: report.hold_count,
+    held_count: report.held_count,
     sample: reportRows.slice(0, 10).map((row) => ({
       title: row.title,
       issues: row.issues.map((issue) => issue.code),
