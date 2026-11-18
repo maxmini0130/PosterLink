@@ -9,6 +9,9 @@ import {
   toApplicationEndIso,
 } from "./poster-structured-fields.js";
 
+const seoulDay = (value) =>
+  value ? new Date(Date.parse(value) + 9 * 60 * 60 * 1000).toISOString().slice(0, 10) : null;
+
 test("a date-only deadline ends at 23:59:59 Asia/Seoul", () => {
   assert.equal(toApplicationEndIso("2026-11-19"), "2026-11-19T14:59:59.000Z");
   const fields = buildStructuredPosterFields({
@@ -38,7 +41,7 @@ test("an existing 09:00 value is not mistaken for a date-only deadline", () => {
   assert.equal(fields.application_end_at, "2026-11-19T00:00:00.000Z");
 });
 
-test("start and event dates keep their date-only storage", () => {
+test("a date-only event day is stored at Seoul midnight, start date unchanged", () => {
   const fields = buildStructuredPosterFields({
     applicationStartAt: "2026-11-02",
     applicationEndAt: "2026-11-19",
@@ -46,8 +49,51 @@ test("start and event dates keep their date-only storage", () => {
     eventEndAt: "2026-11-28",
   });
   assert.equal(fields.application_start_at, "2026-11-02T00:00:00.000Z");
-  assert.equal(fields.event_start_at, "2026-11-28T00:00:00.000Z");
-  assert.equal(fields.event_end_at, "2026-11-28T00:00:00.000Z");
+  // UTC midnight would read as 09:00 KST; Seoul midnight keeps the day and no false time.
+  assert.equal(fields.event_start_at, "2026-11-27T15:00:00.000Z");
+  assert.equal(fields.event_end_at, "2026-11-27T15:00:00.000Z");
+  assert.equal(seoulDay(fields.event_start_at), "2026-11-28");
+});
+
+test("a 진행일정 time line gives the event its start and end time", () => {
+  const fields = buildStructuredPosterFields({
+    applicationEndAt: "2026-11-24",
+    readableFacts: { period: "2026-11-16 ~ 2026-11-24" },
+    sourceText: "신청기간 2026-11-16 ~ 2026-11-24\n진행일정: 2026-11-26 14:00 ~ 16:00 (Asia/Seoul)",
+  });
+  assert.equal(fields.event_start_at, "2026-11-26T05:00:00.000Z");
+  assert.equal(fields.event_end_at, "2026-11-26T07:00:00.000Z");
+  assert.equal(fields.application_end_at, "2026-11-24T14:59:59.000Z");
+});
+
+test("a multi-day 진행일정 keeps each end's own time", () => {
+  const fields = buildStructuredPosterFields({
+    applicationEndAt: "2026-11-20",
+    sourceText: "진행일정: 2026-11-25 19:00 ~ 2026-12-02 21:00 (Asia/Seoul)",
+  });
+  assert.equal(fields.event_start_at, "2026-11-25T10:00:00.000Z");
+  assert.equal(fields.event_end_at, "2026-12-02T12:00:00.000Z");
+});
+
+test("event times given by the adapter are kept, including 09:00 KST", () => {
+  const fields = buildStructuredPosterFields({
+    applicationEndAt: "2026-11-24",
+    eventStartAt: "2026-11-26T09:00:00+09:00",
+    eventEndAt: "2026-11-26T11:00:00+09:00",
+    sourceText: "진행일정: 2026-11-26 14:00 ~ 16:00",
+  });
+  assert.equal(fields.event_start_at, "2026-11-26T00:00:00.000Z");
+  assert.equal(fields.event_end_at, "2026-11-26T02:00:00.000Z");
+});
+
+test("a 진행일정 line for another day does not move the event time", () => {
+  const fields = buildStructuredPosterFields({
+    applicationEndAt: "2026-11-24",
+    eventStartAt: "2026-11-26",
+    eventEndAt: "2026-11-26",
+    sourceText: "진행일정: 2026-11-30 10:00 ~ 12:00",
+  });
+  assert.equal(fields.event_start_at, "2026-11-25T15:00:00.000Z");
 });
 
 test("no deadline stays empty", () => {
@@ -125,8 +171,8 @@ test("first-come single-day event notices reuse the event day for application an
   assert.equal(fields.deadline_type, "fixed");
   assert.equal(fields.application_start_at.slice(0, 10), "2026-09-16");
   assert.equal(fields.application_end_at.slice(0, 10), "2026-09-16");
-  assert.equal(fields.event_start_at.slice(0, 10), "2026-09-16");
-  assert.equal(fields.event_end_at.slice(0, 10), "2026-09-16");
+  assert.equal(seoulDay(fields.event_start_at), "2026-09-16");
+  assert.equal(seoulDay(fields.event_end_at), "2026-09-16");
 });
 
 test("library movie notices use OCR event day when application period is an invalid midnight range", () => {
@@ -157,8 +203,8 @@ test("library movie notices use OCR event day when application period is an inva
   assert.equal(fields.deadline_type, "fixed");
   assert.equal(fields.application_start_at.slice(0, 10), "2026-09-16");
   assert.equal(fields.application_end_at.slice(0, 10), "2026-09-16");
-  assert.equal(fields.event_start_at.slice(0, 10), "2026-09-16");
-  assert.equal(fields.event_end_at.slice(0, 10), "2026-09-16");
+  assert.equal(seoulDay(fields.event_start_at), "2026-09-16");
+  assert.equal(seoulDay(fields.event_end_at), "2026-09-16");
 });
 
 test("first-come fallback does not override notices with an explicit application period", () => {
@@ -170,8 +216,8 @@ test("first-come fallback does not override notices with an explicit application
 
   assert.equal(fields.application_start_at.slice(0, 10), "2026-09-01");
   assert.equal(fields.application_end_at.slice(0, 10), "2026-09-16");
-  assert.equal(fields.event_start_at.slice(0, 10), "2026-09-16");
-  assert.equal(fields.event_end_at.slice(0, 10), "2026-09-16");
+  assert.equal(seoulDay(fields.event_start_at), "2026-09-16");
+  assert.equal(seoulDay(fields.event_end_at), "2026-09-16");
 });
 
 test("open-ended first-come library notices keep start date and event date separate", () => {
@@ -194,8 +240,8 @@ test("open-ended first-come library notices keep start date and event date separ
   assert.equal(fields.deadline_type, "until_exhausted");
   assert.equal(fields.application_start_at.slice(0, 10), "2026-09-04");
   assert.equal(fields.application_end_at, null);
-  assert.equal(fields.event_start_at.slice(0, 10), "2026-09-15");
-  assert.equal(fields.event_end_at.slice(0, 10), "2026-09-15");
+  assert.equal(seoulDay(fields.event_start_at), "2026-09-15");
+  assert.equal(seoulDay(fields.event_end_at), "2026-09-15");
 });
 
 test("history exploration notices extract labeled dates, location, grade ages, capacity, and first-come deadline", () => {
@@ -227,8 +273,8 @@ test("history exploration notices extract labeled dates, location, grade ages, c
   assert.equal(fields.deadline_type, "until_exhausted");
   assert.equal(fields.application_start_at.slice(0, 10), "2026-09-01");
   assert.equal(fields.application_end_at.slice(0, 10), "2026-09-06");
-  assert.equal(fields.event_start_at.slice(0, 10), "2026-09-12");
-  assert.equal(fields.event_end_at.slice(0, 10), "2026-09-12");
+  assert.equal(seoulDay(fields.event_start_at), "2026-09-12");
+  assert.equal(seoulDay(fields.event_end_at), "2026-09-12");
   assert.equal(fields.target_age_min, 10);
   assert.equal(fields.target_age_max, 12);
   assert.equal(fields.recruitment_count, "48명");
@@ -262,8 +308,8 @@ test("counseling program notices extract attached emoji labels and event ranges"
   assert.equal(fields.deadline_type, "fixed");
   assert.equal(fields.application_start_at.slice(0, 10), "2026-09-03");
   assert.equal(fields.application_end_at.slice(0, 10), "2026-09-20");
-  assert.equal(fields.event_start_at.slice(0, 10), "2026-10-06");
-  assert.equal(fields.event_end_at.slice(0, 10), "2026-11-24");
+  assert.equal(seoulDay(fields.event_start_at), "2026-10-06");
+  assert.equal(seoulDay(fields.event_end_at), "2026-11-24");
   assert.equal(
     fields.eligibility_summary,
     "부장·국장·시설장 급을 제외한 사회복지종사자 5명",

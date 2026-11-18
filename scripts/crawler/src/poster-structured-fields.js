@@ -58,6 +58,54 @@ function toIsoDateTime(dateOnly) {
 
 const DATE_ONLY_VALUE = /^\d{4}-\d{2}-\d{2}$/;
 
+// "진행일정: 2026-11-26 14:00 ~ 16:00 (Asia/Seoul)" (youth portal overview) and
+// the same shape with an end date ("… ~ 2026-11-27 16:00").
+const SCHEDULE_TIME_PATTERN =
+  /진행\s*일정\s*:?\s*(\d{4}-\d{2}-\d{2})\s+(\d{1,2})\s*:\s*(\d{2})\s*~\s*(?:(\d{4}-\d{2}-\d{2})\s+)?(\d{1,2})\s*:\s*(\d{2})/;
+
+function pad2(value) {
+  return String(value).padStart(2, "0");
+}
+
+/** Start/end wall-clock times stated by a 진행일정 line, keyed by date. */
+export function extractScheduleTimes(text) {
+  const match = String(text ?? "").match(SCHEDULE_TIME_PATTERN);
+  if (!match) return null;
+  const [, startDate, sh, sm, endDateRaw, eh, em] = match;
+  const valid = (h, m) => Number(h) <= 23 && Number(m) <= 59;
+  if (!valid(sh, sm) || !valid(eh, em)) return null;
+  return {
+    startDate,
+    startTime: `${pad2(sh)}:${sm}`,
+    endDate: endDateRaw ?? startDate,
+    endTime: `${pad2(eh)}:${em}`,
+  };
+}
+
+/**
+ * An event day known only by its date is stored at Seoul midnight, so its
+ * Seoul calendar day stays right (UTC midnight would read as 09:00 KST). When
+ * a 진행일정 line states the time for that day, the time is used instead.
+ * Values that came in with an explicit time are returned unchanged.
+ */
+export function toEventIso(value, { hadTime, schedule, edge }) {
+  if (!value) return null;
+  if (hadTime) return normalizeIsoDate(value);
+  const iso = normalizeIsoDate(value);
+  // Only the internal date-only form (UTC midnight) is a bare day; anything
+  // else already carries a time and is kept.
+  if (!iso || !iso.endsWith("T00:00:00.000Z")) return iso;
+  const day = iso.slice(0, 10);
+  const scheduleDay = edge === "end" ? schedule?.endDate : schedule?.startDate;
+  const time = scheduleDay === day ? (edge === "end" ? schedule.endTime : schedule.startTime) : "00:00";
+  return normalizeIsoDate(`${day}T${time}:00+09:00`);
+}
+
+function hasExplicitTime(value) {
+  const text = String(value ?? "").trim();
+  return Boolean(text) && !DATE_ONLY_VALUE.test(text) && Boolean(normalizeIsoDate(text));
+}
+
 /**
  * A deadline known only by its date stays open through that whole day in
  * Asia/Seoul. Stored as UTC midnight it would read as 09:00 and close then.
@@ -776,8 +824,16 @@ export function buildStructuredPosterFields({
       !singleEventDayApplicationFallback
         ? toApplicationEndIso(finalApplicationEndAt.slice(0, 10))
         : finalApplicationEndAt,
-    event_start_at: normalizedEventStartAt,
-    event_end_at: normalizedEventEndAt,
+    event_start_at: toEventIso(normalizedEventStartAt, {
+      hadTime: hasExplicitTime(eventStartAt) && normalizedEventStartAt === normalizeIsoDate(eventStartAt),
+      schedule: extractScheduleTimes(eventEvidenceText),
+      edge: "start",
+    }),
+    event_end_at: toEventIso(normalizedEventEndAt, {
+      hadTime: hasExplicitTime(eventEndAt) && normalizedEventEndAt === normalizeIsoDate(eventEndAt),
+      schedule: extractScheduleTimes(eventEvidenceText),
+      edge: "end",
+    }),
     eligibility_summary: eligibilitySummary,
     target_age_min: inferredAgeRange.targetAgeMin ?? null,
     target_age_max: inferredAgeRange.targetAgeMax ?? null,
