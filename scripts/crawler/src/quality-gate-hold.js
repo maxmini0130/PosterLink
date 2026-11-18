@@ -29,6 +29,7 @@
  */
 import { evaluatePosterQuality } from "./poster-quality-gate.js";
 import { getCorrection } from "./apply-field-verification-corrections.js";
+import { personReviewedSince, time } from "./person-review.js";
 import {
   imageClassificationOf,
   imageConfidenceHoldOf,
@@ -47,12 +48,9 @@ export const HOLD_REASON_TEXT = Object.freeze({
   field_correction: "마감일 정정 후보가 있음(원문과 저장값이 다름)",
 });
 
-// Keys under field_verification written by a direct review a person ran or
-// ordered (source reviews, follow-ups, corrections). The AI review queue
-// (aiQueueReview) is a model and does not count.
-const PERSON_REVIEW_KEY =
-  /(?:sourceReview|SourceReview|DeepReview|FollowupReview|humanReview|remainingReview|dateReview|manualCorrection)/;
-const MODEL_REVIEWER = /(?:ai[-_ ]?queue|gpt|openai)/i;
+// "Reviewed by a person" is judged in person-review.js, shared with the
+// field-correction check.
+export { lastPersonReviewAt } from "./person-review.js";
 
 function asObject(value) {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -60,48 +58,8 @@ function asObject(value) {
     : {};
 }
 
-function time(value) {
-  const t = Date.parse(value ?? "");
-  return Number.isFinite(t) ? t : null;
-}
-
 export function isPublicExposureTier(value) {
   return value === null || value === undefined || value === "A" || value === "B";
-}
-
-function endOfSeoulDay(yyyymmdd) {
-  const m = String(yyyymmdd ?? "").match(/^(\d{4})-?(\d{2})-?(\d{2})$/);
-  return m ? time(`${m[1]}-${m[2]}-${m[3]}T23:59:59+09:00`) : null;
-}
-
-/**
- * Latest time a person reviewed this poster, or null. The review keys are
- * written only by direct reviews; the automatic AI queue writes aiQueueReview
- * (its reviewer field also says "codex", so the key decides). A date-only
- * stamp (todayKst, or the date in the key name such as sourceReview20261102)
- * counts as the end of that Seoul day.
- */
-export function lastPersonReviewAt(fieldVerification) {
-  let latest = null;
-  for (const [key, value] of Object.entries(asObject(fieldVerification))) {
-    if (!PERSON_REVIEW_KEY.test(key) || /^aiQueue/.test(key)) continue;
-    const review = asObject(value);
-    const who = review.reviewer ?? review.correctedBy;
-    if (typeof who === "string" && MODEL_REVIEWER.test(who)) continue;
-    const t =
-      time(review.reviewedAt ?? review.correctedAt ?? review.checkedAt) ??
-      endOfSeoulDay(review.todayKst) ??
-      endOfSeoulDay(key.match(/(20\d{6})/)?.[1]);
-    if (t !== null && (latest === null || t > latest)) latest = t;
-  }
-  return latest;
-}
-
-function personReviewedSince(fieldVerification, findingAt) {
-  const findingTime = time(findingAt);
-  if (findingTime === null) return false;
-  const reviewed = lastPersonReviewAt(fieldVerification);
-  return reviewed !== null && reviewed >= findingTime;
 }
 
 /** Findings other than image confidence, each with a fingerprint and the time it was made. */

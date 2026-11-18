@@ -4,6 +4,7 @@ import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
+import { personReviewedSince } from "./person-review.js";
 
 const DEFAULT_OUTPUT = "data/results/field-verification-corrections.json";
 const DEFAULT_LIMIT = 1000;
@@ -88,7 +89,29 @@ function getYear(value) {
 }
 
 function isStaleDeadlineCorrection(row, verification, correctedDeadline) {
+  // A person checked the source after this AI verification ran: the stored
+  // deadline is their decision and the older model guess must not replace it.
+  if (personReviewedSince(verification, verification?.checkedAt)) {
+    return "person_reviewed_after_ai_check";
+  }
+
   const currentDeadline = dateKey(row.application_end_at);
+
+  // The proposed "deadline" is the poster's own event day while the stored
+  // deadline is before the event: the model read the event date as the
+  // application deadline (e.g. apply until 11/20, class on 11/24).
+  const eventStart = dateKey(row.event_start_at);
+  const eventEnd = dateKey(row.event_end_at);
+  if (
+    currentDeadline
+    && eventStart
+    && currentDeadline < eventStart
+    && correctedDeadline >= eventStart
+    && correctedDeadline <= (eventEnd ?? eventStart)
+  ) {
+    return "corrected_deadline_is_event_date";
+  }
+
   const correctedYear = getYear(correctedDeadline);
   const referenceYear = Math.max(
     getYear(currentDeadline) ?? 0,
@@ -207,7 +230,7 @@ async function fetchRows(supabase, limit, statuses) {
     const to = Math.min(offset + pageSize - 1, limit - 1);
     const { data, error } = await supabase
       .from("posters")
-      .select("id,title,source_org_name,poster_status,application_end_at,source_key,field_verification,created_at")
+      .select("id,title,source_org_name,poster_status,application_end_at,event_start_at,event_end_at,source_key,field_verification,created_at")
       .in("poster_status", statuses)
       .not("field_verification", "is", null)
       .order("created_at", { ascending: false })

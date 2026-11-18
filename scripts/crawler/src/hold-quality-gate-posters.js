@@ -34,7 +34,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Reports land in scripts/crawler/data/results, which the workflow uploads.
 const CRAWLER_ROOT = path.resolve(__dirname, "..");
 export const POSTER_COLUMNS =
-  "id,title,poster_status,exposure_tier,thumbnail_url,source_key,source_org_name,summary_short,summary_long,application_end_at,created_at,published_at,updated_at,field_verification";
+  "id,title,poster_status,exposure_tier,thumbnail_url,source_key,source_org_name,summary_short,summary_long,application_end_at,event_start_at,event_end_at,created_at,published_at,updated_at,field_verification";
 
 function parseArgs(argv) {
   return Object.fromEntries(
