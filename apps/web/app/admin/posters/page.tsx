@@ -805,6 +805,8 @@ export default function AdminPostersPage() {
   const [regions, setRegions] = useState<any[]>([]);
   const [draftFilters, setDraftFilters] = useState<PosterSearchFilters>(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<PosterSearchFilters>(EMPTY_FILTERS);
+  // 조회·초기화 버튼은 조건이 그대로여도 목록을 다시 불러와야 한다(다른 화면이나 스크립트가 바꾼 상태 반영).
+  const [searchRequestId, setSearchRequestId] = useState(0);
   const [focusedPosterId, setFocusedPosterId] = useState<string | null>(null);
   const [aiReviewStatus, setAiReviewStatus] = useState<AiReviewStatus | null>(null);
   const [aiReviewStatusLoading, setAiReviewStatusLoading] = useState(false);
@@ -957,7 +959,7 @@ export default function AdminPostersPage() {
   useEffect(() => {
     if (!urlParamsReady) return;
     void fetchPosters(currentFilter, page, appliedFilters);
-  }, [appliedFilters, currentFilter, fetchPosters, page, urlParamsReady]);
+  }, [appliedFilters, currentFilter, fetchPosters, page, searchRequestId, urlParamsReady]);
 
   useEffect(() => {
     if (!urlParamsReady || currentFilter !== "review") return;
@@ -1289,12 +1291,14 @@ export default function AdminPostersPage() {
   const applySearchFilters = () => {
     setPage(0);
     setAppliedFilters(draftFilters);
+    setSearchRequestId((id) => id + 1);
   };
 
   const resetSearchFilters = () => {
     setDraftFilters(EMPTY_FILTERS);
     setAppliedFilters(EMPTY_FILTERS);
     setPage(0);
+    setSearchRequestId((id) => id + 1);
   };
 
   const toggleSelectAll = () => {
