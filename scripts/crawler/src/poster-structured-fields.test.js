@@ -504,3 +504,15 @@ test("a portal 상시 header next to 신청기간 is not read as 상시 신청",
   assert.equal(inferStructuredDeadlineType({ periodText: "상시", sourceText: "참여자를 상시 모집합니다" }), "ongoing");
   assert.equal(inferStructuredDeadlineType({ periodText: "상시모집", sourceText: "안내" }), "ongoing");
 });
+
+test("a bare 서울청년센터 or portal organizer is refined from the title", async () => {
+  const { refineOrganizerName } = await import("./poster-structured-fields.js");
+  assert.equal(refineOrganizerName("서울청년센터", "서울청년센터성동 <성동티톡|가을을 빚다> 2회차 참여자 모집"), "서울청년센터 성동");
+  assert.equal(refineOrganizerName("서울청년센터", "서울청년센터 관악 신림동쓰리룸 <광명동굴 딸기 스마트팜 체험>"), "서울청년센터 관악 신림동쓰리룸");
+  assert.equal(refineOrganizerName("서울청년센터", "양천외국인주민센터 <세계요리나눔 중국편 (추가모집) 안내>"), "양천외국인주민센터");
+  assert.equal(refineOrganizerName("청년몽땅정보통", "영등포구청 <드론산업진로 특강 안내>"), "영등포구청");
+  // a specific name is never replaced; nothing to go on keeps the original
+  assert.equal(refineOrganizerName("한국디자인진흥원", "서울청년센터 중구 <특강>"), "한국디자인진흥원");
+  assert.equal(refineOrganizerName("서울청년센터", "청년 마음 건강 특강 참여자 모집"), "서울청년센터");
+  assert.equal(refineOrganizerName(null, "서울청년센터 강동 <티톡>"), "서울청년센터 강동");
+});
