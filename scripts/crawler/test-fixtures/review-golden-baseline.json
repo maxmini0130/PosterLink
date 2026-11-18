@@ -9,9 +9,9 @@
       "accuracy": 68
     },
     "organizer_name": {
-      "correct": 174,
+      "correct": 193,
       "total": 266,
-      "accuracy": 65.4
+      "accuracy": 72.6
     },
     "deadline_type": {
       "correct": 201,
