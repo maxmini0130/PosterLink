@@ -155,6 +155,35 @@ export function extractDeadlineTime(text, deadlineDay) {
   return null;
 }
 
+const SEOUL_DISTRICTS =
+  "강남|강동|강북|강서|관악|광진|구로|금천|노원|도봉|동대문|동작|마포|서대문|서초|성동|성북|송파|양천|영등포|용산|은평|종로|중구|중랑";
+const YOUTH_CENTER_BRANCH = new RegExp(
+  `서울청년센터\\s*[\\[(]?\\s*(${SEOUL_DISTRICTS})(\\s*신림동쓰리룸)?`,
+);
+// Names that say where a notice was collected, not who runs the program.
+const GENERIC_ORGANIZER = /^(?:서울청년센터|청년몽땅정보통|서울시\s*청년몽땅정보통)$/;
+// "양천외국인주민센터 <세계요리나눔…>", "영등포구청 <드론산업…>": the issuing body
+// written before the program name.
+const TITLE_PREFIX_ORGANIZER =
+  /^\s*\[?\s*([가-힣A-Za-z0-9·()]+(?:\s+[가-힣A-Za-z0-9·()]+){0,3}?(?:센터|구청|시청|재단|도서관|복지관|학교|협회|공단|공사|진흥원|청|위원회|문화의집|가족센터))\s*\]?\s*[<\[「《〈]/;
+
+/**
+ * The organizer when the extracted name is only a collection placeholder.
+ * The youth portal fills 담당기관 with a bare "서울청년센터" for many notices:
+ * the branch ("서울청년센터 성동") or the real issuer written at the start of
+ * the title is used instead. Any other name is returned unchanged.
+ */
+export function refineOrganizerName(name, title) {
+  const current = compactText(name, 300);
+  if (current && !GENERIC_ORGANIZER.test(current)) return current;
+  const text = compactText(title, 300) ?? "";
+  const branch = text.match(YOUTH_CENTER_BRANCH);
+  if (branch) return `서울청년센터 ${branch[1]}${branch[2] ? ` ${branch[2].trim()}` : ""}`;
+  const prefix = text.match(TITLE_PREFIX_ORGANIZER);
+  if (prefix && !/서울청년센터|청년몽땅정보통/.test(prefix[1])) return prefix[1].trim();
+  return current;
+}
+
 /** A day-only deadline at the time the notice states, else 23:59:59 KST. */
 function deadlineAtStatedTime(day, text) {
   const time = extractDeadlineTime(text, day);
@@ -756,7 +785,9 @@ export function inferStructuredDeadlineType({
   periodText,
   sourceText,
 } = {}) {
-  const text = `${periodText ?? ""} ${sourceText ?? ""}`;
+  // A separator keeps wording from matching across the two values: the period
+  // "상시" followed by "신청기간 …" must not read as "상시 신청".
+  const text = `${periodText ?? ""} / ${sourceText ?? ""}`;
   const explicit = normalizeStructuredDeadlineType(deadlineType);
   if (explicit !== "unknown") {
     if (hasOpenEndedDeadlineEvidence(explicit, text)) return explicit;
@@ -790,6 +821,7 @@ export function buildStructuredPosterFields({
   eventStartAt,
   eventEndAt,
   sourceText,
+  title,
   fallbackOrganizerName,
   target,
   supportScale,
@@ -926,14 +958,17 @@ export function buildStructuredPosterFields({
   const inferredEventLocation = extractEventLocation(sourceEvidenceText);
 
   return {
-    organizer_name: firstText(
-      [
-        organization.organizerName,
-        organization.displayOrgName,
-        verification.correctedOrgName,
-        fallbackOrganizerName,
-      ],
-      300,
+    organizer_name: refineOrganizerName(
+      firstText(
+        [
+          organization.organizerName,
+          organization.displayOrgName,
+          verification.correctedOrgName,
+          fallbackOrganizerName,
+        ],
+        300,
+      ),
+      title ?? String(sourceText ?? "").split("\n")[0],
     ),
     application_organization_name: firstText(
       [

@@ -2276,6 +2276,7 @@ async function uploadToSupabase(filePath) {
       eventStartAt: post.eventStartAt ?? post.event_start_at ?? null,
       eventEndAt: post.eventEndAt ?? post.event_end_at ?? null,
       sourceText: `${post.title ?? ""}\n${post.content ?? ""}`,
+      title: readableInfo.title ?? post.title ?? null,
       fallbackOrganizerName: verifiedOrgName,
     });
     // v6.1: confirmed only while the stored value still matches the portal field.
