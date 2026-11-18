@@ -1,0 +1,46 @@
+name: Crawler Golden Set
+
+# Replays the structuring step on the committed review golden set
+# (scripts/crawler/test-fixtures/review-golden-set.json) and fails when a
+# field's accuracy drops below test-fixtures/review-golden-baseline.json.
+# No secrets, network or DB: everything comes from the committed fixture.
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "scripts/crawler/**"
+      - ".github/workflows/crawler-golden-set.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/crawler/**"
+      - ".github/workflows/crawler-golden-set.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  golden-check:
+    name: Crawler - Golden set accuracy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: scripts/crawler
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: scripts/crawler/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check golden-set accuracy against the baseline
+        run: npm run golden:check -- --summary="$GITHUB_STEP_SUMMARY"
