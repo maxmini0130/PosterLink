@@ -101,7 +101,7 @@ export default function SignupPage() {
       <h1 className="text-3xl font-black text-gray-900 mb-2">회원가입</h1>
       <p className="text-gray-500 mb-10">새로운 계정을 만들고 맞춤 정보를 받아보세요</p>
       
-      <form onSubmit={handleSignup} className="w-full max-w-sm space-y-4">
+      <form method="post" onSubmit={handleSignup} className="w-full max-w-sm space-y-4">
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-1">이메일</label>
           <input 

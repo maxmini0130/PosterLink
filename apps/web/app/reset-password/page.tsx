@@ -90,7 +90,7 @@ export default function ResetPasswordPage() {
           <p className="text-sm text-gray-400">잠시 후 홈으로 이동합니다...</p>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
+        <form method="post" onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
           <div>
             <label className="mb-1 block text-sm font-semibold text-gray-700">새 비밀번호</label>
             <input

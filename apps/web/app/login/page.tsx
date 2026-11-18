@@ -98,7 +98,7 @@ export default function LoginPage() {
       <h1 className="mb-2 text-3xl font-black text-gray-900">로그인</h1>
       <p className="mb-10 text-gray-500">공공 포스터를 더 쉽게 찾고 공유하세요</p>
 
-      <form onSubmit={handleLogin} className="w-full max-w-sm space-y-4">
+      <form method="post" onSubmit={handleLogin} className="w-full max-w-sm space-y-4">
         <div>
           <label className="mb-1 block text-sm font-semibold text-gray-700">이메일</label>
           <input
