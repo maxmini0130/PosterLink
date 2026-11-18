@@ -67,13 +67,24 @@ function pad2(value) {
   return String(value).padStart(2, "0");
 }
 
+// "진행일정: 2026-12-03 ~ 2026-12-17 14:00 ~ 16:00": a date range, then the daily
+// time range (start time on the first day, end time on the last day).
+const SCHEDULE_RANGE_TIME_PATTERN =
+  /진행\s*일정\s*:?\s*(\d{4}-\d{2}-\d{2})\s*~\s*(\d{4}-\d{2}-\d{2})\s+(\d{1,2})\s*:\s*(\d{2})\s*~\s*(\d{1,2})\s*:\s*(\d{2})/;
+
 /** Start/end wall-clock times stated by a 진행일정 line, keyed by date. */
 export function extractScheduleTimes(text) {
-  const match = String(text ?? "").match(SCHEDULE_TIME_PATTERN);
-  if (!match) return null;
-  const [, startDate, sh, sm, endDateRaw, eh, em] = match;
+  const source = String(text ?? "");
+  const range = source.match(SCHEDULE_RANGE_TIME_PATTERN);
+  const single = range ? null : source.match(SCHEDULE_TIME_PATTERN);
+  if (!range && !single) return null;
+  const [startDate, sh, sm, endDateRaw, eh, em] = range
+    ? [range[1], range[3], range[4], range[2], range[5], range[6]]
+    : single.slice(1);
   const valid = (h, m) => Number(h) <= 23 && Number(m) <= 59;
   if (!valid(sh, sm) || !valid(eh, em)) return null;
+  // "00:00 ~ 00:00" is the portal's placeholder for "no time".
+  if (Number(sh) === 0 && Number(sm) === 0 && Number(eh) === 0 && Number(em) === 0) return null;
   return {
     startDate,
     startTime: `${pad2(sh)}:${sm}`,
@@ -242,18 +253,46 @@ function inferApplicationDateRangeFromPeriod(periodText, { yearHint } = {}) {
 
   const labelPattern = /(?:모집|신청|접수)\s*(?:기간|일시|마감|기한)/g;
   const snippets = [];
+  let eventDayEnd = null;
   let labelMatch;
   while ((labelMatch = labelPattern.exec(text)) !== null) {
-    snippets.push(text.slice(labelMatch.index, labelMatch.index + 180));
+    let snippet = text.slice(labelMatch.index, labelMatch.index + 180);
+    // Stop at the next overview field: in "신청기간 상시 대상 … 진행일정: 2026-11-20"
+    // the date belongs to the event schedule, not to the application period.
+    const nextField = snippet
+      .slice(labelMatch[0].length)
+      .search(/(?:진행\s*일정|행사\s*일(?:시|정)|교육\s*기간|담당\s*기관|대\s*상\s|대상\s*:)/);
+    if (nextField >= 0) {
+      const own = snippet.slice(0, labelMatch[0].length + nextField);
+      // The period itself states no date (e.g. "상시"): keep the old end-of-event
+      // fallback for the deadline so the notice still closes, but no start.
+      if (extractDateOnlyTokens(own, { yearHint }).length === 0) {
+        const borrowed = extractDateOnlyTokens(snippet, { yearHint })[0];
+        if (borrowed && !eventDayEnd) eventDayEnd = toIsoDateTime(borrowed.iso);
+        continue;
+      }
+      snippet = own;
+    }
+    snippets.push(snippet);
   }
-  if (snippets.length === 0) snippets.push(text);
+  if (snippets.length === 0 && !eventDayEnd) snippets.push(text);
 
-  let fallback = {};
+  let fallback = eventDayEnd ? { applicationStartAt: null, applicationEndAt: eventDayEnd } : {};
   for (const rangeText of snippets) {
     const dates = extractDateOnlyTokens(rangeText, { yearHint });
     if (dates.length === 0) continue;
 
-    const start = dates[0]?.iso ?? null;
+    // "신청기간 ~ 2026-11-18": the only date is the end; there is no start.
+    const endOnly =
+      dates.length >= 1 &&
+      /(?:~|～|〜|∼)\s*$/.test(rangeText.slice(0, dates[0].index));
+    const start = endOnly ? null : dates[0]?.iso ?? null;
+    if (endOnly) {
+      if (!fallback.applicationStartAt && !fallback.applicationEndAt) {
+        fallback = { applicationStartAt: null, applicationEndAt: toIsoDateTime(dates[0].iso) };
+      }
+      continue;
+    }
     let end = null;
     for (let index = 0; index + 1 < dates.length; index += 1) {
       const between = rangeText.slice(
@@ -817,7 +856,12 @@ export function buildStructuredPosterFields({
           periodText: trustedFacts.period,
           sourceText,
         }),
-    application_start_at: finalApplicationStartAt,
+    // A bare start day opens at Seoul midnight, not 09:00 KST (UTC midnight).
+    application_start_at: toEventIso(finalApplicationStartAt, {
+      hadTime: hasExplicitTime(applicationStartAt) && finalApplicationStartAt === normalizeIsoDate(applicationStartAt),
+      schedule: null,
+      edge: "start",
+    }),
     application_end_at:
       applicationEndHasNoTime &&
       finalApplicationEndAt &&
