@@ -1752,6 +1752,15 @@ async function fetchSightingPhashesByIds(idColumn, ids, batchSize = 100) {
   return map;
 }
 
+// Duplicate matching reads only field_verification.attachmentAnalysis.sources, never the summaries.
+// Loading the whole summary_long / field_verification JSON for up to 5,000 rows per upload made
+// Postgres spill several GB to temp files on the Micro instance (2026-11-25 outage review).
+const DUPLICATE_ATTACHMENT_SOURCES = "attachment_sources:field_verification->attachmentAnalysis->sources";
+
+function withAttachmentSources({ attachment_sources: sources, ...row }) {
+  return { ...row, field_verification: Array.isArray(sources) ? { attachmentAnalysis: { sources } } : null };
+}
+
 async function loadNoticeCandidateDuplicateCandidates(limit) {
   const rows = [];
   const pageSize = 1000;
@@ -1760,7 +1769,7 @@ async function loadNoticeCandidateDuplicateCandidates(limit) {
     const to = Math.min(offset + pageSize - 1, limit - 1);
     const { data, error } = await supabase
       .from("poster_notice_candidates")
-      .select("id,title,source_org_name,candidate_status,created_at,application_end_at,source_key,source_url,summary_short,summary_long,field_verification")
+      .select(`id,title,source_org_name,candidate_status,created_at,application_end_at,source_key,source_url,${DUPLICATE_ATTACHMENT_SOURCES}`)
       .in("candidate_status", ["pending", "drafting"])
       .order("created_at", { ascending: false })
       .range(offset, to);
@@ -1770,7 +1779,7 @@ async function loadNoticeCandidateDuplicateCandidates(limit) {
       return [];
     }
 
-    rows.push(...(data ?? []));
+    rows.push(...(data ?? []).map(withAttachmentSources));
     if (!data || data.length < pageSize) break;
   }
 
@@ -1813,7 +1822,7 @@ export async function loadDuplicateCandidates() {
     const to = Math.min(offset + pageSize - 1, limit - 1);
     const { data, error } = await supabase
       .from("posters")
-      .select("id,title,source_org_name,poster_status,created_at,application_end_at,thumbnail_url,source_key,summary_short,summary_long,field_verification")
+      .select(`id,title,source_org_name,poster_status,created_at,application_end_at,thumbnail_url,source_key,${DUPLICATE_ATTACHMENT_SOURCES}`)
       .in("poster_status", ["review", "published"])
       .order("created_at", { ascending: false })
       .range(offset, to);
@@ -1823,7 +1832,7 @@ export async function loadDuplicateCandidates() {
       return [];
     }
 
-    rows.push(...(data ?? []).map((row) => ({ ...row, duplicateTargetType: "poster" })));
+    rows.push(...(data ?? []).map((row) => ({ ...withAttachmentSources(row), duplicateTargetType: "poster" })));
     if (!data || data.length < pageSize) break;
   }
 
