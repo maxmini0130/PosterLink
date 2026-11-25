@@ -9,6 +9,14 @@ import { hasActiveQualityGateHold } from "./quality-gate-hold.js";
 import { blockingQualityIssueCodes } from "./source-application-status.js";
 import { isClearedToTextNotice } from "./review-image-clear.js";
 import { ocrFactsNeedPersonReview } from "./poster-structured-fields.js";
+import {
+  deriveReviewStatus,
+  kstDate,
+  MODEL_DEADLINE_TYPES,
+  reviewedDateUpdate,
+  reviewedDeadlineType,
+  storedDates,
+} from "./review-queue-dates.js";
 
 function todayInKst() {
   const parts = new Intl.DateTimeFormat("en", {
@@ -28,7 +36,7 @@ const MODEL = process.env.OPENAI_REVIEW_QUEUE_MODEL?.trim() || process.env.OPENA
 const OUTPUT_DEFAULT = `data/results/review-queue-ai-review-${TODAY_KST.replaceAll("-", "")}.json`;
 const CONFIRM_TOKEN = "AI_REVIEW_APPROVE_QUEUE";
 const REVIEW_BATCH_SIZE = 15;
-const VALID_DEADLINE_TYPES = ["fixed", "ongoing", "until_exhausted", "unknown"];
+const VALID_DEADLINE_TYPES = MODEL_DEADLINE_TYPES;
 const VALID_CATEGORY_LABELS = Object.keys(CATEGORY_CODE_BY_LABEL);
 const AUTO_APPROVAL_BLOCKING_DATE_ISSUES = new Set([
   "ambiguous-multiple-dates",
@@ -76,14 +84,6 @@ function normalizeDateOnly(value) {
   return match ? match[0] : null;
 }
 
-function toKstStart(date) {
-  return date ? `${date}T00:00:00+09:00` : null;
-}
-
-function toKstEnd(date) {
-  return date ? `${date}T23:59:59+09:00` : null;
-}
-
 function normalizeLabels(labels) {
   return [...new Set(asArray(labels).filter((label) => VALID_CATEGORY_LABELS.includes(label)))].slice(0, 2);
 }
@@ -92,10 +92,21 @@ function issueCodes(verification, key) {
   return asArray(verification[key]).map((issue) => issue?.code).filter(Boolean);
 }
 
-function deriveStatus(decision) {
-  if (decision.status === "published" || decision.status === "closed") return decision.status;
-  const end = decision.application_end_at ?? decision.event_end_at ?? decision.event_start_at;
-  return end && end < TODAY_KST ? "closed" : "published";
+// Model dates are normalized first; the stored type is kept only when the dates did not change.
+function normalizeReviewedDecision(decision, row) {
+  const dates = {
+    application_start_at: normalizeDateOnly(decision?.application_start_at),
+    application_end_at: normalizeDateOnly(decision?.application_end_at),
+    event_start_at: normalizeDateOnly(decision?.event_start_at),
+    event_end_at: normalizeDateOnly(decision?.event_end_at),
+  };
+  const current = storedDates(row);
+  const datesUnchanged = Object.keys(dates).every((field) => dates[field] === current[field]);
+  return {
+    ...dates,
+    deadline_type: reviewedDeadlineType(row?.deadline_type, decision?.deadline_type, datesUnchanged),
+    status: deriveReviewStatus({ ...dates, status: decision?.status }, TODAY_KST),
+  };
 }
 
 async function fetchReviewRows(supabase, limit) {
@@ -130,10 +141,10 @@ function buildReviewInput(row) {
     source_org_name: row.source_org_name,
     organizer_name: row.organizer_name,
     current_dates: {
-      application_start_at: normalizeDateOnly(row.application_start_at),
-      application_end_at: normalizeDateOnly(row.application_end_at),
-      event_start_at: normalizeDateOnly(row.event_start_at),
-      event_end_at: normalizeDateOnly(row.event_end_at),
+      application_start_at: kstDate(row.application_start_at),
+      application_end_at: kstDate(row.application_end_at),
+      event_start_at: kstDate(row.event_start_at),
+      event_end_at: kstDate(row.event_end_at),
       deadline_type: row.deadline_type,
     },
     current_categories: (row.poster_categories ?? []).map((entry) => entry.categories?.name).filter(Boolean),
@@ -276,16 +287,13 @@ async function buildPlan(rows, batchSize = REVIEW_BATCH_SIZE) {
   const rowById = new Map(rows.map((row) => [row.id, row]));
   return decisions.map((decision) => {
     const row = rowById.get(decision.id);
+    const reviewed = normalizeReviewedDecision(decision, row);
     const labels = normalizeLabels(decision.category_labels);
     const nextCodes = labels.map((label) => CATEGORY_CODE_BY_LABEL[label]).filter(Boolean);
     const normalizedDecision = {
       ...decision,
-      status: decision.approve ? deriveStatus(decision) : "keep_review",
-      application_start_at: normalizeDateOnly(decision.application_start_at),
-      application_end_at: normalizeDateOnly(decision.application_end_at),
-      event_start_at: normalizeDateOnly(decision.event_start_at),
-      event_end_at: normalizeDateOnly(decision.event_end_at),
-      deadline_type: VALID_DEADLINE_TYPES.includes(decision.deadline_type) ? decision.deadline_type : "unknown",
+      ...reviewed,
+      status: decision.approve ? reviewed.status : "keep_review",
       category_labels: labels,
       category_codes: nextCodes,
     };
@@ -311,10 +319,10 @@ async function buildPlan(rows, batchSize = REVIEW_BATCH_SIZE) {
       source_key: row?.source_key ?? "",
       current: {
         status: row?.poster_status ?? null,
-        application_start_at: normalizeDateOnly(row?.application_start_at),
-        application_end_at: normalizeDateOnly(row?.application_end_at),
-        event_start_at: normalizeDateOnly(row?.event_start_at),
-        event_end_at: normalizeDateOnly(row?.event_end_at),
+        application_start_at: kstDate(row?.application_start_at),
+        application_end_at: kstDate(row?.application_end_at),
+        event_start_at: kstDate(row?.event_start_at),
+        event_end_at: kstDate(row?.event_end_at),
         deadline_type: row?.deadline_type ?? null,
         category_codes: currentCodes,
         category_labels: (row?.poster_categories ?? []).map((entry) => entry.categories?.name).filter(Boolean),
@@ -322,10 +330,10 @@ async function buildPlan(rows, batchSize = REVIEW_BATCH_SIZE) {
       decision: normalizedDecision,
       changed: Boolean(row) && (
         row.poster_status !== normalizedDecision.status
-        || normalizeDateOnly(row.application_start_at) !== normalizedDecision.application_start_at
-        || normalizeDateOnly(row.application_end_at) !== normalizedDecision.application_end_at
-        || normalizeDateOnly(row.event_start_at) !== normalizedDecision.event_start_at
-        || normalizeDateOnly(row.event_end_at) !== normalizedDecision.event_end_at
+        || kstDate(row.application_start_at) !== normalizedDecision.application_start_at
+        || kstDate(row.application_end_at) !== normalizedDecision.application_end_at
+        || kstDate(row.event_start_at) !== normalizedDecision.event_start_at
+        || kstDate(row.event_end_at) !== normalizedDecision.event_end_at
         || row.deadline_type !== normalizedDecision.deadline_type
         || currentCodes.slice().sort().join(",") !== nextCodes.slice().sort().join(",")
       ),
@@ -356,14 +364,7 @@ function buildManualPlan(rows, manualItems) {
     const decision = {
       ...item.decision,
       id: item.id,
-      status: item.decision?.status === "closed" ? "closed" : "published",
-      application_start_at: normalizeDateOnly(item.decision?.application_start_at),
-      application_end_at: normalizeDateOnly(item.decision?.application_end_at),
-      event_start_at: normalizeDateOnly(item.decision?.event_start_at),
-      event_end_at: normalizeDateOnly(item.decision?.event_end_at),
-      deadline_type: VALID_DEADLINE_TYPES.includes(item.decision?.deadline_type)
-        ? item.decision.deadline_type
-        : "unknown",
+      ...normalizeReviewedDecision(item.decision, row),
       category_labels: labels,
       category_codes: categoryCodes,
       confidence: Number(item.decision?.confidence ?? 0),
@@ -382,10 +383,10 @@ function buildManualPlan(rows, manualItems) {
       source_key: row.source_key,
       current: {
         status: row.poster_status,
-        application_start_at: normalizeDateOnly(row.application_start_at),
-        application_end_at: normalizeDateOnly(row.application_end_at),
-        event_start_at: normalizeDateOnly(row.event_start_at),
-        event_end_at: normalizeDateOnly(row.event_end_at),
+        application_start_at: kstDate(row.application_start_at),
+        application_end_at: kstDate(row.application_end_at),
+        event_start_at: kstDate(row.event_start_at),
+        event_end_at: kstDate(row.event_end_at),
         deadline_type: row.deadline_type,
         category_codes: currentCodes,
         category_labels: (row.poster_categories ?? []).map((entry) => entry.categories?.name).filter(Boolean),
@@ -464,11 +465,7 @@ async function applyPlan(supabase, rows, categoryByCode, plan) {
       poster_status: item.decision.status,
       published_at: new Date().toISOString(),
       rejection_reason: null,
-      application_start_at: toKstStart(item.decision.application_start_at),
-      application_end_at: toKstEnd(item.decision.application_end_at),
-      event_start_at: toKstStart(item.decision.event_start_at),
-      event_end_at: toKstEnd(item.decision.event_end_at),
-      deadline_type: item.decision.deadline_type,
+      ...reviewedDateUpdate(row, item.decision),
       field_verification: mergeFieldVerification(row, item),
     };
     const { data, error } = await supabase
