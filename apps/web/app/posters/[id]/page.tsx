@@ -21,6 +21,7 @@ import {
   type PosterDetailPoster,
 } from "./PosterDetailClient";
 import type { AlertDefaults } from "./ClosedPosterAlertCta";
+import { isUuid } from "../../../lib/uuid";
 import {
   DEADLINE_VERIFICATION_COLUMNS,
   type DeadlineVerificationRow,
@@ -166,6 +167,8 @@ function getPosterDisplayOrgName(poster: PosterDetailPoster) {
 }
 
 const fetchPosterDetail = cache(async (id: string) => {
+  // /posters/null and similar links would send five failing queries (22P02).
+  if (!isUuid(id)) return null;
   const supabase = createPosterServerClient();
 
   const fetchPoster = async () => {
