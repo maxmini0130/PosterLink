@@ -1,0 +1,85 @@
+name: Uptime Monitor
+
+# Checks posterlink.kr and Supabase every 10 minutes (GitHub may start scheduled runs a few minutes late).
+# Outage: opens one issue labelled uptime-incident that mentions the repository owner, and fails
+# this run once so the Actions failure email is sent. While the issue stays open, later failing
+# runs stay quiet. Recovery: comments on the issue and closes it.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+    inputs:
+      test_alert:
+        description: "Check a missing page on purpose to test the outage issue and notification."
+        type: boolean
+        default: false
+
+concurrency:
+  group: uptime-monitor
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/monitor
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check site and database
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SITE_URL: ${{ inputs.test_alert && 'https://www.posterlink.kr/__uptime-monitor-test__' || 'https://www.posterlink.kr' }}
+        run: node scripts/monitor/uptime-check.mjs > "$RUNNER_TEMP/uptime.json"
+
+      - name: Open or close the incident issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          summary="$RUNNER_TEMP/uptime.json"
+          ok=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).ok)' "$summary")
+          node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).markdown)' "$summary" > "$RUNNER_TEMP/table.md"
+          cat "$RUNNER_TEMP/table.md" >> "$GITHUB_STEP_SUMMARY"
+          gh label create uptime-incident --color B60205 --description "Uptime monitor outage" 2>/dev/null || true
+          open=$(gh issue list --label uptime-incident --state open --limit 1 --json number -q '.[0].number // empty')
+
+          if [ "$ok" = "true" ]; then
+            if [ -n "$open" ]; then
+              { echo "@$OWNER 서비스가 복구되었습니다."; echo; cat "$RUNNER_TEMP/table.md"; echo; echo "실행 기록: $RUN_URL"; } > "$RUNNER_TEMP/body.md"
+              gh issue comment "$open" --body-file "$RUNNER_TEMP/body.md"
+              gh issue close "$open" --reason completed
+            fi
+            exit 0
+          fi
+
+          if [ -n "$open" ]; then
+            echo "Outage continues; issue #$open is already open."
+            exit 0
+          fi
+          {
+            echo "@$OWNER posterlink.kr 서비스 응답에 문제가 있습니다 (재시도 1회 후에도 실패)."
+            echo
+            cat "$RUNNER_TEMP/table.md"
+            echo
+            echo "- Supabase DB(API)가 실패하면 Supabase 대시보드에서 프로젝트 상태·리소스를 확인하고 필요하면 Restart project를 실행하세요."
+            echo "- 복구되면 이 이슈는 다음 확인에서 자동으로 닫힙니다."
+            echo
+            echo "실행 기록: $RUN_URL"
+          } > "$RUNNER_TEMP/body.md"
+          gh issue create --title "[장애] posterlink.kr 서비스 응답 이상" --label uptime-incident --body-file "$RUNNER_TEMP/body.md"
+          echo "::error::posterlink.kr outage detected"
+          exit 1
