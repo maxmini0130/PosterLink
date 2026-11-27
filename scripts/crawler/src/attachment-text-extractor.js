@@ -165,7 +165,7 @@ function decodeEntities(value) {
     .replace(/&#(\d+);/g, (_, number) => String.fromCodePoint(Number(number)));
 }
 
-function cleanExtractedText(value, maxLength = DEFAULT_MAX_TEXT_PER_ATTACHMENT) {
+export function cleanExtractedText(value, maxLength = DEFAULT_MAX_TEXT_PER_ATTACHMENT) {
   const text = decodeEntities(value)
     .replace(/\u0000/g, " ")
     .replace(/[\u0001-\u0008\u000b\u000c\u000e-\u001f]/g, " ")
@@ -192,7 +192,7 @@ function detectCharset(contentType, buffer) {
   return head.match(/charset=["']?([^\s"';>]+)/i)?.[1]?.toLowerCase() ?? "utf-8";
 }
 
-function decodeBuffer(buffer, contentType = "") {
+export function decodeBuffer(buffer, contentType = "") {
   const charset = detectCharset(contentType, buffer);
   let decoded = iconv.decode(buffer, charset);
   const replacementCount = (decoded.match(/\uFFFD/g) ?? []).length;

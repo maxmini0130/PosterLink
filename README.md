@@ -86,6 +86,7 @@ AI 품질 게이트와 운영 데이터를 읽는 검사는 필요한 환경변�
 - 운영자 도구: `/operator`, `/operator/posters`
 - 관리자 홈: `/admin`
 - 공고·검수: `/admin/posters`, `/admin/notice-candidates`
+- AI 원문 검토 결과 확인: `/admin/ai-review-checks` (자동 반영 중 확인 필요 건, 검증에 걸려 검수 대기에 남은 건)
 - 수집 운영: `/admin/collection-sources`, `/admin/crawler`
 - 방문·운영 현황: `/admin/traffic`
 
@@ -96,6 +97,7 @@ AI 품질 게이트와 운영 데이터를 읽는 검사는 필요한 환경변�
 - 웹은 `apps/web/vercel.json`을 기준으로 Vercel에 배포합니다.
 - CI는 웹 lint·build와 크롤러 회귀 테스트를 실행합니다.
 - 일일 크롤러는 `.github/workflows/crawler.yml`에서 배치 실행 후 Supabase 업로드와 AI 품질 게이트를 수행합니다.
+- `/admin/posters`의 'AI 검토 승인' 버튼은 `.github/workflows/ai-review-queue.yml`을 정밀(`thorough`) 모드로 실행합니다. `scripts/crawler/src/review-queue-source-review.js`가 공고마다 원문·신청 페이지·이미지를 다시 받아 AI 수정안을 만들고, 규칙 검증(`source-review-validate.js`)을 통과한 건만 반영합니다. 오판 위험 신호가 있는 건은 `/admin/ai-review-checks`에서 확인 완료하거나 되돌립니다. 모델은 저장소 변수 `OPENAI_SOURCE_REVIEW_MODEL`(기본 `gpt-5`)로 바꿉니다.
 - 배포·워크플로 실패 시 GitHub Actions와 Vercel 로그를 확인하고, 데이터 쓰기 여부와 재실행 범위를 먼저 판단합니다.
 
 ## 개발 규칙

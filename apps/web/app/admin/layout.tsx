@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, FileCheck, ShieldCheck, LogOut, Settings, AlertTriangle, Bell, Loader2, ClipboardList, Menu, X, Home, Inbox, UserCog, Bot, BarChart3, Building2, ImageOff, Sparkles } from "lucide-react";
+import { LayoutDashboard, FileCheck, ShieldCheck, LogOut, Settings, AlertTriangle, Bell, Loader2, ClipboardList, Menu, X, Home, Inbox, UserCog, Bot, BarChart3, Building2, ImageOff, Sparkles, ListChecks } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
@@ -75,6 +75,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <Link href="/admin/ai-verification" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl hover:bg-white/10 transition-all font-black text-sm group">
         <Sparkles size={20} className="text-indigo-400 group-hover:text-white transition-colors" />
         <span>AI 검증 현황</span>
+      </Link>
+      <Link href="/admin/ai-review-checks" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl hover:bg-white/10 transition-all font-black text-sm group">
+        <ListChecks size={20} className="text-indigo-400 group-hover:text-white transition-colors" />
+        <span>AI 반영 확인</span>
       </Link>
       <Link href="/admin/collection-sources" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl hover:bg-white/10 transition-all font-black text-sm group">
         <Building2 size={20} className="text-indigo-400 group-hover:text-white transition-colors" />

@@ -1099,9 +1099,9 @@ export default function AdminPostersPage() {
     const confirmed = confirm([
       `검수대기 ${queueCount}건을 AI가 다시 읽고 검토합니다.`,
       "",
-      "- 대표 이미지와 원문 내용을 다시 확인합니다.",
-      "- 날짜·카테고리·중복 여부를 정밀 검토합니다.",
-      "- 확실한 항목만 승인하고 애매한 항목은 검수대기에 남깁니다.",
+      "- 원문·신청 페이지와 대표 이미지를 다시 받아 모든 항목을 대조합니다.",
+      "- 규칙 검증을 통과한 건만 공개·마감·반려로 자동 반영합니다.",
+      "- 오판 가능성이 있는 건은 'AI 반영 확인' 화면에, 검증에 걸린 건은 검수대기에 남깁니다.",
       "",
       "백그라운드 검토를 시작할까요?",
     ].join("\n"));
@@ -1584,7 +1584,12 @@ export default function AdminPostersPage() {
                   {` · ${formatAdminDateTime(aiReviewStatus.latestRun.updatedAt)}`}
                 </span>
               ) : (
-                <span>확실한 항목만 승인하고 나머지는 대기에 남깁니다.</span>
+                <span>
+                  검증 통과 건만 자동 반영합니다.{" "}
+                  <a href="/admin/ai-review-checks" className="text-indigo-500 underline hover:text-indigo-700">
+                    AI 반영 확인
+                  </a>
+                </span>
               )}
               {(aiReviewStatus?.latestRun?.url || aiReviewStatus?.workflowUrl) && (
                 <a

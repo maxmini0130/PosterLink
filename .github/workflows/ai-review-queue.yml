@@ -24,7 +24,7 @@ on:
         default: "200"
         type: string
       thorough:
-        description: "Re-read poster images and use the stronger review model before applying safe approvals."
+        description: "Source review: re-fetch each notice's pages and images, apply proposals that pass the rule checks, and list risky ones on /admin/ai-review-checks."
         required: true
         default: "false"
         type: choice
@@ -40,7 +40,7 @@ jobs:
   review-and-approve:
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: scripts/crawler
@@ -49,6 +49,7 @@ jobs:
       SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       OPENAI_REVIEW_QUEUE_MODEL: ${{ vars.OPENAI_REVIEW_QUEUE_MODEL || 'gpt-5-mini' }}
+      OPENAI_SOURCE_REVIEW_MODEL: ${{ vars.OPENAI_SOURCE_REVIEW_MODEL || 'gpt-5' }}
       REVIEW_LIMIT: ${{ github.event.inputs.limit || '200' }}
       SHOULD_APPLY: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.apply || 'true' }}
       THOROUGH_REVIEW: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.thorough || 'false' }}
@@ -83,6 +84,17 @@ jobs:
             --apply \
             --output="scripts/crawler/data/results/ai-review-images-${GITHUB_RUN_ID}.json"
 
+      # Thorough mode (the admin "AI 검토 승인" button): full source review.
+      - name: Source review and apply proposals that pass the rule checks
+        if: ${{ env.THOROUGH_REVIEW == 'true' }}
+        run: |
+          ARGS=(--limit="$REVIEW_LIMIT" --concurrency=3 --output="data/results/ai-source-review-${GITHUB_RUN_ID}.json")
+          if [ "$SHOULD_APPLY" = "true" ]; then
+            ARGS+=(--apply --confirm=AI_SOURCE_REVIEW_APPLY)
+          fi
+          node src/review-queue-source-review.js "${ARGS[@]}"
+
+      # Runs on what the source review left in the queue.
       - name: Clear non-poster images or hold quality-gate reject candidates for a person
         if: ${{ env.THOROUGH_REVIEW == 'true' }}
         run: |
@@ -92,13 +104,11 @@ jobs:
             --apply \
             --output="scripts/crawler/data/results/ai-review-nonposters-${GITHUB_RUN_ID}.json"
 
+      # Scheduled and report-only runs keep the date and category review.
       - name: Review queue and apply safe decisions
+        if: ${{ env.THOROUGH_REVIEW != 'true' }}
         run: |
           ARGS=(--limit="$REVIEW_LIMIT" --output="data/results/ai-review-queue-${GITHUB_RUN_ID}.json")
-          if [ "$THOROUGH_REVIEW" = "true" ]; then
-            ARGS+=(--batch-size=5)
-            export OPENAI_REVIEW_QUEUE_MODEL="${{ vars.OPENAI_REVIEW_QUEUE_THOROUGH_MODEL || 'gpt-5' }}"
-          fi
           if [ "$SHOULD_APPLY" = "true" ]; then
             ARGS+=(--apply --confirm=AI_REVIEW_APPROVE_QUEUE)
           fi
